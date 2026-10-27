@@ -1,5 +1,15 @@
 /** @jsxImportSource ermine-h */
-import type { API } from "@ermine/api"
+import {
+	createAction,
+	createMemo,
+	ensureNode,
+	patch,
+	patchAttributes,
+	peep,
+	read,
+	readAttributes,
+} from "@ermine/system"
+import { host } from "@ermine/slaygrounds/tools"
 import { bind } from "ermine-h"
 import type { Extra, Got, Renderer } from "./host.ts"
 
@@ -9,7 +19,6 @@ import type { Extra, Got, Renderer } from "./host.ts"
 // that fits; why is the table of who got what. edit the title: one text node changes, and the
 // counts say how few host operations each screen did. edit a renderer: the nodes it drew are
 // drawn again by it. take one out: the table says what fits instead, or why nothing does
-type Tools = API & Extra
 
 // the types: what a node is, and what a renderer opens
 const TEXT = "party.chee.ermine.text"
@@ -20,66 +29,74 @@ const IMAGE = "party.chee.ermine.image"
 // a ui is data: h(tag, attrs, ...kids), a string, or a node drawn by a renderer: at(node). an
 // on:<event> attribute is the path of the method it sends to
 const h = (tag: string, attrs: object = {}, ...kids: unknown[]) => ({ tag, attrs, kids })
-const where = (n: { path?: readonly string[] }) => "/" + n.path!.join("/")
-const at = (n: { path?: readonly string[] }) => ({ node: where(n) })
+// a node is given by its path from the root: a handle names no path to the program that holds it
+const at = (path: string) => ({ node: path })
 
-export default function app({ open, read, edit, info, memo, method }: Tools) {
+export default function app() {
 	// count and presses are ./ nodes: they are there still after a reload. label and picture are
 	// memos inside the process, made again at each start
-	const count = open("./count", 3)
-	const presses = open("./presses", [])
-	const label = memo("label", () => `${Math.min(8, read(count) as number)} of 8 full`)
-	const picture = memo("picture", () => heart(read(count) as number))
+	const count = ensureNode("./count", 3)
+	const presses = ensureNode("./presses", [])
+	const label = createMemo("label", () => `${Math.min(8, read(count) as number)} of 8 full`)
+	const picture = createMemo("picture", () => heart(read(count) as number))
 	for (
 		const [node, type] of [[count, NUMBER], [presses, LIST], [label, TEXT], [
 			picture,
 			IMAGE,
 		]] as const
 	) {
-		if (read(info(node), ["ermine.type"]) !== type) {
-			edit(info(node), (a: Record<string, unknown>) => void (a["ermine.type"] = type))
+		if (peep(() => readAttributes(node, ["ermine.type"])) !== type) {
+			patchAttributes(node, [{ path: ["ermine.type"], value: type }])
 		}
 	}
 
-	const add = method("on/add", () => {
-		edit(count, (c: number) => c + 1)
-		edit(presses, (d: string[]) => {
-			d.unshift(`+1 at ${new Date().toLocaleTimeString()}`)
-			d.splice(3)
-		})
+	createAction("on/add", () => {
+		patch(count, [{ path: [], value: (peep(() => read(count)) as number) + 1 }])
+		const was = peep(() => read(presses)) as string[]
+		patch(presses, [{
+			path: [],
+			value: [`+1 at ${new Date().toLocaleTimeString()}`, ...was].slice(0, 3),
+		}])
 	})
-	const clear = method("on/clear", () => {
-		edit(count, () => 0)
-		edit(presses, (d: string[]) => void d.splice(0))
+	createAction("on/clear", () => {
+		patch(count, [{ path: [], value: 0 }])
+		patch(presses, [{ path: [], value: [] }])
 	})
 
-	open(
+	ensureNode(
 		"ui",
 		h(
 			"div",
 			{ class: "app" },
 			h("h1", {}, "a little meter"),
-			h("p", {}, "count: ", at(count), " · ", at(label)),
-			h("figure", {}, at(picture)),
-			h("section", {}, "presses", at(presses)),
+			h("p", {}, "count: ", at("/count"), " · ", at("/app/label")),
+			h("figure", {}, at("/app/picture")),
+			h("section", {}, "presses", at("/presses")),
 			h(
 				"p",
 				{ class: "buttons" },
-				h("button", { "on:click": where(add) }, "+1"),
+				h("button", { "on:click": "/app/on/add" }, "+1"),
 				" ",
-				h("button", { "on:click": where(clear) }, "clear"),
+				h("button", { "on:click": "/app/on/clear" }, "clear"),
 			),
 		),
 	)
 }
 
 // the screens: each draws /app/ui through its host
-export const dom = ({ mirror, hosts }: Tools) => mirror(hosts.dom, "/app/ui")
-export const chars = ({ mirror, hosts }: Tools) => mirror(hosts.chars, "/app/ui")
+// (what each is given beyond @ermine/system: the host's hosts and mirror, read by host())
+export const dom = () => {
+	const { mirror, hosts } = host<Extra>()
+	return mirror(hosts.dom, "/app/ui")
+}
+export const chars = () => {
+	const { mirror, hosts } = host<Extra>()
+	return mirror(hosts.chars, "/app/ui")
+}
 
 // the table: each node, what it is, and what each screen got for it
-export function why({ read, memo }: Tools) {
-	const rows = memo("rows", () => {
+export function why() {
+	createMemo("rows", () => {
 		const by = (screen: string) => (read(`/screens/${screen}/mirror/got`) ?? []) as Got[]
 		const dom = by("dom"), chars = by("chars")
 		return [...new Set([...dom, ...chars].map((g) => g.at))].map((at) => ({
@@ -110,8 +127,9 @@ export function why({ read, memo }: Tools) {
 		<div class="why">
 			<p>
 				a renderer is an opener of a type (<code>openwith</code>), run by a screen's runner,
-				which provides the keys it needs. click either screen: it sends to{" "}
-				<code>/app/on/…</code>
+				which provides the keys it needs. a click on either screen should send to{" "}
+				<code>/app/on/…</code>: it cannot now, the mirror's listener has no call open (nothing
+				is sent; the console says so)
 			</p>
 			<table>
 				<tr>
@@ -120,7 +138,7 @@ export function why({ read, memo }: Tools) {
 					<th>screens/dom got</th>
 					<th>screens/chars got</th>
 				</tr>
-				{bind(rows, (list: any[]) =>
+				{bind("rows", (list: any[]) =>
 					list.map((r) => (
 						<tr>
 							<td>{r.at}</td>

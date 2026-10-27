@@ -1,18 +1,20 @@
 import { createWorld } from "@ermine/slaygrounds/world"
 import { trace } from "@ermine/core/scheduler/trace"
+import * as lib from "@ermine/core/places/lib"
 import { render } from "ermine-h"
 
 // fancy-embark's host: the world (@ermine/slaygrounds/world), one process, embark, and what only a
 // host can give it (each in extend below, with what it is for):
-//   lookup, peek   a request to a public api is a node at /cache/<api>/<hash of its url>. a run
-//                  asks for it: there, its value; not there, the request is queued (one server at a
-//                  time, each at its own polite rate) and the run ends pending. the answer lands as
-//                  that node, the run had read the place, so it runs again and finds it. a failure
-//                  lands too, as a node saying so: the program shows it in place, until retry (or the
-//                  browser being online again) takes it out. peek never waits or throws: it says
-//                  { result } | { waiting } | { error } (menus, previews)
+//   ask            a request to a public api is a node at /cache/<api>/<hash of its url>, which the
+//                  program reads (a node not there throws PENDING, and the run reads it again when it
+//                  lands). ask gives the key, and when the node is not there the request is queued (one
+//                  server at a time, each at its own polite rate). the answer lands as that node. a
+//                  failure lands too, as a node saying so: the program shows it in place, until retry
+//                  (or the browser being online again) takes it out
 //   retry          the failure nodes taken out, so whoever read them asks again
-//   ended          told how each memo ended a run, what it read named (nodes, and /cache keys)
+//   ended          told how each memo ended a run, what it read named (paths: nodes, and /cache keys):
+//                  the host runs an action of the program's with it (a program has no listener to
+//                  give: nothing is open in one)
 // the request is the host's: a browser can not set User-Agent, so each fetch says where it is from
 // with its referrer (Nominatim asks for one naming the application)
 // before the program runs, /cache is filled from seed.json (committed beside this file: the default
@@ -84,33 +86,37 @@ const seedFile: Record<string, Entry> = await fetch(
 const world = createWorld({
 	render,
 	processes: [{ name: "embark" }],
-	extend: (api) => ({
-		lookup,
-		peek,
+	extend: () => ({
+		ask,
 		retry,
-		// fn told each time a memo of this process ends a run: { name, of, run, ended, error, ms,
-		// values, keys }. name and of are the last two names of the memo's place (result/<id>); values
-		// the ids of the nodes it read, keys the /cache keys ("geocode/<hash>")
-		ended(fn: (run: Record<string, unknown>) => void) {
+		// action: the path of an action of the program's (a program is not given a function to call
+		// from here: nothing is open in one). it is run with { name, of, run, ended, error, ms,
+		// values, keys } each time a memo of this process ends a run: name and of are the last two
+		// names of the memo's place (result/<id>), values the paths of the nodes it read, keys the
+		// /cache keys ("geocode/<hash>"). gives back the stop
+		ended(action: string) {
 			const started = new Map<unknown, number>()
-			api.teardown(trace(ermine.s, (m) => {
+			return trace(world.world.s, (m) => {
 				if ("starts" in m) started.set(m.starts, performance.now())
 				if (!("ends" in m) || m.ended === "stopped") return
-				const part = ermine.parts.get(m.ends)
+				const part = world.world.parts.get(m.ends)
 				if (!part) return
 				const at = part.entry.path
-				const values: string[] = [], keys: string[] = []
+				if (!at) return
+				const values: string[][] = [], keys: string[] = []
 				for (const k of m.reads) {
-					const w = ermine.places.describe(k)
+					const w = world.world.places.describe(k)
 					if (!w) continue
-					if (w.part === "value") values.push(String(w.id))
-					else if (w.part === "children" && w.path?.length === 1) {
+					if (w.part === "value") {
+						const p = pathOfId(w.id)
+						if (p) values.push(p)
+					} else if (w.part === "children" && w.path?.length === 1) {
 						const api = APIS.find((a) => String(w.id) === folders.get(a))
 						if (api) keys.push(`${api}/${w.path[0]}`)
 					}
 				}
 				const t0 = started.get(m.ends)
-				fn({
+				const run = {
 					name: at[at.length - 2],
 					of: at[at.length - 1],
 					run: m.run,
@@ -119,31 +125,48 @@ const world = createWorld({
 					ms: t0 === undefined ? undefined : +(performance.now() - t0).toFixed(1),
 					values,
 					keys,
+				}
+				// after the run that ended is over: an action is a write
+				queueMicrotask(() => {
+					try {
+						world.ermine.executeAction(action, run)
+					} catch { /* the program has stopped */ }
 				})
-			}))
+			})
 		},
 	}),
 })
-const host = world.hostAPI
+const host = world.ermine
 const folders = new Map<string, string>() // api -> the id of /cache/<api>
-// the world is a global by now
-declare const ermine: any
-
+// the names from the root to a node, by its id: up through the names it has (places' namesOf), the
+// first each time (the program reaches nodes by path, the host's table by id)
+function pathOfId(id: unknown): string[] | undefined {
+	const { places } = world.world
+	const names: string[] = []
+	let at = id as never
+	for (let i = 0; i < 24; i++) {
+		if (at === places.root) return names
+		const slot = places.namesOf(at)[0]
+		if (!slot) return undefined
+		names.unshift(slot.name)
+		at = slot.folder as never
+	}
+}
 world.seed((h) => {
-	h.open("/cache", "every lookup, by the hash of its url")
-	for (const api of APIS) h.open(`/cache/${api}`, null)
-	h.open("/net", stats)
+	h.ensureNode("/cache", "every lookup, by the hash of its url")
+	for (const api of APIS) h.ensureNode(`/cache/${api}`)
+	h.ensureNode("/net", stats)
 	for (const [from, all] of [["seed", seedFile], ["saved", saved()]] as const) {
 		for (const [k, entry] of Object.entries(all)) {
 			const [api, key] = k.split("/")
 			if (!APIS.includes(api) || entry?.error !== undefined) continue
-			if (from === "saved" && h.entries(`/cache/${api}/${key}`).length) continue
-			h.open(`/cache/${api}/${key}`, { ...entry, from })
+			if (from === "saved" && h.hasNode(`/cache/${api}/${key}`)) continue
+			h.ensureNode(`/cache/${api}/${key}`, { ...entry, from })
 			stats.kept[from]++
 		}
 	}
-	h.edit("/net", [{ path: [], value: structuredClone(stats) }])
-	for (const api of APIS) folders.set(api, String(h.entries(`/cache/${api}`)[0].id))
+	h.patch("/net", [{ path: [], value: structuredClone(stats) }])
+	for (const api of APIS) folders.set(api, String(lib.get(world.ermine.places, ["cache", api])))
 })
 
 // the network's node is written after the run that asked is over (a run never writes), at most
@@ -155,35 +178,23 @@ function tell(change: (n: typeof stats) => void) {
 	telling = true
 	setTimeout(() => {
 		telling = false
-		host.edit("/net", [{ path: [], value: structuredClone(stats) }])
+		host.patch("/net", [{ path: [], value: structuredClone(stats) }])
+		host.pulse()
 	}, 250)
 }
 const said = (e: unknown) => String((e as Error)?.message ?? e)
 
-// in a run: the answer to url, from /cache/<api>; not there yet: asked, and the run is pending
-function lookup(api: string, url: string) {
-	const out = peek(api, url)
-	if ("error" in out) throw new Error(out.error)
-	if ("waiting" in out) throw host.PENDING
-	return out.result
-}
-function peek(api: string, url: string):
-	| { result: unknown; from?: string; at?: string; ms?: number }
-	| { waiting: true }
-	| { error: string; at?: string } {
+// the key of url's answer in /cache/<api>, asked for: the node is there (a hit), or the request is
+// queued. the program reads the node (a node not there throws PENDING in its run)
+function ask(api: string, url: string): string {
 	const key = hash(url)
-	if (!APIS.includes(api)) return { error: `no api ${api}` }
-	const v = host.read(`/cache/${api}/${key}`) as Entry | undefined
-	if (v !== undefined) {
-		tell((n) => n.hits++)
-		if (v.error !== undefined) return { error: v.error, at: v.at }
-		return { result: v.result, from: v.from, at: v.at, ms: v.ms }
-	}
-	ask(api, url, key)
-	return { waiting: true }
+	if (!APIS.includes(api)) return key
+	if (host.hasNode(`/cache/${api}/${key}`)) tell((n) => n.hits++)
+	else enqueue(api, url, key)
+	return key
 }
 
-function ask(api: string, url: string, key: string) {
+function enqueue(api: string, url: string, key: string) {
 	if (inflight.has(api + "/" + key)) return
 	inflight.add(api + "/" + key)
 	const server = new URL(url).host
@@ -223,8 +234,9 @@ function ask(api: string, url: string, key: string) {
 		inflight.delete(api + "/" + key)
 		// an answer (or a failure) as the node at /cache/<api>/<key>: a new one, or the one there
 		const at = `/cache/${api}/${key}`
-		if (host.entries(at).length) host.edit(at, [{ path: [], value: entry }])
-		else host.open(at, entry)
+		if (host.hasNode(at)) host.patch(at, [{ path: [], value: entry }])
+		else host.ensureNode(at, entry)
+		host.pulse()
 		tell((n) => {
 			n.waiting[server] = Math.max(0, (n.waiting[server] ?? 1) - 1)
 			if (entry.error) n.failed++
@@ -276,7 +288,7 @@ function dump() {
 	}
 	return JSON.stringify(out)
 }
-ermine.embark = { dump, retry, stats: () => stats }
+;(world.world as unknown as Record<string, unknown>).embark = { dump, retry, stats: () => stats }
 
 // a hash of a string (53 bits, as hex): prog-build's, copied
 function hash(v: string) {

@@ -1,5 +1,20 @@
 /** @jsxImportSource ermine-h */
-import type { API } from "@ermine/api"
+import {
+	addTeardown,
+	createAction,
+	createEffect,
+	createMemo,
+	ensureNode,
+	hasNode,
+	list,
+	patch,
+	peep,
+	place,
+	read,
+	ref,
+	unplace,
+} from "@ermine/system"
+import { inspect, up } from "@ermine/slaygrounds/tools"
 import { bind, handler } from "ermine-h"
 
 // fancy-scene: a 3D scene graph on the ermine graph.
@@ -470,23 +485,27 @@ function createRenderer(canvas: HTMLCanvasElement) {
 
 // ---- the walk: every object reached from /scene, depth first, its matrix its parent's times its
 // own. a node met again on its own way down (mounted under itself) is not gone into ----
-function walk({ list, read, entries }: API): Item[] {
+function walk(): Item[] {
 	const out: Item[] = []
 	const count = new Map<string, number>()
-	const idOf = (path: string) => entries(path)[0]?.id as string | undefined
+	// the node at a path: its id, found by up (names from the root), tracked
+	const idOf = (path: string) => up(path.split("/").filter(Boolean), [])?.found
+	// a node under an object, none if it has no such name (tracked as the list is)
+	const maybe = (path: string, name: string) =>
+		list(path).includes(name) ? read(`${path}/${name}`) : undefined
 	const visit = (path: string, parent: M4, depth: number, chain: string[]) => {
 		for (const name of list(path)) {
 			const here = `${path}/${name}`, id = idOf(here)
 			if (PROPS.has(name) || id === undefined || chain.includes(id) || depth > 12) continue
-			const M = mul(parent, local(read(`${here}/transform`) as Transform))
+			const M = mul(parent, local(maybe(here, "transform") as Transform))
 			count.set(id, (count.get(id) ?? 0) + 1)
 			out.push({
 				path: here,
 				name,
 				depth,
 				id,
-				shape: (read(`${here}/shape`) as string | undefined) ?? "none",
-				colour: (read(`${here}/colour`) as string | undefined) ?? "#ffffff",
+				shape: (maybe(here, "shape") as string | undefined) ?? "none",
+				colour: (maybe(here, "colour") as string | undefined) ?? "#ffffff",
 				m: M,
 			})
 			visit(here, M, depth + 1, [...chain, id])
@@ -516,27 +535,30 @@ const said = (tr: Transform) =>
 // =================================================================================================
 // the view: the canvas, a tag over each object it names, the outline, the panel of the one picked
 // =================================================================================================
-export function view(api: API & { inspect: (address: string[]) => void }) {
-	const { open, read, edit, entries, place, unplace, list, memo, effect, method, send, ref } = api
-	const { teardown, inspect } = api
-	const put = (x: ReturnType<typeof open>, v: unknown) => edit(x, [{ path: [], value: v }])
-	const camera = open("./camera", { yaw: 32, pitch: 22, dist: 10.5 })
-	const picked = open("./picked", "")
-	const size = open("./size", { w: 640, h: 420 })
-	const tags = open("./tags", false)
-	const canvas = read(ref("./canvas", () => document.createElement("canvas"))) as HTMLCanvasElement
-	const sceneId = entries("/scene")[0]?.id as string
-	const target = () => entries("/spin/target")[0]?.id
+// a node's value now, from an action (nothing tracked)
+const get = <T,>(x: Parameters<typeof read>[0]) => peep(() => read(x)) as T
+const put = (x: Parameters<typeof read>[0], v: unknown) => patch(x, [{ path: [], value: v }])
+
+export function view() {
+	const camera = ensureNode("./camera", { yaw: 32, pitch: 22, dist: 10.5 })
+	const picked = ensureNode("./picked", "")
+	const tags = ensureNode("./tags", false)
+	const canvas = peep(() =>
+		read(ref("./canvas", () => document.createElement("canvas")))
+	) as HTMLCanvasElement
+	const sceneId = up(["scene"], [])?.found as string
+	// the node mounted at /spin/target: its id (what the spinner turns)
+	const target = () => up(["spin", "target"], [])?.found
 
 	// everything drawn, each with its matrix (any transform written: this runs again)
-	const world = memo("world", () => walk(api))
+	const world = createMemo("world", () => walk())
 	// the same, without the matrices: it changes only when the tree, a colour or a shape does
-	const outline = memo("outline", () => {
+	const outline = createMemo("outline", () => {
 		const spun = target()
 		return (read(world) as Item[]).map(({ m: _, ...x }) => ({ ...x, spun: x.id === spun }))
 	}, { equal: same })
 	// the picked object, and every object it could be placed under too (not one under it)
-	memo("chosen", () => {
+	createMemo("chosen", () => {
 		const p = read(picked) as string
 		const items = read(outline) as Item[]
 		const c = items.find((x) => x.path === p)
@@ -551,7 +573,7 @@ export function view(api: API & { inspect: (address: string[]) => void }) {
 		return { ...c, parents }
 	}, { equal: same })
 	// what gets a tag over it in the view: the picked and the spun, or (tags on) everything
-	const tagged = memo("tagged", () => {
+	const tagged = createMemo("tagged", () => {
 		const all = read(tags), p = read(picked)
 		return (read(outline) as Item[])
 			.filter((x) => (all ? x.shape !== "line" : x.path === p || x.spun))
@@ -561,18 +583,27 @@ export function view(api: API & { inspect: (address: string[]) => void }) {
 	// the drawing: an effect, so it acts once a round, after the world and the camera settled
 	const r = createRenderer(canvas)
 	let layer: HTMLElement | undefined
-	effect("draw", () => ({
+	// the canvas's size is not a node: an observer can write nothing (nothing is open in its
+	// callback), so the act takes it off the canvas as it draws, and the observer draws the last
+	// frame again when the box changes
+	let frame: Omit<Frame, "size"> | undefined
+	const drawn = () => {
+		const b = canvas.getBoundingClientRect()
+		return { w: Math.round(b.width) || 640, h: Math.round(b.height) || 420 }
+	}
+	const paint = (v: Omit<Frame, "size">) => {
+		const f = { ...v, size: drawn() }
+		r.draw(f)
+		// the tags: once this round's bindings have acted (a new tag is in the page by then)
+		queueMicrotask(() => layer && tagsAt(layer, f))
+	}
+	createEffect("draw", () => ({
 		items: read(world),
 		cam: read(camera),
 		picked: read(picked),
-		size: read(size),
 		tags: read(tagged),
-	}), (v: Frame) => {
-		r.draw(v)
-		// the tags: once this round's bindings have acted (a new tag is in the page by then)
-		queueMicrotask(() => layer && tagsAt(layer, v))
-	})
-	teardown(() => r.drop())
+	}), (v) => paint(frame = v as Omit<Frame, "size">))
+	addTeardown(() => r.drop())
 	// each tag where its object's origin is on the screen
 	function tagsAt(into: HTMLElement, v: Frame) {
 		const vp = eyes(v.cam, v.size.w, v.size.h)
@@ -591,69 +622,68 @@ export function view(api: API & { inspect: (address: string[]) => void }) {
 		}
 	}
 
-	// ---- methods: what a person does ----
-	method("on/orbit", (dx: number, dy: number) =>
-		edit(camera, (c: Camera) => {
-			c.yaw = Math.round((c.yaw - dx * 0.45) * 10) / 10
-			c.pitch = Math.round(Math.max(-8, Math.min(80, c.pitch + dy * 0.35)) * 10) / 10
-		}))
-	method(
-		"on/zoom",
-		(way: number) =>
-			edit(
-				camera,
-				(c: Camera) =>
-					void (c.dist = r1(Math.max(4, Math.min(30, c.dist * (way > 0 ? 1.1 : 1 / 1.1))))),
-			),
-	)
-	method("on/resize", (w: number, h: number) => {
-		const was = read(size) as { w: number; h: number }
-		if (was.w !== w || was.h !== h) put(size, { w, h })
+	// ---- actions: what a person does ----
+	createAction("on/orbit", (dx: number, dy: number) => {
+		const c = get<Camera>(camera)
+		patch(camera, [
+			{ path: ["yaw"], value: Math.round((c.yaw - dx * 0.45) * 10) / 10 },
+			{
+				path: ["pitch"],
+				value: Math.round(Math.max(-8, Math.min(80, c.pitch + dy * 0.35)) * 10) / 10,
+			},
+		])
+	})
+	createAction("on/zoom", (way: number) => {
+		const c = get<Camera>(camera)
+		patch(camera, [{
+			path: ["dist"],
+			value: r1(Math.max(4, Math.min(30, c.dist * (way > 0 ? 1.1 : 1 / 1.1)))),
+		}])
 	})
 	// a pick: the place picked here, and its node picked in the graph tab
 	const choose = (path: string) => {
 		put(picked, path)
 		if (path) inspect(path.split("/").filter(Boolean))
 	}
-	method("on/pick", choose)
-	method(
+	createAction("on/pick", choose)
+	createAction(
 		"on/point",
 		(x: number, y: number, w: number, h: number) =>
-			choose(pick(read(world) as Item[], read(camera) as Camera, w, h, x, y)),
+			choose(pick(get<Item[]>(world), get<Camera>(camera), w, h, x, y)),
 	)
 	// an object's three nodes are at its path: transform, colour, shape
-	method("on/set", (path: string, at: [string, number], value: number) => {
+	createAction("on/set", (path: string, at: [string, number], value: number) => {
 		if (!Number.isFinite(value)) return
-		edit(`${path}/transform`, (tr: Transform) => void (tr[at[0] as "p"][at[1]] = value))
+		patch(`${path}/transform`, [{ path: [at[0], at[1]], value }])
 	})
-	method("on/colour", (path: string, colour: string) => put(open(`${path}/colour`), colour))
-	method("on/shape", (path: string, shape: string) => put(open(`${path}/shape`), shape))
+	createAction("on/colour", (path: string, colour: string) => put(`${path}/colour`, colour))
+	createAction("on/shape", (path: string, shape: string) => put(`${path}/shape`, shape))
 	// the spinner's target: whatever is placed at /spin/target
-	method("on/spin", (path: string) => {
-		if (target() !== undefined) unplace("/spin/target")
+	createAction("on/spin", (path: string) => {
+		if (hasNode("/spin/target")) unplace("/spin/target")
 		place("/spin/target", path)
 	})
-	method("on/pause", () => put(open("/spin/speed"), read("/spin/speed") ? 0 : 45))
-	method("on/tags", () => put(tags, !read(tags)))
+	createAction("on/pause", () => put("/spin/speed", get("/spin/speed") ? 0 : 45))
+	createAction("on/tags", () => put(tags, !get(tags)))
 	// one node placed under another parent too: an instance
-	method("on/mount", (path: string, name: string, parent: string) => {
+	createAction("on/mount", (path: string, name: string, parent: string) => {
 		if (!parent) return
 		// a name holds one id: under a name taken already, the instance takes name-2, name-3...
 		let own = name
-		for (let n = 2; list(parent).includes(own); n++) own = `${name}-${n}`
+		const have = peep(() => list(parent))
+		for (let n = 2; have.includes(own); n++) own = `${name}-${n}`
 		place(`${parent}/${own}`, path)
 	})
-	method("on/unmount", (parent: string, name: string) => {
+	createAction("on/unmount", (parent: string, name: string) => {
 		unplace(`${parent}/${name}`)
 		put(picked, "")
 	})
 
-	// the canvas's size, told by the page (an observer calls the method: explain sees it)
-	const watcher = new ResizeObserver(([e]) => {
-		send("on/resize", Math.round(e.contentRect.width), Math.round(e.contentRect.height))
-	})
+	// the canvas's size changes: the last frame is drawn again (the page tells the observer, and the
+	// observer tells no node)
+	const watcher = new ResizeObserver(() => frame && paint(frame))
 	watcher.observe(canvas)
-	teardown(() => watcher.disconnect())
+	addTeardown(() => watcher.disconnect())
 
 	// the pointer: a drag orbits, a click (barely moved) picks
 	let last: number[] | undefined, moved = 0
@@ -863,21 +893,37 @@ export function view(api: API & { inspect: (address: string[]) => void }) {
 // =================================================================================================
 // the spinner: turns whatever is placed at its target, by writing that object's transform node
 // =================================================================================================
-export function spin({ open, read, edit, teardown }: API) {
-	const speed = open("./spin/speed", 45) // degrees a second
+export function spin() {
+	const speed = ensureNode("./spin/speed", 45) // degrees a second
 	let last = performance.now()
-	// a timer writes as the process: no method in between
-	const timer = setInterval(() => {
+	// the turn is an action, called by a handler: a timer has nothing open to write with, so the
+	// beat is an element in the spinner's own view whose css animation cycles every 50ms, and each
+	// cycle's animationiteration calls on/turn. it holds still when the speed is 0
+	createAction("on/turn", () => {
 		const now = performance.now()
 		const dt = Math.min(0.1, (now - last) / 1000)
 		last = now
-		const v = read(speed) as number
-		if (!v || read("./spin/target/transform") === undefined) return
-		edit("./spin/target/transform", (x: Transform) => {
-			x.r[1] = Math.round(((x.r[1] + v * dt) % 360) * 10) / 10
-		})
-	}, 50)
-	teardown(() => clearInterval(timer))
+		const v = get<number>(speed)
+		if (!v || !hasNode("./spin/target/transform")) return
+		const r = get<Transform>("./spin/target/transform").r
+		patch("./spin/target/transform", [{
+			path: ["r", 1],
+			value: Math.round(((r[1] + v * dt) % 360) * 10) / 10,
+		}])
+	})
+	return (
+		<div>
+			<style>
+				{`@keyframes beat { to { opacity: 0 } }
+.beat { position: fixed; width: 0; height: 0; pointer-events: none; animation: beat 50ms linear infinite }`}
+			</style>
+			<i
+				class="beat"
+				style={bind("spin/speed", (v) => `animation-play-state:${v ? "running" : "paused"}`)}
+				onAnimationIteration={handler("on/turn")}
+			/>
+		</div>
+	)
 }
 
 // ---- the look: chee.party ----

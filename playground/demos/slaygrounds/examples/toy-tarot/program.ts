@@ -1,5 +1,17 @@
 /** @jsxImportSource ermine-h */
-import type { API, Node } from "@ermine/api"
+import {
+	addTeardown,
+	createAction,
+	createEffect,
+	createMemo,
+	ensureNode,
+	type Node,
+	patch,
+	peep,
+	PENDING,
+	read,
+	ref,
+} from "@ermine/system"
 import { bind, handler } from "ermine-h"
 
 // toy-tarot: you cannot draw until you have gathered enough entropy. mouse moves over the pad become
@@ -236,6 +248,7 @@ body{background:#fffbe0}
 .tr .back{transform:rotateY(180deg);background:#fffbe0;padding:6px}
 .tr .back div{width:100%;height:100%;border:1px solid #000;display:grid;place-items:center;font-size:30px;color:#ff2284;
 background:repeating-linear-gradient(45deg,#fff 0 7px,#ffd0e4 7px 8px),repeating-linear-gradient(-45deg,transparent 0 7px,#40dcba55 7px 8px)}
+.tr .table[data-wave=on] .card.up .inner{transition-delay:calc(var(--i) * .65s)}
 .tr .card.empty{opacity:.5}
 .tr .card.empty .inner{transform:rotateY(180deg)}
 .tr .card.empty .back div{background:none;border-style:dashed;color:#000}
@@ -248,15 +261,16 @@ background:repeating-linear-gradient(45deg,#fff 0 7px,#ffd0e4 7px 8px),repeating
 .tr .wait{font-size:14px;text-align:center;margin:0}
 `
 
-// the process: the reading is saved under "./" (samples, spread, flipped, rereads, tick), so a reload
+// the process: the reading is saved under "./" (samples, spread, flipped, rereads, wave), so a reload
 // finds the same cards; what is derived (stats, bits, pool, seed, deck, reading…) is memos inside the
-// process, made again at each start. the canvas is a ref, the timers and the frame loop have
-// teardowns
-export default function program(
-	{ open, read, edit, memo, effect, method, send, ref, teardown, PENDING }: API,
-) {
+// process, made again at each start. the canvas is a ref, the frame loop has a
+// teardown
+export default function program() {
 	// a node's value, as the program uses it: any (the nodes hold what this program put there)
 	const get = (x: Node): any => read(x)
+	// the same, in an action: not tracked
+	const now = (x: Node): any => peep(() => read(x))
+	const put = (x: Node, value: unknown) => patch(x, [{ path: [], value }])
 	// a memo that is still out is nothing yet (the pool, while its digest runs)
 	const soft = (x: Node): any => {
 		try {
@@ -267,15 +281,15 @@ export default function program(
 		}
 	}
 	// ---- nodes: the whole reading lives here ----
-	const samples = open("./samples", []) // [x, y, time, since last, credit, clock], only the credited ones
-	const spread = open("./spread", "three")
-	const flipped = open("./flipped", []) // positions turned face up, in order
-	const rereads = open("./rereads", 0)
-	// the clock, only so a still mouse can be seen to be still: a timer writes it while gathering
-	const tick = open("./tick", 0)
+	const samples = ensureNode("./samples", []) // [x, y, time, since last, credit, clock], only the credited ones
+	const spread = ensureNode("./spread", "three")
+	const flipped = ensureNode("./flipped", []) // positions turned face up, in order
+	const rereads = ensureNode("./rereads", 0)
+	// turn them all, staggered: the turns wait their place in the order (css), as a timer cannot call
+	const wave = ensureNode("./wave", false)
 
 	// a summary of the samples, so the graph shows the shape without every number
-	memo("stats", () => {
+	createMemo("stats", () => {
 		const s = get(samples)
 		const last = s.at(-1)
 		const gaps = s.map((x) => x[3])
@@ -286,15 +300,14 @@ export default function program(
 			span: s.length ? +(last[2] - s[0][2]).toFixed(1) : 0,
 		}
 	})
-	const bits = memo("bits", () => Math.min(NEED, get(samples).reduce((a, x) => a + x[4], 0)))
+	const bits = createMemo("bits", () => Math.min(NEED, get(samples).reduce((a, x) => a + x[4], 0)))
 	// the rate of gathering over the last 1.5 s: bits per second, and which way the pointer went
 	// (-1 left .. 1 right); pace is the same rate as 0..1, what the shuffling is driven by
-	const rate = memo("rate", () => {
+	const rate = createMemo("rate", () => {
 		const s = get(samples)
 		const last = s.at(-1)
 		if (!last) return { bps: 0, dir: 0, pace: 0 }
-		const ref = Math.max(get(tick), last[2])
-		const win = s.filter((x) => x[2] > ref - 1500)
+		const win = s.filter((x) => x[2] > last[2] - 1500)
 		let credit = 0, dx = 0, ax = 0
 		win.forEach((x, i) => {
 			credit += x[4]
@@ -305,7 +318,7 @@ export default function program(
 	})
 	// the pool: SHA-256 of all samples. async: it reads first, then awaits the digest. the hash
 	// says how many samples it took in, so the seed can wait for a pool that is up to date
-	const pool = memo("pool", () => {
+	const pool = createMemo("pool", () => {
 		const s = get(samples)
 		if (!s.length) return { n: 0, hex: "" }
 		return sha256("tarot-pool:" + s.map((x) => x.join(",")).join(";")).then((hex) => ({
@@ -314,22 +327,22 @@ export default function program(
 		}))
 	})
 	// the seed: fixed when the bits are full and the pool has taken in every sample (no more come)
-	const seed = memo("seed", () => {
+	const seed = createMemo("seed", () => {
 		const p = soft(pool)
 		const full = get(samples).length
 		if (get(bits) < NEED || !p || typeof p !== "object" || p.n !== full) return null
 		return p.hex.slice(0, 32)
 	})
-	const deck = memo("deck", () => {
+	const deck = createMemo("deck", () => {
 		const s = get(seed)
 		return typeof s === "string" ? shuffle(s) : null // [card, reversed] x 78
 	})
-	const print = memo("fingerprint", () => {
+	const print = createMemo("fingerprint", () => {
 		const d = get(deck)
 		return Array.isArray(d) ? fnv(d) : null
 	})
 	// what is on the table: the top of the deck laid out in the spread, with what is turned
-	memo("reading", () => {
+	createMemo("reading", () => {
 		const d = get(deck)
 		const kind = get(spread)
 		const up = get(flipped)
@@ -343,46 +356,57 @@ export default function program(
 		}
 	})
 
-	// ---- methods: what the buttons send; the pad's batches and the clock write from timers ----
+	// ---- actions: what the buttons and the pad call ----
 	const turn = (i: number) => {
-		const up = get(flipped)
-		if (get(seed) && !up.includes(i)) edit(flipped, (d: number[]) => void d.push(i))
+		const up = now(flipped)
+		if (now(seed) && !up.includes(i)) put(flipped, [...up, i])
 	}
-	method("on/sample", (batch: number[][]) => {
-		// samples come in once a few have gathered; once the bits are full, none more are taken
-		let have = get(samples).reduce((a: number, x: number[]) => a + x[4], 0)
+	createAction("on/sample", (batch: number[][]) => {
+		// samples come in as the pointer moves; once the bits are full, none more are taken
+		let have = now(samples).reduce((a: number, x: number[]) => a + x[4], 0)
 		const take: number[][] = []
 		for (const x of batch) {
 			if (have >= NEED) break
 			take.push(x)
 			have += x[4]
 		}
-		if (take.length) edit(samples, (d: number[][]) => void d.push(...take))
+		if (take.length) put(samples, [...now(samples), ...take])
 	})
-	method("on/flip", turn)
-	method("on/next", () => {
-		const n = spreads[get(spread) as string].length
-		const up = get(flipped)
+	createAction("on/flip", (i: number) => {
+		put(wave, false)
+		turn(i)
+	})
+	createAction("on/next", () => {
+		put(wave, false)
+		const n = spreads[now(spread) as string].length
+		const up = now(flipped)
 		for (let i = 0; i < n; i++) if (!up.includes(i)) return turn(i)
 	})
-	method("on/spread", (kind: string) => {
-		edit(spread, () => kind)
-		edit(flipped, (d: number[]) => void d.splice(0))
+	// every card at once, each turn waiting for its place in the spread (the wave class: a css
+	// delay by position); the old one called on/next from a timer
+	createAction("on/all", () => {
+		put(wave, true)
+		put(flipped, spreads[now(spread) as string].map((_: string, i: number) => i))
 	})
-	// the same seed again: the deck is a function of it, so the same cards come back
-	method("on/reread", () => {
-		edit(flipped, (d: number[]) => void d.splice(0))
-		edit(rereads, (n: number) => n + 1)
+	createAction("on/spread", (kind: string) => {
+		put(spread, kind)
+		put(flipped, [])
+	})
+	// the same seed again: the deck is a function of it, so the same cards come back. they settle
+	// face down; turning them again is up to whoever reads (a timer cannot call on/next)
+	createAction("on/reread", () => {
+		put(flipped, [])
+		put(rereads, now(rereads) + 1)
 	})
 	// a new reading needs new entropy: the samples go, and with them the pool, seed and deck
-	method("on/renew", () => {
-		edit(samples, (d: number[][]) => void d.splice(0))
-		edit(flipped, (d: number[]) => void d.splice(0))
-		edit(rereads, () => 0)
+	createAction("on/renew", () => {
+		put(samples, [])
+		put(flipped, [])
+		put(rereads, 0)
 	})
 
 	// what the shuffling stage says under the cards: a node, so it can be bound like the rest
-	memo("caption", () => {
+	createMemo("caption", () => {
 		const r = get(rate), b = get(bits), fp = get(print)
 		return typeof get(seed) === "string"
 			? `deck fixed · lands as ${fp}`
@@ -393,7 +417,7 @@ export default function program(
 
 	// ---- the view: jsx bound to the nodes. what the program draws itself (the pad's canvas, the
 	// shuffling cards, the timers' state) lives in this setup ----
-	const st = { x: NaN, y: NaN, t: 0, dt: 0, buf: [] as number[][], timer: 0, tick: 0 }
+	const st = { x: NaN, y: NaN, t: 0, dt: 0, full: false, moved: 0 }
 	const canvas: HTMLCanvasElement = get(
 		ref(
 			"el/canvas",
@@ -410,12 +434,13 @@ export default function program(
 	})
 	let stage: HTMLElement | undefined
 
-	// a move over the pad: samples at full resolution, sent in batches (a timer's send: the samples
-	// are the hand's, the send is the pad's own code)
+	// a move over the pad: samples at full resolution, handed to on/sample as the move happens (the
+	// handler's arguments are read off the event: a listener of this code's own could not call)
 	const move = (e: PointerEvent) => {
-		if ((get(bits) as number) >= NEED) return
+		if (st.full) return undefined
 		const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
 		const evs = e.getCoalescedEvents?.() ?? []
+		const batch: number[][] = []
 		for (const ev of evs.length ? evs : [e]) {
 			// full resolution: the fractional position, the time to the microsecond, the gap since the last
 			const now = performance.now()
@@ -427,7 +452,8 @@ export default function program(
 			const credit = !moved ? 0 : 1 + (Math.abs(dt - st.dt) >= 0.5 ? 1 : 0)
 			st.x = x, st.y = y, st.t = when, st.dt = dt
 			if (!credit) continue
-			st.buf.push([x, y, when, dt, credit, performance.timeOrigin + now])
+			st.moved = now
+			batch.push([x, y, when, dt, credit, performance.timeOrigin + now])
 			ctx.fillStyle = "rgba(255,251,224,.035)"
 			ctx.fillRect(0, 0, canvas.width, canvas.height)
 			ctx.fillStyle = credit > 1 ? "#ff2284" : "#2269ff"
@@ -435,30 +461,9 @@ export default function program(
 			ctx.arc((x / rect.width) * canvas.width, (y / rect.height) * canvas.height, 3.5, 0, 7)
 			ctx.fill()
 		}
-		if (!st.timer) {
-			st.timer = setTimeout(() => {
-				st.timer = 0
-				const batch = st.buf.splice(0)
-				if (batch.length) send("on/sample", batch)
-			}, 80)
-		}
+		return batch.length ? [batch] : undefined
 	}
-	teardown(() => (clearTimeout(st.timer), (st.timer = 0)))
 
-	// turn them all, one at a time: the first now, the rest by timer
-	const all = () => {
-		const n = spreads[get(spread) as string].length
-		for (let i = 1; i < n; i++) setTimeout(() => send("on/next"), i * 650)
-		return []
-	}
-	// a re-read: the cards settle face down, then turn again
-	const again = () => {
-		setTimeout(() => {
-			send("on/next")
-			all()
-		}, 900)
-		return []
-	}
 	// a spread's button is lit while it is the spread
 	const lit = (kind: string) => bind("spread", (k) => (k === kind ? "on" : ""))
 	// the buttons that need a deck: off until the reading is dealt
@@ -469,6 +474,7 @@ export default function program(
 		return (
 			<div class={"cell pos" + (i + 1)} key={String(i)}>
 				<div
+					style={`--i:${i}`}
 					class={"card" + (dealt ? "" : " empty") + (c.up ? " up" : "") +
 						(c.rev ? " rev" : "")}
 					onClick={handler("on/flip", [i])}
@@ -517,12 +523,13 @@ export default function program(
 		raf: 0,
 		was: false,
 	}
-	effect("shuffle", () => ({
+	createEffect("shuffle", () => ({
 		r: get(rate),
 		b: get(bits),
 		full: typeof get(seed) === "string",
 		fp: get(print),
 	}), (v) => {
+		st.full = v.full
 		anim.target = { pace: v.r.pace, mix: v.b / NEED, dir: v.r.dir, full: v.full }
 	})
 	const ease = (a: number, b: number, x: number) => {
@@ -534,8 +541,11 @@ export default function program(
 		const dt = Math.min(0.05, (now - (anim.last || now)) / 1000)
 		anim.last = now
 		const g = anim.target ?? { pace: 0, mix: 0, dir: 0, full: false }
+		// a still hand: the rate node holds its last value (nothing ticks it), so the pace is let go
+		// here once the pointer has been quiet for a moment
+		const still = performance.now() - st.moved > 1500
 		const k = 1 - Math.exp(-dt * 6)
-		anim.pace += (g.pace - anim.pace) * k
+		anim.pace += ((still ? 0 : g.pace) - anim.pace) * k
 		anim.mix += (g.mix - anim.mix) * k
 		anim.dir += (g.dir - anim.dir) * k
 		anim.calm += ((g.full ? 0 : 1) - anim.calm) * k
@@ -574,16 +584,7 @@ export default function program(
 		})
 	}
 	anim.raf = requestAnimationFrame(frame)
-	teardown(() => cancelAnimationFrame(anim.raf))
-	// a still mouse needs a clock: tick while gathering, until the hand has been quiet a few seconds
-	st.tick = setInterval(() => {
-		const s = get(samples), last = s.at(-1)
-		if (last && get(bits) < NEED && performance.now() - last[2] < 4000) {
-			edit(tick, () => performance.now())
-		}
-	}, 200)
-	teardown(() => clearInterval(st.tick))
-
+	addTeardown(() => cancelAnimationFrame(anim.raf))
 	const hud = (s) => `${s.n} samples · gap ${s.last ? s.last.dt.toFixed(2) : 0} ms`
 	return (
 		// fixed: the seed is fixed, so the reading is dealt (bound to the reading: it always has a
@@ -603,7 +604,7 @@ export default function program(
 				<div class="gathrow">
 					<div
 						class="pad"
-						onPointerMove={move}
+						onPointerMove={handler("on/sample", move)}
 						onPointerDown={(e) =>
 							(e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId)}
 					>
@@ -662,14 +663,20 @@ export default function program(
 						celtic cross
 					</button>
 					<button disabled={undealt} onClick={handler("on/next")}>turn the next card</button>
-					<button disabled={undealt} onClick={handler("on/next", all)}>turn them all</button>
-					<button disabled={undealt} onClick={handler("on/reread", again)}>
+					<button disabled={undealt} onClick={handler("on/all")}>turn them all</button>
+					<button disabled={undealt} onClick={handler("on/reread")}>
 						re-read this seed
 					</button>
 					<button class="go" onClick={handler("on/renew")}>new reading</button>
 				</div>
 				<p class="wait">the cards are waiting: gather entropy to deal</p>
-				<div class={bind("spread", (k) => (k === "cross" ? "table cross" : "table"))}>
+				<div
+					class={bind(
+						"spread",
+						(k) => (k === "cross" ? "table cross" : "table"),
+					)}
+					data-wave={bind("wave", (w) => (w ? "on" : "off"))}
+				>
 					{bind("reading", (r) => r.cards.map(card))}
 				</div>
 				<ul class="words">{bind("reading", (r) => r.cards.filter((c) => c.up).map(word))}</ul>

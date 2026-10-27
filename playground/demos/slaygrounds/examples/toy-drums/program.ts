@@ -1,11 +1,22 @@
 /** @jsxImportSource ermine-h */
-import type { API } from "@ermine/api"
+import {
+	createAction,
+	createEffect,
+	createMemo,
+	ensureNode,
+	patch,
+	peep,
+	read,
+	ref,
+} from "@ermine/system"
 import { bind, handler } from "ermine-h"
 
 // toy-drums: three drums, eight steps. the pattern is one node (three strings, x = hit), the
 // playhead is another. the grid and the little text pattern under it are two views of those nodes.
 // change a drum sound or a label below and save: the beat keeps going, the pattern stays. each
-// cell is bound to the pattern; the playhead is one bar over the grid, bound to its own node
+// cell is bound to the pattern; the playhead is one bar over the grid, bound to its own node.
+// the beat cannot keep itself: a timer cannot write now (nothing is open after it), so ▶ plays
+// and a step button moves the playhead one place
 const drums = ["kick", "snare", "hat"]
 const css = `
 .drums{background:#fff;border:1px solid #000;border-radius:2px;box-shadow:0 4px 24px #ff228433;padding:14px;max-width:420px;margin:0 auto;font-family:Jost,system-ui,sans-serif}
@@ -18,40 +29,42 @@ const css = `
 .drums pre{margin:0;font:13px/1.4 ui-monospace,monospace;background:#fffdf0;border:1px dashed #000;padding:6px}
 `
 
-export default function program({ open, read, edit, memo, effect, method, teardown, ref }: API) {
-	const pattern = open("./pattern", ["x...x...", "....x...", "x.x.x.x."])
-	const step = open("./step", 0)
-	const playing = open("./playing", false)
+export default function program() {
+	const pattern = ensureNode("./pattern", ["x...x...", "....x...", "x.x.x.x."])
+	const step = ensureNode("./step", 0)
+	const playing = ensureNode("./playing", false)
 	const rows = () => read(pattern) as string[]
 	const at = () => read(step) as number
+	const now = <T,>(x: unknown) => peep(() => read(x as never)) as T
+	const put = (x: unknown, value: unknown) => patch(x as never, [{ path: [], value }])
 
 	// the same pattern, as text, with a playhead
-	memo("ascii", () => {
+	createMemo("ascii", () => {
 		const s = at()
 		const lines = rows().map((r, i) => drums[i].padEnd(6) + r)
 		return lines.join("\n") + "\n" + " ".repeat(6 + s) + "^"
 	})
 	// where the playhead is: the step while playing, none when stopped
-	memo("playhead", () => (read(playing) ? at() : -1))
+	createMemo("playhead", () => (read(playing) ? at() : -1))
 
 	// a toggle changes one row of the pattern
-	method("on/toggle", (row: number, col: number) =>
-		edit(pattern, (d: string[]) => {
-			const r = d[row]
-			d[row] = r.slice(0, col) + (r[col] === "x" ? "." : "x") + r.slice(col + 1)
-		}))
-	method("on/play", () => edit(playing, (p: boolean) => !p))
-	method("on/clear", () => edit(pattern, () => drums.map(() => "........")))
-	method("on/surprise", () => {
+	createAction("on/toggle", (row: number, col: number) => {
+		const r = now<string[]>(pattern)[row]
+		patch(pattern, [{
+			path: [row],
+			value: r.slice(0, col) + (r[col] === "x" ? "." : "x") + r.slice(col + 1),
+		}])
+	})
+	createAction("on/play", () => put(playing, !now<boolean>(playing)))
+	createAction("on/clear", () => put(pattern, drums.map(() => "........")))
+	createAction("on/surprise", () => {
 		const r = (p: number) =>
 			Array.from({ length: 8 }, () => Math.random() < p ? "x" : ".").join("")
-		edit(pattern, () => [r(0.3), r(0.2), r(0.6)])
+		put(pattern, [r(0.3), r(0.2), r(0.6)])
 	})
-	// the beat is the process's timer, and writes as it: six writes a second move the playhead
-	const every = setInterval(() => {
-		if (read(playing)) edit(step, (s: number) => (s + 1) % 8)
-	}, 170)
-	teardown(() => clearInterval(every))
+	// the playhead moves one step: six presses a second was the old beat's timer, which wrote as the
+	// process; a timer has no call open now, so a press moves it (and plays the step's sounds)
+	createAction("on/step", () => put(step, (now<number>(step) + 1) % 8))
 
 	// the sounds: a tiny synth, made on first press (a browser wants a click before it speaks)
 	// a live thing, so a ref: it is there till the process stops
@@ -84,11 +97,15 @@ export default function program({ open, read, edit, memo, effect, method, teardo
 		}
 	}
 	// a hit per step: an effect over the step, the pattern and the play flag
-	effect("sound", () => ({ s: at(), p: rows(), on: read(playing) as boolean }), (v, before) => {
-		if (v.on && before && before.s !== v.s) {
-			v.p.forEach((r, i) => r[v.s] === "x" && hit(drums[i]))
-		}
-	})
+	createEffect(
+		"sound",
+		() => ({ s: at(), p: rows(), on: read(playing) as boolean }),
+		(v, before) => {
+			if (v.on && before && before.s !== v.s) {
+				v.p.forEach((r, i) => r[v.s] === "x" && hit(drums[i]))
+			}
+		},
+	)
 	// the press that plays: the synth made (the browser wants a person's click for it), no
 	// arguments for the call
 	const wake = () => {
@@ -126,10 +143,12 @@ export default function program({ open, read, edit, memo, effect, method, teardo
 				<button onClick={handler("on/play", wake)}>
 					{bind("playing", (p) => (p ? "⏸ stop" : "▶ play"))}
 				</button>
+				<button onClick={handler("on/step", wake)}>⏭ step</button>
 				<button onClick={handler("on/clear")}>🧽 clear</button>
 				<button onClick={handler("on/surprise")}>🎲 surprise</button>
 			</div>
 			<pre>{bind("ascii")}</pre>
+			<small>no timer can write now: the playhead moves a step when you press ⏭</small>
 		</div>
 	)
 }

@@ -1,5 +1,21 @@
 /** @jsxImportSource ermine-h */
-import type { API, Node as Entry } from "@ermine/api"
+import {
+	createAction,
+	createEffect,
+	createMemo,
+	ensureNode,
+	hasNode,
+	list,
+	patch,
+	peep,
+	PENDING,
+	pipe,
+	read,
+	ref,
+	unplace,
+	type Watched,
+} from "@ermine/system"
+import { host, inspect } from "@ermine/slaygrounds/tools"
 import type { Extra } from "./host.ts"
 import { bind, handler } from "ermine-h"
 
@@ -9,10 +25,14 @@ import { bind, handler } from "ermine-h"
 // plane and at every data point; …/n0/at is the same at the probe (the pointer). change one weight
 // and its neuron reruns, then what comes after it, nothing before (the mint flash). a step is one
 // send: it reads the activations the graph computed, backprops, writes every weight and bias; the
-// pulse after it is the forward pass. the diagram's views are watches on the nodes (a write marks
+// pulse after it is the forward pass. the diagram's views are pipes on the nodes (a write marks
 // what to paint), the frame paints. grain "layer": a layer's weights are one Float32Array node
 // (layers/L1/W), its activations one compute. edit this file while it trains: the weights are
 // nodes, so they stay (they are under ./, saved: a reload is a stop and a start, and finds them)
+// nothing is open in an animation frame, so a program cannot step or paint from one. the host (host.ts)
+// keeps the clock: each frame it runs on/step (and a pulse after each, the forward pass the next step
+// reads) while playing, then on/frame, which paints. measure is the host's too: it is async, and sets
+// the nodes through the actions
 const LOOK = `
 body { background: #ffff88; margin: 8px; font: 14px Jost, system-ui, sans-serif; color: #000 }
 .nn { display: flex; flex-direction: column; gap: 8px; max-width: 660px }
@@ -36,6 +56,11 @@ label { display: inline-flex; gap: 4px; align-items: center }
 .plane canvas { display: block; cursor: crosshair; touch-action: none }
 .hint { font-size: 12px; color: #000a; margin-top: 4px; width: 256px }
 .net { position: relative }
+.net > .layer { position: relative }
+.net > .heads { position: absolute; left: 0; top: 0; right: 0; bottom: 0 }
+.net > .heads { pointer-events: none }
+.net > .heads > * { pointer-events: auto }
+.netcard { width: 350px }
 .net svg { position: absolute; left: 0; top: 0; overflow: visible }
 .edge { fill: none; stroke-linecap: round }
 .hit { fill: none; stroke: transparent; stroke-width: 9; cursor: pointer; pointer-events: stroke }
@@ -127,6 +152,7 @@ const css = (v: number) => `rgb(${tone(v).join(",")})`
 // weights as plain arrays: W[l-1] is layer l's (rows: its neurons, columns: the ones before), B its biases
 type Params = { W: Float64Array[]; B: Float64Array[] }
 // what the rebuild made: the nodes of one grain, read and written the same way
+type Entry = ReturnType<typeof ensureNode>
 type Net = {
 	grain: string
 	sizes: number[]
@@ -138,7 +164,7 @@ type Net = {
 	address: (l: number, j: number, i: number) => string[]
 	computes: number
 	out: Entry // the output's map
-	watch: (thumbs: Thumb[][], edges: Edge[][][]) => void // the watches that feed the diagram
+	pipes: (thumbs: Thumb[][], edges: Edge[][][]) => void // the pipes that feed the diagram
 }
 type Thumb = {
 	el: HTMLDivElement
@@ -153,55 +179,66 @@ type Thumb = {
 }
 type Edge = { path: SVGPathElement; hit: SVGPathElement; w: () => number; dirty: boolean }
 
-export default function program(api: API & Extra) {
-	const {
-		open,
-		read,
-		edit,
-		memo,
-		effect,
-		watch,
-		method,
-		send,
-		teardown,
-		list,
-		remove,
-		entries,
-		ref,
-		pulse,
-		stats,
-		bulk,
-	} = api
+// the sizes a hidden list gives: 2 in, the hidden ones (kept to what fits), 1 out
+const sizesOf = (hidden: number[]) => [
+	2,
+	...hidden.map((n) => Math.max(1, Math.min(MAX.neurons, n | 0))).slice(0, MAX.layers),
+	1,
+]
+// the diagram's measures: its width, a neuron, the head's row, the columns' x and each one's ys
+const DW = 350, S = 28, TOP = 30
+function geometry(sizes: number[]) {
+	const L = sizes.length - 1
+	const DH = Math.max(276, TOP + 12 + 36 * Math.max(...sizes))
+	const xs = sizes.map((_, c) => 18 + (c * (DW - 36 - S)) / L)
+	const ys = sizes.map((n) => {
+		const gap = Math.min(40, (DH - TOP - 8) / n)
+		return Array.from(
+			{ length: n },
+			(_, j) => TOP + (DH - TOP) / 2 + (j - (n - 1) / 2) * gap - S / 2,
+		)
+	})
+	return { L, DH, xs, ys }
+}
+
+export default function program() {
+	const { bulk } = host<Extra>()
 	// a whole value put on a node
-	const put = (x: Node, value: unknown) => edit(x, [{ path: [], value }])
-	// a read that is nothing while the node is pending (a memo not run yet)
-	const peek = <T,>(x: Node): T | undefined => {
+	const put = (x: Entry, value: unknown) => patch(x, [{ path: [], value }])
+	// a read that is nothing while the node is pending (a memo not run yet) or not there; untracked
+	const peek = <T,>(x: Entry | string): T | undefined => {
 		try {
-			return read(x) as T
+			return peep(() => read(x)) as T
 		} catch (e) {
-			if (e === api.PENDING) return undefined
+			if (e === PENDING) return undefined
 			throw e
 		}
 	}
 
+	// a pipe on x, told as the write lands, named (a name each: two in one run are already-there).
+	// the rebuild's start the count again, so its pipes are the same ones each time
+	let wired = 0
+	const watch = (x: Entry, fn: (w: Watched) => unknown, name = `watch-${wired++}`) =>
+		pipe(x, fn, { timing: "write", name })
+
 	// ---- the nodes: ./ is the root, saved: a reload finds them as they were ----
-	const data = open("./data", DATA.xor())
-	const hidden = open("./hidden", [6, 6])
-	const rate = open("./rate", 0.5)
-	const activation = open("./activation", "tanh")
-	const grain = open("./grain", "weight") // weight | layer
-	const write = open("./write", "each") // each | bulk | whole
-	const speed = open("./speed", 0) // steps a frame; 0: as many as fit in 10ms
-	const playing = open("./playing", false)
-	const steps = open("./steps", 0)
-	const history = open("./history", { every: 1, losses: [] as number[] })
-	const probe = open("./probe", [1, 1])
-	const pen = open("./pen", 1)
-	const busy = open("./measuring", false) // measure is running: its button says so
-	const speeds = open("./speeds", [] as Record<string, unknown>[])
+	const data = ensureNode("./data", DATA.xor())
+	const hidden = ensureNode("./hidden", [6, 6])
+	const rate = ensureNode("./rate", 0.5)
+	const activation = ensureNode("./activation", "tanh")
+	const grain = ensureNode("./grain", "weight") // weight | layer
+	const write = ensureNode("./write", "each") // each | bulk | whole
+	const speed = ensureNode("./speed", 0) // steps a frame; 0: as many as fit in 10ms
+	const playing = ensureNode("./playing", false)
+	const steps = ensureNode("./steps", 0)
+	const history = ensureNode("./history", { every: 1, losses: [] as number[] })
+	const probe = ensureNode("./probe", [1, 1])
+	const pen = ensureNode("./pen", 1)
+	const busy = ensureNode("./measuring", false) // measure is running: its button says so
+	const speeds = ensureNode("./speeds", [] as Record<string, unknown>[])
 	const settings: Record<string, Entry> = { rate, activation, grain, write, speed, pen }
 
-	// what the frame and the handlers' arguments need, kept up by a watch on each: the controls are
+	// what the frame and the handlers' arguments need, kept up by a pipe on each: the controls are
 	// bound to the nodes themselves
 	const cur = {
 		playing: false,
@@ -225,8 +262,12 @@ export default function program(api: API & Extra) {
 			hidden,
 		})
 	) {
-		;(cur as Record<string, unknown>)[k] = read(x)
-		watch(x, (w) => ((cur as Record<string, unknown>)[k] = w.value))
+		;(cur as Record<string, unknown>)[k] = peep(() => read(x))
+		watch(
+			x,
+			(w) => ((cur as Record<string, unknown>)[k] = w.value),
+			`cur-${k}`,
+		)
 	}
 
 	let net: Net | undefined
@@ -234,42 +275,48 @@ export default function program(api: API & Extra) {
 	let ranLog: string[] = []
 	const ran = (label: string, kind = "") => ranLog.push(kind ? `${label} ${kind}` : label)
 
-	// ---- methods: every write is a send ----
-	method("on/step", () => step())
-	method("on/play", (v: boolean) => put(playing, v))
-	method("on/set", (name: string, v: unknown) => put(settings[name], v))
-	method("on/weight", (l: number, j: number, i: number, v: number) => net?.set(l, j, i, v))
-	method("on/add", (x: number, y: number, label: number) =>
-		edit(data, (d: number[][]) => {
-			d.push([r2(x), r2(y), label])
-		}))
-	method("on/data", (name: string) => put(data, name ? DATA[name]() : []))
-	method("on/reset", () => {
+	// ---- actions: every write is an action ----
+	createAction("on/step", () => step())
+	createAction("on/play", (v: boolean) => put(playing, v))
+	createAction("on/set", (name: string, v: unknown) => put(settings[name], v))
+	createAction(
+		"on/weight",
+		(l: number, j: number, i: number, v: number) => net?.set(l, j, i, v),
+	)
+	createAction("on/add", (x: number, y: number, label: number) => {
+		const n = (peep(() => read(data)) as number[][]).length
+		patch(data, [{ path: [], range: [n, n], value: [[r2(x), r2(y), label]] }])
+	})
+	createAction("on/data", (name: string) => put(data, name ? DATA[name]() : []))
+	createAction("on/reset", () => {
 		if (!net) return
 		net.write(reshape(undefined, undefined, net.sizes), cur.write)
 		put(steps, 0)
 		put(history, { every: 1, losses: [] })
 	})
-	method("on/hidden", (h: number[]) => put(hidden, h))
-	method("on/probe", (p: number[]) => put(probe, p))
-	method("on/speeds", (rows: Record<string, unknown>[]) => put(speeds, rows))
-	method("on/measuring", (v: boolean) => put(busy, v))
-	const call = (name: string, args: unknown[] = []) => send("on/" + name, ...args)
+	createAction("on/hidden", (h: number[]) => put(hidden, h))
+	createAction("on/probe", (p: number[]) => put(probe, p))
+	createAction("on/speeds", (rows: Record<string, unknown>[]) => put(speeds, rows))
+	createAction("on/measuring", (v: boolean) => put(busy, v))
+	// the step with no graph (the host's measure runs it): its row
+	createAction("on/plain", () => peep(() => plain()))
 
 	// ---- a step: the activations the graph computed, backprop, every weight and bias written ----
 	function step() {
 		if (!net) return
-		const pts = read(data) as number[][]
+		const pts = peek<number[][]>(data) ?? []
 		const N = pts.length
 		if (!N) return
 		const { sizes } = net
 		const L = sizes.length - 1
-		const P = net.read()
+		const P = peep(net.read)
 		const df = (ACTS[cur.activation] ?? ACTS.tanh)[1]
 		const lr = cur.rate
 		// A[l][i]: neuron i of layer l at the data points, read from its map node
-		const A = sizes.map((n, l) =>
-			Array.from({ length: n }, (_, j) => net!.act(l, j).subarray(OFF, OFF + N))
+		const A = peep(() =>
+			sizes.map((n, l) =>
+				Array.from({ length: n }, (_, j) => net!.act(l, j).subarray(OFF, OFF + N))
+			)
 		)
 		let d = [new Float64Array(N)]
 		let sum = 0
@@ -305,9 +352,9 @@ export default function program(api: API & Extra) {
 			}
 		}
 		net.write(P, cur.write)
-		edit(steps, (n: number) => n + 1)
-		const n = read(steps) as number
-		const h = read(history) as { every: number; losses: number[] }
+		const n = (peep(() => read(steps)) as number) + 1
+		put(steps, n)
+		const h = peep(() => read(history)) as { every: number; losses: number[] }
 		if (n % h.every === 0) {
 			const v = Math.round((sum / N) * 1e4) / 1e4
 			if (h.losses.length >= 300) {
@@ -316,9 +363,11 @@ export default function program(api: API & Extra) {
 					losses: [...h.losses.filter((_, i) => i % 2 === 0), v],
 				})
 			} else {
-				edit(history, (x: { losses: number[] }) => {
-					x.losses.push(v)
-				})
+				patch(history, [{
+					path: ["losses"],
+					range: [h.losses.length, h.losses.length],
+					value: [v],
+				}])
 			}
 		}
 	}
@@ -344,7 +393,7 @@ export default function program(api: API & Extra) {
 		return out
 	}
 	function stored(name: string): [Params, number[]] | undefined {
-		const had = read(`./${name}`) as number[] | undefined
+		const had = peek<number[]>(`./${name}`)
 		if (!Array.isArray(had)) return
 		const P: Params = { W: [], B: [] }
 		for (let l = 1; l < had.length; l++) {
@@ -352,14 +401,14 @@ export default function program(api: API & Extra) {
 			const W = new Float64Array(r * c), B = new Float64Array(r)
 			if (name === "net") {
 				for (let j = 0; j < r; j++) {
-					B[j] = (read(`./net/L${l}/n${j}/b`) as number | undefined) ?? 0
+					B[j] = peek<number>(`./net/L${l}/n${j}/b`) ?? 0
 					for (let i = 0; i < c; i++) {
-						W[j * c + i] = (read(`./net/L${l}/n${j}/w${i}`) as number | undefined) ?? 0
+						W[j * c + i] = peek<number>(`./net/L${l}/n${j}/w${i}`) ?? 0
 					}
 				}
 			} else {
-				const w = read(`./${name}/L${l}/W`) as Float32Array | undefined
-				const b = read(`./${name}/L${l}/b`) as Float32Array | undefined
+				const w = peek<Float32Array>(`./${name}/L${l}/W`)
+				const b = peek<Float32Array>(`./${name}/L${l}/b`)
 				if (w) W.set(w)
 				if (b) B.set(b)
 			}
@@ -368,23 +417,24 @@ export default function program(api: API & Extra) {
 		}
 		return [P, had]
 	}
-	// a node and all under it taken out (remove takes one)
+	// a node and all under it taken out (a program unplaces one name at a time)
 	function drop(path: string) {
-		for (const name of [...list(path)]) drop(`${path}/${name}`)
-		if (entries(path).length) remove(path)
+		if (!peep(() => hasNode(path))) return
+		for (const name of [...peep(() => list(path))]) drop(`${path}/${name}`)
+		unplace(path)
 	}
 	// names under path past n (by their number), taken out
 	function trim(path: string, letter: string, n: number) {
 		const re = new RegExp(`^${letter}(\\d+)$`)
-		for (const name of [...list(path)]) {
+		for (const name of [...peep(() => list(path))]) {
 			const m = re.exec(name)
 			if (m && +m[1] >= n) drop(`${path}/${name}`)
 		}
 	}
 	// the node at the path holding v (made with it, or written to it when it holds something else)
 	function holding(path: string, v: number | Float32Array) {
-		const e = open(path, v)
-		const was = read(e)
+		const e = ensureNode(path, v)
+		const was = peek<number | Float32Array>(e)
 		const same = typeof v === "number"
 			? was === v
 			: was instanceof Float32Array && was.length === v.length && was.every((x, k) => x === v[k])
@@ -395,18 +445,18 @@ export default function program(api: API & Extra) {
 	// ---- grain "weight": a node per weight and bias, a map and an at per neuron ----
 	function byWeight(sizes: number[], P: Params): Net {
 		const L = sizes.length - 1
-		const folder = open("./net", sizes)
-		if (JSON.stringify(read(folder)) !== JSON.stringify(sizes)) put(folder, sizes)
+		const folder = ensureNode("./net", sizes)
+		if (JSON.stringify(peek(folder)) !== JSON.stringify(sizes)) put(folder, sizes)
 		const w: Entry[][][] = [], b: Entry[][] = [], maps: Entry[][] = [], ats: Entry[][] = []
 		for (let l = 0; l <= L; l++) {
-			open(`./net/L${l}`, null)
+			ensureNode(`./net/L${l}`, null)
 			w.push([]), b.push([]), maps.push([]), ats.push([])
 			for (let j = 0; j < sizes[l]; j++) {
 				const at = `./net/L${l}/n${j}`
-				open(at, null)
+				ensureNode(at, null)
 				const label = `L${l}·n${j}`
 				if (l === 0) {
-					maps[0].push(memo(`${at}/map`, () => {
+					maps[0].push(createMemo(`${at}/map`, () => {
 						const pts = read(data) as number[][]
 						const o = new Float32Array(OFF + pts.length)
 						o.set(j ? GY : GX)
@@ -415,7 +465,7 @@ export default function program(api: API & Extra) {
 						return o
 					}))
 					ats[0].push(
-						memo(`${at}/at`, () => (ran(label, "at"), (read(probe) as number[])[j])),
+						createMemo(`${at}/at`, () => (ran(label, "at"), (read(probe) as number[])[j])),
 					)
 					continue
 				}
@@ -429,7 +479,7 @@ export default function program(api: API & Extra) {
 				w[l].push(ws)
 				const before = maps[l - 1], beforeAt = ats[l - 1]
 				const fn = () => (l === L ? sigmoid : (ACTS[cur.activation] ?? ACTS.tanh)[0])
-				maps[l].push(memo(`${at}/map`, () => {
+				maps[l].push(createMemo(`${at}/map`, () => {
 					const f = fn(), z0 = read(bias) as number
 					const k = ws.map((e) => read(e) as number)
 					const ins = before.map((e) => read(e) as Float32Array)
@@ -442,7 +492,7 @@ export default function program(api: API & Extra) {
 					ran(label, "map")
 					return o
 				}))
-				ats[l].push(memo(`${at}/at`, () => {
+				ats[l].push(createMemo(`${at}/at`, () => {
 					let z = read(bias) as number
 					for (let i = 0; i < c; i++) {
 						z += (read(ws[i]) as number) * (read(beforeAt[i]) as number)
@@ -501,7 +551,7 @@ export default function program(api: API & Extra) {
 			act: (l, j) => read(maps[l][j]) as Float32Array,
 			address: (l, j, i) => ["net", `L${l}`, `n${j}`, i < 0 ? "b" : `w${i}`],
 			out: maps[L][0],
-			watch(thumbs, edges) {
+			pipes(thumbs, edges) {
 				for (let l = 0; l <= L; l++) {
 					for (let j = 0; j < sizes[l]; j++) {
 						const th = thumbs[l][j]
@@ -520,18 +570,31 @@ export default function program(api: API & Extra) {
 		}
 	}
 
+	// a typed array node changed where it differs from what is given: a patch (a range of one) for each element
+	function each(x: Entry, to: Float64Array) {
+		const now = peep(() => read(x)) as Float32Array
+		const patches = []
+		for (let k = 0; k < now.length; k++) {
+			const v = Math.fround(to[k])
+			if (now[k] !== v) {
+				patches.push({ path: [], range: [k, k + 1] as const, value: Float32Array.of(v) })
+			}
+		}
+		if (patches.length) patch(x, patches)
+	}
+
 	// ---- grain "layer": a layer's weights one Float32Array node (rows: neurons), a map and an at per layer ----
 	function byLayer(sizes: number[], P: Params): Net {
 		const L = sizes.length - 1
-		const folder = open("./layers", sizes)
-		if (JSON.stringify(read(folder)) !== JSON.stringify(sizes)) put(folder, sizes)
+		const folder = ensureNode("./layers", sizes)
+		if (JSON.stringify(peek(folder)) !== JSON.stringify(sizes)) put(folder, sizes)
 		const W: Entry[] = [], B: Entry[] = [], maps: Entry[] = [], ats: Entry[] = []
 		for (let l = 0; l <= L; l++) {
 			const at = `./layers/L${l}`
-			open(at, null)
+			ensureNode(at, null)
 			const label = `L${l}`
 			if (l === 0) {
-				maps.push(memo(`${at}/map`, () => {
+				maps.push(createMemo(`${at}/map`, () => {
 					const pts = read(data) as number[][]
 					const n = OFF + pts.length, o = new Float32Array(2 * n)
 					o.set(GX, 0)
@@ -543,7 +606,7 @@ export default function program(api: API & Extra) {
 					return o
 				}))
 				ats.push(
-					memo(
+					createMemo(
 						`${at}/at`,
 						() => (ran(label, "at"), Float32Array.from(read(probe) as number[])),
 					),
@@ -557,7 +620,7 @@ export default function program(api: API & Extra) {
 			W.push(We), B.push(Be)
 			const before = maps[l - 1], beforeAt = ats[l - 1]
 			const fn = () => (l === L ? sigmoid : (ACTS[cur.activation] ?? ACTS.tanh)[0])
-			maps.push(memo(`${at}/map`, () => {
+			maps.push(createMemo(`${at}/map`, () => {
 				const f = fn(), w = read(We) as Float32Array, b = read(Be) as Float32Array
 				const ins = read(before) as Float32Array, n = ins.length / c
 				const o = new Float32Array(r * n)
@@ -571,7 +634,7 @@ export default function program(api: API & Extra) {
 				ran(label, "map")
 				return o
 			}))
-			ats.push(memo(`${at}/at`, () => {
+			ats.push(createMemo(`${at}/at`, () => {
 				const f = fn(), w = read(We) as Float32Array, b = read(Be) as Float32Array
 				const ins = read(beforeAt) as Float32Array, o = new Float32Array(r)
 				for (let j = 0; j < r; j++) {
@@ -608,30 +671,26 @@ export default function program(api: API & Extra) {
 						put(B[l], Float32Array.from(P.B[l - 1]))
 						continue
 					}
-					// a patch per element that changed (produce on a typed array: a range of one each)
-					edit(W[l], (d: Float32Array) => {
-						for (let k = 0; k < d.length; k++) d[k] = P.W[l - 1][k]
-					})
-					edit(B[l], (d: Float32Array) => {
-						for (let k = 0; k < d.length; k++) d[k] = P.B[l - 1][k]
-					})
+					// a patch per element that changed
+					each(W[l], P.W[l - 1])
+					each(B[l], P.B[l - 1])
 				}
 			},
 			get: (l, j, i) =>
 				i < 0
 					? (read(B[l]) as Float32Array)[j]
 					: (read(W[l]) as Float32Array)[j * sizes[l - 1] + i],
-			set: (l, j, i, v) =>
-				edit(i < 0 ? B[l] : W[l], (d: Float32Array) => {
-					d[i < 0 ? j : j * sizes[l - 1] + i] = v
-				}),
+			set: (l, j, i, v) => {
+				const k = i < 0 ? j : j * sizes[l - 1] + i
+				patch(i < 0 ? B[l] : W[l], [{ path: [], range: [k, k + 1], value: Float32Array.of(v) }])
+			},
 			act(l, j) {
 				const m = read(maps[l]) as Float32Array, n = m.length / sizes[l]
 				return m.subarray(j * n, (j + 1) * n)
 			},
 			address: (l, _j, i) => ["layers", `L${l}`, i < 0 ? "b" : "W"],
 			out: maps[L],
-			watch(thumbs, edges) {
+			pipes(thumbs, edges) {
 				for (let l = 0; l <= L; l++) {
 					const n = sizes[l]
 					const slice = <T extends Float32Array>(m: T | undefined, j: number) =>
@@ -698,18 +757,6 @@ export default function program(api: API & Extra) {
 			/>
 		</span>
 	)
-	// children of parent, in this order: only what is out of place is moved (a slider being dragged
-	// stays in its card)
-	function mount(parent: Element, next: Node[]) {
-		for (const n of [...parent.childNodes]) if (!next.includes(n)) parent.removeChild(n)
-		let before: Node | null = null
-		for (let i = next.length - 1; i >= 0; i--) {
-			const n = next[i]
-			if (n.parentNode !== parent || n.nextSibling !== before) parent.insertBefore(n, before)
-			before = n
-		}
-	}
-
 	// the plane: the output over the grid, the points, the probe. live things, the graph's refs
 	const canvas = read(ref(
 		"el/canvas",
@@ -730,12 +777,11 @@ export default function program(api: API & Extra) {
 		]
 	}
 
-	// the network: an svg of edges under a neuron box each, and the picked weight's card. built by
-	// the rebuild below and drawn by the frame: elements, not jsx
-	const netCard = el("div", "card")
-	const box = el("div", "net")
-	const weightCard = el("div", "weight")
-	mount(netCard, [box, weightCard])
+	// the network: an svg of edges under a neuron box each (layer), built by the rebuild below and
+	// drawn by the frame: elements. the heads, with the buttons that change the hidden layers, are jsx
+	// over it (they run actions: an element's own listener has nothing open), and so is the picked
+	// weight's slider
+	const layer = el("div", "layer")
 	const curve = read(ref("el/curve", () => document.createElement("canvas"))) as HTMLCanvasElement
 	const cg = curve.getContext("2d")!
 
@@ -744,20 +790,21 @@ export default function program(api: API & Extra) {
 	const dirty = { plane: true, curve: true, card: true }
 	let picked: { l: number; j: number; i: number } | undefined
 	let lastRan = ""
-	watch(probe, () => (dirty.plane = true))
-	watch(history, () => (dirty.curve = true))
-	watch(data, () => (dirty.plane = true))
+	watch(probe, () => (dirty.plane = true), "probe")
+	watch(history, () => (dirty.curve = true), "history")
+	watch(data, () => (dirty.plane = true), "data")
 
 	// ---- the rebuild: the grain and the sizes make the nodes, the computes and the diagram. what
 	// it makes goes when it acts again (its memos, its watches), the weights stay ----
-	effect("rebuild", () => {
-		const h = (read(hidden) as number[]).map((n) => Math.max(1, Math.min(MAX.neurons, n | 0)))
-		return `${read(grain)}|${h.slice(0, MAX.layers).join(",")}`
+	createEffect("rebuild", () => {
+		const h = sizesOf(read(hidden) as number[]).slice(1, -1)
+		return `${read(grain)}|${h.join(",")}`
 	}, (key: string) => {
 		const [g0, h] = key.split("|")
 		const sizes = [2, ...(h ? h.split(",").map(Number) : []), 1]
 		const name = g0 === "layer" ? "layers" : "net"
 		const other = g0 === "layer" ? "net" : "layers"
+		wired = 0
 		ranLog = [] // a rebuild runs everything: what reran is counted from here
 		const [P, had] = stored(name) ?? stored(other) ?? [undefined, undefined]
 		const weights = reshape(P, had, sizes)
@@ -765,7 +812,7 @@ export default function program(api: API & Extra) {
 		drop(`./${other}`)
 		const L = sizes.length - 1
 		const outEntry = net.out
-		memo("./loss", () => {
+		createMemo("./loss", () => {
 			const out = read(outEntry) as Float32Array, pts = read(data) as number[][]
 			let sum = 0
 			for (let k = 0; k < pts.length; k++) {
@@ -775,7 +822,7 @@ export default function program(api: API & Extra) {
 			ran("loss")
 			return pts.length ? Math.round((sum / pts.length) * 1e4) / 1e4 : 0
 		})
-		memo("./accuracy", () => {
+		createMemo("./accuracy", () => {
 			const out = read(outEntry) as Float32Array, pts = read(data) as number[][]
 			let right = 0
 			for (let k = 0; k < pts.length; k++) {
@@ -795,19 +842,9 @@ export default function program(api: API & Extra) {
 	})
 
 	function diagram(sizes: number[], net: Net) {
-		const L = sizes.length - 1, DW = 350, S = 28, top = 30
-		const DH = Math.max(276, top + 12 + 36 * Math.max(...sizes))
-		const xs = sizes.map((_, c) => 18 + (c * (DW - 36 - S)) / L)
-		const ys = sizes.map((n) => {
-			const gap = Math.min(40, (DH - top - 8) / n)
-			return Array.from(
-				{ length: n },
-				(_, j) => top + (DH - top) / 2 + (j - (n - 1) / 2) * gap - S / 2,
-			)
-		})
-		box.style.width = DW + "px"
-		box.style.height = DH + "px"
-		netCard.style.width = DW + "px"
+		const { L, DH, xs, ys } = geometry(sizes)
+		layer.style.width = DW + "px"
+		layer.style.height = DH + "px"
 		const NS = "http://www.w3.org/2000/svg"
 		const svg = document.createElementNS(NS, "svg")
 		svg.setAttribute("width", String(DW))
@@ -870,53 +907,10 @@ export default function program(api: API & Extra) {
 				})
 				parts.push(n)
 			}
-			// the column's head: its size, and buttons for a hidden one
-			const head = document.createElement("div")
-			head.className = "head"
-			head.style.left = xs[l] + S / 2 + "px"
-			if (l === 0) head.textContent = "x, y"
-			else if (l === L) head.textContent = "out"
-			else {
-				const minus = Object.assign(document.createElement("button"), {
-					className: "small",
-					textContent: "−",
-				})
-				const plus = Object.assign(document.createElement("button"), {
-					className: "small",
-					textContent: "+",
-				})
-				const h = sizes.slice(1, -1)
-				minus.onclick = () => {
-					const next = h.slice()
-					next[l - 1] > 1 ? next[l - 1]-- : next.splice(l - 1, 1)
-					call("hidden", [next])
-				}
-				plus.onclick = () => {
-					const next = h.slice()
-					next[l - 1] = Math.min(MAX.neurons, next[l - 1] + 1)
-					call("hidden", [next])
-				}
-				head.append(minus, String(sizes[l]), plus)
-			}
-			parts.push(head)
 		}
-		// a layer more (before the output), at the right
-		const more = Object.assign(document.createElement("button"), {
-			className: "small",
-			textContent: "+ layer",
-		})
-		more.onclick = () => {
-			if (sizes.length - 2 < MAX.layers) call("hidden", [[...sizes.slice(1, -1), 4]])
-		}
-		const side = document.createElement("div")
-		side.className = "side"
-		side.style.left = "0px"
-		side.style.bottom = "0px"
-		side.append(more)
-		parts.push(side)
-		box.replaceChildren(...parts)
+		layer.replaceChildren(...parts)
 
-		net.watch(thumbs, edges) // a watch per thing shown: a weight redraws its edge, a map its neuron
+		net.pipes(thumbs, edges) // a pipe per thing shown: a weight redraws its edge, a map its neuron
 		return { thumbs, edges }
 	}
 
@@ -1067,26 +1061,17 @@ export default function program(api: API & Extra) {
 		paintCard()
 	}
 
-	// the picked weight: a slider writing it, its node in the graph tab
-	const slider = el("input")
-	slider.type = "range"
-	Object.assign(slider, { min: "-4", max: "4", step: "0.01" })
+	// the picked weight: its slider (jsx below, writing it through on/weight), its readout, a button
+	// to its node in the graph tab. the rest of the card is elements, shown as the pick says
+	let slider: HTMLInputElement | undefined
 	const readout = el("output")
 	const inGraph = el("button", "small")
 	inGraph.textContent = "in the graph"
 	inGraph.onclick = () => {
-		if (picked && net) {
-			;(parent as unknown as { __pick?: (a: string[]) => void }).__pick?.(
-				net.address(picked.l, picked.j, picked.i),
-			)
-		}
+		if (picked && net) inspect(net.address(picked.l, picked.j, picked.i))
 	}
 	const what = el("span", "what")
 	const ranLine = el("div", "ran")
-	const spaces = [" ", " ", " "].map((x) => document.createTextNode(x))
-	slider.oninput = () => {
-		if (picked) call("weight", [picked.l, picked.j, picked.i, +slider.value])
-	}
 	let cardKey = ""
 	function paintCard() {
 		if (!net) return
@@ -1100,128 +1085,31 @@ export default function program(api: API & Extra) {
 		}
 		for (const col of look?.thumbs ?? []) for (const th of col) th.el.classList.remove("picked")
 		ranLine.textContent = lastRan
+		const some = picked !== undefined && v !== undefined
+		if (slider) slider.hidden = !some
+		readout.hidden = inGraph.hidden = !some
 		if (!picked || v === undefined) {
 			what.textContent = "click an edge for its weight, a neuron for its bias"
-			mount(weightCard, [what, ranLine])
 			return
 		}
 		const { l, j, i } = picked
 		if (i < 0) look?.thumbs[l]?.[j]?.el.classList.add("picked")
 		else look?.edges[l]?.[j]?.[i]?.hit.classList.add("picked")
 		what.textContent = i < 0 ? `bias of L${l}·n${j}` : `weight L${l}·n${j} ← L${l - 1}·n${i}`
-		if (document.activeElement !== slider) slider.value = String(v)
+		if (slider && document.activeElement !== slider) slider.value = String(v)
 		readout.textContent = v.toFixed(3)
-		mount(weightCard, [what, spaces[0], slider, spaces[1], readout, spaces[2], inGraph, ranLine])
 	}
 
-	// ---- the clock: steps while playing, then a paint, every frame. a frame loop writes as the
-	// process, with no method in between; a step still goes through its method (explain's badge),
-	// and is followed by its pulse, the forward pass the next step reads ----
-	let measuring = false
-	let done = 0
-	const window_: [number, number][] = []
-	let raf = 0
-	// one step, its body and its pulse timed apart
-	const one = () => {
-		const t0 = performance.now()
-		call("step")
-		const t1 = performance.now()
-		pulse()
-		const t2 = performance.now()
-		stats.calls++
-		stats.bodyMs += t1 - t0
-		stats.pulseMs += t2 - t1
-	}
-	const frame = () => {
-		raf = requestAnimationFrame(frame)
-		const w0 = stats.writes, s0 = stats.starts, d0 = done
-		if (cur.playing && net && !measuring) {
-			const end = performance.now() + 10
-			let k = 0
-			try {
-				do {
-					one()
-					k++
-					done++
-				} while (cur.playing && (cur.speed ? k < cur.speed : performance.now() < end))
-			} catch (e) {
-				console.error("a step failed, paused", e)
-				call("play", [false])
-			}
-		}
-		const now = performance.now()
-		window_.push([now, done])
-		while (window_.length > 2 && now - window_[0][0] > 1000) window_.shift()
-		const [t0, n0] = window_[0]
-		setLive(
-			"steps/s",
-			now - t0 > 200 ? String(Math.round(((done - n0) * 1000) / (now - t0))) : "0",
-		)
-		if (done > d0) {
-			setLive("writes/step", String(Math.round((stats.writes - w0) / (done - d0))))
-			setLive("runs/step", String(Math.round((stats.starts - s0) / (done - d0))))
-		}
-		paint()
-	}
-	raf = requestAnimationFrame(frame)
-	teardown(() => cancelAnimationFrame(raf))
+	// ---- the frame: the host runs on/frame each frame, after the steps it ran while playing. it
+	// paints (reads untracked), and shows what the host measured (steps/s, writes/step, runs/step) ----
+	createAction("on/frame", (readouts: Record<string, string> = {}) => {
+		for (const [n, v] of Object.entries(readouts)) setLive(n, v)
+		peep(paint)
+	})
 
-	// ---- measure: each grain and write, steps timed in the calls alone; then the arithmetic alone ----
-	const nextFrame = () => new Promise((r) => requestAnimationFrame(r))
-	async function measure() {
-		if (measuring || !net) return
-		measuring = true
-		call("measuring", [true])
-		const was = { grain: cur.grain, write: cur.write, playing: cur.playing }
-		call("play", [false])
-		stats.timing = true
-		const rows: Record<string, unknown>[] = []
-		try {
-			for (const [g0, w0] of CONFIGS) {
-				call("set", ["grain", g0])
-				call("set", ["write", w0])
-				await nextFrame()
-				for (let k = 0; k < 10; k++) one()
-				const a = { ...stats }
-				let n = 0, ms = 0
-				const t0 = performance.now()
-				while (performance.now() - t0 < 1500) {
-					const t1 = performance.now()
-					for (let k = 0; k < 10; k++) one()
-					ms += performance.now() - t1
-					n += 10
-					await nextFrame()
-				}
-				const per = (k: keyof typeof stats) => ((stats[k] as number) - (a[k] as number)) / n
-				rows.push({
-					grain: g0,
-					write: w0,
-					"steps/s": Math.round((n * 1000) / ms),
-					"ms/step": (ms / n).toFixed(2),
-					"in step": per("bodyMs").toFixed(2),
-					"in pulse": per("pulseMs").toFixed(2),
-					"its runs": per("oursMs").toFixed(2),
-					"inspector": per("othersMs").toFixed(2),
-					writes: Math.round(per("writes")),
-					headers: Math.round(per("headers")),
-					runs: Math.round(per("starts")),
-				})
-			}
-			rows.push(plain())
-		} finally {
-			stats.timing = false
-			call("set", ["grain", was.grain])
-			call("set", ["write", was.write])
-			call("speeds", [rows])
-			call("play", [was.playing])
-			measuring = false
-			call("measuring", [false])
-			console.log("nn speeds", JSON.stringify(rows))
-		}
-	}
 	// the same step with no graph: the forward pass over the grid and the data, backprop, in arrays
 	function plain() {
-		const pts = read(data) as number[][], sizes = net!.sizes, L = sizes.length - 1
+		const pts = peek<number[][]>(data) ?? [], sizes = net!.sizes, L = sizes.length - 1
 		const P = net!.read(), N = pts.length, n = OFF + N, lr = cur.rate
 		const [f, df] = ACTS[cur.activation] ?? ACTS.tanh
 		const x0 = new Float32Array(2 * n)
@@ -1287,6 +1175,58 @@ export default function program(api: API & Extra) {
 			</table>
 		)
 	}
+	// a column's head: its size, and buttons for a hidden one; and a layer more (before the output),
+	// at the left. jsx, since they run actions
+	const heads = (sizes: number[]) => {
+		const { L, xs } = geometry(sizes)
+		const h = sizes.slice(1, -1)
+		return (
+			<div class="heads">
+				{sizes.map((n, l) => {
+					const left = { left: xs[l] + S / 2 + "px" }
+					if (l === 0) return <div class="head" style={left}>x, y</div>
+					if (l === L) return <div class="head" style={left}>out</div>
+					const less = h.slice()
+					less[l - 1] > 1 ? less[l - 1]-- : less.splice(l - 1, 1)
+					const more = h.slice()
+					more[l - 1] = Math.min(MAX.neurons, more[l - 1] + 1)
+					return (
+						<div class="head" style={left}>
+							<button class="small" onClick={handler("on/hidden", [less])}>−</button>
+							{String(n)}
+							<button class="small" onClick={handler("on/hidden", [more])}>+</button>
+						</div>
+					)
+				})}
+				<div class="side" style={{ left: "0px", bottom: "0px" }}>
+					<button
+						class="small"
+						onClick={handler(
+							"on/hidden",
+							[h.length < MAX.layers ? [...h, 4] : h],
+						)}
+					>
+						+ layer
+					</button>
+				</div>
+			</div>
+		)
+	}
+	// the slider: writes the picked weight
+	const picker = (
+		<input
+			type="range"
+			min="-4"
+			max="4"
+			step="0.01"
+			hidden
+			ref={(e: HTMLInputElement) => (slider = e)}
+			onInput={handler(
+				"on/weight",
+				(e) => picked ? [picked.l, picked.j, picked.i, +e.target.value] : undefined,
+			)}
+		/>
+	)
 	return (
 		<div class="nn">
 			<style>{LOOK}</style>
@@ -1335,7 +1275,7 @@ export default function program(api: API & Extra) {
 						"10",
 						"10 a frame",
 					]], Number)}
-					<button onClick={() => void measure()}>
+					<button onClick={handler("/host/on/measure")}>
 						{bind("measuring", (m) => (m ? "measuring…" : "measure"))}
 					</button>
 				</div>
@@ -1377,7 +1317,18 @@ export default function program(api: API & Extra) {
 						show
 					</div>
 				</div>
-				{netCard}
+				<div class="card netcard">
+					<div class="net">
+						{layer}
+						{bind("hidden", (h: number[]) =>
+							heads(sizesOf(h)))}
+					</div>
+					<div class="weight">
+						{what} {picker}
+						{readout} {inGraph}
+						{ranLine}
+					</div>
+				</div>
 			</div>
 			<div class="card curve">{curve}</div>
 			<div

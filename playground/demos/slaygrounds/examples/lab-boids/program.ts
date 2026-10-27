@@ -1,10 +1,20 @@
 /** @jsxImportSource ermine-h */
-import type { API } from "@ermine/api"
+import {
+	addTeardown,
+	createAction,
+	createEffect,
+	ensureNode,
+	patch,
+	peep,
+	read,
+	ref,
+} from "@ermine/system"
 import { bind, handler } from "ermine-h"
 
 // program.ts: boids on a canvas. the rules' numbers are nodes under ./params: edit one in the
 // graph tab (or drag a slider, which writes the same node) and the flock changes at once. the
-// pointer is a node too. the flock itself (positions, 60 times a second) is not in the graph: it
+// pointer is a node too (written by the card's pointer events, through a handler: a plain listener
+// has nothing open to write with). the flock itself (positions, 60 times a second) is not in the graph: it
 // is a plain array held by ref at ./flock, which a reload finds again. edit the rules below and the same birds carry on. the
 // canvas is drawn by hand and held with ref; the knobs are jsx, each bound to its node under params
 const LOOK = `
@@ -33,22 +43,25 @@ const KNOBS: Record<string, [number, number, number, number]> = {
 
 type Boid = { x: number; y: number; vx: number; vy: number }
 
-export default function program({ open, read, edit, effect, ref, method, teardown }: API) {
-	const nodes: Record<string, ReturnType<typeof open>> = {}
-	for (const [k, [, , , v]] of Object.entries(KNOBS)) nodes[k] = open("./params/" + k, v)
-	const aim = open("./params/pointer", "avoid") // avoid | follow
-	const pointer = open("./pointer", null) // {x, y} or null: where the pointer is
-	const put = (x: ReturnType<typeof open>, value: unknown) => edit(x, [{ path: [], value }])
-	method("on/set", (k: string, v: unknown) => put(k === "pointer" ? aim : nodes[k], v))
+export default function program() {
+	const nodes: Record<string, ReturnType<typeof ensureNode>> = {}
+	for (const [k, [, , , v]] of Object.entries(KNOBS)) nodes[k] = ensureNode("./params/" + k, v)
+	const aim = ensureNode("./params/pointer", "avoid") // avoid | follow
+	const pointer = ensureNode("./pointer", null) // {x, y} or null: where the pointer is
+	const put = (x: ReturnType<typeof ensureNode>, value: unknown) => patch(x, [{ path: [], value }])
+	createAction("on/set", (k: string, v: unknown) => put(k === "pointer" ? aim : nodes[k], v))
+	createAction("on/point", (p: { x: number; y: number } | null) => put(pointer, p))
 
 	// the flock: ref at ./flock, so a reload finds the same birds (not in the graph's values: it
 	// moves every frame)
-	const flock = read(ref("./flock", () => ({ birds: [] as Boid[] }))) as { birds: Boid[] }
+	const flock = peep(() => read(ref("./flock", () => ({ birds: [] as Boid[] })))) as {
+		birds: Boid[]
+	}
 
 	// ---- the rules as numbers, from the nodes: one effect reads them all into P ----
 	let P: Record<string, any> = {}
 	let pointed: { x: number; y: number } | null = null
-	effect("settings", () => {
+	createEffect("settings", () => {
 		const out: Record<string, any> = {}
 		for (const k in nodes) out[k] = read(nodes[k])
 		out.aim = read(aim)
@@ -63,19 +76,20 @@ export default function program({ open, read, edit, effect, ref, method, teardow
 			b.push({ x: Math.random() * W, y: Math.random() * H, vx: Math.cos(a), vy: Math.sin(a) })
 		}
 	})
-	effect("pointed", () => read(pointer), (p) => (pointed = p as typeof pointed))
+	createEffect("pointed", () => read(pointer), (p) => (pointed = p as typeof pointed))
 
-	// ---- the canvas: the pointer a node, written by the listener ----
-	const canvas = read(ref(
-		"canvas",
-		() => Object.assign(document.createElement("canvas"), { width: W, height: H }),
-	)) as HTMLCanvasElement
+	// ---- the canvas: the pointer a node, written by the card's handlers (below) ----
+	const canvas = peep(() =>
+		read(ref(
+			"canvas",
+			() => Object.assign(document.createElement("canvas"), { width: W, height: H }),
+		))
+	) as HTMLCanvasElement
 	const g = canvas.getContext("2d")!
-	canvas.onpointermove = (e) => {
+	const at = (e: PointerEvent) => {
 		const r = canvas.getBoundingClientRect()
-		put(pointer, { x: e.clientX - r.left, y: e.clientY - r.top })
+		return [{ x: e.clientX - r.left, y: e.clientY - r.top }]
 	}
-	canvas.onpointerleave = () => put(pointer, null)
 
 	// ---- the loop: step the flock with P, draw ----
 	function step() {
@@ -145,14 +159,20 @@ export default function program({ open, read, edit, effect, ref, method, teardow
 		draw()
 	}
 	raf = requestAnimationFrame(loop)
-	teardown(() => cancelAnimationFrame(raf))
+	addTeardown(() => cancelAnimationFrame(raf))
 
 	// ---- the knobs: each a slider and a readout bound to its node; a slide is a send to on/set ----
 	const value = (e: Event) => (e.target as HTMLInputElement).value
 	return (
 		<div class="lab">
 			<style>{LOOK}</style>
-			<div class="card">{canvas}</div>
+			<div
+				class="card"
+				onPointerMove={handler("on/point", at)}
+				onPointerLeave={handler("on/point", () => [null])}
+			>
+				{canvas}
+			</div>
 			<div class="knobs card">
 				{Object.entries(KNOBS).map(([k, [min, max, step]]) => [
 					<span>{k}</span>,

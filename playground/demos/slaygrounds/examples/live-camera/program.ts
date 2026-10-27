@@ -1,5 +1,17 @@
 /** @jsxImportSource ermine-h */
-import type { API, Node } from "@ermine/api"
+import {
+	addTeardown,
+	createAction,
+	createEffect,
+	createMemo,
+	ensureNode,
+	patch,
+	peep,
+	PENDING,
+	read,
+	ref,
+} from "@ermine/system"
+import { host } from "@ermine/slaygrounds/tools"
 import { bind, type Child, handler } from "ermine-h"
 
 // live-camera: three processes on a board, wired by the addresses in their `in` nodes.
@@ -9,12 +21,12 @@ import { bind, type Child, handler } from "ermine-h"
 // what a person edits is saved under ./board (a code text, a wire, a card's place, the rate, the
 // stream): a reload finds it. edit the transform's code in the card (or a preset): no restart. edit
 // this file: a reload, the editor text and the camera are kept. the editor is the host's (extend)
-type Cam = API & {
-	editor: (
-		parent: HTMLElement,
-		doc: string,
-		onchange: (text: string) => void,
-	) => { destroy(): void }
+// nothing is open in a frame callback or a timer, so a program cannot write from one: the host
+// (host.ts) keeps the clocks and runs the actions here: on/frame each frame (the source's), on/stats
+// each second (every process's), and the editor's typing (the transform's on/edit). the camera's
+// promise is a memo's: the memo is pending while it is out, and the stream is its value
+type Cam = {
+	editor: (parent: HTMLElement, doc: string) => { destroy(): void }
 	settext: (view: unknown, text: string) => void
 }
 const W = 160, H = 120
@@ -29,28 +41,27 @@ css.textContent =
 document.head.append(css)
 
 // a card's common nodes: where it sits (the board writes it, through on/move), and one line of numbers
-function common({ open, edit, method }: API, name: string) {
-	const pos = open(`./board/${name}/pos`, start[name])
-	method("on/move", (xy: number[]) => edit(pos, [{ path: [], value: xy }]))
-	return { fps: open("fps", 0), cost: open("cost", "") }
+function common(name: string) {
+	const pos = ensureNode(`./board/${name}/pos`, start[name])
+	createAction("on/move", (xy: number[]) => patch(pos, [{ path: [], value: xy }]))
+	return { fps: ensureNode("fps", 0), cost: ensureNode("cost", "") }
 }
-// once a second: how many frames this stage handled and what its own work cost (a write per number)
+// once a second, run by the host: how many frames this stage handled and what its own work cost (a
+// write per number)
 function every(
-	{ edit, teardown }: API,
-	nodes: { fps: Node; cost: Node },
+	nodes: { fps: ReturnType<typeof ensureNode>; cost: ReturnType<typeof ensureNode> },
 	stats: { n: number; line: () => string },
 ) {
 	let last = performance.now()
-	const timer = setInterval(() => {
+	createAction("on/stats", () => {
 		const now = performance.now()
 		const n = Math.round(stats.n * 1000 / (now - last))
 		const text = stats.line() // reads n, so before it is zeroed
 		stats.n = 0
 		last = now
-		edit(nodes.fps, () => n)
-		edit(nodes.cost, () => text)
-	}, 1000)
-	teardown(() => clearInterval(timer))
+		patch(nodes.fps, [{ path: [], value: n }])
+		patch(nodes.cost, [{ path: [], value: text }])
+	})
 }
 // a stage's line of numbers, bound to its own fps and cost
 const Stat = () => (
@@ -63,14 +74,13 @@ const Stage = (props: { children?: Child }) => <div style="display: contents">{p
 const ms = (x: number) => x.toFixed(2) + "ms"
 
 // ---- source: a camera, or a test pattern ----
-export function source(api: API) {
-	const { open, read, edit, effect, method, ref, teardown } = api
-	const frame = open("frame", null)
+export function source() {
+	const frame = ensureNode("frame", null)
 	// the live value: a MediaStream, in memory only (a ref, kept across reloads: a stop is "ended")
 	const stream = ref("./board/source/stream", () => null)
-	const mode = open("mode", "test pattern: waiting for the camera…")
-	const rate = open("./board/source/rate", 30) // 30 | 60 | 0 (as fast as it can go)
-	const nodes = common(api, "source")
+	const rate = ensureNode("./board/source/rate", 30) // 30 | 60 | 0 (as fast as it can go)
+	const asked = ensureNode("asked", 0)
+	const nodes = common("source")
 	const grab = Object.assign(document.createElement("canvas"), { width: W, height: H })
 	const video = Object.assign(document.createElement("video"), { muted: true, playsInline: true })
 	const ctx = grab.getContext("2d", { willReadFrequently: true })!
@@ -87,36 +97,62 @@ export function source(api: API) {
 				0
 		return s
 	}
-	const say = (how: string) => edit(mode, () => how)
-	method("on/rate", (r: number) => edit(rate, () => r))
+	// the cap goes 30 → 60 → none → 30
+	createAction("on/rate", () => {
+		const r = peep(() => read(rate)) as 30 | 60 | 0
+		patch(rate, [{ path: [], value: { 30: 60, 60: 0, 0: 30 }[r] }])
+	})
+	createAction(
+		"on/ask",
+		() => patch(asked, [{ path: [], value: (peep(() => read(asked)) as number) + 1 }]),
+	)
 
-	// the live value is attached by an effect: when the node holds a stream the video plays it
-	effect("attach", () => read(stream) as MediaStream | null, (ms) => {
+	let alive = true
+	// the camera: a stream still live from before a reload is kept; else the browser is asked (and
+	// again at each "ask for camera"). a promise: the memo is pending while it is out, and its value
+	// is the stream, or why not
+	type Camera = MediaStream | { error: string }
+	createMemo("camera", (): Camera | Promise<Camera> | typeof PENDING => {
+		const n = read(asked) as number
+		const had = peep(() => read(stream)) as MediaStream | null
+		if (n === 0 && had?.active) return had
+		if (!navigator.mediaDevices) return { error: "no mediaDevices" }
+		return navigator.mediaDevices.getUserMedia({
+			video: { width: 320, height: 240 },
+			audio: false,
+		})
+			.then((got): Camera => {
+				if (alive) return got
+				got.getTracks().forEach((x) => x.stop())
+				return { error: "stopped" }
+			})
+			.catch((e): Camera => ({ error: e?.name ?? "unavailable" }))
+	})
+	// what the card says about it
+	createMemo("mode", () => {
+		let got: unknown
+		try {
+			got = read("camera")
+		} catch (e) {
+			if (e === PENDING) return "test pattern: waiting for the camera…"
+			throw e
+		}
+		return got instanceof MediaStream
+			? "camera: a live MediaStream is in ./board/source/stream"
+			: `test pattern: no camera (${(got as { error: string }).error})`
+	})
+	// the stream into its node (the node outlives a reload), and from the node into the video
+	createEffect("keep", () => read("camera") as Camera, (got) => {
+		if (got instanceof MediaStream) patch(stream, [{ path: [], value: got }])
+	})
+	let current: MediaStream | null = null
+	createEffect("attach", () => read(stream) as MediaStream | null, (ms) => {
+		current = ms
 		if (ms && video.srcObject !== ms) (video.srcObject = ms, video.play().catch(() => {}))
 	})
 
-	let alive = true
-	// the stream arrives from outside the scheduler (a promise): it writes as the process
-	const arrived = (ms: MediaStream) => {
-		if (!alive) return ms.getTracks().forEach((x) => x.stop())
-		live = ms
-		edit(stream, [{ path: [], value: ms }])
-		say("camera: a live MediaStream is in ./board/source/stream")
-	}
-	let live = read(stream) as MediaStream | null | undefined
-	if (live && !live.active) live = undefined
-	if (!live) {
-		navigator.mediaDevices?.getUserMedia({ video: { width: 320, height: 240 }, audio: false })
-			.then(arrived)
-			.catch((e) => alive && say(`test pattern: no camera (${e?.name ?? "unavailable"})`))
-		if (!navigator.mediaDevices) say("test pattern: no camera (no mediaDevices)")
-	} else {
-		say("camera: a live MediaStream is in ./board/source/stream")
-		video.play().catch(() => {})
-	}
-
 	function draw(k: number) {
-		if (live && video.readyState >= 2) {
+		if (current?.active && video.readyState >= 2) {
 			ctx.drawImage(video, 0, 0, W, H)
 			return
 		}
@@ -138,57 +174,37 @@ export function source(api: API) {
 		ctx.fillText("frame " + k, 8, H * 0.93)
 	}
 
-	// the frame loop writes the frame node itself, as the process: no method in between
-	let k = 0, last = 0, raf = 0
-	const channel = new MessageChannel()
-	function tick(now: number) {
-		if (!alive) return
-		const r = read(rate) as number
-		if (r === 30 && now - last < 30) return next()
-		last = now
+	// one frame, run by the host's frame loop: it writes the frame node itself
+	let k = 0
+	createAction("on/frame", () => {
 		const a = performance.now()
 		draw(k++)
 		const img = ctx.getImageData(0, 0, W, H)
 		const b = performance.now()
 		stats.n++
 		stats.frames++
-		edit(frame, [{ path: [], value: img }])
+		patch(frame, [{ path: [], value: img }])
 		stats.write += performance.now() - b
 		stats.grab += b - a
 		stats.round += performance.now() - b
-		next()
-	}
-	function next() {
-		const r = read(rate) as number
-		if (r === 0) channel.port2.postMessage(0)
-		else raf = requestAnimationFrame(tick)
-	}
-	channel.port1.onmessage = () => tick(performance.now())
-	next()
-	teardown((why) => {
-		alive = false
-		cancelAnimationFrame(raf)
-		// a reload keeps the camera; the process ending lets it go
-		if (why === "ended") {
-			;(read(stream) as MediaStream | null)?.getTracks().forEach((x) => x.stop())
-		}
 	})
-	every(api, nodes, stats)
+	addTeardown((why) => {
+		alive = false
+		// a reload keeps the camera; the process ending lets it go
+		if (why === "ended") current?.getTracks().forEach((x) => x.stop())
+	})
+	every(nodes, stats)
 
-	// the cap goes 30 → 60 → none → 30
-	const nextRate = () => [{ 30: 60, 60: 0, 0: 30 }[read(rate) as number]]
-	// asking again is the browser's: a promise, so a plain listener
-	const ask = () => navigator.mediaDevices?.getUserMedia({ video: true }).then(arrived)
 	return (
 		<Stage>
 			{grab}
 			<p class="note">{bind("mode")}</p>
 			<Stat />
 			<div class="row">
-				<button onClick={handler("on/rate", nextRate)}>
+				<button onClick={handler("on/rate")}>
 					{bind("board/source/rate", (r) => (r ? `${r} fps cap` : "no cap"))}
 				</button>
-				<button onClick={ask}>ask for camera</button>
+				<button onClick={handler("on/ask")}>ask for camera</button>
 			</div>
 		</Stage>
 	)
@@ -277,11 +293,11 @@ function compile(text: string) {
 	}
 }
 
-export function transform(api: Cam) {
-	const { open, read, edit, memo, method, teardown, editor: makeEditor, settext } = api
-	const inn = open("./board/transform/in", "/source/frame") // the address it reads: the board draws the wire from it
-	const code = open("./board/transform/code", presets.invert) // the editor's text, a node
-	const nodes = common(api, "transform")
+export function transform() {
+	const { editor: makeEditor, settext } = host<Cam>()
+	const inn = ensureNode("./board/transform/in", "/source/frame") // the address it reads: the board draws the wire from it
+	const code = ensureNode("./board/transform/code", presets.invert) // the editor's text, a node
+	const nodes = common("transform")
 	const stats = { n: 0, work: 0, line: () => "" }
 	stats.line = () => {
 		const s = `fn ${ms(stats.work / Math.max(1, stats.n))}`
@@ -289,12 +305,12 @@ export function transform(api: Cam) {
 		return s
 	}
 	// the function, recompiled when the text changes: nothing else restarts
-	const fn = memo("fn", () => compile(read(code) as string))
-	memo("status", () => (read(fn) as any).error ?? "ok")
+	const fn = createMemo("fn", () => compile(read(code) as string))
+	createMemo("status", () => (read(fn) as any).error ?? "ok")
 	let lastError = ""
-	method("on/edit", (text: string) => edit(code, () => text))
+	createAction("on/edit", (text: string) => patch(code, [{ path: [], value: text }]))
 	// out: reads the input address, runs the function. the result is a node
-	memo("out", () => {
+	createMemo("out", () => {
 		const f = read(fn) as any
 		const img = read(String(read(inn))) as ImageData | null | undefined
 		if (!img || !img.data || f.error) return img
@@ -311,16 +327,12 @@ export function transform(api: Cam) {
 		}
 	})
 
-	every(api, nodes, stats)
-	// the editor is the host's (CodeMirror): a div it draws in, placed and never touched
-	const host = Object.assign(document.createElement("div"), { className: "cm-host" })
-	let timer: number
-	// typing is debounced into one write; a preset button writes the text into the editor, same path
-	const editor = makeEditor(host, read(code) as string, (text) => {
-		clearTimeout(timer)
-		timer = setTimeout(() => api.send("on/edit", text), 120)
-	})
-	teardown(() => (clearTimeout(timer), editor.destroy()))
+	every(nodes, stats)
+	// the editor is the host's (CodeMirror): a div it draws in, placed and never touched. what is
+	// typed is the host's too: it runs on/edit, debounced
+	const box = Object.assign(document.createElement("div"), { className: "cm-host" })
+	const editor = makeEditor(box, peep(() => read(code)) as string)
+	addTeardown(() => editor.destroy())
 	return (
 		<Stage>
 			<div class="row">
@@ -328,17 +340,16 @@ export function transform(api: Cam) {
 					<button onClick={() => settext(editor, text)}>{name}</button>
 				))}
 			</div>
-			{host}
+			{box}
 			<p class="note warn">{bind("status")}</p>
 			<Stat />
 		</Stage>
 	)
 }
 // ---- output ----
-export function output(api: API) {
-	const { open, read, effect } = api
-	const inn = open("./board/output/in", "/transform/out")
-	const nodes = common(api, "output")
+export function output() {
+	const inn = ensureNode("./board/output/in", "/transform/out")
+	const nodes = common("output")
 	const stats = { n: 0, draw: 0, line: () => "" }
 	stats.line = () => {
 		const s = `draw ${ms(stats.draw / Math.max(1, stats.n))}`
@@ -348,14 +359,14 @@ export function output(api: API) {
 	const canvas = Object.assign(document.createElement("canvas"), { width: W, height: H })
 	const ctx = canvas.getContext("2d")!
 	// an effect: reads the address it is wired to, draws each new frame
-	effect("draw", () => read(String(read(inn))) as ImageData | null | undefined, (img) => {
+	createEffect("draw", () => read(String(read(inn))) as ImageData | null | undefined, (img) => {
 		if (!img?.data) return
 		const a = performance.now()
 		ctx.putImageData(img, 0, 0)
 		stats.draw += performance.now() - a
 		stats.n++
 	})
-	every(api, nodes, stats)
+	every(nodes, stats)
 	return (
 		<Stage>
 			{canvas}

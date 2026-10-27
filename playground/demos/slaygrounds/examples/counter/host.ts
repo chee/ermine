@@ -4,6 +4,6 @@ import { createWorld } from "@ermine/slaygrounds/world"
 import { render } from "ermine-h"
 
 const world = createWorld({ render, processes: [{ name: "demo" }] })
-world.seed((host) => void host.open("/data/n", 21))
+world.seed((host) => void host.ensureNode("/data/n", 21))
 
 export const reload = world.reload

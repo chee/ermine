@@ -1,5 +1,18 @@
 /** @jsxImportSource ermine-h */
-import type { API } from "@ermine/api"
+import {
+	addTeardown,
+	createAction,
+	createEffect,
+	ensureNode,
+	getArgs,
+	hasNode,
+	list,
+	patch,
+	peep,
+	read,
+	ref,
+	unplace,
+} from "@ermine/system"
 import { bind, handler, under } from "ermine-h"
 
 // fancy-synth: a little eurorack. every module is a process, /<name>, its args its name and its
@@ -11,7 +24,9 @@ import { bind, handler, under } from "ermine-h"
 // a cable is a node under /patch, named for the input it feeds: /patch/filter.in = {from:
 // "mixer.out"}. an input's wiring is an effect reading its cable's node and the two jacks, so
 // re-patching reruns that one input's wiring, and a module rebuilt (edit its build below) is
-// rewired by everyone reading its jacks. power on the out module: audio needs a click
+// rewired by everyone reading its jacks. power on the out module: audio needs a click.
+// nothing is open after a timer or a frame: the clock's loop is an element whose css animation
+// cycles every 20ms, each cycle's animationiteration calling on/beat through a handler
 const HP = 13 // px per eurorack unit
 const LOOKAHEAD = 0.1 // s: how far ahead the clock writes its gates (the graph runs ahead of the speaker)
 const COLORS = ["#ff2284", "#40dcba", "#2269ff", "#ffff88", "#000000"]
@@ -41,7 +56,6 @@ type Gate = { n: number; at: number; len: number }
 type Any = any
 type Voice = { jacks: Record<string, AudioNode>; stop: () => void; [k: string]: Any }
 type Module = {
-	api: API
 	name: string
 	spec: Spec
 	// a node of this module's, saved: /rack/<name>/<sub>
@@ -49,7 +63,7 @@ type Module = {
 	// a live thing (a canvas) kept at /rack/<name>/<sub>: a reload finds it again
 	keep: <T>(sub: string, make: () => T) => T
 	// a whole put
-	put: (x: ReturnType<API["open"]>, v: unknown) => void
+	put: (x: Parameters<typeof read>[0], v: unknown) => void
 	knob: Record<string, Any>
 	jack: Record<string, Any>
 	voice: Any
@@ -72,6 +86,10 @@ type Spec = {
 	setup?: (m: Module) => void
 	face?: (m: Module) => Any
 }
+
+// a node's value now, from an action or an act (nothing tracked)
+const get = <T,>(x: Parameters<typeof read>[0]) => peep(() => read(x)) as T
+const put = (x: Parameters<typeof read>[0], v: unknown) => patch(x, [{ path: [], value: v }])
 
 // ---- a knob's turn: 0..1 along its range, and back ----
 const clamp = (n: number) => Math.min(1, Math.max(0, n))
@@ -109,20 +127,18 @@ const CLOCK: Spec = {
 	outs: [{ id: "gate", label: "gate", kind: "gate" }],
 	// a gate is written ahead of time, on the audio clock: whoever reads it schedules at its at
 	setup(m) {
-		const { read, teardown } = m.api
 		const state = m.keep("state", () => ({ n: 0, next: 0 }))
-		// a timer writes as the process, and reads untracked: what it reads now is what it uses now
-		const every = setInterval(() => {
-			const ctx = m.ctx()
+		// a beat (every 20ms, from the clock's face): what it reads now is what it uses now
+		createAction("on/beat", () => {
+			const ctx = peep(() => m.ctx())
 			if (!ctx || ctx.state !== "running") return
-			const step = 30 / (Number(read(m.knob.bpm)) || 120) // eighths
+			const step = 30 / (Number(get(m.knob.bpm)) || 120) // eighths
 			if (state.next < ctx.currentTime) state.next = ctx.currentTime + 0.02
 			while (state.next < ctx.currentTime + LOOKAHEAD) {
 				m.put(m.jack.gate, { n: state.n++, at: state.next, len: step / 2 })
 				state.next += step
 			}
-		}, 20)
-		teardown(() => clearInterval(every))
+		})
 	},
 	face: (m) => (
 		<div class="face">
@@ -131,6 +147,7 @@ const CLOCK: Spec = {
 				data-flash={bind(m.own("jacks/gate"), (g: Gate) => (g.n % 2 ? "a" : "b"))}
 			/>
 			<small>bpm, in 8ths</small>
+			<i class="beat" onAnimationIteration={handler("on/beat")} />
 		</div>
 	),
 }
@@ -170,12 +187,12 @@ const STEPS: Spec = {
 	),
 	// one step on per gate: the pitch is set at the gate's own time; step says which (the graph's)
 	gate(voice, g, m) {
-		const step = m.api.open(m.own("step"), -1)
-		const i = (Number(m.api.read(step)) + 1) % 4
+		const step = ensureNode(m.own("step"), -1)
+		const i = (Number(get(step)) + 1) % 4
 		voice.cv.offset.setValueAtTime(voice.semis[i], g.at)
 		m.put(step, i)
 	},
-	setup: (m) => void m.api.open(m.own("step"), -1),
+	setup: (m) => void ensureNode(m.own("step"), -1),
 	face: (m) => (
 		<div class="face leds">
 			{[0, 1, 2, 3].map((i) => (
@@ -417,18 +434,17 @@ const ENV: Spec = {
 		p.linearRampToValueAtTime(1, g.at + a)
 		p.setTargetAtTime(s, g.at + a, d / 3)
 		p.setTargetAtTime(0, g.at + Math.max(a, g.len), r / 3)
-		m.put(m.api.open(m.own("hit"), 0), g.n)
+		m.put(ensureNode(m.own("hit"), 0), g.n)
 	},
 	setup(m) {
-		const { open, read, effect } = m.api
-		open(m.own("hit"), 0)
+		ensureNode(m.own("hit"), 0)
 		// the shape, drawn from the four knobs (a canvas stays a canvas)
 		const canvas = m.keep(
 			"shape",
 			() => Object.assign(document.createElement("canvas"), { width: 240, height: 84 }),
 		)
 		canvas.className = "screen shape"
-		effect(
+		createEffect(
 			"shape",
 			() => ["a", "d", "s", "r"].map((k) => Number(read(m.knob[k]))),
 			([a, d, s, r]) => drawShape(canvas, a, d, s, r),
@@ -532,15 +548,14 @@ const SCOPE: Spec = {
 		}
 	},
 	setup(m) {
-		const { read, effect, teardown } = m.api
 		const canvas = m.keep(
 			"screen",
 			() => Object.assign(document.createElement("canvas"), { width: 340, height: 220 }),
 		)
 		canvas.className = "screen"
 		let voice: Any, zoom = 3, gain = 1.5
-		effect("voice", () => read(m.voice), (v) => void (voice = v))
-		effect(
+		createEffect("voice", () => read(m.voice), (v) => void (voice = v))
+		createEffect(
 			"knobs",
 			() => [read(m.knob.zoom), read(m.knob.gain)],
 			([z, g]) => void ((zoom = Number(z) || 1), (gain = Number(g) || 1)),
@@ -550,7 +565,7 @@ const SCOPE: Spec = {
 			drawScope(canvas, voice, buf, zoom, gain)
 			raf = requestAnimationFrame(frame)
 		})
-		teardown(() => cancelAnimationFrame(raf))
+		addTeardown(() => cancelAnimationFrame(raf))
 	},
 	face: (m) => <div class="face">{m.keep("screen", () => document.createElement("canvas"))}</div>,
 }
@@ -638,13 +653,12 @@ const OUT: Spec = {
 	// the audio context is a node (/audio) the out module makes on the first press: audio needs
 	// a person's click. power is a node too: edit it in the graph tab and the context follows
 	setup(m) {
-		const { open, read, edit, ref, effect, method, teardown } = m.api
-		const power = open(m.own("power"), false)
-		method("on/power", () => {
+		const power = ensureNode(m.own("power"), false)
+		createAction("on/power", () => {
 			ref("./audio", () => new AudioContext({ latencyHint: "interactive" }))
-			m.put(power, !read(power))
+			m.put(power, !get(power))
 		})
-		effect(
+		createEffect(
 			"power",
 			() => [read(power), m.ctx()] as const,
 			([on, ctx]) => {
@@ -660,7 +674,7 @@ const OUT: Spec = {
 		)
 		meter.className = "screen meter"
 		let voice: Any
-		effect("voice", () => read(m.voice), (v) => void (voice = v))
+		createEffect("voice", () => read(m.voice), (v) => void (voice = v))
 		const buf = new Float32Array(1024)
 		let raf = requestAnimationFrame(function frame() {
 			let peak = 0
@@ -679,7 +693,7 @@ const OUT: Spec = {
 			}
 			raf = requestAnimationFrame(frame)
 		})
-		teardown(() => cancelAnimationFrame(raf))
+		addTeardown(() => cancelAnimationFrame(raf))
 	},
 	face: (m) => (
 		<div class="face side">
@@ -698,28 +712,29 @@ const OUT: Spec = {
 
 // ---- a module: one program for every spec. knobs, jacks, the voice, the wiring, the panel ----
 function module(spec: Spec) {
-	return function program(api: API) {
-		const { open, read, edit, ref, effect, method, teardown } = api
+	return function program() {
 		// the host gives the process its name, then its first values: "tune=110" "wave=sawtooth"
-		const [name, ...given] = api.args
+		const [name, ...given] = getArgs()
 		const args = Object.fromEntries(given.map((a) => {
 			const [k, v] = a.split("=")
 			return [k, v !== "" && Number.isFinite(Number(v)) ? Number(v) : v]
 		}))
 		const own = (sub: string) => `/rack/${name}/${sub}`
-		const put = (x: ReturnType<typeof open>, v: unknown) => edit(x, [{ path: [], value: v }])
-		const keep = <T,>(sub: string, make: () => T) => read(ref(own(sub), make)) as T
-		const voice = open(own("voice"), null)
+		const keep = <T,>(sub: string, make: () => T) => peep(() => read(ref(own(sub), make))) as T
+		const voice = ensureNode(own("voice"), null)
 		const knob: Record<string, Any> = {}, jack: Record<string, Any> = {}
 		for (const k of [...spec.knobs, ...(spec.switches ?? [])]) {
-			knob[k.id] = open(own(`knobs/${k.id}`), args[k.id] ?? k.init)
+			knob[k.id] = ensureNode(own(`knobs/${k.id}`), args[k.id] ?? k.init)
 		}
-		for (const j of [...spec.ins, ...spec.outs]) jack[j.id] = open(own(`jacks/${j.id}`), null)
+		for (const j of [...spec.ins, ...spec.outs]) {
+			jack[j.id] = ensureNode(own(`jacks/${j.id}`), null)
+		}
+		// the audio context, once the out module has made it (told by hasNode, tracked)
 		const ctx = () => {
-			const c = read("./audio")
+			const c = hasNode("./audio") ? read("./audio") : undefined
 			return c instanceof AudioContext ? c : undefined
 		}
-		const m: Module = { api, name, spec, own, keep, put, knob, jack, voice, ctx }
+		const m: Module = { name, spec, own, keep, put, knob, jack, voice, ctx }
 
 		// a knob's value as the voice wants it: in range, or one of the switch's options
 		const value = (id: string, v: unknown) => {
@@ -728,19 +743,19 @@ function module(spec: Spec) {
 			const w = spec.switches!.find((w) => w.id === id)!
 			return w.options.includes(v as string) ? v : w.init
 		}
-		method("on/knob", (id: string, v: number) => put(knob[id], value(id, v)))
-		method("on/switch", (id: string) => {
+		createAction("on/knob", (id: string, v: number) => put(knob[id], value(id, v)))
+		createAction("on/switch", (id: string) => {
 			const w = spec.switches!.find((w) => w.id === id)!
-			const i = w.options.indexOf(read(knob[id]) as string)
+			const i = w.options.indexOf(get(knob[id]) as string)
 			put(knob[id], w.options[(i + 1) % w.options.length])
 		})
 
 		// the voice: built once per audio context, and again only when build's code changed
 		// (a reload keeps it, so the sound keeps going). its jacks go in the jack nodes
 		if (spec.build) {
-			effect("build", () => ctx(), (c) => {
+			createEffect("build", () => ctx(), (c) => {
 				if (!c) return
-				const was = read(voice) as Any
+				const was = get<Any>(voice)
 				const code = String(spec.build)
 				if (was?.ctx === c && was.code === code) return
 				was?.stop()
@@ -750,7 +765,7 @@ function module(spec: Spec) {
 			})
 			// a knob's effect reads that knob and the voice: turning it sets one param
 			for (const [id, set] of Object.entries(spec.set ?? {})) {
-				effect(
+				createEffect(
 					`set-${id}`,
 					() => [read(knob[id]), read(voice)] as const,
 					([v, x]) => void (x && set(x, value(id, v), (x as Any).ctx)),
@@ -763,17 +778,21 @@ function module(spec: Spec) {
 		const wires = keep("wires", () => ({})) as Record<string, Any>
 		for (const j of spec.ins) {
 			const id = `${name}.${j.id}`
-			effect(`wire-${j.id}`, () => {
-				const from = read(`/patch/${id}`, ["from"])
+			createEffect(`wire-${j.id}`, () => {
+				// a cable that is not there (or names no jack) is no source, not a wait: unplugging
+				// reruns this, and the wire comes down
+				const cable = `/patch/${id}`
+				const from = hasNode(cable) ? read(cable, ["from"]) : undefined
 				const [mod, out] = typeof from === "string" ? from.split(".") : []
-				const src = mod && out ? read(`/rack/${mod}/jacks/${out}`) : undefined
+				const at = `/rack/${mod}/jacks/${out}`
+				const src = mod && out && hasNode(at) ? read(at) : undefined
 				return { from, src, dst: read(jack[j.id]) }
 			}, ({ from, src, dst }: Any) => {
 				if (j.kind === "gate") {
 					// a gate: a beat with a time. each new one is acted on once
 					if (typeof src?.n !== "number" || wires[j.id]?.n === src.n) return
 					wires[j.id] = { n: src.n, from }
-					const x = read(voice) as Any
+					const x = get<Any>(voice)
 					if (x && src.at >= x.ctx.currentTime - 0.02) spec.gate?.(x, src, m)
 					return
 				}
@@ -791,14 +810,17 @@ function module(spec: Spec) {
 				ping(id)
 			})
 		}
-		teardown((why: string) => {
+		// the voice as it is now, for the teardown (nothing is open to read it there)
+		let live: Any
+		createEffect("live", () => read(voice), (v) => void (live = v))
+		addTeardown((why) => {
 			if (why !== "ended") return
 			for (const w of Object.values(wires)) {
 				try {
 					w?.src?.disconnect?.(w.dst)
 				} catch { /* gone */ }
 			}
-			;(read(voice) as Any)?.stop?.()
+			live?.stop?.()
 		})
 
 		spec.setup?.(m)
@@ -962,65 +984,58 @@ const DEFAULT_PATCH = [
 	["delay.out", "scope.in"],
 ]
 
-export function patchbay(
-	{ open, read, edit, remove, list, entries, ref, effect, method, teardown }: API,
-) {
-	const put = (x: ReturnType<typeof open>, v: unknown) => edit(x, [{ path: [], value: v }])
+export function patchbay() {
 	// the first time only: a patch that sounds like something
-	const names = () => {
-		try {
-			return list("/patch")
-		} catch {
-			return []
-		}
-	}
+	const names = () => (hasNode("/patch") ? list("/patch") : [])
 	const seed = () =>
 		DEFAULT_PATCH.forEach(([from, to], i) =>
-			open(`/patch/${to}`, { from, color: COLORS[i % COLORS.length] })
+			ensureNode(`/patch/${to}`, { from, color: COLORS[i % COLORS.length] })
 		)
 	if (names().length === 0) seed()
 	// the cable in hand while dragging: where it is from (or to), and the pointer. it is the
 	// process's own: a reload drops it
-	const held = open("held", null)
-	const cable = (to: string) => entries(`/patch/${to}`).length > 0
-	const color = () => COLORS[names().length % COLORS.length]
+	const held = ensureNode("held", null)
+	const cable = (to: string) => hasNode(`/patch/${to}`)
+	const color = () => COLORS[peep(names).length % COLORS.length]
 	const plug = (from: string, to: string, color: string) => {
-		if (cable(to)) put(open(`/patch/${to}`), { from, color })
-		else open(`/patch/${to}`, { from, color })
+		if (cable(to)) put(`/patch/${to}`, { from, color })
+		else ensureNode(`/patch/${to}`, { from, color })
 	}
 
-	method("on/grab", (jack: string, dir: string, x: number, y: number) => {
+	createAction("on/grab", (jack: string, dir: string, x: number, y: number) => {
 		if (!jack) return
 		if (dir === "out") return put(held, { from: jack, x, y, color: color() })
 		if (!cable(jack)) return put(held, { to: jack, x, y, color: color() })
 		// a plug pulled out of an input: the cable is in hand again, from where it was from
-		const was = read(`/patch/${jack}`) as Any
-		remove(`/patch/${jack}`)
+		const was = get<Any>(`/patch/${jack}`)
+		unplace(`/patch/${jack}`)
 		put(held, { from: was.from, x, y, color: was.color })
 	})
-	method("on/drag", (x: number, y: number) => {
-		const h = read(held) as Any
+	createAction("on/drag", (x: number, y: number) => {
+		const h = get<Any>(held)
 		if (h) put(held, { ...h, x, y })
 	})
-	method("on/drop", (jack?: string, dir?: string) => {
-		const h = read(held) as Any
+	createAction("on/drop", (jack?: string, dir?: string) => {
+		const h = get<Any>(held)
 		if (!h) return
 		put(held, null)
 		if (h.from && dir === "in" && jack) plug(h.from, jack, h.color)
 		else if (h.to && dir === "out" && jack) plug(jack, h.to, h.color)
 	})
-	method("on/unplug", (to: string) => void (cable(to) && remove(`/patch/${to}`)))
-	method("on/reset", () => {
-		for (const c of names()) remove(`/patch/${c}`)
+	createAction("on/unplug", (to: string) => void (cable(to) && unplace(`/patch/${to}`)))
+	createAction("on/reset", () => {
+		for (const c of peep(names)) unplace(`/patch/${c}`)
 		seed()
 	})
 
 	// the cables: an effect reads every cable node and the one in hand; a frame loop draws them
 	// where the jacks are now (a layout change moves them; the graph doesn't know layout)
-	const canvas = read(ref("./cables", () => document.createElement("canvas"))) as HTMLCanvasElement
+	const canvas = peep(() =>
+		read(ref("./cables", () => document.createElement("canvas")))
+	) as HTMLCanvasElement
 	canvas.className = "wires"
 	let shown: Any = { cables: [], held: null }
-	effect(
+	createEffect(
 		"cables",
 		() => ({
 			cables: names().map((c) => ({ to: c, ...(read(`/patch/${c}`) as Any) })),
@@ -1032,7 +1047,7 @@ export function patchbay(
 		drawCables(canvas, shown)
 		raf = requestAnimationFrame(frame)
 	})
-	teardown(() => cancelAnimationFrame(raf))
+	addTeardown(() => cancelAnimationFrame(raf))
 
 	return (
 		<div class="bay">
@@ -1129,6 +1144,8 @@ function drawCables(canvas: HTMLCanvasElement, { cables, held }: Any) {
 // ---- the look: lemon page, black lines, white cards with a pink glow, cherry, mint, blue ----
 const LOOK = `
 @import url("https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600&display=swap");
+@keyframes beat { to { opacity: 0 } }
+.beat { position: fixed; width: 0; height: 0; pointer-events: none; animation: beat 20ms linear infinite }
 * { box-sizing: border-box }
 body { background: #ffff88; margin: 10px; font-family: Jost, system-ui, sans-serif; color: #000 }
 .world { position: relative; width: max-content; display: flex; flex-direction: column; gap: 10px; padding-bottom: 30px }

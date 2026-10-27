@@ -1,5 +1,22 @@
 /** @jsxImportSource ermine-h */
-import type { API } from "@ermine/api"
+import {
+	addTeardown,
+	createAction,
+	createEffect,
+	createMemo,
+	ensureNode,
+	hasNode,
+	list,
+	patch,
+	peep,
+	PENDING,
+	read,
+	readAttributes,
+	ref,
+	rename,
+	unplace,
+} from "@ermine/system"
+import { host, up } from "@ermine/slaygrounds/tools"
 import type { Found } from "@ermine/compilers"
 import type { Extra } from "./host.ts"
 import { bind, handler } from "ermine-h"
@@ -11,11 +28,13 @@ import { bind, handler } from "ermine-h"
 // exactly the cells that read it. the arrows on the left are those reads: each run's end is
 // written to ./flow, and an effect draws the rail from it. edit a cell, drag a slider, type a
 // city: watch only the dependents light up.
-// every computed cell is a step of @ermine/programs/build (the host hands them out): its name the
+// every computed cell is a step of @ermine/compilers' builds (the host hands them out): its name the
 // cell's id, its code its kind, source and chart type. its run reads the cells it uses, and each
 // run kept is an entry in ./cache, its reads and what it gave; the same code reading the same
 // values again is a hit, given back without running (a city typed twice fetches once). a line
 // "// nocache" in a cell's code keeps it out of the cache (the clock, a random number)
+// the cells' memos are made by one effect (running) as it runs, for each cell in the order: made
+// again at each of its runs, so one whose cell was removed or renamed is gone after it
 
 // ---- the first notebook (seeded once: a reload keeps what you changed) ----
 const SEED: [kind: string, name: string, src: string, extra?: Record<string, unknown>][] = [
@@ -70,41 +89,34 @@ const COMPUTED = new Set(["code", "md", "chart"])
 const TYPES = ["line", "area", "bars", "dots"]
 const COLORS = ["#ff2284", "#2269ff", "#14a888", "#000000", "#a23cf0"]
 
-export default function program(api: API & Extra) {
-	const {
-		open,
-		read,
-		edit,
-		entries,
-		list,
-		remove,
-		move,
-		memo,
-		effect,
-		method,
-		teardown,
-		ref,
-		info,
-	} = api
-	const { PENDING, builds: makeBuilds, scoped, peek, id: idAt } = api
+// a node's value now, from an action or inside a run (nothing tracked)
+const get = <T,>(x: Parameters<typeof read>[0], key?: readonly (string | number)[]) =>
+	peep(() => read(x, key)) as T
+const put = (x: Parameters<typeof read>[0], value: unknown) => patch(x, [{ path: [], value }])
+
+export default function program() {
+	const { builds: makeBuilds } = host<Extra>()
 
 	// the font link lives in the head: made once, kept (a reload would add a second)
-	ref("./font", () =>
-		document.head.appendChild(Object.assign(document.createElement("link"), {
-			rel: "stylesheet",
-			href: "https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600;700&display=swap",
-		})))
+	peep(() =>
+		ref("./font", () =>
+			document.head.appendChild(Object.assign(document.createElement("link"), {
+				rel: "stylesheet",
+				href: "https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600;700&display=swap",
+			})))
+	)
 
 	// ./cells/<id> is a cell (its record), ./cells/<id>/src its source; ./order the ids in order;
 	// ./values/<name> a cell's value; ./flow what each cell's last run did; ./cache the builds'
 	// steps. all under ./, so a reload finds them as they were
-	const first = read("./order") === undefined
-	const order = open("./order", [])
-	open("./cells", {})
-	open("./values", {})
-	const flow = open("./flow", {})
-	open("./cache", {})
+	const first = !hasNode("./order")
+	const order = ensureNode("./order", [])
+	ensureNode("./cells", {})
+	ensureNode("./values", {})
+	const flow = ensureNode("./flow", {})
+	ensureNode("./cache", {})
 	const builds = makeBuilds(["cache"])
+	addTeardown(() => builds.stop())
 
 	const ids = () => (read(order) ?? []) as string[]
 	const at = (id: string) => `./cells/${id}`
@@ -115,12 +127,15 @@ export default function program(api: API & Extra) {
 	function cell(name: string) {
 		touched?.add(String(name))
 		const here = `/values/${name}`
-		if (entries(here).length === 0) throw new Error(`no cell is named ${name}`)
-		// it waits (a fetch out): this one waits too, in place; it failed: so does this one
-		const state = read(info(here), [STATUS])
-		if (state === PENDING) throw PENDING
-		if (state instanceof Error) throw new Error(`${name} failed`)
-		return read(here)
+		if (!hasNode(here)) throw new Error(`no cell is named ${name}`)
+		// it waits (a fetch out): this one waits too, in place (read throws PENDING); it failed: so
+		// does this one
+		try {
+			return read(here)
+		} catch (e) {
+			if (e === PENDING) throw e
+			throw new Error(`${name} failed`)
+		}
 	}
 	// the names the cell running now read, while it runs in the reader's own run (the // nocache
 	// cells: a step's run is the builds', which keeps its trace)
@@ -153,11 +168,11 @@ export default function program(api: API & Extra) {
 	}
 
 	// ---- what a run found, and its end: a step says (onStep) what its lookup found, and the run
-	// then ends; both are told here, and written to ./flow a moment after (a run reads its own cell
-	// and others', never the flow) ----
+	// then ends; both are told here, and written to ./flow as the run ends (a run reads its own cell
+	// and others', never the flow; nothing is open after a microtask, so it is not written later) ----
 	const found = new Map<string, Found>()
 	const off = builds.onStep((f) => found.set(f.name as string, f))
-	teardown(off)
+	addTeardown(off)
 	// a miss: the step is out, the cell runs again as it lands and hits the entry kept. that run
 	// is the miss, timed from the miss's start
 	const missed = new Map<string, { key: string; t0: number }>()
@@ -173,7 +188,7 @@ export default function program(api: API & Extra) {
 	}
 	const notes: Note[] = []
 	let alive = true
-	teardown(() => (alive = false))
+	addTeardown(() => (alive = false))
 
 	function note(id: string, out: unknown, took: number, thrown: unknown, reads?: Set<string>) {
 		const f = found.get(id)
@@ -206,18 +221,18 @@ export default function program(api: API & Extra) {
 			}
 		}
 		notes.push(n)
-		queueMicrotask(flush)
+		flush()
 	}
 
 	// the notes written to the flow, one edit for all: the cell's run number, how it ended, what
 	// its step found (counted), and who it read: for a hit, the places its entry's trace names
 	function flush() {
 		if (!alive || !notes.length) return
-		const was = (peek(["flow"]) ?? {}) as Record<string, any>
+		const was = (get(flow) ?? {}) as Record<string, any>
 		const next: Record<string, any> = {}
-		const values = idAt(["values"])
+		const values = up(["values"], [])?.found
 		for (const n of notes.splice(0)) {
-			const name = peek(["cells", n.id], "value", ["name"]) as string | undefined
+			const name = hasNode(at(n.id)) ? get<string>(at(n.id), ["name"]) : undefined
 			if (name === undefined) continue
 			const before = next[name] ?? was[name]
 			const counts = before?.cache ?? { hits: 0, misses: 0, cutoffs: 0, never: 0 }
@@ -239,9 +254,12 @@ export default function program(api: API & Extra) {
 			let reads: string[] = before?.reads ?? []
 			if (n.reads) reads = n.reads.filter((r) => r !== name)
 			else if (c?.outcome === "hit" || c?.outcome === "miss") {
-				const trace = peek(["cache", c.key!, c.entry!], "attributes", [TRACE]) as
-					| [string, unknown, (string | number)[], string | null][]
-					| undefined
+				const entry = `./cache/${c.key}/${c.entry}`
+				const trace = (hasNode(entry)
+					? peep(() => readAttributes(entry, [TRACE]))
+					: undefined) as
+						| [string, unknown, (string | number)[], string | null][]
+						| undefined
 				reads = []
 				for (const [part, id, path] of trace ?? []) {
 					const r = String(path[0])
@@ -260,7 +278,7 @@ export default function program(api: API & Extra) {
 				cache,
 			}
 		}
-		edit(flow, (d: Record<string, unknown>) => void Object.assign(d, next))
+		patch(flow, Object.entries(next).map(([name, value]) => ({ path: [name], value })))
 	}
 
 	// one run of a cell: its source and chart type read (so an edit reruns it), then its step: a
@@ -298,105 +316,121 @@ export default function program(api: API & Extra) {
 		return out
 	}
 
-	// ---- the running cells: a memo for each computed cell, placed at its name in ./values, in a
-	// scope of its own (it goes when the cell does); a node for each widget ----
-	const live = new Map<string, () => void>()
-	function begin(id: string) {
-		const c = read(at(id)) as { kind: string; name: string; start?: unknown }
-		if (COMPUTED.has(c.kind)) {
-			const made = scoped(
-				() => memo(`/values/${c.name}`, () => evaluate(id, c.kind), { equal: sameBytes }),
-				{ cell: true },
-			)
-			live.set(id, made.stop)
-		} else open(`/values/${c.name}`, c.start)
-	}
-	// a cell stops running; keep: its widget's value stays (a rename moves it)
-	function end(id: string, keep = false) {
-		const c = read(at(id)) as { kind: string; name: string }
-		if (COMPUTED.has(c.kind)) {
-			live.get(id)?.()
-			live.delete(id)
-			lastOut.delete(id)
-			missed.delete(id)
-		} else if (!keep) remove(`/values/${c.name}`)
-	}
-	// a new cell: its record and source, running, and its place in the order
+	// ---- the running cells: a memo for each computed cell, at its name in ./values, made by one
+	// effect as it runs (a cell removed or renamed is not made again, and its memo goes); a node
+	// for each widget, made with the cell. a memo made again by its owner's run is due again, so
+	// the effect reads a memo of the cells that are (id, name, kind), equal while they are the same:
+	// a move, a fold or a chart type does not make them again, a cell added, removed or renamed
+	// does, and every cell's memo runs again with it ----
+	const running = createMemo(
+		"cells",
+		() =>
+			ids().map((id) =>
+				[id, read(at(id), ["name"]), read(at(id), ["kind"])] as [string, string, string]
+			).sort(),
+		{
+			equal: sameBytes,
+		},
+	)
+	createEffect("running", () => {
+		const made: string[] = []
+		for (const [id, name, kind] of read(running) as [string, string, string][]) {
+			if (COMPUTED.has(kind)) {
+				createMemo(`/values/${name}`, () => evaluate(id, kind), { equal: sameBytes })
+			}
+			made.push(name)
+		}
+		return made
+	}, () => {})
+	// a new cell: its record and source, its widget's node, and its place in the order
 	function create(record: Record<string, unknown>, src: string, index?: number) {
 		const id = crypto.randomUUID()
-		open(at(id), record)
-		open(`${at(id)}/src`, src)
-		begin(id)
-		edit(order, (d: string[]) => void d.splice(index ?? d.length, 0, id))
+		ensureNode(at(id), record)
+		ensureNode(`${at(id)}/src`, src)
+		if (!COMPUTED.has(record.kind as string)) ensureNode(`/values/${record.name}`, record.start)
+		const was = get<string[]>(order)
+		const next = [...was]
+		next.splice(index ?? next.length, 0, id)
+		put(order, next)
 	}
 
 	if (first) { for (const [kind, name, src, extra] of SEED) create({ kind, name, ...extra }, src) }
-	else for (const id of ids()) begin(id)
+	else {
+		for (const id of ids()) {
+			const c = get<{ kind: string; name: string; start?: unknown }>(at(id))
+			if (!COMPUTED.has(c.kind)) ensureNode(`/values/${c.name}`, c.start)
+		}
+	}
 
-	// ---- handlers: every write is a call ----
-	method(
-		"on/src",
-		(id: string, text: string) => edit(`${at(id)}/src`, [{ path: [], value: text }]),
+	// ---- actions: every write is a call ----
+	createAction("on/src", (id: string, text: string) => put(`${at(id)}/src`, text))
+	createAction("on/set", (name: string, value: unknown) => put(`/values/${name}`, value))
+	createAction(
+		"on/type",
+		(id: string, type: string) => patch(at(id), [{ path: ["type"], value: type }]),
 	)
-	method(
-		"on/set",
-		(name: string, value: unknown) => edit(`/values/${name}`, [{ path: [], value }]),
-	)
-	method("on/type", (id: string, type: string) => edit(at(id), (d: any) => void (d.type = type)))
-	method("on/fold", (id: string) => edit(at(id), (d: any) => void (d.open = !d.open)))
-	method("on/add", (kind: string, after?: string) => {
+	createAction("on/fold", (id: string) => {
+		patch(at(id), [{ path: ["open"], value: !get<{ open?: boolean }>(at(id)).open }])
+	})
+	createAction("on/add", (kind: string, after?: string) => {
 		const [prefix, src, extra] = FRESH[kind]
-		const taken = new Set(names())
+		const taken = new Set(peep(names))
 		let n = 1
 		while (taken.has(prefix + n)) n++
-		const index = after ? ids().indexOf(after) + 1 : undefined
+		const index = after ? peep(ids).indexOf(after) + 1 : undefined
 		create({ kind, name: prefix + n, open: true, ...extra }, src, index)
 	})
 	// the step of a cell's code now, out of the cache (its other codes' steps stay)
 	const uncache = (name: string) => {
-		const key = peek(["flow"], "value", [name, "cache", "key"]) as string | undefined
+		const key = get<string | undefined>(flow, [name, "cache", "key"])
 		if (!key) return
-		for (const entry of list(`./cache/${key}`)) remove(`./cache/${key}/${entry}`)
-		remove(`./cache/${key}`)
+		for (const entry of peep(() => list(`./cache/${key}`))) unplace(`./cache/${key}/${entry}`)
+		unplace(`./cache/${key}`)
 	}
-	method("on/remove", (id: string) => {
-		const name = nameOf(id)
+	createAction("on/remove", (id: string) => {
+		const name = peep(() => nameOf(id))
 		uncache(name)
-		end(id)
-		edit(order, (d: string[]) => void d.splice(d.indexOf(id), 1))
-		remove(`${at(id)}/src`)
-		remove(at(id))
-		edit(flow, (d: Record<string, unknown>) => void delete d[name])
+		if (!COMPUTED.has(get<string>(at(id), ["kind"]))) unplace(`/values/${name}`)
+		lastOut.delete(id)
+		missed.delete(id)
+		put(order, get<string[]>(order).filter((x) => x !== id))
+		unplace(`${at(id)}/src`)
+		unplace(at(id))
+		patch(flow, [{ path: [name] }])
 	})
 	// a cell's cache emptied: its next run is a miss
-	method("on/uncache", (name: string) => {
+	createAction("on/uncache", (name: string) => {
 		uncache(name)
-		edit(flow, (d: any) => void (d[name]?.cache && (d[name].cache.entries = 0)))
+		if (get(flow, [name, "cache"])) patch(flow, [{ path: [name, "cache", "entries"], value: 0 }])
 	})
-	method("on/move", (id: string, by: number) => {
-		const from = ids().indexOf(id)
-		const to = Math.max(0, Math.min(ids().length - 1, from + by))
-		if (to !== from) edit(order, (d: string[]) => void d.splice(to, 0, ...d.splice(from, 1)))
+	createAction("on/move", (id: string, by: number) => {
+		const all = [...get<string[]>(order)]
+		const from = all.indexOf(id)
+		const to = Math.max(0, Math.min(all.length - 1, from + by))
+		if (to === from) return
+		all.splice(to, 0, ...all.splice(from, 1))
+		put(order, all)
 	})
 	// a new name: a widget's node moves with it, so a slider keeps its value; a computed cell runs
-	// again at the new name (its steps are named by its id: its cache stays its own). the cells
-	// reading the old name find nothing there now, and say so
-	method("on/rename", (id: string, typed: string) => {
-		const old = nameOf(id)
+	// again at the new name (the running effect makes its memo there; its steps are named by its
+	// id, so its cache stays its own). the cells reading the old name find nothing there now, and
+	// say so
+	createAction("on/rename", (id: string, typed: string) => {
+		const old = peep(() => nameOf(id))
 		let name = String(typed).trim().replace(/[^\w$]/g, "_").replace(/^(\d)/, "_$1")
 		if (!name || name === old) return
-		const taken = new Set(names())
+		const taken = new Set(peep(names))
 		if (taken.has(name)) {
 			let n = 2
 			while (taken.has(name + n)) n++
 			name += n
 		}
-		const computed = COMPUTED.has(read(at(id), ["kind"]) as string)
-		end(id, true)
-		if (!computed && list("/values").includes(old)) move(`/values/${old}`, `/values/${name}`)
-		edit(at(id), (d: any) => void (d.name = name))
-		if (computed) begin(id)
-		edit(flow, (d: Record<string, unknown>) => void delete d[old])
+		const computed = COMPUTED.has(get<string>(at(id), ["kind"]))
+		if (!computed && peep(() => list("/values")).includes(old)) {
+			rename(`/values/${old}`, `/values/${name}`)
+		}
+		patch(at(id), [{ path: ["name"], value: name }])
+		patch(flow, [{ path: [old] }])
 	})
 
 	// ---- the arrows: an effect on the flow and the order, drawn in the rail beside the cells.
@@ -416,7 +450,7 @@ export default function program(api: API & Extra) {
 		cancelAnimationFrame(frame)
 		frame = requestAnimationFrame(() => draw())
 	}
-	effect(
+	createEffect(
 		"arrows",
 		() => {
 			const f = (read(flow) ?? {}) as Record<string, { reads?: string[]; run?: number }>
@@ -484,9 +518,9 @@ export default function program(api: API & Extra) {
 	}
 	// a cell grows (a chart drawn, a source longer): the rail is drawn again
 	const sizes = new ResizeObserver(() => redraw())
-	teardown(() => sizes.disconnect())
+	addTeardown(() => sizes.disconnect())
 	addEventListener("resize", redraw)
-	teardown(() => removeEventListener("resize", redraw))
+	addTeardown(() => removeEventListener("resize", redraw))
 	const lit = (name?: string) => {
 		hover = name
 		redraw()
@@ -739,8 +773,7 @@ export default function program(api: API & Extra) {
 }
 
 // ---- small things ----
-// the attributes a computer's status, and a cache entry's reads, are kept in
-const STATUS = "ermine.computer.status"
+// the attribute a cache entry's reads are kept in
 const TRACE = "ermine.programs.trace"
 // a value's bytes: its JSON (a function or a symbol has none: a string saying what it is). two
 // results with the same bytes are the same, so a run giving them again stops there (early cutoff)

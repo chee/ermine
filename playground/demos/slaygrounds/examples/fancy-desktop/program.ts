@@ -1,14 +1,47 @@
 /** @jsxImportSource ermine-h */
-import type { API } from "@ermine/programs/api"
-import type { Extra } from "./host.ts"
+import {
+	createAction,
+	createEffect,
+	createMemo,
+	ensureNode,
+	executeAction,
+	hasNode,
+	list,
+	patch,
+	patchAttributes,
+	peep,
+	PENDING,
+	place,
+	read as readNode,
+	readAttributes,
+	readEntries,
+	unplace,
+} from "@ermine/system"
+import { host, inspect, up } from "@ermine/slaygrounds/tools"
+import type { Opening } from "./host.ts"
 import { bind, handler, under } from "ermine-h"
 
+// what the host's extend adds (host.ts says what each is for)
+type Host = {
+	opening: (address: string[]) => Opening
+	idOf: (path: string) => string | undefined
+}
+// what a node holds, as the desktop takes it (any: its values are its own)
+// deno-lint-ignore no-explicit-any
+const read = (x: Parameters<typeof readNode>[0], key?: readonly (string | number)[]): any =>
+	readNode(x, key)
+// what an action reads is for now: untracked (peep), and every action runs inside it
+const method = (name: string, f: (...a: any[]) => unknown) =>
+	createAction(name, (...a: unknown[]) => peep(() => f(...a)))
+
 // fancy-desktop: a tiny desktop on the graph.
-//   a window is a process placed in /desktop (/desktop/<app>-<n>), started by the shell. what it
-//   shows and where it sits are kept in /windows/<app>-<n>, its working folder: doc and keys/<name>
-//   (mounts of what it was handed), pos, folded, info. drag its title bar and it writes pos; the
-//   close box takes the window's record away (the shell stops the process, its teardown runs, a
-//   line lands in /system/log); the box on the right, or a double-click on the title, folds it
+//   a window is an app the shell runs for each record in /windows (/windows/<app>-<n>): a process
+//   per window is gone, a program starts no program, so the app is memos, effects and actions the
+//   shell makes for it (named <app>-<n>/…, made again by the shell's windows effect, one with its
+//   record gone goes). what a window shows and where it sits are kept in its record: doc and
+//   keys/<name> (mounts of what it was handed), pos, folded, info. drag its title bar and it
+//   writes pos; the close box takes the window's record away (the app goes, a line lands in
+//   /system/log); the box on the right, or a double-click on the title, folds it
 //   an app is a node in /apps: a function, typed javascript, with the types it opens in its
 //   attributes. every thing says its type (a UTI; the types are nodes at /ermine/types).
 //   double-click a thing and the host asks openwith, from where it was reached up to the root: the
@@ -34,8 +67,9 @@ const kind = (type: string | undefined) => (type && KIND[type]) ?? null
 const pad = (n: number) => String(n).padStart(2, "0")
 
 // a whole value put on a node
-const put = (api: API, x: Parameters<API["edit"]>[0], value: unknown) =>
-	api.edit(x, [{ path: [], value }])
+const put = (x: Parameters<typeof patch>[0], value: unknown) => patch(x, [{ path: [], value }])
+// the type a node at a path says it is, in its attributes
+const typeOf = (path: string) => peep(() => readAttributes(path, [TYPE])) as string | undefined
 
 // ---- a picture: palette indices, w by h, onto a canvas ----
 type Picture = { w: number; h: number; px: number[] }
@@ -56,31 +90,29 @@ function pixels(c: HTMLCanvasElement, img: Picture, pal: string[]) {
 }
 
 // a line in /system/log (the log is a node: the shell shows its last line)
-function say(api: API, text: string) {
-	api.edit("/system/log", (l: string[]) => {
-		l.push(text)
-		if (l.length > 30) l.shift()
-	})
+function say(text: string) {
+	const l = peep(() => read("/system/log")) as string[]
+	put("/system/log", [...l, text].slice(-30))
 }
 
-// the window's own folder: it is started with its name as its argument, its working folder
-// /windows/<name>. what it was handed is under it
-const folder = (api: API) => `/windows/${api.args[0]}`
+// a window's own record: /windows/<name>. what it was handed is under it
+const folder = (name: string) => `/windows/${name}`
 
-// the other windows open on the same node as this one: a memo, so it follows /windows
-function twins(api: API) {
-	const mine = api.args[0]
-	api.memo("twins", () => {
-		const doc = api.entries(`/windows/${mine}/doc`)[0]?.id
-		return api.list("/windows").filter((w) =>
-			w !== mine && doc !== undefined && api.entries(`/windows/${w}/doc`)[0]?.id === doc
+// the other windows open on the same node as this one: a memo, so it follows /windows. the id of
+// the node a window's doc mounts is the host's to say (idOf), a program names a node by its path
+function twins(name: string) {
+	const { idOf } = host<Host>()
+	createMemo(`${name}/twins`, () => {
+		const doc = idOf(`/windows/${name}/doc`)
+		return list("/windows").filter((w) =>
+			w !== name && doc !== undefined && idOf(`/windows/${w}/doc`) === doc
 		)
 	})
 }
-const Twins = () => (
+const Twins = ({ name }: { name: string }) => (
 	<span class="twins">
 		{bind(
-			"twins",
+			`${name}/twins`,
 			(l: string[]) =>
 				l.length ? `⧉ one node, also open in ${l.join(", ")}` : "one node, open here only",
 		)}
@@ -88,11 +120,11 @@ const Twins = () => (
 )
 
 // a thing's picture: a folder, a page, a list, a clock face, or the picture itself
-const Pic = (props: { is: string | null; id: string; pal?: string[] }) =>
+const Pic = (props: { is: string | null; path: string; pal?: string[] }) =>
 	props.is === "image"
 		? (
 			<span class="pic image">
-				{bind({ id: props.id }, (img: Picture) => (
+				{bind(props.path, (img: Picture) => (
 					<canvas
 						width={img.w}
 						height={img.h}
@@ -115,7 +147,7 @@ type Plan = {
 	type?: string | null
 	app?: string | null
 	from?: string | null
-	others?: { name: string; from: string; id: string }[]
+	others?: { name: string; from: string; at: string }[]
 	not?: string
 	why?: string | null
 }
@@ -130,44 +162,35 @@ function notTaken(why: { why: string; at: readonly string[] }[]) {
 	return [...by].map(([reason, names]) => `${names.join(", ")}: ${reason}`).join("; ")
 }
 
-export function shell(api: API & Extra) {
-	const {
-		open,
-		read,
-		edit,
-		entries,
-		list,
-		place,
-		unplace,
-		remove,
-		memo,
-		effect,
-		method,
-		send,
-		start,
-		stop,
-		info,
-		up,
-		opening,
-	} = api
+// the apps' canvases, by window: kept across the shell making its apps again
+const canvases = new Map<string, HTMLCanvasElement>()
+const canvasFor = (name: string) => {
+	let c = canvases.get(name)
+	if (!c) canvases.set(name, c = document.createElement("canvas"))
+	return c
+}
+
+export function shell() {
+	const { opening, idOf } = host<Host>()
 	// the shell's own state is saved under ./ (the root): a reload finds it as it was
-	const selected = open("./selected", "")
-	const menu = open("./menu", "")
-	const drag = open("./drag", null)
-	const counts = open("./counts", {} as Record<string, number>)
-	const typeOf = (id: unknown) =>
-		read({ id: id as string, part: "attributes" }, [TYPE]) as string | undefined
+	const selected = ensureNode("./selected", "")
+	const menu = ensureNode("./menu", "")
+	const drag = ensureNode("./drag", null)
+	const counts = ensureNode("./counts", {} as Record<string, number>)
 
 	// the things in a folder: what each is, and the palette their pictures are drawn in
 	const things = (path: string) => (): Thing[] => {
 		const pal = read("/system/palette") as string[]
 		return list(path).flatMap((name) => {
-			const m = entries(`${path}/${name}`)[0]
-			return m ? [{ name, path: `${path}/${name}`, id: m.id, is: kind(typeOf(m.id)), pal }] : []
+			const there = `${path}/${name}`
+			const m = readEntries(there)[0]
+			return m && m.node
+				? [{ name, path: there, id: idOf(there) ?? there, is: kind(typeOf(there)), pal }]
+				: []
 		})
 	}
-	memo("icons", things("/home"))
-	memo("docked", things("/dock"))
+	createMemo("icons", things("/home"))
+	createMemo("docked", things("/dock"))
 
 	// what opens a thing: the walk and the chain, as data (the host's opening, tracked: a new app
 	// nearer, an attribute edited, and it is worked out again)
@@ -175,7 +198,7 @@ export function shell(api: API & Extra) {
 		const o = opening(address)
 		const path = toPath(address)
 		if ("missing" in o) return { path, why: o.missing }
-		const type = typeOf(o.id) ?? null
+		const type = typeOf(toPath(o.names)) ?? null
 		const said = { path, name: o.name, type }
 		if ("refused" in o.found) {
 			return {
@@ -195,23 +218,23 @@ export function shell(api: API & Extra) {
 			others: ways.map((w) => ({
 				name: w.program.at.at(-1)!,
 				from: folderOf(w.program.at),
-				id: w.program.id,
+				at: toPath([...w.program.at]),
 			})),
 			not: notTaken(o.found.why),
 			why: first ? null : `nothing from ${toPath(["/", ...o.from])} up opens ${type}`,
 		}
 	}
 	// what opens the thing selected, as data
-	memo("opens", () => {
+	createMemo("opens", () => {
 		const path = read(selected) as string
 		return path ? plan(addr(path)) : ""
 	})
 
-	// the windows: a record each in /windows (what it shows, where it sits), a process each at
-	// /desktop/<name>
+	// the windows: a record each in /windows (what it shows, where it sits), an app each made
+	// below
 	const pos = (name: string) => `/windows/${name}/pos`
 	// the window in front: the highest z (read at z only: a drag does not rerun this)
-	const front = memo("front", () => {
+	const front = createMemo("front", () => {
 		let front = "", top = -Infinity
 		for (const w of list("/windows")) {
 			const z = (read(pos(w), ["z"]) as number | undefined) ?? 0
@@ -226,28 +249,30 @@ export function shell(api: API & Extra) {
 			if (w === name) mine = z
 			else top = Math.max(top, z)
 		}
-		if (mine <= top) edit(pos(name), (p: { z: number }) => void (p.z = top + 1))
+		if (mine <= top) patch(pos(name), [{ path: ["z"], value: top + 1 }])
 	}
 
 	// a window opened on the thing at the address: by the first app openwith finds, or the app
-	// given. its record is written (mounts of the app, the thing and the keys the app wants, each
-	// the nearest /system/<name> from the thing's folder up), and the effect below starts it
+	// given (its path). its record is written (mounts of the app, the thing and the keys the app
+	// wants, each the nearest /system/<name> from the thing's folder up), and the effect below
+	// makes its app
 	function openWindow(address: string[], using?: string, where?: { x: number; y: number }) {
 		const o = opening(address)
-		if ("missing" in o) return say(api, `✗ ${o.missing}`)
-		if ("refused" in o.found) return say(api, `✗ ${o.name} says no type: nothing opens it`)
-		const way = using ? o.found.ways.find((w) => w.program.id === using) : o.found.ways[0]
+		if ("missing" in o) return say(`✗ ${o.missing}`)
+		if ("refused" in o.found) return say(`✗ ${o.name} says no type: nothing opens it`)
+		const way = using
+			? o.found.ways.find((w) => toPath([...w.program.at]) === using)
+			: o.found.ways[0]
 		if (!way) {
 			return say(
-				api,
 				`✗ nothing from ${toPath(["/", ...o.from])} up opens ${o.name} (${
 					notTaken(o.found.why)
 				})`,
 			)
 		}
-		const a = (read({ id: way.program.id, part: "attributes" }) ?? {}) as Record<string, any>
+		const appAt = toPath([...way.program.at])
+		const a = (peep(() => readAttributes(appAt)) ?? {}) as Record<string, any>
 		const app = {
-			id: way.program.id,
 			name: way.program.at.at(-1)!,
 			from: folderOf(way.program.at),
 			size: a.size,
@@ -258,10 +283,10 @@ export function shell(api: API & Extra) {
 		})
 		const lost = keys.filter(([, got]) => !got).map(([need]) => need)
 		if (lost.length) {
-			return say(api, `✗ ${app.name} wants ${lost.join(", ")}: no system/<name> from here up`)
+			return say(`✗ ${app.name} wants ${lost.join(", ")}: no system/<name> from here up`)
 		}
 		const n = ((read(counts) as Record<string, number>)[app.name] ?? 0) + 1
-		edit(counts, (c: Record<string, number>) => void (c[app.name] = n))
+		patch(counts, [{ path: [app.name], value: n }])
 		const name = `${app.name}-${n}`
 		const names = list("/windows")
 		const z = Math.max(0, ...names.map((w) => (read(pos(w), ["z"]) as number | undefined) ?? 0)) +
@@ -269,39 +294,41 @@ export function shell(api: API & Extra) {
 		const [w, h] = Array.isArray(app.size) ? app.size : [300, 240]
 		const k = names.length % 8
 		const at = `/windows/${name}`
-		open(at, null)
-		place(`${at}/app`, { id: app.id, part: "value" })
-		place(`${at}/doc`, { id: o.id, part: "value" })
-		open(`${at}/keys`, null)
-		for (const [need, got] of keys) place(`${at}/keys/${need}`, got!)
-		open(`${at}/pos`, { x: where?.x ?? 30 + k * 44, y: where?.y ?? 14 + k * 30, w, h, z })
-		open(`${at}/folded`, false)
-		open(`${at}/info`, {
+		ensureNode(at)
+		place(`${at}/app`, appAt)
+		place(`${at}/doc`, toPath(address))
+		ensureNode(`${at}/keys`)
+		for (const [need, got] of keys) place(`${at}/keys/${need}`, toPath(got!.path))
+		ensureNode(`${at}/pos`, { x: where?.x ?? 30 + k * 44, y: where?.y ?? 14 + k * 30, w, h, z })
+		ensureNode(`${at}/folded`, false)
+		ensureNode(`${at}/info`, {
 			title: o.name,
 			doc: toPath(address),
 			app: app.name,
 			from: app.from,
-			keys: keys.map(([need, got]) => `${need} from ${folderOf(got!.path!)}`),
+			keys: keys.map(([need, got]) => `${need} from ${folderOf(got!.path)}`),
 		})
-		say(api, `opened ${o.name} with ${app.name} (found in ${app.from})`)
+		say(`opened ${o.name} with ${app.name} (found in ${app.from})`)
 		return name
 	}
 	// a window closed: its record taken away. the mounts are unplaced (what they hold is the
-	// thing's, and stays); what the window owns is removed
+	// thing's, and stays); what the window owns is unplaced with it
 	function closeWindow(name: string) {
 		const at = `/windows/${name}`
 		for (const m of ["app", "doc"]) unplace(`${at}/${m}`)
 		for (const need of [...list(`${at}/keys`)]) unplace(`${at}/keys/${need}`)
-		for (const own of ["keys", "pos", "folded", "info"]) remove(`${at}/${own}`)
-		remove(at)
+		for (const own of ["keys", "pos", "folded", "info"]) unplace(`${at}/${own}`)
+		unplace(at)
 	}
 
-	// a process for each window kept: started on the app it names (a path, so the walk is the one
-	// from the app), its name its argument and its working folder its record. a window taken
-	// away: its process stopped. the shell stopping (a reload) stops them all, and starts them
-	// again here, on what is now at /apps
-	const running = new Map<string, ReturnType<typeof start>>()
-	effect(
+	// an app for each window kept: the app its record names (a function at /apps/<name>) is called
+	// with the window's name, and makes what it needs under that name. a window taken away: its
+	// app is not made again, and goes. the apps' views are held in ./views, which the frames bind.
+	// the shell stopping (a reload) ends them all, and they are made again here on what is now at
+	// /apps
+	const views = ensureNode("./views", {} as Record<string, unknown>)
+	const lastSeen = new Map<string, string>()
+	createEffect(
 		"windows",
 		() =>
 			list("/windows").map((name) =>
@@ -309,83 +336,94 @@ export function shell(api: API & Extra) {
 			),
 		(rows) => {
 			const want = new Map(rows.map((r) => r.split("|") as [string, string]))
-			for (const [name, p] of running) {
-				if (want.has(name)) continue
-				if (!("refused" in p)) stop(p)
-				running.delete(name)
-			}
+			const made: Record<string, unknown> = {}
 			for (const [name, app] of want) {
-				if (running.has(name)) continue
-				const p = start(`/apps/${app}`, `/desktop/${name}`, {
-					folder: `/windows/${name}`,
-					args: [name],
-				})
-				if ("refused" in p) say(api, `✗ ${name}: ${p.refused}`)
-				else running.set(name, p)
+				try {
+					const run = peep(() => read(`/apps/${app}`)) as
+						| ((name: string) => unknown)
+						| undefined
+					if (typeof run !== "function") throw new Error(`no app ${app} at /apps`)
+					made[name] = run(name)
+					lastSeen.set(name, app)
+				} catch (e) {
+					if (e === PENDING) throw e
+					say(`✗ ${name}: ${(e as Error).message}`)
+				}
 			}
+			// a window taken away: the app goes with it, and says so
+			for (const [name, app] of [...lastSeen]) {
+				if (want.has(name)) continue
+				lastSeen.delete(name)
+				canvases.delete(name)
+				say(`${name}: cleanup ran, ${FAREWELL[app] ?? "it let go"}`)
+			}
+			put(views, made)
 		},
 	)
 
-	method("on/select", (path: string) => put(api, selected, path))
+	method("on/select", (path: string) => put(selected, path))
 	method("on/open", (path: string, using?: string) => {
-		put(api, menu, "")
+		put(menu, "")
 		openWindow(addr(path), using)
 	})
-	method("on/menu", (which: string) => put(api, menu, read(menu) === which ? "" : which))
+	method("on/menu", (which: string) => put(menu, read(menu) === which ? "" : which))
 	method("on/raise", raise)
 	// a drag: where the pointer took the title bar, then the pos node written as it moves
 	method("on/grab", (name: string, x: number, y: number) => {
 		const p = read(pos(name)) as { x: number; y: number }
-		put(api, drag, { name, dx: x - p.x, dy: y - p.y })
+		put(drag, { name, dx: x - p.x, dy: y - p.y })
 	})
 	method("on/drag", (name: string, x: number, y: number) => {
 		const d = read(drag) as { name: string; dx: number; dy: number } | null
 		if (d?.name !== name) return
-		edit(pos(name), (p: { x: number; y: number }) => {
-			p.x = Math.round(x - d.dx)
-			p.y = Math.max(0, Math.round(y - d.dy))
-		})
+		patch(pos(name), [
+			{ path: ["x"], value: Math.round(x - d.dx) },
+			{ path: ["y"], value: Math.max(0, Math.round(y - d.dy)) },
+		])
 	})
-	method("on/drop", () => put(api, drag, null))
+	method("on/drop", () => put(drag, null))
 	method("on/fold", (name: string) => {
 		const f = `/windows/${name}/folded`
-		put(api, f, !read(f))
+		put(f, !read(f))
 	})
-	// closing is taking the window's record away: the process sees it gone and is stopped. none
+	// closing is taking the window's record away: the shell sees it gone and its app goes. none
 	// named: the window in front
 	method("on/close", (name?: string) => {
-		put(api, menu, "")
+		put(menu, "")
 		name ??= read(front) as string
-		if (!name || !entries(`/windows/${name}`).length) return
+		if (!name || !hasNode(`/windows/${name}`)) return
 		closeWindow(name)
-		say(api, `closed ${name}: its record taken from /windows, its process from /desktop`)
+		say(`closed ${name}: its record taken from /windows, its app with it`)
 	})
 	method("on/show", (name: string) => {
-		put(api, menu, "")
-		put(api, `/windows/${name}/folded`, false)
+		put(menu, "")
+		put(`/windows/${name}/folded`, false)
 		raise(name)
 	})
 	method("on/note", () => {
-		put(api, menu, "")
+		put(menu, "")
 		const names = list("/home")
 		let n = 1
 		while (names.includes(`note-${n}`)) n++
 		const path = `/home/note-${n}`
-		edit(info(open(path, "")), [{ path: [TYPE], value: "public.plain-text" }])
-		put(api, selected, path)
+		ensureNode(path, "")
+		patchAttributes(path, [{ path: [TYPE], value: "public.plain-text" }])
+		put(selected, path)
 		openWindow(addr(path))
 	})
 	method("on/clear", () => {
-		put(api, menu, "")
-		put(api, "/system/log", ["✿ the log, cleared"])
+		put(menu, "")
+		put("/system/log", ["✿ the log, cleared"])
 	})
 
 	// the session the desktop starts with: once, then it is what was left
-	if (!entries("./booted").length) {
-		open("./booted", true)
-		openWindow(addr("/home/hello"), undefined, { x: 18, y: 16 })
-		openWindow(addr("/home/sketches/doodle"), undefined, { x: 372, y: 34 })
-		openWindow(addr("/home/clocks/london"), undefined, { x: 650, y: 40 })
+	if (!hasNode("./booted")) {
+		ensureNode("./booted", true)
+		peep(() => {
+			openWindow(addr("/home/hello"), undefined, { x: 18, y: 16 })
+			openWindow(addr("/home/sketches/doodle"), undefined, { x: 372, y: 34 })
+			openWindow(addr("/home/clocks/london"), undefined, { x: 650, y: 40 })
+		})
 	}
 
 	// the title bar takes the pointer (not its buttons): the drag goes on outside it
@@ -435,7 +473,7 @@ export function shell(api: API & Extra) {
 						onClick={handler("on/fold", [name])}
 					/>
 				</header>
-				<div class="body">{bind(`/desktop/${name}`, (el) => el)}</div>
+				<div class="body">{bind("views", (v: Record<string, unknown>) => v?.[name] ?? "")}</div>
 			</section>
 		)
 	}
@@ -447,7 +485,7 @@ export function shell(api: API & Extra) {
 			onClick={handler(dock ? "on/open" : "on/select", [x.path])}
 			onDblClick={dock ? undefined : handler("on/open", [x.path])}
 		>
-			<Pic is={x.is} id={x.id} pal={x.pal} />
+			<Pic is={x.is} path={x.path} pal={x.pal} />
 			<span class="label">{x.name}</span>
 		</button>
 	)
@@ -467,8 +505,8 @@ export function shell(api: API & Extra) {
 			<div class="menu about" style={{ left: "6px" }}>
 				<b>ermine desktop</b>
 				<p>
-					a window is a process placed in /desktop. what opens a thing is the nearest app, from
-					where it is up to the root, that opens its type (openwith).
+					a window is an app the shell runs for its record in /windows. what opens a thing is
+					the nearest app, from where it is up to the root, that opens its type (openwith).
 				</p>
 				<button onClick={handler("on/clear")}>clear the log</button>
 			</div>
@@ -483,7 +521,7 @@ export function shell(api: API & Extra) {
 							</button>,
 							<div class="sub">open with… (every app opening it, nearest first)</div>,
 							...(o.others ?? []).map((x) => (
-								<button class="with" onClick={handler("on/open", [o.path, x.id])}>
+								<button class="with" onClick={handler("on/open", [o.path, x.at])}>
 									{x.name} <span class="tag">{x.from}</span>
 								</button>
 							)),
@@ -499,7 +537,7 @@ export function shell(api: API & Extra) {
 		),
 		window: () => (
 			<div class="menu" style={{ left: "82px" }}>
-				<div class="sub">/windows: each a process at /desktop</div>
+				<div class="sub">/windows: each an app the shell runs</div>
 				{under("/windows", (w) => (
 					<button onClick={handler("on/show", [w.name])}>
 						{bind([w, "info"], (i) => `${i.title} · ${i.app}`)}{" "}
@@ -557,54 +595,54 @@ export function shell(api: API & Extra) {
 	)
 }
 
+// what a window's app says as it goes (its record taken away)
+const FAREWELL: Record<string, string> = {
+	editor: "let go of its note",
+	view: "put the picture down",
+	paint: "put the brush down",
+	clock: "its second hand stopped",
+	catclock: "its tail stopped swinging",
+	lists: "put the list down",
+	files: "left the folder",
+}
+
 // =================================================================================================
-// the apps. each is run as the process of a window: its name is its argument, its working folder
-// /windows/<name>; what it was handed is under that: doc (the thing, a mount), keys/<name> (each
-// key its app needs, a mount), info, pos, folded
+// the apps. each is called with its window's name, and makes what it needs named under it
+// (<name>/…); what it was handed is in the window's record: doc (the thing, a mount), keys/<name>
+// (each key its app needs, a mount), info, pos, folded. it returns its view, which the shell holds
 // =================================================================================================
 
 // text → window
-function editor(api: API & Extra) {
-	const { read, method, teardown } = api
-	const doc = `${folder(api)}/doc`
-	const name = api.args[0]
-	const title = (read(`${folder(api)}/info`) as { title?: string } | undefined)?.title
-	method("on/type", (text: string) => put(api, doc, text))
-	twins(api)
-	teardown((why) => {
-		if (why === "ended") say(api, `${name}: cleanup ran, let go of ${title}`)
-	})
+function editor(name: string) {
+	const doc = `${folder(name)}/doc`
+	createAction(`${name}/on/type`, (text: string) => put(doc, text))
+	twins(name)
 	return (
 		<div class="app editor">
 			<textarea
 				spellcheck={false}
 				value={bind(doc)}
-				onInput={handler("on/type", (e) => [e.target.value])}
+				onInput={handler(`${name}/on/type`, (e) => [e.target.value])}
 			/>
 			<footer>
 				{bind(doc, (v: string) =>
 					`${[...String(v)].length} characters · ${String(v).split("\n").length} lines`)}
-				<Twins />
+				<Twins name={name} />
 			</footer>
 		</div>
 	)
 }
 
 // image + palette → window: the picture, never changed here
-function viewer(api: API & Extra) {
-	const { read, effect, teardown } = api
-	const f = folder(api)
-	const name = api.args[0]
-	const canvas = document.createElement("canvas")
-	effect(
-		"draw",
+function viewer(name: string) {
+	const f = folder(name)
+	const canvas = canvasFor(name)
+	createEffect(
+		`${name}/draw`,
 		() => ({ img: read(`${f}/doc`), pal: read(`${f}/keys/palette`) }),
 		(v) => pixels(canvas, v.img as Picture, v.pal as string[]),
 	)
-	twins(api)
-	teardown((why) => {
-		if (why === "ended") say(api, `${name}: cleanup ran, put the picture down`)
-	})
+	twins(name)
 	return (
 		<div class="app viewer">
 			<div class="frame">{canvas}</div>
@@ -614,33 +652,33 @@ function viewer(api: API & Extra) {
 					(img: Picture) => `${img.w} × ${img.h} · ${new Set(img.px).size} colours`,
 				)} <span class="tag">{bind(`${f}/info`, (i) => i.keys.join(", "))}</span>
 			</p>
-			<Twins />
+			<Twins name={name} />
 		</div>
 	)
 }
 
 // image + palette → window: a dab writes one pixel, a patch at px/<i>
-function paint(api: API & Extra) {
-	const { open, read, edit, effect, method, teardown } = api
-	const f = folder(api)
+function paint(name: string) {
+	const f = folder(name)
 	const doc = `${f}/doc`, pal = `${f}/keys/palette`
-	const name = api.args[0]
-	const ink = open("ink", 3)
-	const canvas = document.createElement("canvas")
-	effect(
-		"draw",
+	const ink = ensureNode(`${name}/ink`, 3)
+	const canvas = canvasFor(name)
+	createEffect(
+		`${name}/draw`,
 		() => ({ img: read(doc), pal: read(pal) }),
 		(v) => pixels(canvas, v.img as Picture, v.pal as string[]),
 	)
-	twins(api)
-	method("on/dab", (i: number) => {
-		const k = read(ink)
-		if (read(doc, ["px", i]) !== k) edit(doc, (d: Picture) => void (d.px[i] = k as number))
+	twins(name)
+	createAction(`${name}/on/dab`, (i: number) => {
+		peep(() => {
+			const k = read(ink)
+			if (read(doc, ["px", i]) !== k) patch(doc, [{ path: ["px", i], value: k }])
+		})
 	})
-	method("on/ink", (k: number) => put(api, ink, k))
-	method("on/wipe", () => edit(doc, (d: Picture) => void d.px.fill(0)))
-	teardown((why) => {
-		if (why === "ended") say(api, `${name}: cleanup ran, put the brush down`)
+	createAction(`${name}/on/ink`, (k: number) => put(ink, k))
+	createAction(`${name}/on/wipe`, () => {
+		const img = peep(() => read(doc)) as Picture
+		patch(doc, [{ path: ["px"], value: img.px.map(() => 0) }])
 	})
 	// the pixel under the pointer (the picture is fitted into the canvas's box, centred)
 	const cell = (e: PointerEvent) => {
@@ -657,13 +695,13 @@ function paint(api: API & Extra) {
 		<div class="app paint">
 			<div
 				class="frame"
-				onPointerDown={handler("on/dab", (e) => {
+				onPointerDown={handler(`${name}/on/dab`, (e) => {
 					try {
 						e.currentTarget.setPointerCapture(e.pointerId)
 					} catch { /* a script's pointer */ }
 					return cell(e)
 				})}
-				onPointerMove={handler("on/dab", (e) => (e.buttons ? cell(e) : undefined))}
+				onPointerMove={handler(`${name}/on/dab`, (e) => (e.buttons ? cell(e) : undefined))}
 			>
 				{canvas}
 			</div>
@@ -672,27 +710,32 @@ function paint(api: API & Extra) {
 					cols.map((c, i) => (
 						<button
 							key={String(i)}
-							class={bind("ink", (k) => (k === i ? "ink on" : "ink"))}
+							class={bind(`${name}/ink`, (k) => (k === i ? "ink on" : "ink"))}
 							style={{ background: c }}
 							title={c}
-							onClick={handler("on/ink", [i])}
+							onClick={handler(`${name}/on/ink`, [i])}
 						/>
 					)))}
-				<button class="wipe" onClick={handler("on/wipe")}>wipe</button>
+				<button class="wipe" onClick={handler(`${name}/on/wipe`)}>wipe</button>
 			</div>
-			<Twins />
+			<Twins name={name} />
 		</div>
 	)
 }
 
 // list → window: a checklist, each tick a patch at <i>/done
-function lists(api: API & Extra) {
-	const { edit, method } = api
-	const doc = `${folder(api)}/doc`
-	method("on/toggle", (i: number) => edit(doc, (d: Item[]) => void (d[i].done = !d[i].done)))
-	method("on/add", (text: string) => edit(doc, (d: Item[]) => void d.push({ text, done: false })))
-	method("on/drop", (i: number) => edit(doc, (d: Item[]) => void d.splice(i, 1)))
-	twins(api)
+function lists(name: string) {
+	const doc = `${folder(name)}/doc`
+	createAction(`${name}/on/toggle`, (i: number) => {
+		const done = peep(() => read(doc, [i, "done"]))
+		patch(doc, [{ path: [i, "done"], value: !done }])
+	})
+	createAction(`${name}/on/add`, (text: string) => {
+		const n = (peep(() => read(doc)) as Item[]).length
+		patch(doc, [{ path: [], range: [n, n], value: [{ text, done: false }] }])
+	})
+	createAction(`${name}/on/drop`, (i: number) => patch(doc, [{ path: [], range: [i, i + 1] }]))
+	twins(name)
 	let input: HTMLInputElement
 	const typed = () => {
 		const text = input.value.trim()
@@ -705,11 +748,15 @@ function lists(api: API & Extra) {
 				{bind(doc, (list: Item[]) =>
 					list.map((x, i) => (
 						<li key={String(i)} class={x.done ? "done" : ""}>
-							<button class="tick" onClick={handler("on/toggle", [i])}>
+							<button class="tick" onClick={handler(`${name}/on/toggle`, [i])}>
 								{x.done ? "✓" : ""}
 							</button>
 							<span>{x.text}</span>
-							<button class="x" title="take it out" onClick={handler("on/drop", [i])}>
+							<button
+								class="x"
+								title="take it out"
+								onClick={handler(`${name}/on/drop`, [i])}
+							>
 								×
 							</button>
 						</li>
@@ -719,9 +766,9 @@ function lists(api: API & Extra) {
 				ref={(e) =>
 					void (input = e)}
 				placeholder="a new thing, then enter"
-				onKeyDown={handler("on/add", (e) => (e.key === "Enter" ? typed() : undefined))}
+				onKeyDown={handler(`${name}/on/add`, (e) => (e.key === "Enter" ? typed() : undefined))}
 			/>
-			<Twins />
+			<Twins name={name} />
 		</div>
 	)
 }
@@ -729,29 +776,26 @@ type Item = { text: string; done: boolean }
 
 // folder → window: a browser of the graph. any node can be gone into; a thing that says what it
 // is (and is not a folder) is opened in a window of its own
-function files(api: API & Extra) {
-	const { open, read, entries, list, memo, method, send } = api
-	const typeOf = (id: unknown) =>
-		read({ id: id as string, part: "attributes" }, [TYPE]) as string | undefined
+function files(name: string) {
 	// where it starts: the path the thing was opened from
-	const from = (read(`${folder(api)}/info`) as { doc?: string } | undefined)?.doc ?? "/"
-	const at = open("at", from)
-	memo("listing", () => {
+	const from = (peep(() => read(`${folder(name)}/info`)) as { doc?: string } | undefined)?.doc ??
+		"/"
+	const at = ensureNode(`${name}/at`, from)
+	createMemo(`${name}/listing`, () => {
 		const path = read(at) as string
 		const pal = read("/system/palette") as string[]
-		if (!entries(path).length) return { path, items: [] }
+		if (!readEntries(path).length) return { path, items: [] }
 		return {
 			path,
-			items: list(path).flatMap((name) => {
-				const there = `${path === "/" ? "" : path}/${name}`
-				const m = entries(there)[0]
+			items: list(path).flatMap((n) => {
+				const there = `${path === "/" ? "" : path}/${n}`
+				const m = readEntries(there)[0]
 				if (!m) return []
 				const v = m.value
 				return [{
-					name,
+					name: n,
 					path: there,
-					id: m.id,
-					is: kind(typeOf(m.id)) ??
+					is: kind(typeOf(there)) ??
 						(typeof v === "function" ? "app" : list(there).length ? "node" : "leaf"),
 					peek: peek(v),
 					pal,
@@ -759,45 +803,42 @@ function files(api: API & Extra) {
 			}),
 		}
 	})
-	method("on/go", (path: string) => {
-		const x = entries(path)[0]
-		const is = x && kind(typeOf(x.id))
-		if (is && is !== "folder") send("/shell/on/open", path)
-		else api.edit(at, [{ path: [], value: path }])
+	createAction(`${name}/on/go`, (path: string) => {
+		const x = peep(() => readEntries(path))[0]
+		const is = x && kind(typeOf(path))
+		if (is && is !== "folder") executeAction("on/open", path)
+		else put(at, path)
 	})
-	method("on/up", () => {
-		const path = read(at) as string
-		api.edit(at, [{ path: [], value: path.split("/").slice(0, -1).join("/") || "/" }])
+	createAction(`${name}/on/up`, () => {
+		const path = peep(() => read(at)) as string
+		put(at, path.split("/").slice(0, -1).join("/") || "/")
 	})
-	method("on/inspect", () => {
-		;(globalThis as unknown as { parent: { __pick?: (a: string[]) => void } }).parent.__pick?.(
-			(read(at) as string).split("/").filter(Boolean),
-		)
+	createAction(`${name}/on/inspect`, () => {
+		inspect((peep(() => read(at)) as string).split("/").filter(Boolean))
 	})
-	// a click selects it on the desktop: the shell's own method, sent to across (its menu bar then
-	// says what opens it, its File menu what else would)
-	method("on/select", (path: string) => send("/shell/on/select", path))
+	// a click selects it on the desktop: the shell's own action (its menu bar then says what opens
+	// it, its File menu what else would)
 	return (
 		<div class="app files">
 			<div class="crumbs">
-				<button onClick={handler("on/up")} title="up one">↑</button>
-				<span class="where">{bind("at")}</span>
-				<button onClick={handler("on/inspect")} title="pick this node in the inspector">
+				<button onClick={handler(`${name}/on/up`)} title="up one">↑</button>
+				<span class="where">{bind(`${name}/at`)}</span>
+				<button onClick={handler(`${name}/on/inspect`)} title="pick this node in the inspector">
 					⌖
 				</button>
 			</div>
 			<div class="grid">
-				{bind("listing", (l) =>
+				{bind(`${name}/listing`, (l) =>
 					l.items.length
 						? l.items.map((m) => (
 							<button
 								key={m.path}
-								class={bind("/selected", (s) => (s === m.path ? "file on" : "file"))}
+								class={bind("selected", (s) => (s === m.path ? "file on" : "file"))}
 								title={`${m.path}${m.peek ? ` = ${m.peek}` : ""}`}
 								onClick={handler("on/select", [m.path])}
-								onDblClick={handler("on/go", [m.path])}
+								onDblClick={handler(`${name}/on/go`, [m.path])}
 							>
-								<Pic is={m.is} id={m.id} pal={m.pal} />
+								<Pic is={m.is} path={m.path} pal={m.pal} />
 								<span class="label">{m.name}</span>
 								{m.peek ? <span class="peek">{m.peek}</span> : ""}
 							</button>
@@ -819,19 +860,15 @@ function peek(v: unknown): string {
 	return `{${Object.keys(v as object).slice(0, 3).join(", ")}}`
 }
 
-// clock → window: its own timer writes its now node; the teardown stops it
-function clock(api: API & Extra) {
-	const { open, read, edit, memo, teardown } = api
-	const doc = `${folder(api)}/doc`
-	const name = api.args[0]
-	const now = open("now", Date.now())
-	// a timer writes as the process, with no method in between
-	const every = setInterval(() => edit(now, () => Date.now()), 1000)
-	teardown((why) => {
-		clearInterval(every)
-		if (why === "ended") say(api, `${name}: cleanup ran, its second hand stopped`)
+// clock → window: the host's beat (/beat, every 50ms: a timer cannot call into the graph) writes
+// its now node each second
+function clock(name: string) {
+	const doc = `${folder(name)}/doc`
+	const now = ensureNode(`${name}/now`, Date.now())
+	createEffect(`${name}/second`, () => read("/beat"), (beat) => {
+		if ((beat as number) % 20 === 0) put(now, Date.now())
 	})
-	memo("hands", () => {
+	createMemo(`${name}/hands`, () => {
 		const ms = read(now) as number
 		const { zone, label } = (read(doc) ?? {}) as { zone?: string; label?: string }
 		const [h, m, s] = new Date(ms).toLocaleTimeString("en-GB", { timeZone: zone, hour12: false })
@@ -845,6 +882,7 @@ function clock(api: API & Extra) {
 		}
 	})
 	const turn = (k: "h" | "m" | "s") => (x) => ({ transform: `rotate(${x[k]}deg)` })
+	const hands = `${name}/hands`
 	return (
 		<div class="app clock">
 			<div class="face">
@@ -852,47 +890,41 @@ function clock(api: API & Extra) {
 					{ length: 12 },
 					(_, i) => <b style={{ transform: `rotate(${i * 30}deg)` }} />,
 				)}
-				<i class="hh" style={bind("hands", turn("h"))} />
-				<i class="mm" style={bind("hands", turn("m"))} />
-				<i class="ss" style={bind("hands", turn("s"))} />
+				<i class="hh" style={bind(hands, turn("h"))} />
+				<i class="mm" style={bind(hands, turn("m"))} />
+				<i class="ss" style={bind(hands, turn("s"))} />
 				<u />
 			</div>
 			<p>
-				<span class="tag">{bind("hands", (x) => x.label)}</span> {bind("hands", (x) => x.text)}
+				<span class="tag">{bind(hands, (x) => x.label)}</span> {bind(hands, (x) => x.text)}
 			</p>
 		</div>
 	)
 }
 
 // clock → window, as a Kit-Cat Klock: a black cat with a clock on its belly, a tail that swings as
-// a pendulum and eyes that follow it. its own timer writes where the tail is (its swing node);
-// how fast it swings and its bow tie are a node on the thing (doc/cat), not the window: two cats
-// on one clock swing together, and an edit there changes both
+// a pendulum and eyes that follow it. the host's beat (every 50ms) writes where the tail is (its
+// swing node); how fast it swings and its bow tie are a node on the thing (doc/cat), not the
+// window: two cats on one clock swing together, and an edit there changes both
 type Cat = { swing: number; bow: string }
-function catclock(api: API & Extra) {
-	const { open, read, edit, effect, teardown } = api
-	const f = folder(api)
+function catclock(name: string) {
+	const f = folder(name)
 	const doc = `${f}/doc`
-	const name = api.args[0]
-	// the thing's own node, made the first time any cat opens it: ./doc is the thing, so this is
+	// the thing's own node, made the first time any cat opens it: doc is the thing, so this is
 	// under the thing, one for every window on it
-	const cat = open("./doc/cat", { swing: 1, bow: "#ff2284" })
-	const swing = open("swing", { x: 0, at: Date.now() })
-	const canvas = document.createElement("canvas")
+	const cat = ensureNode(`${doc}/cat`, { swing: 1, bow: "#ff2284" })
+	const swing = ensureNode(`${name}/swing`, { x: 0, at: Date.now() })
+	const canvas = canvasFor(name)
 	// a pendulum: x = sin(π·time / seconds a swing), from the wall clock, so every cat with the
-	// same cat node is at the same place in its swing. the timer writes as the process
-	const every = setInterval(() => {
+	// same cat node is at the same place in its swing
+	createEffect(`${name}/swinging`, () => read("/beat"), () => {
 		const at = Date.now()
-		const { swing: secs = 1 } = (read(cat) ?? {}) as Partial<Cat>
+		const { swing: secs = 1 } = (peep(() => read(cat)) ?? {}) as Partial<Cat>
 		const x = Math.sin((Math.PI * at) / (Math.max(0.2, Number(secs) || 1) * 1000))
-		edit(swing, () => ({ x: Math.round(x * 1000) / 1000, at }))
-	}, 50)
-	teardown((why) => {
-		clearInterval(every)
-		if (why === "ended") say(api, `${name}: cleanup ran, its tail stopped swinging`)
+		put(swing, { x: Math.round(x * 1000) / 1000, at })
 	})
-	effect(
-		"draw",
+	createEffect(
+		`${name}/draw`,
 		() => {
 			const { x, at } = read(swing) as { x: number; at: number }
 			const { zone } = (read(doc) ?? {}) as { zone?: string }
@@ -903,19 +935,19 @@ function catclock(api: API & Extra) {
 		},
 		(v) => kitcat(canvas, v),
 	)
-	twins(api)
-	const where = `${(read(`${f}/info`) as { doc?: string } | undefined)?.doc ?? ""}/cat`
+	twins(name)
+	const where = `${(peep(() => read(`${f}/info`)) as { doc?: string } | undefined)?.doc ?? ""}/cat`
 	return (
 		<div class="app catclock">
 			<div class="cat">{canvas}</div>
 			<p>
 				<span class="tag">{bind(doc, (d) => d.label ?? d.zone)}</span>
-				{bind("draw", (v) => `${pad(v.h)}:${pad(v.m)}`)}
+				{bind(`${name}/draw`, (v) => `${pad(v.h)}:${pad(v.m)}`)}
 			</p>
 			<p class="dim" title="edit it in the graph tab: every cat on this clock changes">
 				swing and bow: {where}
 			</p>
-			<Twins />
+			<Twins name={name} />
 		</div>
 	)
 }

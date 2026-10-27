@@ -1,12 +1,24 @@
 /** @jsxImportSource ermine-h */
-import type { API } from "@ermine/api"
+import {
+	addTeardown,
+	createAction,
+	createEffect,
+	createMemo,
+	ensureNode,
+	executeAction,
+	patch,
+	peep,
+	read,
+} from "@ermine/system"
+import { change, who } from "@ermine/slaygrounds/tools"
 import { bind, handler } from "ermine-h"
 
 // trust: a vault that opens only for a person. the world decides trusted by itself, from the
 // event the window is dispatching right now (read through the native getter it kept before this
 // program ran); nothing a program hands it counts. each row below is an attempt: press its button.
-// what the row says it got is not this program's guess: it is the "trusted-event" key on the change
-// the vault's handler wrote (vault/tries/<row>), the same pair the inspector and explain show
+// what the row says it got is not this program's guess: it is what the vault's action wrote
+// (vault/tries/<row>: who() as it ran, and the caller of the change). nothing a listener or a timer does can call an action now (no
+// call is open there), so the rows that did are tried and say what threw
 
 const css = `
 body { background: #ffff88 }
@@ -41,7 +53,7 @@ code { font: 11px Monaco, ui-monospace, monospace; background: #ffffc2; padding:
 button.decoy { display: none }
 `
 
-// how a row's attempt is made: kept here, so each row's code is what you read
+// how a row's attempt is made: held here, so each row's code is what you read
 type Row = {
 	id: string
 	what: string
@@ -53,7 +65,8 @@ type Row = {
 	elsewhere?: boolean
 }
 type Ctx = {
-	knock: (id: string, ...rest: unknown[]) => unknown
+	// the call made straight from this code: nothing is open in a listener or a timer, so it throws
+	knock: (id: string, ...rest: unknown[]) => void
 	decoy: () => HTMLButtonElement
 	note: (text: string) => void
 }
@@ -108,7 +121,7 @@ const rows: Row[] = [
 		what: "window.event = { isTrusted: true }",
 		how: "from code (a timer), window.event replaced, then a call",
 		why:
-			"window.event can be replaced, so a host reading it would be fooled; this host kept the native getter before any program ran",
+			"window.event can be replaced, so a host reading it would be fooled; this host kept the native getter before any program ran. now the call itself throws: a timer has no call open",
 		go: ({ knock, note }) => {
 			setTimeout(() => {
 				const real = Object.getOwnPropertyDescriptor(window, "event")!
@@ -126,7 +139,8 @@ const rows: Row[] = [
 		id: "fake",
 		what: "a fake { isTrusted: true } handed in",
 		how: "from code (a timer), as the event and as an argument",
-		why: "call takes no event and no flag: what it is handed is never asked",
+		why:
+			"call takes no event and no flag: what it is handed is never asked. now the call itself throws: a timer has no call open",
 		go: ({ knock }) => void setTimeout(() => knock("fake", { isTrusted: true })),
 	},
 	{
@@ -134,7 +148,7 @@ const rows: Row[] = [
 		what: "a real click that awaits, then calls",
 		how: "async: await a 10ms timer, then knock",
 		why:
-			"after the await the click is over: no event is being dispatched (the same rule as scopes and reads)",
+			"after the await the click is over: no event is being dispatched (the same rule as scopes and reads), and no call is open either: it throws",
 		go: async ({ knock }) => {
 			await new Promise((r) => setTimeout(r, 10))
 			knock("await")
@@ -145,7 +159,7 @@ const rows: Row[] = [
 		what: "a real click that awaits a promise already settled",
 		how: "async: await null, then knock",
 		why:
-			"the code after this await runs before the click is done being dispatched (a microtask, before the listener's turn ends), so it is still your click",
+			"the code after this await runs before the click is done being dispatched, so it is still your click: but no call is open in a listener, so it throws all the same",
 		go: async ({ knock }) => {
 			await null
 			knock("microtask")
@@ -155,13 +169,14 @@ const rows: Row[] = [
 		id: "timer",
 		what: "a real click that starts a timer",
 		how: "setTimeout(0), and the timer calls knock",
-		why: "a timer runs in a task of its own: no event is being dispatched",
+		why:
+			"a timer runs in a task of its own: no event is being dispatched, no call is open: it throws",
 		go: ({ knock }) => void setTimeout(() => knock("timer")),
 	},
 	{
 		id: "console",
 		what: "a call from the console",
-		how: "type knock() in the console below and press enter",
+		how: "type knock() in the console below and press enter: it throws, nothing is open there",
 		why:
 			"your enter is dispatched in the page around the program, not in its window: the program's window has no event",
 		elsewhere: true,
@@ -175,59 +190,50 @@ const rows: Row[] = [
 	},
 ]
 
-// the world's two tools: who is the caller and trusted of the call (or of a change), change a
-// node's latest change
-type Tools = API & {
-	who: (change?: unknown) => { caller: unknown; "trusted-event": boolean }
-	change: (x: unknown) => { metadata?: [string, unknown][] } | undefined
-}
-
-export default function program(
-	{ open, read, edit, memo, effect, method, send, teardown, who, change }: Tools,
-) {
-	const door = open("door", "shut")
-	const opened = open("opened", 0)
-	const bounced = open("bounced", 0)
-	const notes = open("notes", {})
+export default function program() {
+	const door = ensureNode("door", "shut")
+	const opened = ensureNode("opened", 0)
+	const bounced = ensureNode("bounced", 0)
+	const ids = [...rows.map((r) => r.id), "chain-relay"]
+	// the tries, each its own node counting its attempts: made now, so a memo can read each
+	type Try = { times: number; trusted: boolean }
+	const none: Try = { times: 0, trusted: false }
+	const tries = new Map(ids.map((id) => [id, ensureNode(`tries/${id}`, none)]))
 	const n = (x: unknown) => read(x as never) as number
-	const add = (x: unknown) => edit(x as never, (c: number) => c + 1)
+	const add = (x: unknown) => patch(x as never, [{ path: [], value: peep(() => n(x)) + 1 }])
+	// an attempt counted at its node, with whether the call was a person's: who() says it live, in
+	// the call (the change's own header no longer carries "trusted-event")
+	const tried = (id: string) => {
+		const node = tries.get(id) ?? ensureNode(`tries/${id}`, none)
+		const was = peep(() => read(node)) as Try
+		patch(node, [{ path: [], value: { times: was.times + 1, trusted: who()["trusted-event"] } }])
+	}
 
-	// every attempt ends here. what it writes (vault/tries/<id>) carries the send's pairs: the
-	// rows read "trusted-event" off that change. the door opens only for a person
-	let shut: ReturnType<typeof setTimeout> | undefined
-	method("on/knock", (id: string = "inspector") => {
-		add(open(`tries/${id}`, 0))
-		if (id === "chain") send("on/relay")
+	// every attempt ends here. what it writes (vault/tries/<id>) is what the rows show. the door opens only for a person, and stays open till it is locked (a timer cannot write)
+	createAction("on/knock", (id: string = "inspector") => {
+		tried(id)
+		if (id === "chain") executeAction("on/relay")
 		if (!who()["trusted-event"]) return void add(bounced)
-		edit(door, () => "open")
+		patch(door, [{ path: [], value: "open" }])
 		add(opened)
-		clearTimeout(shut)
-		// a timer writes as the vault, with no method between
-		shut = setTimeout(() => edit(door, () => "shut"), 1600)
 	})
-	method("on/relay", () => add(open("tries/chain-relay", 0)))
-	method(
-		"on/note",
-		(id: string, text: string) => edit(notes, (d: Record<string, string>) => void (d[id] = text)),
-	)
-	teardown(() => clearTimeout(shut))
+	createAction("on/relay", () => tried("chain-relay"))
+	createAction("on/lock", () => patch(door, [{ path: [], value: "shut" }]))
 
-	// what each row got: the trusted-event and caller keys of its node's latest change
-	memo("verdicts", () => {
+	// what each row got: the trusted its node was written with, and who() of its latest change
+	createMemo("verdicts", () => {
 		const out: Record<string, { trusted: boolean; caller: unknown; times: unknown }> = {}
-		for (const id of [...rows.map((r) => r.id), "chain-relay"]) {
-			const node = open(`tries/${id}`)
-			const times = read(node)
-			if (times === undefined) continue
-			const { caller, "trusted-event": trusted } = who(change(node))
-			out[id] = { trusted, caller, times }
+		for (const [id, node] of tries) {
+			const { times, trusted } = read(node) as Try
+			if (times === 0) continue
+			out[id] = { trusted, caller: who(change(node)).caller, times }
 		}
 		return out
 	})
 
 	// a failed attempt bounces off the vault
 	let vault: HTMLElement | undefined
-	effect("bounce", () => n(bounced), (_, before) => {
+	createEffect("bounce", () => n(bounced), (_, before) => {
 		if (before !== undefined) {
 			vault?.animate([
 				{ transform: "translateX(0)" },
@@ -238,16 +244,25 @@ export default function program(
 		}
 	})
 
-	// the console's way in: knock() typed in the console below
+	// the console's way in: knock() typed in the console below. it runs outside any call: it throws
 	const g = globalThis as any
-	g.knock = (id = "console") => send("on/knock", id)
-	teardown(() => delete g.knock)
+	g.knock = (id = "console") => executeAction("/vault/on/knock", id)
+	addTeardown(() => delete g.knock)
 
+	// a row's note, set on the page itself: a listener or a timer cannot write a node
+	const notes = new Map<string, HTMLElement>()
 	const decoys = new Map<string, HTMLButtonElement>()
 	const ctx = (id: string): Ctx => ({
-		knock: (row, ...rest) => send("on/knock", row, ...rest),
+		knock: (row, ...rest) => {
+			try {
+				executeAction("/vault/on/knock", row, ...rest)
+			} catch (e) {
+				const x = e as { code?: string; message?: string }
+				notes.get(id)!.textContent = `threw ${x.code ?? ""} ${x.message ?? e}`.slice(0, 120)
+			}
+		},
 		decoy: () => decoys.get(id)!,
-		note: (text) => void send("on/note", id, text),
+		note: (text) => void (notes.get(id)!.textContent = text),
 	})
 	const pill = (v?: { trusted: boolean; caller: unknown; times: unknown }) =>
 		!v ? <span class="pill none">not tried</span> : (
@@ -273,7 +288,8 @@ export default function program(
 				</div>
 				<div class="tally">
 					opened <span>{bind("opened")}</span>×<br />
-					bounced <span>{bind("bounced")}</span>×
+					bounced <span>{bind("bounced")}</span>×<br />
+					<button onClick={handler("on/lock")}>lock</button>
 				</div>
 			</div>
 			<table>
@@ -306,7 +322,7 @@ export default function program(
 										relay: {v["chain-relay"].trusted ? "trusted" : "untrusted"}
 									</span>
 								))}
-							{bind("notes", (v) => v[r.id] && <span class="note">{v[r.id]}</span>)}
+							<span class="note" ref={(e) => notes.set(r.id, e as HTMLElement)} />
 						</td>
 						<td class="why">{r.why}</td>
 					</tr>

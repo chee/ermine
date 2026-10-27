@@ -1,12 +1,28 @@
 /** @jsxImportSource ermine-h */
-import type { API } from "@ermine/api"
+import {
+	createAction,
+	createEffect,
+	createMemo,
+	ensureNode,
+	hasNode,
+	list,
+	patch,
+	peep,
+	pipe,
+	read,
+	ref,
+	unplace,
+} from "@ermine/system"
+import { host } from "@ermine/slaygrounds/tools"
 import { bind, handler } from "ermine-h"
 import apply from "@ermine/core/op/apply"
 import { count, unit } from "@ermine/core/util/walk-string"
 
 // piece-lens: one text in three kinds of place, kept in step by opstreams. a file or a folder on
 // your computer (the File System Access API), a patchwork doc (automerge, by its url), and inner
-// nodes that live only in this graph. the opstream on a text is ermine's splice, a patch:
+// nodes that live only in this graph. this port has the inner nodes, the pipes and the editor; the
+// disk and the docs are not in it (see the note in the view): each writes the graph from a picker's
+// promise, a file's change or a doc's change, where nothing is open. the opstream on a text is ermine's splice, a patch:
 // { path: [], range: [a, b], value }: positions a to b (code points) become value. one editor
 // (CodeMirror) edits whichever node you pick.
 //   the disk   has no ops, only texts: what it has now is diffed against what it had (lines matched,
@@ -19,7 +35,7 @@ import { count, unit } from "@ermine/core/util/walk-string"
 //              leaves out, kept so the source can be made again). a change on the left is got
 //              through the lenses and diffed into the right; a change on the right is put back
 //              through them, then got again: the right shows what the left makes of it
-// every write says who made it (its change's actor): a pipe or an adapter never answers its own
+// every write is told in the flow with who made it; a pipe is never told its own writes
 
 // ---- the opstream on a text: splices ----
 // a splice: code points a to b become value (none: taken out). a list of them is in order, each
@@ -498,12 +514,10 @@ function back(chain: Using[], v: string, source: string): string {
 }
 
 // ---- the program ----
-// what the host's extend adds (host.ts): as, f run as an actor of its own (every write says who made
-// it); the editor (CodeMirror) and automerge, bundled apart (cm.ts)
+// what the host's extend adds (host.ts): the editor (CodeMirror), bundled apart (cm.ts). its typing
+// is the host's to tell: it runs this process's on/typed with each change
 type Host = {
-	as: <T>(actor: string, f: () => T) => T
 	editor: () => import("./cm.ts").TextEditor
-	automerge: () => Promise<import("./cm.ts").Automerge>
 }
 type Spec = {
 	id: string
@@ -527,22 +541,6 @@ type Row = {
 	top: boolean
 }
 
-// the disk's side of a file node
-type Disk = {
-	handle: FileSystemFileHandle
-	path: string[]
-	single: boolean // opened alone (not in a folder)
-	known: string | Uint8Array // what the disk had, as last read or written
-	seen: unknown // the node's value, as last told
-	ours: Splice[] // what the node took since known, by anyone but the disk
-	writing: boolean
-	again: boolean
-	mtime: number
-	timer?: number
-}
-// an automerge doc's side of a doc node
-type Linked = { doc: import("./cm.ts").Doc; path: string[]; seen: string }
-
 const DRAFT = `Hello! This is draft, an inner node: it lives only in this graph.
 Shout, below it, is draft through the UPPERCASE lens. Write in either one.
 In shout the case you meant is kept aside: iPhone, McDonald's, NASA, ermine.
@@ -560,569 +558,196 @@ const PIPES: Spec[] = [
 	},
 ]
 
-const strict = new TextDecoder("utf-8", { fatal: true })
-// what not every browser has: the pickers, FileSystemObserver
-// deno-lint-ignore no-explicit-any
-const browser = globalThis as any
-
-export default function program(
-	{
-		open,
-		read,
-		edit,
-		entries,
-		list,
-		memo,
-		effect,
-		method,
-		watch,
-		remove,
-		teardown,
-		ref,
-		as,
-		editor: makeEditor,
-		automerge: loadAutomerge,
-	}:
-		& API
-		& Host,
-) {
-	// the text nodes live in the working folder (saved, so a reload finds them): ./text/inner, files,
-	// docs. a node here is its path under it, names; tree says where. pipes and what is picked are
-	// there too. what each outside side says, and the log, are the process's own
-	const tree = (path: readonly string[]) => ["/", "text", ...path]
-	const pipes = open("./text/pipes", PIPES)
-	const editing = open("./text/editing", ["inner", "draft"])
-	const log = open("log", [] as Flow[])
-	// what each outside side says: synced, writing, read only, online…, by path
-	const state = open("state", {} as Record<string, string>)
+export default function program() {
+	const { editor: makeEditor } = host<Host>()
+	// the text nodes live in the working folder (saved, so a reload finds them): ./text/inner. a node
+	// here is its path under it, names; tree says where. pipes and what is picked are there too. what
+	// each side says, and the log, are the process's own
+	const tree = (path: readonly string[]) => "/text/" + path.join("/")
+	const pipes = ensureNode("./text/pipes", PIPES)
+	const editing = ensureNode("./text/editing", ["inner", "draft"])
+	const log = ensureNode("log", [] as Flow[])
+	// what each side says: by path
+	const state = ensureNode("state", {} as Record<string, string>)
 	// what each pipe's lenses keep aside, and how much went through
-	const looks = open("looks", {} as Record<string, unknown>)
-	open(tree(["inner", "draft"]), DRAFT)
-	open(tree(["inner", "shout"]), "")
-	const put = (x: ReturnType<typeof open>, value: unknown) => edit(x, [{ path: [], value }])
+	const looks = ensureNode("looks", {} as Record<string, unknown>)
+	ensureNode(tree(["inner", "draft"]), DRAFT)
+	ensureNode(tree(["inner", "shout"]), "")
+	const put = (x: ReturnType<typeof ensureNode>, value: unknown) => patch(x, [{ path: [], value }])
 
-	// kept across reloads: the outside's handles, and the editor (live values, ref'd in ./)
-	const disks = read(ref("./text-kept/disks", () => new Map<string, Disk>())) as Map<string, Disk>
-	const folders = read(
-		ref(
-			"./text-kept/folders",
-			() => new Map<string, { handle: FileSystemDirectoryHandle; path: string[] }>(),
-		),
-	) as Map<string, { handle: FileSystemDirectoryHandle; path: string[] }>
-	const linked = read(ref("./text-kept/linked", () => new Map<string, Linked>())) as Map<
-		string,
-		Linked
-	>
+	// kept across reloads: the editor (a live value, ref'd in ./)
 	const editor = read(ref("./text-kept/editor", () => makeEditor())) as ReturnType<
 		typeof makeEditor
 	>
 
 	// ---- reading and writing ----
+	// reads here are as things are now (peep), but where a memo or an effect says, tracked (look)
+	const now = <T,>(f: () => T) => peep(f)
 	// a node's path if there is a node there
 	const node = (path: string[]): string[] | undefined =>
-		entries(tree(path)).length ? path : undefined
-	const val = (x?: string[]) => x && read(tree(x))
+		now(() => hasNode(tree(path))) ? path : undefined
+	const val = (x?: string[]) => (x ? now(() => read(tree(x))) : undefined)
 	const text = (x?: string[]) => {
 		const v = val(x)
 		return typeof v === "string" ? v : undefined
 	}
 	const rel = (x: string[]) => x.join("/")
-	// splices on a node, as who; told to the flow
+	// splices on a node, told to the flow
 	function write(who: string, x: string[], ps: readonly unknown[], note = "") {
 		if (ps.length === 0) return
-		// told first: what this write makes happen is told after it
-		as(who, () => {
-			told(who, rel(x), ps, note)
-			edit(tree(x), ps as never)
-		})
+		told(who, rel(x), ps, note)
+		patch(tree(x), ps as never)
 	}
 	function told(who: string, at: string, ps: readonly unknown[], note = "") {
-		as(who, () => {
-			const was = read(log) as Flow[]
-			const n = (was[0]?.n ?? 0) + 1
-			put(log, [{ n, who, at, what: summary(ps), note }, ...was].slice(0, 14))
-		})
+		const was = now(() => read(log)) as Flow[]
+		const n = (was[0]?.n ?? 0) + 1
+		put(log, [{ n, who, at, what: summary(ps), note }, ...was].slice(0, 14))
 	}
 	function say(key: string, words: string) {
-		const was = read(state) as Record<string, string>
-		if (was[key] !== words) as("lens", () => put(state, { ...was, [key]: words }))
+		const was = now(() => read(state)) as Record<string, string>
+		if (was[key] !== words) put(state, { ...was, [key]: words })
 	}
 	const unique = (parent: string[], name: string) => {
-		const taken = new Set(list(tree(parent)))
+		const taken = new Set(now(() => list(tree(parent))))
 		let out = name, n = 1
 		while (taken.has(out)) out = `${name} ${++n}`
 		return out
 	}
 
-	// ---- the disk: a file node and its file ----
-	async function readFile(h: FileSystemFileHandle) {
-		const f = await h.getFile()
-		const bytes = new Uint8Array(await f.arrayBuffer())
-		let value: string | Uint8Array = bytes
-		try {
-			value = strict.decode(bytes)
-		} catch { /* not UTF-8: bytes */ }
-		return { value, mtime: f.lastModified }
-	}
-	const same = (a: unknown, b: unknown) =>
-		a === b ||
-		a instanceof Uint8Array && b instanceof Uint8Array && a.length === b.length &&
-			a.every((x, i) => x === b[i])
-	// deno-lint-ignore no-explicit-any
-	const writable = async (d: Disk) =>
-		(await (d.handle as any).queryPermission?.({ mode: "readwrite" }).catch(() => "denied")) ===
-			"granted"
-
-	// the node told a change: what it took goes on ours, and the file is written
-	function attachDisk(d: Disk) {
-		const x = node(d.path)
-		if (!x) return
-		watch(tree(x), (fact) => {
-			if (fact.change?.actor === "disk") return
-			const now = fact.value
-			if (typeof now === "string" && typeof d.seen === "string") {
-				d.ours.push(...step(d.seen, fact.patches, now))
-			}
-			d.seen = now
-			// written a moment later: keys typed together go out together, and a write the disk is in
-			// the middle of lands first, to be read and rebased past (a file can't be asked to change
-			// only if it is still what was read)
-			clearTimeout(d.timer)
-			d.timer = setTimeout(() => flush(d), 200)
-		})
-	}
-
-	// the disk and the node made one: what the disk has now goes in first (rebased past what the
-	// node took), then the node's text is written if the disk has not got it. one at a time: a
-	// call while one is going makes it go round again
-	async function flush(d: Disk) {
-		const key = d.path.join("/")
-		if (d.writing) return void (d.again = true)
-		d.writing = true
-		try {
-			do {
-				d.again = false
-				const disk = await readFile(d.handle).catch(() => undefined)
-				if (!disk) return gone(d)
-				d.mtime = disk.mtime
-				if (!same(disk.value, d.known)) ingest(d, disk.value)
-				const x = node(d.path)
-				const now = val(x)
-				if (now === undefined || same(now, d.known)) {
-					d.ours = []
-					say(key, typeof d.known === "string" ? "synced" : "bytes")
-					continue
-				}
-				if (!(await writable(d))) return say(key, "read only")
-				say(key, "writing…")
-				const n = d.ours.length
-				const w = await d.handle.createWritable()
-				await w.write(now as string | BufferSource)
-				await w.close()
-				d.known = now as string | Uint8Array
-				d.ours.splice(0, n)
-				told("disk", key, [], `wrote ${size(now)}`)
-				say(key, "synced")
-			} while (d.again)
-		} catch (e) {
-			say(key, "error: " + (e as Error).message)
-		} finally {
-			d.writing = false
-		}
-	}
-	// what the disk has, which is not what it had: its splices, rebased past ours, into the node
-	function ingest(d: Disk, disk: string | Uint8Array) {
-		const x = node(d.path)
-		if (!x) return
-		const now = val(x)
-		if (typeof disk !== "string" || typeof now !== "string" || typeof d.known !== "string") {
-			d.known = disk
-			d.ours = []
-			if (!same(now, disk)) write("disk", x, [{ path: [], value: disk }], "whole")
-			d.seen = val(x)
+	// ---- the editor: one CodeMirror over the node in editing ----
+	// the person types: the host runs on/typed with their changes (an editor's listener has nothing
+	// open to write in), as splices on the node. a change told while the editor is out of step with
+	// the node: the node's text made the editor's, by a diff
+	let at: string[] | undefined
+	createAction("on/typed", (changes: Change[], before: string) => {
+		const x = at && node(at)
+		const was = text(x)
+		if (!x || was === undefined) return
+		write("editor", x, was === before ? points(before, changes) : diff(was, editor.text()))
+	})
+	// the editor follows the node: loaded with a node picked, and made the same when the node
+	// changes by anyone else (a diff of what it shows against what the node has: an edit of its own
+	// leaves them the same, and nothing is applied)
+	createEffect("follow", () => {
+		const path = read(editing) as string[]
+		const here = hasNode(tree(path))
+		return { key: rel(path), path, here, v: here ? read(tree(path)) : undefined }
+	}, ({ key, path, here, v }, before) => {
+		at = here ? path : undefined
+		if (before?.key !== key || before.here !== here) {
+			editor.load(
+				typeof v === "string"
+					? v
+					: here
+					? v instanceof Uint8Array
+						? `(${size(v)} of bytes: not text)`
+						: "(a folder: pick a file in it)"
+					: `(nothing at ${path.join("/")})`,
+				{ readonly: typeof v !== "string", name: path[path.length - 1] },
+			)
 			return
 		}
-		const theirs = diff(d.known, disk)
-		let [mine, ours] = rebase(theirs, d.ours)
-		let note = d.ours.length ? `rebased past ${d.ours.length}` : ""
-		try {
-			if (run(now, mine) !== run(disk, ours)) throw 0
-		} catch {
-			// the two did not agree: the disk wins
-			;[mine, ours, note] = [diff(now, disk), [], "the disk won"]
-		}
-		d.known = disk
-		d.ours = ours
-		write("disk", x, mine, note)
-		d.seen = val(x)
-	}
-	// gone from the disk: asked again in a moment (an editor saving can take a file away and put
-	// it back), then the node goes too
-	function gone(d: Disk) {
-		const key = d.path.join("/")
-		say(key, "gone?")
-		setTimeout(async () => {
-			if (await d.handle.getFile().then(() => true, () => false)) return flush(d)
-			disks.delete(key)
-			const x = node(d.path)
-			if (x) as("disk", () => prune(x))
-			told("disk", key, [], "gone from the disk")
-		}, 500)
-	}
-
-	// a file made a node (opened, or in a folder): the disk wins when they differ
-	async function addFile(
-		h: FileSystemFileHandle,
-		parent: string[],
-		name: string,
-		single: boolean,
-	) {
-		const r = await readFile(h)
-		const path = [...parent, name]
-		const x = path
-		as("disk", () => open(tree(path), r.value))
-		const d: Disk = {
-			handle: h,
-			path,
-			single,
-			known: r.value,
-			seen: val(x),
-			ours: [],
-			writing: false,
-			again: false,
-			mtime: r.mtime,
-		}
-		disks.set(path.join("/"), d)
-		if (!same(d.seen, r.value)) {
-			d.known = d.seen as string // what the node has: the disk's is a change to it
-			ingest(d, r.value)
-		}
-		say(path.join("/"), typeof r.value === "string" ? "synced" : "bytes")
-		attachDisk(d)
-		return d
-	}
-	// a folder: its files and folders as nodes, hidden ones and node_modules left out, 400 files
-	// at most, none over 1MB
-	async function addFolder(dir: FileSystemDirectoryHandle, at: string[], budget: { n: number }) {
-		const all: [string, FileSystemHandle][] = []
-		// deno-lint-ignore no-explicit-any
-		for await (const e of (dir as any).entries()) all.push(e)
-		all.sort(([a, x], [b, y]) =>
-			x.kind === y.kind ? a.localeCompare(b) : x.kind === "directory" ? -1 : 1
-		)
-		for (const [name, h] of all) {
-			if (skip(name) || budget.n <= 0) continue
-			if (h.kind === "directory") {
-				const sub = [...at, name]
-				as("disk", () => open(tree(sub), null))
-				await addFolder(h as FileSystemDirectoryHandle, sub, budget)
-			} else if ((await (h as FileSystemFileHandle).getFile()).size <= 1_000_000) {
-				budget.n--
-				await addFile(h as FileSystemFileHandle, at, name, false)
-			}
-		}
-	}
-	const skip = (name: string) =>
-		name.startsWith(".") || name === "node_modules" || name.endsWith(".crswap")
-
-	// the disk heard: FileSystemObserver where there is one (records as files change), else each
-	// file asked every second
-	const Observer = browser.FileSystemObserver
-	const observers: { disconnect(): void }[] = []
-	function observe(handle: FileSystemHandle, base: string[], recursive: boolean) {
-		if (!Observer) return
-		// deno-lint-ignore no-explicit-any
-		const o = new Observer((records: any[]) => heard(records, base))
-		o.observe(handle, recursive ? { recursive: true } : {}).catch((e: Error) =>
-			say(base.join("/"), "not watched: " + e.message)
-		)
-		observers.push(o)
-	}
-	// deno-lint-ignore no-explicit-any
-	function heard(records: any[], base: string[]) {
-		for (const r of records) {
-			const parts: string[] = r.relativePathComponents ?? []
-			const key = [...base, ...parts].join("/")
-			const from: string[] | undefined = r.relativePathMovedFrom
-			if (parts.some(skip) && r.type !== "moved") continue
-			const d = disks.get(key)
-			if (r.type === "modified" || (r.type === "moved" && from?.at(-1)?.endsWith(".crswap"))) {
-				if (d) flush(d)
-			} else if (r.type === "appeared" && r.changedHandle?.kind === "file" && !d) {
-				appeared(base, parts, r.changedHandle)
-			} else if (r.type === "disappeared" && d) gone(d)
-			else if (r.type === "moved" && from) {
-				const was = disks.get([...base, ...from].join("/"))
-				if (was) gone(was)
-				if (!parts.some(skip)) appeared(base, parts, r.changedHandle)
-			} else if (r.type === "unknown" || r.type === "errored") {
-				for (const d of disks.values()) {
-					if (d.path.join("/").startsWith(base.join("/"))) flush(d)
-				}
-			}
-		}
-	}
-	// a file new in an open folder
-	async function appeared(base: string[], parts: string[], h: FileSystemFileHandle) {
-		if (!folders.has(base.join("/")) || h?.kind !== "file") return
-		let at = node(base)
-		for (const name of parts.slice(0, -1)) {
-			if (!at) break
-			const sub = [...at, name]
-			as("disk", () => open(tree(sub), null))
-			at = sub
-		}
-		if (!at) return
-		await addFile(h, at, parts[parts.length - 1], false)
-		told("disk", [...base, ...parts].join("/"), [], "new on the disk")
-	}
-
-	for (const f of folders.values()) observe(f.handle, f.path, true)
-	for (const d of disks.values()) {
-		if (d.single) observe(d.handle, d.path, false)
-		attachDisk(d)
-		flush(d)
-	}
-	teardown(() => observers.forEach((o) => o.disconnect()))
-	if (!Observer) {
-		const timer = setInterval(async () => {
-			for (const d of disks.values()) {
-				const f = await d.handle.getFile().catch(() => undefined)
-				if (!f || f.lastModified !== d.mtime) flush(d)
-			}
-		}, 1000)
-		teardown(() => clearInterval(timer))
-	}
-
-	// ---- automerge: a doc node and its patchwork doc ----
-	function attachDoc(l: Linked) {
-		const key = l.path.join("/")
-		const x = node(l.path)
-		if (!x) return
-		// the doc changed: here, our own coming back (the node has it already); else its splices,
-		// when the node is what the doc was, or a diff
-		teardown(l.doc.on(({ before, after, changes }) => {
-			const y = node(l.path)
-			const now = text(y)
-			if (!y || now === undefined) return
-			if (now !== after) {
-				write(
-					"automerge",
-					y,
-					now === before && changes ? points(before, changes) : diff(now, after),
-				)
-			}
-			l.seen = after
-		}))
-		// the node changed: its splices, in units, into the doc
-		watch(tree(x), (fact) => {
-			if (fact.change?.actor === "automerge") return
-			const now = fact.value
-			if (typeof now !== "string") return
-			const ps = step(l.seen, fact.patches, now)
-			const before = l.seen
-			l.seen = now
-			if (ps.length === 0) return
-			l.doc.change(units(before, ps), before, now)
-			told("automerge", key, ps, "sent")
-		})
-		// what the doc has now, if it changed while this was away
-		const now = text(x), there = l.doc.text()
-		if (now !== undefined && now !== there) write("automerge", x, diff(now, there))
-		l.seen = there
-		say(key, l.doc.kind() === "text" ? "linked" : `${l.doc.kind()}: an edit makes it text`)
-	}
-	for (const l of linked.values()) attachDoc(l)
-	async function link(doc: import("./cm.ts").Doc) {
-		const there = [...linked.values()].find((l) => l.doc.url === doc.url)
-		if (there) return as("lens", () => put(editing, there.path))
-		const name = unique(["docs"], doc.name)
-		as("automerge", () => open(tree(["docs", name]), doc.text()))
-		const l: Linked = { doc, path: ["docs", name], seen: doc.text() }
-		linked.set(l.path.join("/"), l)
-		attachDoc(l)
-		told("automerge", l.path.join("/"), [], "opened " + doc.url.slice(0, 22) + "…")
-		as("lens", () => put(editing, l.path))
-	}
-	// automerge, loaded the first time it is needed; whether it is online, heard once a run
-	let loading: Promise<import("./cm.ts").Automerge> | undefined
-	function automerge() {
-		return loading ??= (async () => {
-			if (!(read(state) as Record<string, string>).docs) say("docs", "loading automerge…")
-			const am = await loadAutomerge()
-			const online = (yes: boolean) => say("docs", yes ? "online" : "connecting…")
-			online(am.online())
-			teardown(am.onstatus(online))
-			return am
-		})().catch((e) => {
-			loading = undefined
-			throw e
-		})
-	}
-	if (linked.size) automerge()
-
-	// ---- the editor: one CodeMirror over the node in editing ----
-	// the person types: their changes, as splices on the node. a change told while the editor is
-	// out of step with the node: the node's text made the editor's, by a diff
-	let at: string[] | undefined
-	editor.onedit = (changes, before) => {
-		const x = at && node(at)
-		const now = text(x)
-		if (!x || now === undefined) return
-		write("editor", x, now === before ? points(before, changes) : diff(now, editor.text()))
-	}
-	// the node changed by anyone else: the editor made the same, after this write is done (an
-	// editor changes no text while it is telling its own change). the splices told, when they take
-	// what it shows to what the node has; else a diff
-	let base: string | undefined, told2: unknown[] = [], queued = false
-	function sync() {
-		queued = false
-		const ps = told2, was = base
-		;[told2, base] = [[], undefined]
-		const now = text(at), shown = editor.text()
-		if (now === undefined || now === shown) return
-		editor.apply(units(shown, shown === was ? step(was, ps, now) : diff(shown, now)))
-	}
-	let unwatch = () => {}
-	teardown(() => unwatch())
-	effect("follow", () => {
-		const path = read(editing) as string[]
-		return JSON.stringify([path, entries(tree(path))[0]?.id ?? null])
-	}, (key: string) => {
-		unwatch()
-		const [path] = JSON.parse(key) as [string[]]
-		const x = node(path)
-		const v = val(x)
-		at = x
-		editor.load(
-			typeof v === "string"
-				? v
-				: x
-				? v instanceof Uint8Array
-					? `(${size(v)} of bytes: not text)`
-					: "(a folder: pick a file in it)"
-				: `(nothing at ${path.join("/")})`,
-			{ readonly: typeof v !== "string", name: path[path.length - 1] },
-		)
-		if (!x) return
-		unwatch = watch(tree(x), (fact) => {
-			if (fact.change?.actor === "editor") return
-			base ??= editor.text()
-			told2.push(...fact.patches)
-			if (!queued) (queued = true, queueMicrotask(sync))
-		})
+		const shown = editor.text()
+		if (typeof v === "string" && v !== shown) editor.apply(units(shown, diff(shown, v)))
 	})
 
 	// ---- pipes ----
-	// each pipe on: a watch on each end. a pipe's own write is heard back (an echo) and dropped
-	function connect(spec: Spec, fresh: boolean) {
+	// each pipe on: one pipe between its ends (pipe(a, b, down, up)): it hears every patch on either
+	// and writes what the lenses make of it on the other. it is never told its own writes, so an echo
+	// cannot happen
+	const tallies = new Map<string, { crossed: number }>()
+	function connect(spec: Spec, chain: Using[], fresh: boolean) {
 		const actor = "pipe " + spec.id
-		const chain: Using[] = spec.lenses
-			.filter((l) => LENSES[l.kind])
-			.map((l) => ({ kind: l.kind, params: { ...LENSES[l.kind].params, ...l.params } }))
-		const tally = { crossed: 0, echoes: 0 }
-		let busy = false
+		const tally = tallies.get(spec.id) ?? { crossed: 0 }
+		tallies.set(spec.id, tally)
 		const ends = () => {
-			const x = node(spec.a), y = node(spec.b)
-			const sx = text(x), sy = text(y)
-			return x && y && sx !== undefined && sy !== undefined ? { x, y, sx, sy } : undefined
+			const sx = text(node(spec.a)), sy = text(node(spec.b))
+			return sx !== undefined && sy !== undefined ? { sx, sy } : undefined
 		}
 		function show(note = "") {
-			const was = read(looks) as Record<string, unknown>
-			as(actor, () =>
-				put(looks, {
-					...was,
-					[spec.id]: {
-						...tally,
-						note,
-						keeps: chain.map((u) =>
-							`${u.kind}: ${LENSES[u.kind].show?.(u.c) ?? "nothing (its own way back)"}`
-						),
-					},
-				}))
+			patch(looks, [{
+				path: [spec.id],
+				value: {
+					...tally,
+					note,
+					keeps: chain.map((u) =>
+						`${u.kind}: ${LENSES[u.kind].show?.(u.c) ?? "nothing (its own way back)"}`
+					),
+				},
+			}])
 		}
-		// a → b: got through the lenses, diffed into b
-		function down() {
+		// a → b: got through the lenses, diffed into b: the splices for b
+		function down(): Splice[] {
 			const e = ends()
-			if (!e) return show("an end is not text")
+			if (!e) return show("an end is not text"), []
 			const v = forward(chain, e.sx).at(-1)!
 			const ps = diff(e.sy, v)
-			if (ps.length) (tally.crossed++, write(actor, e.y, ps, "got"))
+			if (ps.length) (tally.crossed++, told(actor, rel(spec.b), ps, "got"))
 			show()
+			return ps
 		}
-		// b → a: put back through the lenses; then got again, so b shows what a made of it
-		function up() {
+		// b → a: put back through the lenses: the splices for a. then got again, so b shows what a
+		// made of it (written here: the pipe is not told its own writes)
+		function up(): Splice[] {
 			const e = ends()
-			if (!e) return show("an end is not text")
+			if (!e) return show("an end is not text"), []
 			const ps = diff(e.sx, back(chain, e.sy, e.sx))
-			if (ps.length) (tally.crossed++, write(actor, e.x, ps, "put back"))
-			down()
-		}
-		// one at a time: an end changed again while this pipe is still writing (another pipe's lens
-		// correcting what this one wrote) goes through once this write is done, from the text then.
-		// a ring of pipes would go round for ever: join refuses one, and 20 rounds stop it here
-		let next: (() => void) | undefined
-		const guarded = (f: () => void) => () => {
-			if (busy) return void (next = f)
-			busy = true
-			try {
-				f()
-				for (let n = 0; next && n < 20; n++) {
-					const g = next
-					next = undefined
-					g()
-				}
-			} finally {
-				busy = false
-				next = undefined
+			if (ps.length) (tally.crossed++, told(actor, rel(spec.a), ps, "put back"))
+			const v = forward(chain, ps.length ? run(e.sx, ps) : e.sx).at(-1)!
+			const again = diff(e.sy, v)
+			if (again.length) {
+				tally.crossed++
+				told(actor, rel(spec.b), again, "got")
+				patch(tree(spec.b), again)
 			}
+			show()
+			return ps
 		}
-		const [goDown, goUp] = [guarded(down), guarded(up)]
-		const echo = () => (tally.echoes++, show())
-		const x = node(spec.a)!, y = node(spec.b)!
-		const stops = [
-			watch(tree(spec.a), (f) => f.change?.actor === actor ? echo() : goDown()),
-			watch(tree(spec.b), (f) => f.change?.actor === actor ? echo() : goUp()),
-		]
-		// joined: not in the middle of this effect
-		queueMicrotask(() => as(actor, fresh && spec.start === "b" ? goUp : goDown))
-		return () => stops.forEach((s) => s())
+		// joined: one side takes the other first (the effect's own writes, before the pipe is made)
+		if (fresh && spec.start === "b") {
+			const ps = up()
+			if (ps.length) patch(tree(spec.a), ps)
+		} else {
+			const ps = down()
+			if (ps.length) patch(tree(spec.b), ps)
+		}
+		pipe(tree(spec.a), tree(spec.b), down, up, { timing: "write", name: "lens-" + spec.id })
 	}
-	// the pipes node says what is joined: a pipe is (re)made when what it says or what its ends
-	// are changes; one turned on is joined from its start, one changed while on goes from a
-	const joined = new Map<string, { key: string; on: boolean; stop: () => void }>()
-	teardown(() => joined.forEach((j) => j.stop()))
-	effect("wire", () =>
+	// the pipes node says what is joined: a pipe is (re)made when what it says or what its ends are
+	// changes; one turned on is joined from its start, one changed while on goes from a
+	const joined = new Map<string, { key: string; on: boolean; chain: Using[] }>()
+	createEffect("wire", () =>
 		JSON.stringify(
-			(read(pipes) as Spec[]).map((p) => [
-				p,
-				entries(tree(p.a))[0]?.id,
-				entries(tree(p.b))[0]?.id,
-			]),
+			(read(pipes) as Spec[]).map((p) => [p, hasNode(tree(p.a)), hasNode(tree(p.b))]),
 		), (key: string) => {
-		const now = JSON.parse(key) as [Spec, string?, string?][]
-		const ids = new Set(now.map(([p]) => p.id))
-		for (const [id, j] of joined) if (!ids.has(id)) (j.stop(), joined.delete(id))
-		for (const [p, ida, idb] of now) {
-			const k = JSON.stringify([p, ida, idb])
-			const was = joined.get(p.id)
-			if (was?.key === k) continue
-			was?.stop()
-			const on = p.on && !!ida && !!idb
-			joined.set(p.id, { key: k, on, stop: on ? connect(p, !was?.on) : () => {} })
+		const was = new Map(joined)
+		joined.clear()
+		for (const [p, a, b] of JSON.parse(key) as [Spec, boolean, boolean][]) {
+			const k = JSON.stringify([p, a, b])
+			const before = was.get(p.id)
+			const on = p.on && a && b
+			// the lenses kept when the pipe is as it was (their complements go on)
+			const chain = before?.key === k
+				? before.chain
+				: p.lenses.filter((l) => LENSES[l.kind]).map((l) => ({
+					kind: l.kind,
+					params: { ...LENSES[l.kind].params, ...l.params },
+				}))
+			joined.set(p.id, { key: k, on, chain })
+			if (on) connect(p, chain, !before?.on)
 		}
 	})
 
 	// ---- what the page shows ----
-	// every node under inner, files and docs, a row each
-	const rows = memo("rows", () => {
+	// every node under inner, a row each
+	const rows = createMemo("rows", () => {
 		const out: Row[] = []
 		const st = read(state) as Record<string, string>
 		const ed = (read(editing) as string[]).join("/")
 		const walk = (path: string[], depth: number) => {
 			for (const name of list(tree(path))) {
 				const p = [...path, name]
-				const v = val(p)
+				const v = read(tree(p))
 				const kids = list(tree(p))
 				const kind = typeof v === "string"
 					? "text"
@@ -1176,12 +801,10 @@ export default function program(
 			}
 		}
 		group("inner", "only here")
-		group("files", "your computer")
-		group("docs", "patchwork")
 		return out
 	})
 	// the pipes, the text nodes they can join, and what each keeps aside
-	const wires = memo("wires", () => ({
+	const wires = createMemo("wires", () => ({
 		specs: read(pipes) as Spec[],
 		texts: (read(rows) as Row[] ?? []).filter((r) => r.kind === "text").map((r) =>
 			r.path.join("/")
@@ -1193,115 +816,45 @@ export default function program(
 	}))
 
 	// ---- what a person does ----
-	const respec = (f: (specs: Spec[]) => Spec[]) => put(pipes, f(read(pipes) as Spec[]))
+	const respec = (f: (specs: Spec[]) => Spec[]) => put(pipes, f(now(() => read(pipes)) as Spec[]))
 	const change = (id: string, f: (p: Spec) => Spec) =>
 		respec((ps) => ps.map((p) => p.id === id ? f(p) : p))
-	const quiet = (e: unknown) =>
-		(e as Error)?.name === "AbortError" || say("oops", (e as Error).message)
-	method("on/file", () => {
-		if (!browser.showOpenFilePicker) {
-			return say("oops", "no File System Access API here (Chrome has it)")
-		}
-		return browser.showOpenFilePicker({ id: "piece-lens" }).then(
-			async ([h]: FileSystemFileHandle[]) => {
-				// writing asked for now, while the click still counts; refused: read only until allowed
-				await (h as any).requestPermission?.({ mode: "readwrite" }).catch(() => {})
-				const d = await addFile(h, ["files"], unique(["files"], h.name), true)
-				observe(h, d.path, false)
-				flush(d)
-				told("disk", d.path.join("/"), [], "opened")
-				as("lens", () => put(editing, d.path))
-			},
-		).catch(quiet)
-	})
-	method("on/folder", () => {
-		if (!browser.showDirectoryPicker) {
-			return say("oops", "no File System Access API here (Chrome has it)")
-		}
-		return browser.showDirectoryPicker({ id: "piece-lens", mode: "readwrite" }).then(
-			async (dir: FileSystemDirectoryHandle) => {
-				const name = unique(["files"], dir.name)
-				const path = ["files", name]
-				const at = path
-				as("disk", () => open(tree(path), null))
-				folders.set(path.join("/"), { handle: dir, path })
-				say(path.join("/"), "reading…")
-				await addFolder(dir, at, { n: 400 })
-				say(path.join("/"), "folder")
-				observe(dir, path, true)
-				told(
-					"disk",
-					path.join("/"),
-					[],
-					`opened, ${
-						[...disks.keys()].filter((k) => k.startsWith(path.join("/") + "/")).length
-					} files`,
-				)
-			},
-		).catch(quiet)
-	})
-	method("on/allow", (path: string[]) => {
-		const key = path.join("/")
-		const top = folders.get(path.slice(0, 2).join("/"))
-		// deno-lint-ignore no-explicit-any
-		const ask = (top?.handle ?? disks.get(key)?.handle) as any
-		return ask?.requestPermission?.({ mode: "readwrite" }).then(() => {
-			for (const d of disks.values()) {
-				if (d.path.join("/").startsWith(path.slice(0, 2).join("/"))) flush(d)
-			}
-		})
-	})
-	method("on/doc", async (url: string) => {
-		try {
-			say("oops", "")
-			await link(await (await automerge()).open(url.trim()))
-		} catch (e) {
-			say("oops", "couldn't open it: " + (e as Error).message)
-		}
-	})
-	method("on/newdoc", async () => {
-		try {
-			await link(await (await automerge()).create("from ermine"))
-		} catch (e) {
-			say("oops", "couldn't make one: " + (e as Error).message)
-		}
-	})
-	method("on/inner", () => {
+	createAction("on/inner", () => {
 		const name = unique(["inner"], "note")
-		as("lens", () => open(tree(["inner", name]), ""))
+		ensureNode(tree(["inner", name]), "")
 		put(editing, ["inner", name])
 	})
-	method("on/edit", (path: string[]) => put(editing, path))
-	// a top node taken out: its nodes, and what kept it in step
-	method("on/close", (path: string[]) => {
+	createAction("on/edit", (path: string[]) => put(editing, path))
+	// a top node taken out: its nodes
+	createAction("on/close", (path: string[]) => {
 		const key = path.join("/")
-		for (const k of [...disks.keys()]) if (k === key || k.startsWith(key + "/")) disks.delete(k)
-		folders.delete(key)
-		linked.delete(key)
 		const x = node(path)
 		if (x) prune(x)
-		if ((read(editing) as string[]).join("/").startsWith(key)) put(editing, ["inner", "draft"])
+		if ((now(() => read(editing)) as string[]).join("/").startsWith(key)) {
+			put(editing, ["inner", "draft"])
+		}
 	})
-	method("on/copy", (path: string[]) => {
-		const l = linked.get(path.join("/"))
-		if (l) navigator.clipboard?.writeText(l.doc.url).then(() => say(path.join("/"), "url copied"))
-	})
-	method("on/addpipe", () => {
-		const texts = (read(rows) as Row[]).filter((r) => r.kind === "text").map((r) => r.path)
-		const a = read(editing) as string[]
+	createAction("on/addpipe", () => {
+		const texts = (now(() => read(rows)) as Row[]).filter((r) => r.kind === "text").map((r) =>
+			r.path
+		)
+		const a = now(() => read(editing)) as string[]
 		const b = texts.find((p) => p.join("/") !== a.join("/")) ?? a
-		const n = Math.max(0, ...(read(pipes) as Spec[]).map((p) => Number(p.id.slice(1)) || 0)) + 1
+		const n = Math.max(
+			0,
+			...(now(() => read(pipes)) as Spec[]).map((p) => Number(p.id.slice(1)) || 0),
+		) + 1
 		respec((ps) => [...ps, { id: "p" + n, a, b, lenses: [], on: false, start: "a" }])
 	})
 	// an end changed: the pipe stops until it is joined again (someone says who wins)
-	method(
+	createAction(
 		"on/end",
 		(id: string, side: "a" | "b", path: string) =>
 			change(id, (p) => ({ ...p, [side]: path.split("/"), on: false })),
 	)
-	method("on/swap", (id: string) => change(id, (p) => ({ ...p, a: p.b, b: p.a, on: false })))
-	method("on/join", (id: string, start: "a" | "b") => {
-		const specs = read(pipes) as Spec[]
+	createAction("on/swap", (id: string) => change(id, (p) => ({ ...p, a: p.b, b: p.a, on: false })))
+	createAction("on/join", (id: string, start: "a" | "b") => {
+		const specs = now(() => read(pipes)) as Spec[]
 		const p = specs.find((p) => p.id === id)!
 		if (loops([...specs.filter((q) => q.on && q.id !== id), p])) {
 			return say("pipes", `${id} would close a loop: a change would go round for ever`)
@@ -1309,9 +862,9 @@ export default function program(
 		say("pipes", "")
 		change(id, (p) => ({ ...p, on: true, start }))
 	})
-	method("on/pause", (id: string) => change(id, (p) => ({ ...p, on: false })))
-	method("on/unpipe", (id: string) => respec((ps) => ps.filter((p) => p.id !== id)))
-	method("on/lens", (id: string, kind: string) => {
+	createAction("on/pause", (id: string) => change(id, (p) => ({ ...p, on: false })))
+	createAction("on/unpipe", (id: string) => respec((ps) => ps.filter((p) => p.id !== id)))
+	createAction("on/lens", (id: string, kind: string) => {
 		if (LENSES[kind]) {
 			change(
 				id,
@@ -1319,39 +872,41 @@ export default function program(
 			)
 		}
 	})
-	method(
+	createAction(
 		"on/unlens",
 		(id: string, i: number) =>
 			change(id, (p) => ({ ...p, lenses: p.lenses.filter((_, k) => k !== i) })),
 	)
-	method("on/param", (id: string, i: number, name: string, value: string) =>
-		change(id, (p) => ({
-			...p,
-			lenses: p.lenses.map((l, k) =>
-				k === i
-					? {
-						...l,
-						params: {
-							...l.params,
-							[name]: typeof LENSES[l.kind].params?.[name] === "number"
-								? Number(value) || 0
-								: value,
-						},
-					}
-					: l
-			),
-		})))
+	createAction(
+		"on/param",
+		(id: string, i: number, name: string, value: string) =>
+			change(id, (p) => ({
+				...p,
+				lenses: p.lenses.map((l, k) =>
+					k === i
+						? {
+							...l,
+							params: {
+								...l.params,
+								[name]: typeof LENSES[l.kind].params?.[name] === "number"
+									? Number(value) || 0
+									: value,
+							},
+						}
+						: l
+				),
+			})),
+	)
 
 	// a node and all under it, taken out
 	function prune(x: string[]) {
-		for (const name of list(tree(x))) prune([...x, name])
-		remove(tree(x))
+		for (const name of now(() => list(tree(x)))) prune([...x, name])
+		unplace(tree(x))
 	}
 
 	// ---- the page ----
 	const value = (e: Event) => (e.target as HTMLInputElement).value
-	const icon = (r: Row) =>
-		r.kind === "folder" ? "▸" : r.path[0] === "files" ? "💾" : r.path[0] === "docs" ? "🍑" : "○"
+	const icon = (r: Row) => (r.kind === "folder" ? "▸" : "○")
 	return (
 		<div class="pl">
 			<style>{css}</style>
@@ -1359,25 +914,12 @@ export default function program(
 				lens<span>a file, a patchwork doc, inner nodes: one text, splices between</span>
 			</h1>
 			<div class="bar">
-				<button onClick={handler("on/file")}>💾 open a file</button>
-				<button onClick={handler("on/folder")}>📁 open a folder</button>
-				<span class="am">
-					<input placeholder="automerge:… a patchwork doc" spellcheck={false} />
-					<button
-						onClick={handler(
-							"on/doc",
-							(
-								e,
-							) => [
-								(e.target.closest(".am").querySelector("input") as HTMLInputElement).value,
-							],
-						)}
-					>
-						🍑 open
-					</button>
-					<button onClick={handler("on/newdoc")}>new doc</button>
-				</span>
 				<button onClick={handler("on/inner")}>○ new inner node</button>
+				<span class="note">
+					not in this port: a file or folder on your computer, a patchwork doc. each writes the
+					graph from a picker's promise, a file's change or a doc's change, and nothing is open
+					there
+				</span>
 				{bind("state", (st: Record<string, string>) =>
 					st?.oops ? <em class="warn">{st.oops}</em> : null)}
 			</div>
@@ -1409,26 +951,6 @@ export default function program(
 											<span class="label">{r.name}</span>
 											{r.state ? <em class={tone(r.state)}>{r.state}</em> : null}
 											<span class="acts">
-												{r.state === "read only"
-													? (
-														<button
-															class="tiny"
-															onClick={handler("on/allow", [r.path])}
-														>
-															allow writing
-														</button>
-													)
-													: null}
-												{r.top && r.path[0] === "docs"
-													? (
-														<button
-															class="tiny"
-															onClick={handler("on/copy", [r.path])}
-														>
-															copy url
-														</button>
-													)
-													: null}
 												{r.top && r.path.join("/") !== "inner/draft"
 													? (
 														<button
@@ -1476,7 +998,7 @@ export default function program(
 						<h2>
 							pipes<em>
 								left ▸ lenses ▸ right: a change on either side goes through, the lenses keep
-								what the right leaves out
+								what the right leaves out; the pipe is never told its own writes
 							</em>
 						</h2>
 						{(w?.specs ?? []).map((p) => {
@@ -1592,8 +1114,7 @@ export default function program(
 											<div class="keeps">
 												{look.keeps.map((k: string) => <code>{k}</code>)}
 												<span class="tally">
-													{look.crossed} crossed · {look.echoes}{" "}
-													echoes dropped{look.note ? ` · ${look.note}` : ""}
+													{look.crossed} crossed{look.note ? ` · ${look.note}` : ""}
 												</span>
 											</div>
 										)
