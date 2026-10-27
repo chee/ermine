@@ -293,3 +293,32 @@ Deno.test("createErmine throwing after it registered its scheduler undoes the re
 	assertThrows(() => createErmine({ scheduler, host: { at: "" }, schedule: () => {} }))
 	assertEquals(registrations(scheduler), 0)
 })
+
+Deno.test("start's box: one this ermine made, by object, never by shape", () => {
+	const e = createErmine()
+	const other = createErmine()
+	const err = (f: () => unknown) => {
+		try {
+			f()
+		} catch (x) {
+			return (x as { code?: string }).code
+		}
+		return "none"
+	}
+	// an object with a box's fields is no box
+	const fake = { root: e.places.root, places: e.places }
+	assertEquals(err(() => e.start(() => {}, "/p", { box: fake as never })), "not-yet")
+	// a box another ermine made is not this one's
+	e.ensureNode("/b", null)
+	other.ensureNode("/b", null)
+	let theirs: unknown
+	other.getProcessContext()!.within(() => theirs = createBox("/b"))
+	assertEquals(err(() => e.start(() => {}, "/q", { box: theirs as never })), "not-yet")
+	// this ermine's own box handle starts a process in it
+	let mine: unknown
+	e.getProcessContext()!.within(() => mine = createBox("/b"))
+	const started = e.start(() => {}, "/r", { box: mine as never })
+	assert("status" in started)
+	e.close()
+	other.close()
+})
