@@ -446,8 +446,8 @@ static void walk(const char *at, const char *rel, tree *t) {
 static void files_op(void) {
 	tree t = {0};
 	walk(dir, "", &t);
-	qsort(t.folders, t.nfolders, sizeof *t.folders, by_path);
-	qsort(t.files, t.nfiles, sizeof *t.files, by_path);
+	if (t.nfolders) qsort(t.folders, t.nfolders, sizeof *t.folders, by_path);
+	if (t.nfiles) qsort(t.files, t.nfiles, sizeof *t.files, by_path);
 	fputs("{\"folders\":[", stdout);
 	for (size_t i = 0; i < t.nfolders; i++) {
 		if (i) putchar(',');

@@ -1356,7 +1356,7 @@ static int install(es_ermine *e, const es_options *options) {
 		for (size_t k = 0; k < f->nneeds; k++) s.needs[k] = es_dup(f->needs[k]);
 		s.nneeds = f->nneeds;
 		s.hooks = es_alloc((a->nused + 1) * sizeof *s.hooks);
-		memcpy(s.hooks, a->used, a->nused * sizeof *s.hooks);
+		if (a->nused) memcpy(s.hooks, a->used, a->nused * sizeof *s.hooks);
 		s.nhooks = a->nused;
 		ES_PUSH(h->shown, h->nshown, h->capshown, s);
 	}

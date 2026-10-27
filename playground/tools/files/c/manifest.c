@@ -583,7 +583,7 @@ static mf_code saved(const sd_node *n, mf_skip skip, void *context, mf_saving *o
 		return MF_STORE;
 	}
 	// each value once, by hash
-	qsort(values.items, values.length, sizeof *values.items, byhash);
+	if (values.length) qsort(values.items, values.length, sizeof *values.items, byhash);
 	size_t m = 0;
 	for (size_t i = 0; i < values.length; i++)
 		if (!m || strcmp(values.items[m - 1].hash, values.items[i].hash) != 0) values.items[m++] = values.items[i];
@@ -1079,7 +1079,7 @@ mf_code mf_named(const mf_record *records, size_t count, mf_hex **hashes, size_t
 		}
 	}
 	if (c != MF_OK) return free(out), c;
-	qsort(out, n, sizeof *out, byhex);
+	if (n) qsort(out, n, sizeof *out, byhex);
 	size_t m = 0;
 	for (size_t i = 0; i < n; i++)
 		if (!m || strcmp(out[m - 1], out[i]) != 0) memcpy(out[m++], out[i], 65);
