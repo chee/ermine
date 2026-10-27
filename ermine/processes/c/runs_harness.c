@@ -40,7 +40,15 @@ static int ask_guard(void *ctx, tb_key id, const char **op, const char **reason)
 typedef struct {
 	world_watch watch;
 	const op_value *f, *act;
+	const char *wait;
 } effect_p;
+// the promises effects made, by name, until settled (or the end)
+typedef struct {
+	char *name;
+	sc_promise *p;
+} wait_p;
+static wait_p *waits;
+static size_t nwaits, capwaits;
 static effect_p **effects;
 static size_t neffects, capeffects;
 
@@ -53,6 +61,17 @@ static sc_out effect_f(void *previous, void *data) {
 	if (c.error) return op_free(v), (sc_out){.kind = SC_FAILED, .error = c.error};
 	if (c.stopped) return op_free(v), (sc_out){.kind = SC_VALUE};
 	if (c.waited) return op_free(v), (sc_out){.kind = SC_PENDING};
+	if (p->wait != NULL) {
+		op_free(v);
+		if (nwaits == capwaits) {
+			capwaits = capwaits ? capwaits * 2 : 8;
+			waits = realloc(waits, capwaits * sizeof *waits);
+			if (waits == NULL) abort();
+		}
+		sc_promise *promise = sc_promise_new(world_scheduler);
+		waits[nwaits++] = (wait_p){world_copy(p->wait), promise};
+		return (sc_out){.kind = SC_AWAIT, .promise = promise};
+	}
 	return (sc_out){.kind = SC_VALUE, .value = v};
 }
 
@@ -194,6 +213,7 @@ static op_value *answer(const op_value *r) {
 	if (strcmp(op, "effect") == 0) {
 		effect_p *p = world_alloc(sizeof *p);
 		p->f = op_get(r, "f"), p->act = op_get(r, "act");
+		p->wait = world_text(op_get(r, "wait"));
 		if (neffects == capeffects) {
 			capeffects = capeffects ? capeffects * 2 : 8;
 			effects = realloc(effects, capeffects * sizeof *effects);
@@ -204,6 +224,19 @@ static op_value *answer(const op_value *r) {
 			(sc_def){.f = effect_f, .effect = effect_act, .equal = world_equal, .data = p}, true);
 		if (bad) return world_error_take(bad);
 		return op_map();
+	}
+	if (strcmp(op, "settle") == 0) {
+		const char *name = world_text(op_get(r, "promise"));
+		for (size_t i = 0; name != NULL && i < nwaits; i++) {
+			if (strcmp(waits[i].name, name) != 0) continue;
+			sc_resolve(waits[i].p, op_null());
+			free(sc_escaped(world_scheduler));
+			sc_promise_free(waits[i].p);
+			free(waits[i].name);
+			waits[i] = waits[--nwaits];
+			return op_map();
+		}
+		return world_error_take(world_format("no promise %s", name != NULL ? name : "null"));
 	}
 	if (strcmp(op, "giveRun") == 0) {
 		if (runs == NULL) return world_error("no runs");
@@ -245,6 +278,10 @@ void hh_answer(const op_value *request, FILE *out) { world_line(request, out, an
 void hh_finish(void) {
 	if (guard != NULL) gd_free(guard);
 	crn_stop(runs);
+	for (size_t i = 0; i < nwaits; i++) sc_promise_free(waits[i].p), free(waits[i].name);
+	free(waits);
+	waits = NULL;
+	nwaits = capwaits = 0;
 	ph_finish();
 	for (size_t i = 0; i < neffects; i++) free(effects[i]);
 	free(effects);

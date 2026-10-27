@@ -523,8 +523,11 @@ static void run_end(sc_computer *c, unsigned n, sc_ended ended, const void *cons
 	if (ended == SC_FAIL) run->error = xdup(more->error != NULL ? more->error : "error");
 	if (ended == SC_LOOPING) run->error = xdup("looping");
 	run->reads = reads_of(r, reads, nreads, was != NULL ? was->reads : NULL, g);
-	g->saw_on = 0;
-	clear_saws(g);
+	// pending: it may land done, naming the changes as first read
+	if (ended != SC_PENDED) {
+		g->saw_on = 0;
+		clear_saws(g);
+	}
 	if (was != NULL && writes_same(was->writes, g)) {
 		((crn_writes *)was->writes)->refs++;
 		run->writes = was->writes;

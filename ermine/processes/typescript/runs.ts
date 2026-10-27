@@ -228,7 +228,8 @@ export function createRuns(setup: Setup): Runs {
 			writes: sameWrites(was?.writes, g.writes) ? was!.writes : g.writes.slice(),
 		}
 		g.written = g.writes.length
-		g.saw = undefined
+		// pending: it may land done, naming the changes as first read
+		if (ended !== "pending") g.saw = undefined
 		write(c, id, run)
 	}
 
