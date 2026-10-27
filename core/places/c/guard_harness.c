@@ -157,6 +157,18 @@ static pr_answer recording(void *ctx, const pr_ask *ask, const pr_read *read) {
 
 // guards -----------------------------------------------------------------------------------------
 
+// an action's caller, given by the guard request: its place and box, always open
+typedef struct {
+	const char **from;
+	size_t nfrom;
+	const char *box;
+} caller;
+static int caller_at(void *ctx, const char *const **from, size_t *nfrom, tb_key *box) {
+	const caller *c = ctx;
+	*from = c->from, *nfrom = c->nfrom, *box = tb_string(c->box);
+	return 1;
+}
+
 typedef struct {
 	char *name;
 	gd *g;
@@ -575,8 +587,16 @@ static op_value *answer(const op_value *r) {
 		size_t nfrom = 0;
 		const char **names = from ? world_address(from, &nfrom) : NULL;
 		const char *box = world_text(op_get(r, "box"));
+		const op_value *given = op_get(r, "caller");
+		caller *c = NULL;
+		if (given != NULL) {
+			c = world_alloc(sizeof *c);
+			const op_value *cfrom = op_get(given, "from");
+			c->from = cfrom ? world_address(cfrom, &c->nfrom) : NULL;
+			c->box = world_text(op_get(given, "box"));
+		}
 		g.g = gd_new(&(gd_setup){world_places, world_table, outer, names, nfrom,
-			.box = tb_string(box)});
+			.box = tb_string(box), .caller = c ? caller_at : NULL, .caller_ctx = c});
 		free(names);
 		PUSH(guards, nguards, capguards, g);
 		return op_map();

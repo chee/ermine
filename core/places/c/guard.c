@@ -31,7 +31,7 @@ struct gd {
 	pl *places;
 	tb_table *table;
 	const pr_policy *may;
-	// where the asker stands: a path, copied (from_given: it is placed somewhere)
+	// where the asker stands: a path, its names copied (from_given: it is placed somewhere)
 	int from_given;
 	const char **from;
 	size_t nfrom;
@@ -58,12 +58,17 @@ gd *gd_new(const gd_setup *setup) {
 	g->from_given = 1;
 	g->nfrom = setup->nfrom;
 	g->from = xalloc((setup->nfrom + 1) * sizeof *g->from);
-	for (size_t i = 0; i < setup->nfrom; i++) g->from[i] = setup->from[i];
+	for (size_t i = 0; i < setup->nfrom; i++) {
+		const char *name = setup->from[i] != NULL ? setup->from[i] : "";
+		size_t n = strlen(name) + 1;
+		g->from[i] = memcpy(xalloc(n), name, n);
+	}
 	return g;
 }
 
 void gd_free(gd *g) {
 	if (g == NULL) return;
+	for (size_t i = 0; i < g->nfrom; i++) free((char *)g->from[i]);
 	free(g->from);
 	free(g->box);
 	free(g);
@@ -152,6 +157,16 @@ static gd_answer asked(gd *g, int told, const char *op, const gd_target *t, cons
 	tb_key box = {0};
 	if (first == GD_REFUSED || first == GD_FAILED || g->caller == NULL ||
 		!g->caller(g->caller_ctx, &from, &nfrom, &box)) {
+		return first;
+	}
+	// already asked from the caller's place (an execute is asked as the caller): once is enough
+	int same = g->from_given == (from != NULL);
+	if (same && from != NULL) {
+		same = g->nfrom == nfrom;
+		for (size_t i = 0; same && i < nfrom; i++) same = strcmp(g->from[i], from[i]) == 0;
+	}
+	if (same && (g->box == NULL ? box.string == NULL
+	                            : box.string != NULL && strcmp(g->box, box.string) == 0)) {
 		return first;
 	}
 	const char *reason2 = NULL;

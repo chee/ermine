@@ -9,7 +9,9 @@
 //   | {whois: [actor, reader]}  yes for that actor and reader, else no "whois"
 // ts (a start): an id, or {"at": path} asked through the guard (refused: REFUSED). from: a path
 //
-// { op: "guard", name, may?, from?, box? }   → {}   box: the box the asker is in (its folder's id)
+// { op: "guard", name, may?, from?, box?, caller? } → {}   box: the box the asker is in (its folder's id)
+//   caller: {from?, box?}, an action's call always open: every ask made again from there, unless
+//   it is from there already
 // { op: "eval", guard, scope?, e, detail? } → { value } | { error: "refused", reason, op, grant?, field? }
 //   detail: true adds to a refusal grant?: {part, id, index}, the grant that decided, and field?:
 //   the field of the target refused
@@ -209,6 +211,7 @@ function answer(r: Request): Json | undefined {
 					table,
 					from: r.from,
 					...r.box !== undefined && { box: r.box },
+					...r.caller !== undefined && { caller: () => r.caller },
 					may: r.may === undefined ? undefined : recording(policy(r.may)),
 				}),
 			)

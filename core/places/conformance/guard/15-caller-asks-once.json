@@ -1,0 +1,330 @@
+{
+	"title": "an action's caller at the same place and box as the guard: the policy is asked once; another box, another path, or the host (no place): asked again from there",
+	"steps": [
+		{
+			"op": "value",
+			"id": "A",
+			"value": "hi",
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "rules",
+			"value": [
+				{
+					"op": "read"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "q",
+			"info": {
+				"actor": "q"
+			},
+			"expect": {}
+		},
+		{
+			"op": "guard",
+			"name": "same",
+			"may": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"caller": {
+				"from": [
+					"code",
+					"q"
+				],
+				"box": "BoxA"
+			},
+			"from": [
+				"code",
+				"q"
+			],
+			"box": "BoxA",
+			"expect": {}
+		},
+		{
+			"op": "guard",
+			"name": "other-box",
+			"may": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"caller": {
+				"from": [
+					"code",
+					"q"
+				],
+				"box": "BoxB"
+			},
+			"from": [
+				"code",
+				"q"
+			],
+			"box": "BoxA",
+			"expect": {}
+		},
+		{
+			"op": "guard",
+			"name": "other-path",
+			"may": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"caller": {
+				"from": [
+					"code",
+					"r"
+				],
+				"box": "BoxA"
+			},
+			"from": [
+				"code",
+				"q"
+			],
+			"box": "BoxA",
+			"expect": {}
+		},
+		{
+			"op": "guard",
+			"name": "host",
+			"may": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"caller": {},
+			"from": [
+				"code",
+				"q"
+			],
+			"expect": {}
+		},
+		{
+			"op": "eval",
+			"guard": "same",
+			"scope": "q",
+			"e": {
+				"read": [
+					"A",
+					"value"
+				]
+			},
+			"expect": {
+				"value": "hi"
+			}
+		},
+		{
+			"op": "asks",
+			"expect": {
+				"asks": [
+					{
+						"op": "read",
+						"target": {
+							"id": "A",
+							"part": "value"
+						},
+						"who": {
+							"actor": "q",
+							"metadata": {
+								"actor": "q"
+							}
+						},
+						"from": {
+							"path": [
+								"code",
+								"q"
+							],
+							"box": "BoxA"
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "eval",
+			"guard": "other-box",
+			"scope": "q",
+			"e": {
+				"read": [
+					"A",
+					"value"
+				]
+			},
+			"expect": {
+				"value": "hi"
+			}
+		},
+		{
+			"op": "asks",
+			"expect": {
+				"asks": [
+					{
+						"op": "read",
+						"target": {
+							"id": "A",
+							"part": "value"
+						},
+						"who": {
+							"actor": "q",
+							"metadata": {
+								"actor": "q"
+							}
+						},
+						"from": {
+							"path": [
+								"code",
+								"q"
+							],
+							"box": "BoxA"
+						}
+					},
+					{
+						"op": "read",
+						"target": {
+							"id": "A",
+							"part": "value"
+						},
+						"who": {
+							"actor": "q",
+							"metadata": {
+								"actor": "q"
+							}
+						},
+						"from": {
+							"path": [
+								"code",
+								"q"
+							],
+							"box": "BoxB"
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "eval",
+			"guard": "other-path",
+			"scope": "q",
+			"e": {
+				"read": [
+					"A",
+					"value"
+				]
+			},
+			"expect": {
+				"value": "hi"
+			}
+		},
+		{
+			"op": "asks",
+			"expect": {
+				"asks": [
+					{
+						"op": "read",
+						"target": {
+							"id": "A",
+							"part": "value"
+						},
+						"who": {
+							"actor": "q",
+							"metadata": {
+								"actor": "q"
+							}
+						},
+						"from": {
+							"path": [
+								"code",
+								"q"
+							],
+							"box": "BoxA"
+						}
+					},
+					{
+						"op": "read",
+						"target": {
+							"id": "A",
+							"part": "value"
+						},
+						"who": {
+							"actor": "q",
+							"metadata": {
+								"actor": "q"
+							}
+						},
+						"from": {
+							"path": [
+								"code",
+								"r"
+							],
+							"box": "BoxA"
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "eval",
+			"guard": "host",
+			"scope": "q",
+			"e": {
+				"read": [
+					"A",
+					"value"
+				]
+			},
+			"expect": {
+				"value": "hi"
+			}
+		},
+		{
+			"op": "asks",
+			"expect": {
+				"asks": [
+					{
+						"op": "read",
+						"target": {
+							"id": "A",
+							"part": "value"
+						},
+						"who": {
+							"actor": "q",
+							"metadata": {
+								"actor": "q"
+							}
+						},
+						"from": {
+							"path": [
+								"code",
+								"q"
+							]
+						}
+					},
+					{
+						"op": "read",
+						"target": {
+							"id": "A",
+							"part": "value"
+						},
+						"who": {
+							"actor": "q",
+							"metadata": {
+								"actor": "q"
+							}
+						}
+					}
+				]
+			}
+		}
+	]
+}
