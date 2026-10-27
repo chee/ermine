@@ -6,6 +6,7 @@ import { at, site } from "@ermine/system/site"
 import { traceOf } from "@ermine/core/places/header"
 import type { ChangeHeader } from "@ermine/core/node/entry"
 import { manual } from "./manual_fixture.ts"
+import { traceAlways } from "./trace.ts"
 
 type E = ReturnType<typeof createErmine>
 const changeAt = (e: E, name: string): ChangeHeader => {
@@ -49,7 +50,7 @@ Deno.test("site: what the function runs never gets it (taken as it starts)", () 
 })
 
 Deno.test("site: trace always keeps the text beside a build site", () => {
-	const e = createErmine({ features: [manual], trace: "always" })
+	const e = createErmine({ features: [manual, traceAlways] })
 	const S = site("file:///program.ts", 5, 1)
 	e.start(() => void at(S, ensureNode)("/x", 1), "/p")
 	assertEquals(changeAt(e, "x").external, [{ file: "file:///program.ts", line: 5, column: 1 }])

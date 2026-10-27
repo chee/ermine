@@ -35,6 +35,11 @@
 //   onSchedule(pulse, next)         each ask for a pulse soon (one at a time): next(pulse) runs it
 //                                   in a microtask; not called: pulse is the hook's to run, or not
 //   onCreateFunction(made, next)    each memo, effect and action made (an inspector's)
+//   onError(error, fn, next)        each error ermine throws (fn: the function of @ermine/system's
+//                                   it came out of; none: ermine's own, start's or closed): what
+//                                   the hook gives is thrown (hints.ts adds its advice)
+//   onTrace(trace, next)            what a write outside a run keeps: its site, and the whole
+//                                   trace text or not (trace.ts turns it on)
 //   reserveSlot()                   per-process state only this feature reaches, by context
 // and, in a hook (made after setup; before: not-yet), what a feature acts with: context(process?)
 // a running process's context (none: the host's); to act as one, context.within(() => …) round
@@ -48,6 +53,7 @@
 // own.
 // hooks are setup-only: one added after createErmine has returned throws.
 import type { Entry } from "@ermine/core/node/entry"
+import type { FileLocation } from "@ermine/core/util/stacktrace"
 import type { Key as Step } from "@ermine/core/op/apply"
 import type { Id, Path, Places } from "@ermine/core/places"
 import type { Process, Processes } from "@ermine/processes/start"
@@ -125,10 +131,11 @@ export type Reading = {
 	readonly context: ProcessContext
 }
 
-// the node status(x) is asked of
+// the node status(x) is asked of; computer: a memo's or effect's
 export type Asked = {
 	readonly node: NodeData
 	readonly id: Id
+	readonly computer: boolean
 }
 
 // a record as it is written: a computer's run, or a send's call, by its node's id
@@ -154,7 +161,14 @@ export type Hooks = {
 	onId: (kind: IdKind, next: (kind: IdKind) => string) => string
 	onSchedule: (pulse: () => void, next: (pulse: () => void) => void) => void
 	onCreateFunction: (made: CreatedFunction, next: (made: CreatedFunction) => void) => void
+	onError: (error: unknown, fn: string | undefined, next: Errored) => unknown
+	onTrace: (trace: Trace, next: (trace: Trace) => Trace) => Trace
 }
+// what a write outside a run keeps: its site (built: a build site given, nothing captured) and,
+// text, the whole trace text beside the change (traceOf, @ermine/core/places/header)
+export type Trace = { readonly text: boolean; readonly built?: FileLocation }
+// an error on its way out: what is thrown
+export type Errored = (error: unknown, fn: string | undefined) => unknown
 // what a new id is for
 export type IdKind = "node" | "process"
 export type Hook = keyof Hooks
@@ -168,6 +182,8 @@ export const HOOKS: readonly Hook[] = [
 	"onId",
 	"onSchedule",
 	"onCreateFunction",
+	"onError",
+	"onTrace",
 ]
 
 // per-process state, by context: only who holds the slot reaches it
@@ -191,6 +207,8 @@ export type FeatureAPI = {
 	onId: (hook: Hooks["onId"]) => void
 	onSchedule: (hook: Hooks["onSchedule"]) => void
 	onCreateFunction: (hook: Hooks["onCreateFunction"]) => void
+	onError: (hook: Hooks["onError"]) => void
+	onTrace: (hook: Hooks["onTrace"]) => void
 	reserveSlot: <T>() => Slot<T>
 	// in a hook (before: not-yet): the host's process context; a process's while it runs (stopped,
 	// or not this ermine's: undefined). acting as one: context.within(() => …), @ermine/system's
@@ -299,6 +317,8 @@ export function install(
 		onId: [],
 		onSchedule: [],
 		onCreateFunction: [],
+		onError: [],
+		onTrace: [],
 	} as {
 		[H in Hook]: Hooked<H>[]
 	}
@@ -346,6 +366,8 @@ export function install(
 			onId: adder("onId"),
 			onSchedule: adder("onSchedule"),
 			onCreateFunction: adder("onCreateFunction"),
+			onError: adder("onError"),
+			onTrace: adder("onTrace"),
 			getProcessContext: ((process?: Process) =>
 				got("getProcessContext", parts.getProcessContext)(process)) as FeatureAPI[
 					"getProcessContext"

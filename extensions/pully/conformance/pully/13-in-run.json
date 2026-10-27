@@ -4,7 +4,8 @@
 		{
 			"op": "ermine",
 			"features": [
-				"pully"
+				"pully",
+				"trace"
 			],
 			"expect": {}
 		},

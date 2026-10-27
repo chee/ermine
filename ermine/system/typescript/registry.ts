@@ -5,7 +5,7 @@
 // loaded is told apart only to say so (two-copies)
 import type { Scheduler, Scope } from "@ermine/core/scheduler"
 import type { Inner } from "./context.ts"
-import { ErmineError } from "./features.ts"
+import { ErmineError, type Errored } from "./features.ts"
 
 // each scheduler, and how many ermines registered it
 const schedulers = new Map<Scheduler, number>()
@@ -17,21 +17,22 @@ export function registerScope(scope: Scope, inner: Inner) {
 	scopes.set(scope, inner)
 }
 
-// how many ermines registered give hints (createErmine's hints, hints.ts)
-let hinted = 0
-// whether a function finding no context (nothing-open) gives its advice: some ermine open does
-export const hinting = (): boolean => hinted > 0
+// the onError chains of the ermines registered with any onError hook, oldest first
+const erring: Errored[] = []
+// what an error no context was found for goes through (nothing-open, a handle turned into data):
+// the first ermine open with an onError hook's chain; none: thrown as it is
+export const unfound = (e: unknown, fn?: string): unknown => erring.length ? erring[0](e, fn) : e
 
-// s looked in, from here on (an ermine made, hints: whether it gives them); gives its letting go
-// (the ermine closed)
-export function registerScheduler(s: Scheduler, hints = true): () => void {
+// s looked in, from here on (an ermine made; onError: its chain, when it has hooks); gives its
+// letting go (the ermine closed)
+export function registerScheduler(s: Scheduler, onError?: Errored): () => void {
 	schedulers.set(s, (schedulers.get(s) ?? 0) + 1)
-	if (hints) hinted++
+	if (onError) erring.push(onError)
 	let gone = false
 	return () => {
 		if (gone) return
 		gone = true
-		if (hints) hinted--
+		if (onError) erring.splice(erring.indexOf(onError), 1)
 		const n = (schedulers.get(s) ?? 1) - 1
 		if (n <= 0) schedulers.delete(s)
 		else schedulers.set(s, n)

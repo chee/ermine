@@ -21,6 +21,7 @@ import {
 	read,
 } from "@ermine/system"
 import { manual } from "./manual_fixture.ts"
+import { hints } from "./hints.ts"
 
 // what f threw
 function thrown(f: () => unknown): unknown {
@@ -46,7 +47,7 @@ function hinted(e: unknown, text: string, ...says: string[]): string {
 }
 // the error a process's setup threw, as its status shows it
 function setupError(f: () => void, options: Parameters<typeof createErmine>[0] = {}) {
-	const e = createErmine({ features: [manual], ...options })
+	const e = createErmine({ features: [manual, hints], ...options })
 	const s = e.start(f, "/work/p")
 	assert("status" in s)
 	const st = s.status()
@@ -73,7 +74,7 @@ Deno.test("hints: nothing-there for a memo in a folder not there names the folde
 })
 
 Deno.test("hints: nothing-there for a path above the root", () => {
-	const e = createErmine({ features: [manual] })
+	const e = createErmine({ features: [manual, hints] })
 	const caught = thrown(() => e.within(() => getNode("../..")))
 	e.close()
 	hinted(caught, "nothing-there (..)", `too many ".."`)
@@ -90,7 +91,7 @@ Deno.test("hints: already-there for two memos of one name in one setup", () => {
 })
 
 Deno.test("hints: already-there for a place onto a name taken", () => {
-	const e = createErmine({ features: [manual] })
+	const e = createErmine({ features: [manual, hints] })
 	e.within(() => ensureNode("/a", 1))
 	e.within(() => ensureNode("/b", 2))
 	const caught = thrown(() => e.within(() => place("/a", "/b")))
@@ -99,7 +100,7 @@ Deno.test("hints: already-there for a place onto a name taken", () => {
 })
 
 Deno.test("hints: not-a-name", () => {
-	const e = createErmine({ features: [manual] })
+	const e = createErmine({ features: [manual, hints] })
 	const caught = thrown(() => e.within(() => ensureNode(["x", ""], 1)))
 	e.close()
 	assert(caught instanceof PlacesError)
@@ -108,7 +109,7 @@ Deno.test("hints: not-a-name", () => {
 })
 
 Deno.test("hints: not-a-method", () => {
-	const e = createErmine({ features: [manual] })
+	const e = createErmine({ features: [manual, hints] })
 	e.within(() => ensureNode("/v", 1))
 	const caught = thrown(() => e.within(() => executeAction("/v")))
 	e.close()
@@ -116,7 +117,7 @@ Deno.test("hints: not-a-method", () => {
 })
 
 Deno.test("hints: nothing-open, a function called with nothing open", () => {
-	const e = createErmine({ features: [manual] })
+	const e = createErmine({ features: [manual, hints] })
 	const caught = thrown(() => read("/x"))
 	e.close()
 	assert(caught instanceof ErmineError)
@@ -125,7 +126,7 @@ Deno.test("hints: nothing-open, a function called with nothing open", () => {
 })
 
 Deno.test("hints: not-a-handle, not-a-value, not-patches", () => {
-	const e = createErmine({ features: [manual] })
+	const e = createErmine({ features: [manual, hints] })
 	e.within(() => ensureNode("/a", 1))
 	const handle = thrown(() => e.within(() => read({} as never)))
 	const value = thrown(() => JSON.stringify(e.within(() => getNode("/a"))))
@@ -139,7 +140,7 @@ Deno.test("hints: not-a-handle, not-a-value, not-patches", () => {
 })
 
 Deno.test("hints: start's not-a-function and not-yet", () => {
-	const e = createErmine({ features: [manual] })
+	const e = createErmine({ features: [manual, hints] })
 	const fn = thrown(() => e.start("/code/p" as never, "/p"))
 	const box = thrown(() => e.start(() => {}, "/p", { box: { at: [] } as never }))
 	e.close()
@@ -148,7 +149,7 @@ Deno.test("hints: start's not-a-function and not-yet", () => {
 })
 
 Deno.test("hints: closed", () => {
-	const e = createErmine({ features: [manual] })
+	const e = createErmine({ features: [manual, hints] })
 	e.close()
 	const caught = thrown(() => e.within(() => read("/x")))
 	assert(caught instanceof ErmineError)
@@ -168,7 +169,7 @@ Deno.test("hints: a refusal says what and whose, by the program's path", () => {
 Deno.test("a boxed process's refusal says nothing of where its box sits; the policy sees the box", () => {
 	const boxes: unknown[] = []
 	const e = createErmine({
-		features: [manual],
+		features: [manual, hints],
 		may: (ask) => {
 			if (ask.op !== "edit") return yes
 			boxes.push(ask.from?.box)
@@ -199,7 +200,7 @@ Deno.test("a boxed process's refusal says nothing of where its box sits; the pol
 })
 
 Deno.test("hints: a failed status's error is the thrown one, hinted", () => {
-	const e = createErmine({ features: [manual] })
+	const e = createErmine({ features: [manual, hints] })
 	e.start(() => {
 		createMemo("m", () => patch("missing", [{ path: [], value: 1 }]))
 	}, "/work/p")
@@ -220,7 +221,7 @@ Deno.test("hints: a setup pending on a read or a send says setup runs once, and 
 	assert(sent?.hint?.includes(`executeAction("/on/go") has no action there yet`), sent?.hint)
 	assert(sent?.hint?.includes("runs once"), sent?.hint)
 	// a memo waiting is no stuck setup: no hint
-	const e = createErmine({ features: [manual] })
+	const e = createErmine({ features: [manual, hints] })
 	e.start(() => void createMemo("m", () => read("missing")), "/work/p")
 	e.within(() => pulse())
 	const memo = e.within(() => getStatus("/work/p/m"))
@@ -234,7 +235,7 @@ Deno.test("hints: a setup pending on a read or a send says setup runs once, and 
 })
 
 Deno.test("hints: PENDING itself is never touched; hint(PENDING) says how to show loading", () => {
-	const e = createErmine({ features: [manual] })
+	const e = createErmine({ features: [manual, hints] })
 	const caught = thrown(() => e.within(() => read("/counter/count")))
 	e.close()
 	assertStrictEquals(caught, PENDING)
@@ -262,18 +263,18 @@ Deno.test("hints: the rest by hint(): scheduler errors, a feature's, looping", (
 	assertEquals("hint" in own, false)
 })
 
-Deno.test("hints: hints: false gives the bare error and status", () => {
+Deno.test("hints: without the hints feature, the bare error and status", () => {
 	let caught: unknown
 	const st = setupError(() => {
 		caught = thrown(() => patch("count", [{ path: [], value: 1 }]))
 		read("missing")
-	}, { hints: false })
+	}, { features: [manual] })
 	assert(caught instanceof PlacesError)
 	assertEquals(caught.message, "nothing-there (work/p/count)")
 	assertEquals("hint" in caught, false)
 	assertEquals(st?.state, "pending")
 	assertEquals(st?.hint, undefined)
-	const e = createErmine({ features: [manual], hints: false })
+	const e = createErmine({ features: [manual] })
 	const fn = thrown(() => e.start("/x" as never, "/p"))
 	e.close()
 	assertEquals((fn as Error).message, "not-a-function: start takes the program: its function")
@@ -281,7 +282,7 @@ Deno.test("hints: hints: false gives the bare error and status", () => {
 })
 
 Deno.test("hints: an action's error, thrown on through executeAction, carries the action's hint once", () => {
-	const e = createErmine({ features: [manual] })
+	const e = createErmine({ features: [manual, hints] })
 	e.start(() => {
 		createAction("on/go", () => patch("missing", [{ path: [], value: 1 }]))
 	}, "/work/p")

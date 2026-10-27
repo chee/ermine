@@ -29,7 +29,5 @@ export * from "./typescript/process.ts"
 export type { System } from "./typescript/system.ts"
 // the host's: createErmine, and the types hosts and features use
 export * from "./typescript/ermine.ts"
-// what to do about an error (ermine gives it by default; a dev tool or another api's shape calls it)
-export { bare, hint, type Seen } from "./typescript/hints.ts"
 export { PENDING } from "@ermine/core/scheduler"
 export { REFUSED } from "@ermine/core/places/guard"

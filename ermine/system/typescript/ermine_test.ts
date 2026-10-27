@@ -24,6 +24,7 @@ import {
 	type ProcessContext,
 } from "./ermine.ts"
 import { manual } from "./manual_fixture.ts"
+import { trace } from "./trace.ts"
 
 const BASE = ["ermine.ts", "system.ts", "context.ts", "calls.ts", "features.ts"]
 
@@ -260,14 +261,14 @@ Deno.test("a read of a node not there, outside a setup or a run, keeps nothing: 
 	e.close()
 })
 
-Deno.test("trace: a write outside a run keeps its whole trace text, through later copies; trace: false, none", async () => {
+Deno.test("trace: with the trace feature a write outside a run keeps its whole trace text, through later copies; without it, none", async () => {
 	const { traceOf } = await import("@ermine/core/places/header")
 	const changeAt = (e: ReturnType<typeof createErmine>, path: string[]) => {
 		let id = e.places.root as string
 		for (const n of path) id = (e.table.get("children", id)?.value as Record<string, string>)[n]
 		return e.table.get("value", id)!.change
 	}
-	const e = createErmine()
+	const e = createErmine({ features: [trace] })
 	function deepInTheProgram() {
 		e.within(() => ensureNode("/x", 1))
 	}
@@ -280,7 +281,7 @@ Deno.test("trace: a write outside a run keeps its whole trace text, through late
 	}
 	another()
 	assert(traceOf(changeAt(e, ["x"]))?.includes("another"))
-	const off = createErmine({ trace: false })
+	const off = createErmine()
 	off.within(() => ensureNode("/y", 1))
 	assertEquals(traceOf(changeAt(off, ["y"])), undefined)
 	assertEquals(typeof changeAt(off, ["y"]).external?.[0]?.line, "number")

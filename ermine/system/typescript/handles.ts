@@ -9,17 +9,16 @@
 // draft) no longer holds. not data: it won't serialize (toJSON and turning it into a value throw)
 import type { NodeData } from "./context.ts"
 import { ErmineError } from "./features.ts"
-import { attach } from "./hints.ts"
-import { hinting } from "./registry.ts"
+import { unfound } from "./registry.ts"
 
-// thrown by the handle itself (JSON, a string), in no function: given its advice as the ermines
-// open say (hints.ts)
+// thrown by the handle itself (JSON, a string), in no function: through the onError hooks of the
+// first ermine open with any
 const notData = () => {
 	const e = new ErmineError(
 		"not-a-value",
 		"a node handle is not data: read its value (read(node))",
 	)
-	return hinting() ? attach(e) : e
+	return unfound(e)
 }
 
 export class Handle {
