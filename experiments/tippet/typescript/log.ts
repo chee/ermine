@@ -237,8 +237,14 @@ export function createLog(o: { store?: Store; writes?: boolean; seed?: Uint8Arra
 	// this device's highest step asked to be closed into a run, the highest closed, and the bytes
 	// written since the last asked
 	let asked = 0, closed = 0, loose = 0
+	// the first store failure: steps are never made past it, and saved() says it
+	let failure: unknown
+	const track = (p: Promise<unknown>) => {
+		saving = p
+		p.catch((e) => failure ??= e)
+	}
 	const save = (record: Uint8Array, at?: At) => {
-		saving = Promise.all([saving, store.append(record, at)])
+		track(Promise.all([saving, store.append(record, at)]))
 	}
 	const count = (d: string) => feeds.get(d)?.count ?? 0
 
@@ -394,9 +400,11 @@ export function createLog(o: { store?: Store; writes?: boolean; seed?: Uint8Arra
 
 		// a step of this device's, made now: lamport one past the highest seen. one that isn't a
 		// step as decodeStep takes one throws, and is never sent. open in the store until its run
-		// closes
+		// closes. past a store's failed append it throws: saved() has the failure, and no step is sent
+		// that isn't on disk
 		write(s: Omit<Step, "device" | "n" | "before" | "lamport" | "relative">): Step {
 			if (!me) throw new Error("this log writes nothing, or is not loaded")
+			if (failure !== undefined) throw new Error("the store failed", { cause: failure })
 			if (lamport >= Number.MAX_SAFE_INTEGER) throw new RangeError("lamport is at its end")
 			const n = count(me.device) + 1
 			const step: Step = {
@@ -502,7 +510,7 @@ export function createLog(o: { store?: Store; writes?: boolean; seed?: Uint8Arra
 			asked = closed
 			return snapshot
 		},
-		snapshot: (bytes: Uint8Array) => (saving = saving.then(() => store.snapshot(bytes))),
+		snapshot: (bytes: Uint8Array) => (track(saving.then(() => store.snapshot(bytes))), saving),
 		// forgetting: each device's steps through n no longer got from the store, and so never sent
 		drop(through: Record<string, number>) {
 			for (const [d, n] of Object.entries(through)) {
@@ -513,8 +521,8 @@ export function createLog(o: { store?: Store; writes?: boolean; seed?: Uint8Arra
 		saved: () => saving,
 		// every record on disk, the open steps too, and the store let go
 		async close() {
-			await saving
 			try {
+				await saving
 				await store.sync?.()
 			} finally {
 				store.close?.()
