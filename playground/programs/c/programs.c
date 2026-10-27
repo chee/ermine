@@ -5,6 +5,7 @@
 
 #include "../../../experiments/software/c/functions.h"
 #include "../../compilers/c/mem.h"
+#include "../../../ermine/encoding/c/cbor.h"
 
 // copies and frees -----------------------------------------------------------------------------
 
@@ -267,17 +268,15 @@ static void note(search_t *s, const pg_place *c, const char *for_, const char *t
 	PG_PUSH(s->why.items, s->why.n, s->capwhy, w);
 }
 
-// the order of a folder's names: canonical CBOR's key order, by their encodings bytewise (shorter
-// first, then by UTF-8)
+// the order of a folder's names: canonical CBOR's key order (cborKeyCompare: shorter in UTF-8 bytes
+// first, then bytewise, a U+0000 held as C0 80 being the one byte 00)
 typedef struct {
 	const char *name;
 	tb_key id;
 } member;
 static int key_order(const void *a, const void *b) {
 	const char *x = ((const member *)a)->name, *y = ((const member *)b)->name;
-	size_t lx = strlen(x), ly = strlen(y);
-	if (lx != ly) return lx < ly ? -1 : 1;
-	return memcmp(x, y, lx);
+	return cborKeyCompare(x, strlen(x), y, strlen(y));
 }
 
 static void candidate(search_t *s, const char *id, const char *const *at, size_t n, const char *name) {
