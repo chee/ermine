@@ -257,3 +257,17 @@ Deno.test("apply cow: false: a refused patch undoes what was done, in place; the
 		assertEquals(Object.keys(v), ["l", "m", "t", "n"])
 	}
 })
+
+Deno.test("apply: a span of any length goes in and moves, past what a call's arguments hold", () => {
+	const big = Array.from({ length: 300000 }, (_, i) => i)
+	for (const cow of [true, false]) {
+		const put = apply({ a: [0, 1] } as any, [{ path: ["a"], range: [1, 1], value: big }], {
+			cow,
+		}) as any
+		assertEquals([put.a.length, put.a[1], put.a[300000], put.a[300001]], [300002, 0, 299999, 1])
+		const moved = apply({ a: big, b: [] } as any, [
+			{ path: ["b"], range: [0, 0], move: { path: ["a"], range: [0, 300000] } },
+		], { cow }) as any
+		assertEquals([moved.a.length, moved.b.length, moved.b[299999]], [0, 300000, 299999])
+	}
+})
