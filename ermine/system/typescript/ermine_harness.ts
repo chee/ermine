@@ -130,7 +130,7 @@ import {
 	type Started,
 } from "./ermine.ts"
 import * as system from "@ermine/system"
-import { type HostOnly, innerOf, type System, systemFrom } from "./system.ts"
+import type { System } from "./system.ts"
 import { isHandle } from "./handles.ts"
 import { bare } from "./hints.ts"
 import type { Run } from "@ermine/processes/runs"
@@ -438,13 +438,26 @@ function call(api: Sys, env: Env, [fn, ...raw]: [string, ...unknown[]]): unknown
 }
 
 // a function's target: ["info", x] the attributes of x, else the argument as it is
-// what steps call: @ermine/system's functions; the host's, the ermine object's own (with remove
-// and pulse, the host's only); within, the caller's scope opened round a library's call
-type Sys = System & Partial<HostOnly> & { within: <T>(f: () => T) => T }
+// what steps call: @ermine/system's functions; within, the caller's scope opened round a library's
+// call
+type Sys = System & { within: <T>(f: () => T) => T }
+const names = Object.keys(system).filter((k) =>
+	typeof (system as Record<string, unknown>)[k] === "function"
+) as (keyof System)[]
+// the functions, each run in within's scope (the host's, process 0's: ermine.within; a process's:
+// its context's)
+const opened = (within: <T>(f: () => T) => T): Sys => {
+	const out: Record<string, unknown> = { within }
+	for (const k of names) {
+		const f = system[k] as (...a: unknown[]) => unknown
+		out[k] = (...a: unknown[]) => within(() => f(...a))
+	}
+	return out as Sys
+}
 // a program's: the imported ones (setup is given nothing), found from the scope open
-const imported: Sys = { ...system, within: (f) => f() }
-// the host's: the ermine object's (process 0's, falling back to its scope)
-const hostSystem = (e: Ermine): Sys => ({ ...e, within: (f) => e.getProcessContext()!.within(f) })
+const imported: Sys = { ...(system as unknown as System), within: (f) => f() }
+// the host's: in its scope
+const hostSystem = (e: Ermine): Sys => opened(e.within)
 
 // the host's steps: a node written as { id?, path?, part } is minted a handle, as the host may
 // (ermine.handleOf); a process's stay as written (an object no handle: not-a-handle)
@@ -677,7 +690,7 @@ async function answer(r: Request): Promise<Record<string, unknown>> {
 				case "within":
 					return { value: o.within(() => e.scheduler.getCurrentScope() === o.scope) }
 				case "api": {
-					const sys: Sys = { ...systemFrom(() => ({ inner: innerOf(o)! })), within: o.within }
+					const sys: Sys = opened(o.within)
 					const v = call(sys, m.host, a[0] as [string, ...unknown[]])
 					return v === undefined ? {} : { value: plain(v) }
 				}
@@ -694,11 +707,11 @@ async function answer(r: Request): Promise<Record<string, unknown>> {
 			{
 				const program = code(r)
 				m.programs.set(rooted(r.at), program)
-				e.ensureNode(r.at, program)
+				m.hostSys.ensureNode(r.at, program)
 			}
 			return {}
 		case "box":
-			m.boxes.set(r.name, e.createBox(r.at))
+			m.boxes.set(r.name, m.hostSys.createBox(r.at))
 			m.boxIds.set(r.name, get(e.places, inside(r.at)) as Id)
 			return {}
 		case "boxplace": {
@@ -724,7 +737,7 @@ async function answer(r: Request): Promise<Record<string, unknown>> {
 			return {}
 		case "service":
 			if (r.what !== "land") throw new Error(`no service ${r.what}`)
-			e.createAction(r.at, land(e))
+			m.hostSys.createAction(r.at, land(e))
 			return {}
 		case "record": {
 			const id = r.id ?? get(e.places, r.path)

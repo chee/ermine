@@ -19,11 +19,11 @@
 //            missing), createNode (a fresh name), ref (make() only if missing: a live value),
 //            readEntries (every node a path reaches)
 // names      place, unplace (patchChildren's rule, by a path), rename (one change over two
-//            folders, its cycle check), list
-// computing  createMemo, createEffect ({ early }), pipe
+//            folders, its cycle check), list, remove
+// computing  createMemo, createEffect ({ early }), pipe, pulse (the pending pulse now; in one:
+//            nothing)
 // actions    createAction, executeAction, getCaller
 // the rest   getStatus, addTeardown, createBox, getArgs, PENDING, REFUSED
-// the host's only: remove, pulse
 //
 // paths: a bare name inside the process's node (the host's: the root), gone at stop; ./ its folder;
 // ../ above; / its box's root. a node: a path (walked at each use) or a handle (handles.ts: the
@@ -48,8 +48,9 @@
 //                        refused, none of them); pipe(from, to, fnA?, fnB?): mirror, transform,
 //                        translate (pipe below); { timing: "pulse" | "write", name }; its node
 //   place(p, x)          x's node at a second name. unplace(p): the name out, the node stays.
-//                        remove(x), the host's only: unplaced and its entries deleted; a process
-//                        unplaces, and a node no name reaches no longer exists [chee 10-25]
+//                        remove(x): unplaced and its entries deleted, asked "remove" [chee 10-27:
+//                        "why wouldn't we just export remove and pulse too? protect remove"]; a
+//                        node no name reaches no longer exists [chee 10-25]
 //   createMemo(name, f, o?)   a compute at its own node at name: its result, status and latest
 //                        run; made again by its owner's next run (same node, new f); a name not
 //                        made again goes after the run. a second at a name in one run: already-there
@@ -232,9 +233,6 @@ export type CallView = {
 // who called the action running now [chee 10-25: "oh well, it should"]: the actor its writes carry,
 // and its process's node by path as the action sees it (none: outside its box)
 export type Caller = { readonly actor: unknown; readonly process?: Path }
-
-// the process api with what the host keeps: remove (a process removes a name, unplace; a node no
-// name reaches no longer exists [chee 10-25: "yep sounds good"])
 
 // a change as a process sees it: when, who, and the line that made it; explain takes it back to its
 // change (one view per change, base.views). its metadata (node ids) stays the host's
@@ -1991,118 +1989,54 @@ export type System = {
 	addTeardown: (fn: (why: Why) => unknown) => void
 	createBox: (path: string | Path) => BoxNode
 	getArgs: () => readonly string[]
+	remove: (x: Target) => void
+	pulse: () => void
 }
 
-// the host's beside them: remove (a process unplaces), and a pulse now
-export type HostOnly = { remove: (x: Target) => void; pulse: () => void }
-
-// @ermine/system's functions over at(name, x): the context each acts as (a process's, found from
-// the scope open, registry.ts; the host's, for the host's ermine object), and its scope opened
-// round the call when at says so. name: the function asked, for nothing-open's message; x: what it
-// is asked of. a writer's call is entered: its
-// writes' site the line calling it
-export function systemFrom(at: (name: string, x?: unknown) => Found): System
-export function systemFrom(
-	at: (name: string, x?: unknown) => Found,
-	options: { host: true },
-): System & HostOnly
-export function systemFrom(
-	at: (name: string, x?: unknown) => Found,
-	options?: { host: true },
-): System | (System & HostOnly) {
-	// name's implementation run as the context at(name, x) gives (a writer: entered, so its writes'
-	// site is the line calling in; few frames between: a site is found in the stack's first ten)
-	function go<A extends unknown[], T>(
-		name: string,
-		x: unknown,
-		writer: boolean,
-		f: (inner: Inner, ...a: A) => T,
-		...a: A
-	): T {
-		// the call's build site, if one was set for it (site.ts): taken first, so nothing it runs gets it
-		const site = take()
-		let inner: Inner | undefined
-		try {
-			const found = at(name, x)
-			inner = found.inner
-			const i = inner
-			if (found.within !== undefined) {
-				return found.within(() => writer ? here(i).base.enter(f, i, a, site) : f(i, ...a))
-			}
-			return writer ? here(i).base.enter(f, i, a, site) : f(i, ...a)
-		} catch (e) {
-			// an ermine error given its advice as it passes (hints.ts); PENDING as it is. no context
-			// found (nothing-open): as the ermines open say
-			if (e !== PENDING && (inner === undefined ? hinting() : bases.get(inner)?.hints)) {
-				attachHint(e, { fn: name })
-			}
-			throw e
-		}
-	}
-	const getArgs = (inner: Inner) => inner.context.args
-	const readAll = (inner: Inner, x: Target, key?: readonly Step[]) => allOf(inner, x, "value", key)
-	const readAllAttributes = (inner: Inner, x: Target, key?: readonly Step[]) =>
-		allOf(inner, x, "attributes", key)
-	const readAllChildren = (inner: Inner, x: Target) => allOf(inner, x, "children")
-	const explainAttributes = (inner: Inner, x: Target) => explainPart(inner, x, "attributes")
-	const explainChildren = (inner: Inner, x: Target) => explainPart(inner, x, "children")
-	const patchChildrenOnly = (inner: Inner, x: Target, patches: readonly Patch[]) =>
-		patchChildren(inner, x, patchesOnly(patches))
-	const system: System = {
-		getNode: (path) => go("getNode", undefined, false, getNode, path),
-		hasNode: (x) => go("hasNode", x, false, hasNode, x),
-		ensureNode: (path, value) => go("ensureNode", undefined, true, ensureNode, path, value),
-		createNode: (folder, value) => go("createNode", undefined, true, createNode, folder, value),
-		ref: (path, make) => go("ref", undefined, true, ref, path, make),
-		read: (x, key) => go("read", x, false, read, x, key),
-		readAttributes: (x, key) => go("readAttributes", x, false, readAttributes, x, key),
-		readChildren: (x) => go("readChildren", x, false, readChildren, x),
-		readAll: (x, key) => go("readAll", x, false, readAll, x, key),
-		readAllAttributes: (x, key) => go("readAllAttributes", x, false, readAllAttributes, x, key),
-		readAllChildren: (x) => go("readAllChildren", x, false, readAllChildren, x),
-		readEntries: (x) => go("readEntries", x, false, readEntries, x),
-		peep: (f) => go("peep", undefined, false, peep, f),
-		patch: (x, patches) => go("patch", x, true, patch, x, patches),
-		patchAttributes: (x, patches) => go("patchAttributes", x, true, patchAttributes, x, patches),
-		patchChildren: (x, patches) => go("patchChildren", x, true, patchChildrenOnly, x, patches),
-		explain: (x, key) => go("explain", x, false, explain, x, key),
-		explainAttributes: (x) => go("explainAttributes", x, false, explainAttributes, x),
-		explainChildren: (x) => go("explainChildren", x, false, explainChildren, x),
-		place: (path, x) => go("place", undefined, true, place, path, x),
-		unplace: (path) => go("unplace", undefined, true, unplace, path),
-		rename: (from, to) => go("rename", undefined, true, rename, from, to),
-		list: (x) => go("list", x, false, list, x),
-		createMemo: (name, f, options) =>
-			go("createMemo", undefined, true, createMemo, name, f as never, options as never),
-		createEffect: (name, f, act, options) =>
-			go(
-				"createEffect",
-				undefined,
-				true,
-				createEffect,
-				name,
-				f as never,
-				act as never,
-				options as never,
-			),
-		pipe: (from, ...rest) => go("pipe", from, true, pipe, from, ...rest),
-		createAction: (path, fn) => go("createAction", undefined, true, createAction, path, fn),
-		executeAction: (path, ...args) =>
-			go("executeAction", path, true, executeAction, path, ...args),
-		getCaller: () => go("getCaller", undefined, false, getCaller),
-		getStatus: (x) => go("getStatus", x, false, getStatus, x),
-		addTeardown: (fn) => go("addTeardown", undefined, false, addTeardown, fn),
-		createBox: (path) => go("createBox", undefined, true, createBox, path),
-		getArgs: () => go("getArgs", undefined, false, getArgs),
-	}
-	if (options?.host !== true) return system
-	return {
-		...system,
-		remove: (x) => go("remove", x, true, remove, x),
-		pulse: () => go("pulse", undefined, false, (i) => here(i).base.pulse()),
-	}
+// each function's implementation, given the context it acts as (functions.ts finds it)
+export const getArgs = (inner: Inner): readonly string[] => inner.context.args
+export const readAll = (inner: Inner, x: Target, key?: readonly Step[]) =>
+	allOf(inner, x, "value", key)
+export const readAllAttributes = (inner: Inner, x: Target, key?: readonly Step[]) =>
+	allOf(inner, x, "attributes", key)
+export const readAllChildren = (inner: Inner, x: Target) => allOf(inner, x, "children")
+export const explainAttributes = (inner: Inner, x: Target) => explainPart(inner, x, "attributes")
+export const explainChildren = (inner: Inner, x: Target) => explainPart(inner, x, "children")
+export const patchChildrenOnly = (inner: Inner, x: Target, patches: readonly Patch[]) =>
+	patchChildren(inner, x, patchesOnly(patches))
+export const pulse = (inner: Inner) => here(inner).base.pulse()
+export {
+	addTeardown,
+	createAction,
+	createBox,
+	createEffect,
+	createMemo,
+	createNode,
+	ensureNode,
+	executeAction,
+	explain,
+	getCaller,
+	getNode,
+	getStatus,
+	hasNode,
+	here,
+	list,
+	patch,
+	patchAttributes,
+	peep,
+	pipe,
+	place,
+	read,
+	readAttributes,
+	readChildren,
+	readEntries,
+	ref,
+	remove,
+	rename,
+	unplace,
 }
+// whether inner's ermine gives hints (createErmine's hints)
+export const hintsOn = (inner: Inner): boolean | undefined => bases.get(inner)?.hints
 
-// how a process's functions find it (registry.ts), for @ermine/system's module
 export { foundFor } from "./registry.ts"
 export type { Table }

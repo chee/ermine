@@ -6,7 +6,20 @@ import { no, yes } from "@ermine/core/protect"
 import { PENDING, SchedulerError } from "@ermine/core/scheduler"
 import { createErmine, ErmineError, FeatureError, type Status } from "./ermine.ts"
 import { bare, hint, hintStatus } from "./hints.ts"
-import { createAction, createMemo, ensureNode, executeAction, patch, read } from "@ermine/system"
+import {
+	createAction,
+	createBox,
+	createMemo,
+	ensureNode,
+	executeAction,
+	getNode,
+	getStatus,
+	patch,
+	patchChildren,
+	place,
+	pulse,
+	read,
+} from "@ermine/system"
 
 // what f threw
 function thrown(f: () => unknown): unknown {
@@ -60,7 +73,7 @@ Deno.test("hints: nothing-there for a memo in a folder not there names the folde
 
 Deno.test("hints: nothing-there for a path above the root", () => {
 	const e = createErmine({ schedule: () => {} })
-	const caught = thrown(() => e.getNode("../.."))
+	const caught = thrown(() => e.within(() => getNode("../..")))
 	e.close()
 	hinted(caught, "nothing-there (..)", `too many ".."`)
 })
@@ -77,16 +90,16 @@ Deno.test("hints: already-there for two memos of one name in one setup", () => {
 
 Deno.test("hints: already-there for a place onto a name taken", () => {
 	const e = createErmine({ schedule: () => {} })
-	e.ensureNode("/a", 1)
-	e.ensureNode("/b", 2)
-	const caught = thrown(() => e.place("/a", "/b"))
+	e.within(() => ensureNode("/a", 1))
+	e.within(() => ensureNode("/b", 2))
+	const caught = thrown(() => e.within(() => place("/a", "/b")))
 	e.close()
 	hinted(caught, "already-there (a)", `"a" is taken`, "unplace")
 })
 
 Deno.test("hints: not-a-name", () => {
 	const e = createErmine({ schedule: () => {} })
-	const caught = thrown(() => e.ensureNode(["x", ""], 1))
+	const caught = thrown(() => e.within(() => ensureNode(["x", ""], 1)))
 	e.close()
 	assert(caught instanceof PlacesError)
 	assertEquals(caught.code, "not-a-name")
@@ -95,8 +108,8 @@ Deno.test("hints: not-a-name", () => {
 
 Deno.test("hints: not-a-method", () => {
 	const e = createErmine({ schedule: () => {} })
-	e.ensureNode("/v", 1)
-	const caught = thrown(() => e.executeAction("/v"))
+	e.within(() => ensureNode("/v", 1))
+	const caught = thrown(() => e.within(() => executeAction("/v")))
 	e.close()
 	hinted(caught, "not-a-method (v)", "/v", "createAction")
 })
@@ -112,11 +125,11 @@ Deno.test("hints: nothing-open, a function called with nothing open", () => {
 
 Deno.test("hints: not-a-handle, not-a-value, not-patches", () => {
 	const e = createErmine({ schedule: () => {} })
-	e.ensureNode("/a", 1)
-	const handle = thrown(() => e.read({} as never))
-	const value = thrown(() => JSON.stringify(e.getNode("/a")))
-	const patches = thrown(() => e.patch("/a", { value: 2 } as never))
-	const kids = thrown(() => e.patchChildren("/", [{ path: ["a", "b"], value: 1 }]))
+	e.within(() => ensureNode("/a", 1))
+	const handle = thrown(() => e.within(() => read({} as never)))
+	const value = thrown(() => JSON.stringify(e.within(() => getNode("/a"))))
+	const patches = thrown(() => e.within(() => patch("/a", { value: 2 } as never)))
+	const kids = thrown(() => e.within(() => patchChildren("/", [{ path: ["a", "b"], value: 1 }])))
 	e.close()
 	hinted(handle, bare(handle), "pass a path")
 	hinted(value, bare(value), "read(node)")
@@ -136,7 +149,7 @@ Deno.test("hints: start's not-a-function and not-yet", () => {
 Deno.test("hints: closed", () => {
 	const e = createErmine({ schedule: () => {} })
 	e.close()
-	const caught = thrown(() => e.read("/x"))
+	const caught = thrown(() => e.within(() => read("/x")))
 	assert(caught instanceof ErmineError)
 	hinted(caught, "closed: ermine is closed", "addTeardown")
 })
@@ -161,7 +174,7 @@ Deno.test("a boxed process's refusal says nothing of where its box sits; the pol
 			return no("not here")
 		},
 	})
-	const box = e.createBox("/far/away/b")
+	const box = e.within(() => createBox("/far/away/b"))
 	let caught: unknown
 	const s = e.start(
 		() => {
@@ -189,8 +202,8 @@ Deno.test("hints: a failed status's error is the thrown one, hinted", () => {
 	e.start(() => {
 		createMemo("m", () => patch("missing", [{ path: [], value: 1 }]))
 	}, "/work/p")
-	e.pulse()
-	const st = e.getStatus("/work/p/m")
+	e.within(() => pulse())
+	const st = e.within(() => getStatus("/work/p/m"))
 	e.close()
 	assertEquals(st?.state, "failed")
 	hinted(st?.error, "nothing-there (work/p/missing)", "/work/p/missing")
@@ -208,8 +221,8 @@ Deno.test("hints: a setup pending on a read or a send says setup runs once, and 
 	// a memo waiting is no stuck setup: no hint
 	const e = createErmine({ schedule: () => {} })
 	e.start(() => void createMemo("m", () => read("missing")), "/work/p")
-	e.pulse()
-	const memo = e.getStatus("/work/p/m")
+	e.within(() => pulse())
+	const memo = e.within(() => getStatus("/work/p/m"))
 	e.close()
 	assertEquals(memo?.state, "pending")
 	assertEquals(memo?.hint, undefined)
@@ -221,7 +234,7 @@ Deno.test("hints: a setup pending on a read or a send says setup runs once, and 
 
 Deno.test("hints: PENDING itself is never touched; hint(PENDING) says how to show loading", () => {
 	const e = createErmine({ schedule: () => {} })
-	const caught = thrown(() => e.read("/counter/count"))
+	const caught = thrown(() => e.within(() => read("/counter/count")))
 	e.close()
 	assertStrictEquals(caught, PENDING)
 	const h = hint(PENDING, { fn: "read" })!
@@ -271,7 +284,7 @@ Deno.test("hints: an action's error, thrown on through executeAction, carries th
 	e.start(() => {
 		createAction("on/go", () => patch("missing", [{ path: [], value: 1 }]))
 	}, "/work/p")
-	const caught = thrown(() => e.executeAction("/work/p/on/go"))
+	const caught = thrown(() => e.within(() => executeAction("/work/p/on/go")))
 	e.close()
 	hinted(caught, "nothing-there (work/p/missing)", "/work/p/missing")
 	assertEquals((caught as Error).message.split("\nhint: ").length, 2)

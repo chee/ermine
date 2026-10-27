@@ -1,13 +1,13 @@
 // a write outside a run, per write: its site from the trace (whole text, the default; the site
 // only, trace: false) or given at build (at(s, patch), as the plugin writes it), shallow and 40
 // frames deep
-import { createErmine, patch, read } from "@ermine/system"
+import { createErmine, ensureNode, patch, read } from "@ermine/system"
 import { at, site } from "@ermine/system/site"
 
 const S = site("file:///program.ts", 1, 1)
 const make = (trace?: false) => {
 	const e = createErmine({ schedule: () => {}, trace })
-	e.ensureNode("/x", 0)
+	e.within(() => ensureNode("/x", 0))
 	return e.getProcessContext()!
 }
 const whole = make()

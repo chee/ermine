@@ -5,7 +5,7 @@ import { assert, assertEquals, assertRejects } from "@std/assert"
 import * as esbuild from "esbuild"
 import { join } from "node:path"
 import { fileURLToPath as fromFileUrl, pathToFileURL } from "node:url"
-import { createErmine } from "@ermine/system"
+import { createErmine, read } from "@ermine/system"
 import { traceOf } from "@ermine/core/places/header"
 import type { ChangeHeader } from "@ermine/core/node/entry"
 import ermine, { type Options } from "./unplugin.ts"
@@ -74,7 +74,7 @@ Deno.test("build: (b) each write's site is written in at build: the program's fi
 		assertEquals(x.external, [{ file, line: 6, column: 9 }])
 		assertEquals(changeAt(e, "y").external, [{ file, line: 7, column: 2 }])
 		assertEquals(traceOf(x), undefined, "no trace text: nothing captured")
-		assertEquals(e.read("/x"), 2)
+		assertEquals(e.within(() => read("/x")), 2)
 		e.close()
 		// trace "always": the text captured too, the site still the build's
 		const always = await run(out, { trace: "always" })
