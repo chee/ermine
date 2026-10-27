@@ -2,6 +2,7 @@
 // policy (may) reading the rules node: a read of a note the rules hide is refused. what the policy
 // reads is tracked as the asker's reads are, so editing the rules reruns whatever asked
 import { createWorld } from "@ermine/slaygrounds/world"
+import { ensureNode } from "@ermine/system"
 import { render } from "ermine-h"
 import { get } from "@ermine/core/places/lib"
 import { no, type Policy, yes } from "@ermine/core/protect"
@@ -19,11 +20,11 @@ const may: Policy = (ask, read) => {
 }
 
 world = createWorld({ render, processes: [{ name: "reader" }], may })
-world.seed((host) => {
-	host.ensureNode("/notes/a", "buy milk")
-	host.ensureNode("/notes/b", "a secret")
-	host.ensureNode("/notes/c", "call mum")
-	host.ensureNode("/rules", { hidden: ["b"] })
+world.seed(() => {
+	ensureNode("/notes/a", "buy milk")
+	ensureNode("/notes/b", "a secret")
+	ensureNode("/notes/c", "call mum")
+	ensureNode("/rules", { hidden: ["b"] })
 })
 
 export const reload = world.reload

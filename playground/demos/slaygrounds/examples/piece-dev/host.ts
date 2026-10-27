@@ -20,9 +20,9 @@ const world = createWorld({
 })
 // saved names: /dev/clock, a stopped clock face; /dev/lamp; /work/notes
 world.seed((host) => {
-	host.open("/dev/clock", "12:00, stopped")
-	host.open("/dev/lamp", "off")
-	host.open("/work/notes", "buy cherries")
+	host.ensureNode("/dev/clock", "12:00, stopped")
+	host.ensureNode("/dev/lamp", "off")
+	host.ensureNode("/work/notes", "buy cherries")
 })
 const { s, table, places, host } = world.world
 const cache = createPathCache({ places, scheduler: s })

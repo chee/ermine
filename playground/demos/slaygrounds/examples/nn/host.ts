@@ -5,6 +5,7 @@
 // host runs nn's on/step while it is playing (a pulse after each: the forward pass the next step
 // reads), then on/frame, which paints. measure (/host/on/measure) is the host's too: it is async
 import { createWorld } from "@ermine/slaygrounds/world"
+import { createAction, executeAction, peep, read } from "@ermine/system"
 import type { Ermine } from "@ermine/system"
 import update from "@ermine/core/changeable/update"
 import { get } from "@ermine/core/places/lib"
@@ -96,12 +97,12 @@ trace(s, (m) => {
 // ---- nn's actions, run as the host; none there (not started, or stopped): nothing ----
 function act(name: string, ...args: unknown[]): unknown {
 	if (!world.world.processes.has("nn")) return
-	return e.executeAction(`/nn/on/${name}`, ...args)
+	return e.within(() => executeAction(`/nn/on/${name}`, ...args))
 }
 // a node's value as the host reads it, none: undefined
 const peek = (path: string) => {
 	try {
-		return e.peep(() => e.read(path))
+		return e.within(() => peep(() => read(path)))
 	} catch {
 		return undefined
 	}
@@ -116,7 +117,7 @@ const one = () => {
 	const t0 = performance.now()
 	act("step")
 	const t1 = performance.now()
-	e.pulse()
+	s.pulse()
 	const t2 = performance.now()
 	stats.calls++
 	stats.bodyMs += t1 - t0
@@ -219,6 +220,6 @@ async function measure() {
 		console.log("nn speeds", JSON.stringify(rows))
 	}
 }
-world.seed((host) => void host.createAction("/host/on/measure", measure))
+world.seed(() => void createAction("/host/on/measure", measure))
 
 export const reload = world.reload

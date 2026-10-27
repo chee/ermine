@@ -4,12 +4,13 @@
 // its actor, who edited last)
 import { land } from "@ermine/patchy/feature"
 import { createWorld } from "@ermine/slaygrounds/world"
+import { createAction, ensureNode, remove } from "@ermine/system"
 import { render } from "ermine-h"
 
 const world = createWorld({ render, processes: [{ name: "skin" }], overlay: true })
-world.seed((host) => {
+world.seed(() => {
 	// a card everyone shares, at /shared/card
-	host.ensureNode("/shared/card", {
+	ensureNode("/shared/card", {
 		title: "our note",
 		body: "lunch at one? 🥪",
 		x: 36,
@@ -18,10 +19,10 @@ world.seed((host) => {
 		sticker: "🌱",
 	})
 	// the service that lands a patch node on what it is over: a program sends it the node
-	host.createAction("/system/land", land(host))
+	createAction("/system/land", land(world.ermine))
 	// and the one that takes a patch node out, its patch entry with it (remove: a program's unplace
 	// takes the name, and the patch entry is still read through)
-	host.createAction("/system/unload", (node: string) => host.remove(node))
+	createAction("/system/unload", (node: string) => remove(node))
 })
 
 export const reload = world.reload

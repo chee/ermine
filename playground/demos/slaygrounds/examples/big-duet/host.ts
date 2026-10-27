@@ -3,6 +3,7 @@
 // text, and how: the world's change and who. the host is the timer (a program has none that can
 // call in): /beat is written every 120ms, and the poet types a letter at each
 import { createWorld } from "@ermine/slaygrounds/world"
+import { ensureNode, patch } from "@ermine/system"
 import { render } from "ermine-h"
 
 const world = createWorld({
@@ -14,10 +15,10 @@ const world = createWorld({
 		{ name: "poet", export: "poet" },
 	],
 })
-world.seed((host) => void host.ensureNode("/beat", 0))
+world.seed(() => void ensureNode("/beat", 0))
 let beats = 0
 setInterval(() => {
-	world.ermine.patch("/beat", [{ path: [], value: ++beats }])
+	world.ermine.within(() => patch("/beat", [{ path: [], value: ++beats }]))
 }, 120)
 
 export const reload = world.reload

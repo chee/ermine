@@ -5,9 +5,9 @@
 //
 //   import { charHost, domHost, mirror, renderers, runner } from "@ermine/slaygrounds/renderers"
 //   const hosts = { dom: domHost(), chars: charHost() }
-//   world.seed((h) => {
-//   	runner(h, "/screens/dom/run", hosts.dom, ["dom", "canvas"])
-//   	renderers(h, "/renderers", mod.renderers)
+//   world.seed(() => {
+//   	runner("/screens/dom/run", hosts.dom, ["dom", "canvas"])
+//   	renderers("/renderers", mod.renderers)
 //   })
 //   // in a process whose folder is /screens/dom:
 //   export const dom = () => mirror(hosts.dom, "/app/ui", openwith)   // openwith: the host's
@@ -28,12 +28,13 @@ import {
 	addTeardown,
 	createEffect,
 	ensureNode,
-	type Ermine,
 	executeAction,
+	list,
 	patch,
 	patchAttributes,
 	read,
 	readAttributes,
+	remove,
 } from "@ermine/system"
 
 const JS = "com.netscape.javascript-source"
@@ -409,30 +410,30 @@ export function reconcile(host: Host, parent: any, current: any[], next: any[]) 
 // ---- the nodes, written with the api given (a host's, in a seed) ----
 
 // a node at a path: made if not there, its value then written, its attributes written whole
-function put(h: Ermine, at: string, value: unknown, attributes: Record<string, unknown>) {
-	const node = h.ensureNode(at)
-	h.patch(node, [{ path: [], value }])
-	h.patchAttributes(node, [{ path: [], value: attributes }])
+function put(at: string, value: unknown, attributes: Record<string, unknown>) {
+	const node = ensureNode(at)
+	patch(node, [{ path: [], value }])
+	patchAttributes(node, [{ path: [], value: attributes }])
 }
 
 // the folder at `at` says loaders (its children are the candidates, in its place) and holds the
 // renderers given, no others: each a node, its draw the value, typed javascript, opening its UTI
-export function renderers(h: Ermine, at: string, given: Record<string, Renderer> = {}) {
-	const node = h.ensureNode(at, null)
-	h.patchAttributes(node, [{ path: [], value: { [A.loaders]: true } }])
+export function renderers(at: string, given: Record<string, Renderer> = {}) {
+	const node = ensureNode(at, null)
+	patchAttributes(node, [{ path: [], value: { [A.loaders]: true } }])
 	for (const [name, r] of Object.entries(given)) {
-		put(h, `${at}/${name}`, r.draw, {
+		put(`${at}/${name}`, r.draw, {
 			[A.type]: JS,
 			[A.opens]: [r.opens],
 			...(r.needs ? { [A.needs]: r.needs } : {}),
 		})
 	}
-	for (const name of h.list(at)) if (!(name in given)) h.remove(`${at}/${name}`)
+	for (const name of list(at)) if (!(name in given)) remove(`${at}/${name}`)
 }
 
 // a screen's runner at `at`: a live function from the host (no type) taking javascript, giving the
 // host (to @ermine/software, a runner: the function its start). what it provides is the screen's
 // keys: a renderer needing one has a way only on a walk with a runner giving it
-export function runner(h: Ermine, at: string, host: Host, provides: readonly string[]) {
-	put(h, at, () => host, { [A.takes]: [JS], [A.provides]: provides })
+export function runner(at: string, host: Host, provides: readonly string[]) {
+	put(at, () => host, { [A.takes]: [JS], [A.provides]: provides })
 }

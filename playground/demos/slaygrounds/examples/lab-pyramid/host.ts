@@ -4,6 +4,7 @@
 // program cannot write from one: the host runs the program's on/frame each frame and on/second each
 // second (executeAction, as the host), and the measure (/host/on/bench), which is async
 import { createWorld } from "@ermine/slaygrounds/world"
+import { createAction, executeAction, peep, read } from "@ermine/system"
 import { render } from "ermine-h"
 
 // what the page measures. writes: commits landed (each a write of a node's value); acts: effects
@@ -61,7 +62,7 @@ places.commit = (changed) => (stats.writes++, commit(changed))
 // the program's meter, if it is running
 const meter = () => {
 	try {
-		return e.peep(() => e.read("/pyramid/meter")) as Meter
+		return e.within(() => peep(() => read("/pyramid/meter"))) as Meter
 	} catch {
 		return undefined
 	}
@@ -69,7 +70,7 @@ const meter = () => {
 const call = (action: string, ...args: unknown[]) => {
 	if (world.world.processes.has("pyramid")) {
 		try {
-			e.executeAction(`/pyramid/on/${action}`, ...args)
+			e.within(() => executeAction(`/pyramid/on/${action}`, ...args))
 		} catch { /* the program is not up yet */ }
 	}
 }
@@ -92,9 +93,9 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 function change(m: Meter, k: string, v: unknown) {
 	if ((m.conf as Record<string, unknown>)[k] === v) return
 	const t0 = performance.now()
-	e.executeAction("/pyramid/on/set", k, v)
+	e.within(() => executeAction("/pyramid/on/set", k, v))
 	if (k === "depth" || k === "kind") {
-		e.pulse()
+		s.pulse()
 		m.builds.push({
 			depth: m.conf.depth,
 			kind: m.conf.kind,
@@ -156,7 +157,7 @@ async function bench() {
 	console.log("build", JSON.stringify(m.builds))
 	if (m.run) m.run.disabled = false
 }
-world.seed((host) => void host.createAction("/host/on/bench", bench))
+world.seed(() => void createAction("/host/on/bench", bench))
 page.__bench = bench
 page.__rows = () => meter()?.rows
 

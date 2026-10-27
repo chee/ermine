@@ -130,18 +130,18 @@ const world = createWorld({
 	},
 })
 
-world.seed((h) => {
+world.seed(() => {
 	for (const name of ["dom", "chars"] as const) {
-		runner(h, `/screens/${name}/run`, hosts[name], provides[name])
+		runner(`/screens/${name}/run`, hosts[name], provides[name])
 	}
 })
 
 // a reload: the program's exports written as nodes by the world, and the renderers beside them
 export function reload(mod: Record<string, any>) {
-	world.seed((h) => {
-		renderers(h, "/renderers", mod.renderers)
+	world.seed(() => {
+		renderers("/renderers", mod.renderers)
 		for (const name of ["dom", "chars"]) {
-			renderers(h, `/screens/${name}/renderers`, mod.screens?.[name])
+			renderers(`/screens/${name}/renderers`, mod.screens?.[name])
 		}
 	})
 	world.reload(mod)

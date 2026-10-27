@@ -8,7 +8,7 @@
 // for each window it keeps (/windows) and finds what opens a thing with openwith. there is no
 // process for a window: a program starts no program, and the world has no way to start one
 import { createWorld } from "@ermine/slaygrounds/world"
-import type { Ermine } from "@ermine/system"
+import { ensureNode, hasNode, patch, patchAttributes, place } from "@ermine/system"
 import { get } from "@ermine/core/places/lib"
 import { plan as steps } from "@ermine/core/places/path"
 import { ATTRIBUTES, openwith, type Way, type Why } from "@ermine/programs"
@@ -148,46 +148,45 @@ const world = createWorld({
 
 // ---- seed: the folders a person keeps things in. a thing says its type in its attributes,
 // whole; a folder is a node with no value ----
-const typed = (host: Ermine, path: string, value: unknown, uti: string, more: object = {}) => {
-	const n = host.ensureNode(path, value)
-	host.patchAttributes(n, [{ path: [], value: { [ATTRIBUTES.type]: uti, ...more } }])
+const typed = (path: string, value: unknown, uti: string, more: object = {}) => {
+	const n = ensureNode(path, value)
+	patchAttributes(n, [{ path: [], value: { [ATTRIBUTES.type]: uti, ...more } }])
 	return n
 }
-world.seed((host) => {
+world.seed(() => {
 	// /apps holds loaders: its children are looked at in its place (the apps are written there on
 	// load), and the world's runner is among them, so what runs an app is found beside it
-	typed(host, "/apps", null, FOLDER, { [ATTRIBUTES.loaders]: true })
-	typed(host, "/system", null, FOLDER)
-	host.ensureNode("/system/palette", PALETTE)
-	host.ensureNode("/system/log", ["✿ the desktop woke up"])
+	typed("/apps", null, FOLDER, { [ATTRIBUTES.loaders]: true })
+	typed("/system", null, FOLDER)
+	ensureNode("/system/palette", PALETTE)
+	ensureNode("/system/log", ["✿ the desktop woke up"])
 	// the beat the clocks count: /beat, every 50ms (a program has no timer that can call in)
-	host.ensureNode("/beat", 0)
-	typed(host, "/home", null, FOLDER)
+	ensureNode("/beat", 0)
+	typed("/home", null, FOLDER)
 	typed(
-		host,
 		"/home/hello",
 		"hello!\n\nthis note is one node: /home/hello.\nopen it twice and type in either window.",
 		TEXT,
 	)
-	typed(host, "/home/todo", [
+	typed("/home/todo", [
 		{ text: "water the ermine", done: true },
 		{ text: "fold a window", done: false },
 		{ text: "paint a cherry", done: false },
 	], LIST)
-	typed(host, "/home/pictures", null, FOLDER)
-	typed(host, "/home/pictures/rabbit", RABBIT, PICTURE)
-	typed(host, "/home/pictures/cherry", CHERRY, PICTURE)
-	typed(host, "/home/sketches", null, FOLDER)
-	typed(host, "/home/sketches/doodle", heart(), PICTURE)
-	typed(host, "/home/clocks", null, FOLDER)
-	typed(host, "/home/clocks/london", { label: "london", zone: "Europe/London" }, CLOCK)
-	typed(host, "/home/clocks/tokyo", { label: "tokyo", zone: "Asia/Tokyo" }, CLOCK)
+	typed("/home/pictures", null, FOLDER)
+	typed("/home/pictures/rabbit", RABBIT, PICTURE)
+	typed("/home/pictures/cherry", CHERRY, PICTURE)
+	typed("/home/sketches", null, FOLDER)
+	typed("/home/sketches/doodle", heart(), PICTURE)
+	typed("/home/clocks", null, FOLDER)
+	typed("/home/clocks/london", { label: "london", zone: "Europe/London" }, CLOCK)
+	typed("/home/clocks/tokyo", { label: "tokyo", zone: "Asia/Tokyo" }, CLOCK)
 	// the windows' processes are placed here by the shell; each window's own things (what it
 	// shows, its place on the screen) are kept in /windows
-	typed(host, "/desktop", null, FOLDER)
-	typed(host, "/windows", null, FOLDER)
+	typed("/desktop", null, FOLDER)
+	typed("/windows", null, FOLDER)
 	// the dock: things placed again (mounts), opened from here like anywhere else
-	typed(host, "/dock", null, FOLDER)
+	typed("/dock", null, FOLDER)
 	for (
 		const [name, path] of Object.entries({
 			files: "/home",
@@ -196,7 +195,7 @@ world.seed((host) => {
 			doodle: "/home/sketches/doodle",
 			london: "/home/clocks/london",
 		})
-	) host.place(`/dock/${name}`, path)
+	) place(`/dock/${name}`, path)
 })
 
 // a reload: the apps written into /apps (a node each: the function its value,
@@ -207,31 +206,32 @@ export const reload = (mod: Record<string, unknown>) => {
 		string,
 		{ run: unknown; opens: string[]; keys?: string[]; size: number[] }
 	>
-	const host = world.ermine
-	for (const [name, app] of Object.entries(apps)) {
-		const at = `/apps/${name}`
-		const node = host.ensureNode(at)
-		host.patch(node, [{ path: [], value: app.run }])
-		host.patchAttributes(node, [{
-			path: [],
-			value: {
-				[ATTRIBUTES.opens]: app.opens,
-				keys: app.keys ?? [],
-				size: app.size,
-			},
-		}])
-	}
-	// paint is also placed in /home/sketches, catclock in /home/clocks: nearer to a sketch, a
-	// clock there, than /apps is
-	for (const [name, folder] of [["paint", "/home/sketches"], ["catclock", "/home/clocks"]]) {
-		if (apps[name] && !host.hasNode(`${folder}/${name}`)) {
-			host.place(`${folder}/${name}`, `/apps/${name}`)
+	world.seed(() => {
+		for (const [name, app] of Object.entries(apps)) {
+			const at = `/apps/${name}`
+			const node = ensureNode(at)
+			patch(node, [{ path: [], value: app.run }])
+			patchAttributes(node, [{
+				path: [],
+				value: {
+					[ATTRIBUTES.opens]: app.opens,
+					keys: app.keys ?? [],
+					size: app.size,
+				},
+			}])
 		}
-	}
+		// paint is also placed in /home/sketches, catclock in /home/clocks: nearer to a sketch, a
+		// clock there, than /apps is
+		for (const [name, folder] of [["paint", "/home/sketches"], ["catclock", "/home/clocks"]]) {
+			if (apps[name] && !hasNode(`${folder}/${name}`)) {
+				place(`${folder}/${name}`, `/apps/${name}`)
+			}
+		}
+	})
 	world.reload(mod)
 }
 
 let beats = 0
 setInterval(() => {
-	world.ermine.patch("/beat", [{ path: [], value: ++beats }])
+	world.ermine.within(() => patch("/beat", [{ path: [], value: ++beats }]))
 }, 50)

@@ -3,9 +3,10 @@
 // and one process, layers, running program.ts
 import { land } from "@ermine/patchy/feature"
 import { createWorld } from "@ermine/slaygrounds/world"
+import { createAction } from "@ermine/system"
 import { render } from "ermine-h"
 
 const world = createWorld({ render, overlay: true, processes: [{ name: "layers" }] })
-world.seed((host) => void host.createAction("/system/land", land(host)))
+world.seed(() => void createAction("/system/land", land(world.ermine)))
 
 export const reload = world.reload

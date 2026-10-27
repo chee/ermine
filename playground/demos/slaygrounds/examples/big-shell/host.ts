@@ -6,6 +6,7 @@
 // to start a process by name after it is made
 import { ATTRIBUTES, satisfy } from "@ermine/programs"
 import { createWorld } from "@ermine/slaygrounds/world"
+import { ensureNode, patch, patchAttributes } from "@ermine/system"
 import * as lib from "@ermine/core/places/lib"
 import { render } from "ermine-h"
 
@@ -41,22 +42,22 @@ const world = createWorld({
 })
 
 // the beat the programs that move count (a program has no timer that can call in): /beat, every 320ms
-world.seed((h) => void h.ensureNode("/beat", 0))
+world.seed(() => void ensureNode("/beat", 0))
 let beats = 0
 setInterval(() => {
-	world.ermine.patch("/beat", [{ path: [], value: ++beats }])
+	world.ermine.within(() => patch("/beat", [{ path: [], value: ++beats }]))
 }, 320)
 
 // a little filesystem
-world.seed((h) => {
+world.seed(() => {
 	const text = (path: string, v: string) => {
-		h.ensureNode(path, v)
-		h.patchAttributes(path, [{ path: [ATTRIBUTES.type], value: TEXT }])
+		ensureNode(path, v)
+		patchAttributes(path, [{ path: [ATTRIBUTES.type], value: TEXT }])
 	}
 	text("/home/readme", "hi! this is the graph. try ls, tree /, cat, stat, help")
 	text("/home/notes/today", "make the shell")
-	h.ensureNode("/home/numbers", [1, 2, 3])
-	h.patchAttributes("/home/numbers", [{ path: [ATTRIBUTES.type], value: JSON_TYPE }])
+	ensureNode("/home/numbers", [1, 2, 3])
+	patchAttributes("/home/numbers", [{ path: [ATTRIBUTES.type], value: JSON_TYPE }])
 	text("/etc/motd", "🐰 the ermine shell. type help, or ls")
 })
 

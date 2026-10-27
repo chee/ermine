@@ -10,6 +10,7 @@ import { createScheduler } from "@ermine/core/scheduler"
 import { createPaths } from "@ermine/core/scheduler/paths"
 import { createTable } from "@ermine/core/table"
 import { createWorld } from "@ermine/slaygrounds/world"
+import { ensureNode, getNode } from "@ermine/system"
 import {
 	clear,
 	connect,
@@ -30,10 +31,10 @@ const world = createWorld({
 	presence: { sweep: 300 },
 	extend: () => ({ crossed, laptop: here, phone }),
 })
-world.seed((host) => void host.ensureNode("/pad", "a pad to point at"))
+world.seed(() => void ensureNode("/pad", "a pad to point at"))
 const { s, places, presence: laptop } = world.world
 // the pad's id: what the channels anchor the presence rows to
-const padAt = world.ermine.dataOf(world.ermine.getNode("/pad"))!.node
+const padAt = world.ermine.dataOf(world.ermine.within(() => getNode("/pad")))!.node
 const pad = padAt.id ?? get(places, padAt.path!)!
 
 // the phone: its own world, the pad at its own /pad (an id of its own)
