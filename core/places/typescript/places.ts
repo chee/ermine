@@ -241,17 +241,19 @@ export function createPlaces(setup: Setup): Places {
 	}
 
 	// f, with every read it makes (a spot, or a contributor's track) put into reads and told to no
-	// one: what a cache works out outside any run. inside another record, apart from it. made: the
+	// one: what a cache works out outside any run. inside another record or a peep, apart from it. made: the
 	// spots f read that were not this places' before (so nothing else tracks or holds them)
 	function record<T>(f: () => T, reads: Set<unknown>, fresh?: Set<unknown>): T {
-		const was = into, wasMade = made
+		const was = into, wasMade = made, wasPeeping = peeping
 		into = reads
 		made = fresh
+		peeping = 0
 		try {
 			return f()
 		} finally {
 			into = was
 			made = wasMade
+			peeping = wasPeeping
 		}
 	}
 

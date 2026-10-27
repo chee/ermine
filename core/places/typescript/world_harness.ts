@@ -27,6 +27,7 @@
 // { op: "move", at, name, to: { at, name } } → {}
 // { op: "upsert", part, id, path, value }    → {}   upsert.ts; the same value there: no write
 // { op: "getOrSet", part, id, path, value }  → { value }   the value at path, else value put there
+// { op: "peep", request }                    → request's answer, made under places.peep: its reads tell no one
 // status (status.ts):
 // { op: "status" }                           → {}   the status listener, made once
 // { op: "give", name, id }                   → {}   compute name's status written on node id
@@ -367,6 +368,7 @@ export function worldAnswer(r: Request): Json | undefined {
 // a harness's answer to a request, else the world's. the errors that are codes answer as such
 export function answered(own: (r: Request) => Json | undefined, r: Request): Answer {
 	try {
+		if (r.op === "peep") return places.peep(() => answered(own, r.request))
 		const a = own(r) ?? worldAnswer(r)
 		if (a === undefined) throw new Error(`unknown op ${r.op}`)
 		return a as Answer

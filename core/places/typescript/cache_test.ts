@@ -369,3 +369,26 @@ Deno.test("cache: cost at 300 paths, against plain places", () => {
 	assertEquals([out.places.sameRuns, out.places.renameRuns], [N, N])
 	assertEquals([out.cache.afterEntries, out.cache.afterSpots], [0, 0])
 })
+
+Deno.test("cache: an entry worked out under a peep still records its reads", () => {
+	const w = world()
+	w.tree()
+	const r = w.watch(() => w.cache.get(["work", "clock"]))
+	w.s.pulse()
+	// the rename reworks the entry while the peep runs; a peep reads for the caller alone
+	w.places.peep(() => w.rename("W", "clock", "X"))
+	w.s.pulse()
+	assertEquals([w.cache.get(["work", "clock"]), r.values], [undefined, ["C0", undefined]])
+	w.rename("W", "X", "clock")
+	w.s.pulse()
+	assertEquals([w.cache.get(["work", "clock"]), r.values], ["C0", ["C0", undefined, "C0"]])
+	// an entry first made under a peep reads as well
+	const w2 = world()
+	w2.tree()
+	w2.places.peep(() => w2.cache.get(["work", "clock"]))
+	const r2 = w2.watch(() => w2.cache.get(["work", "clock"]))
+	w2.s.pulse()
+	w2.rename("W", "clock", "X")
+	w2.s.pulse()
+	assertEquals(r2.values, ["C0", undefined])
+})
