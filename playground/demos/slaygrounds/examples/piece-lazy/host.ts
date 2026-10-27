@@ -16,7 +16,6 @@ import {
 import pully, { provide } from "@ermine/pully"
 import { render } from "ermine-h"
 
-// ---- the demo ----
 const world = createWorld({ render, processes: [{ name: "lazy" }], features: [pully] })
 const e = world.ermine
 
@@ -27,7 +26,6 @@ world.seed(() => {
 	ensureNode("/provider", { awake: false, ticks: 0, starts: 0, stops: 0, log: [] })
 })
 
-let ticks = 0
 const hhmmss = () => new Date().toTimeString().slice(0, 8)
 
 // the clock's provider, a process of its own: its setup names the handler (provide), and pully
@@ -44,6 +42,7 @@ const started = e.start(() => {
 			{ path: ["log"], value: [{ at: hhmmss(), what, awake }, ...was.log].slice(0, 6) },
 		])
 	}
+	let ticks = 0
 	let timer: ReturnType<typeof setInterval> | undefined
 	// the ticks come from a timer: written through a writer made here, in setup
 	const withWriter = createWriter()

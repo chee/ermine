@@ -1,13 +1,13 @@
-// skin's host: the world (@ermine/slaygrounds/world) with patch nodes (overlay: true: the places
+// skin's host: the world (@ermine/slaygrounds/world) with patch nodes (the patchy feature: the places
 // read through them), a shared card seeded, the land and unload services placed at /system, one process,
-// skin. the program uses the world's change (the card's time is what a patch node is made against;
+// skin. the program uses explain's change (the card's time is what a patch node is made against;
 // its actor, who edited last)
-import { land } from "@ermine/patchy/feature"
+import patchy, { land } from "@ermine/patchy/feature"
 import { createWorld } from "@ermine/slaygrounds/world"
 import { createAction, ensureNode, remove } from "@ermine/system"
 import { render } from "ermine-h"
 
-const world = createWorld({ render, processes: [{ name: "skin" }], overlay: true })
+const world = createWorld({ render, processes: [{ name: "skin" }], features: [patchy] })
 world.seed(() => {
 	// a card everyone shares, at /shared/card
 	ensureNode("/shared/card", {

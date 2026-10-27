@@ -47,7 +47,6 @@ import {
 import { installTypes, type Known } from "@ermine/types"
 import type { Policy } from "@ermine/core/protect"
 import { startSweeper, type World as PresenceWorld } from "@ermine/together/presence"
-import patchy from "@ermine/patchy/feature"
 import { use } from "@ermine/slaygrounds/tools"
 
 const JS = "com.netscape.javascript-source"
@@ -84,9 +83,8 @@ export type Options = {
 	// presence (playground/together/presence): a presence world on the host's scope, swept each
 	// second, the world's presence: the host's, to hand programs as it likes (extend)
 	presence?: { sweep?: number }
-	// patch nodes (extensions/patchy): the feature, so a patch node is read through
-	overlay?: boolean
-	// features beyond patchy's (extensions/pully, ...), given to createErmine as they are
+	// features, given to createErmine as they are (extensions/patchy: a patch node is read through;
+	// extensions/pully, ...)
 	features?: readonly Feature[]
 	// the types (@ermine/types) at /ermine/types, before any seed: true, the well-known list; a list,
 	// those too, after it
@@ -129,7 +127,6 @@ export function createWorld(o: Options) {
 	const ermine: Ermine = createErmine({
 		scheduler: s,
 		features: [
-			...(o.overlay ? [patchy] : []),
 			...(o.features ?? []),
 			{
 				name: "demo-world",
