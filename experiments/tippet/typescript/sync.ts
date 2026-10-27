@@ -207,7 +207,7 @@ export function createSync(o: { log: Log; relay?: boolean }) {
 				turn: Promise.resolve(),
 			}
 			links.add(l)
-			link.onMessage((b) => void receive(l, b))
+			link.onMessage((b) => void receive(l, b).catch(() => {}))
 			link.onClose?.(() => drop(l))
 			say(l, have())
 			tell()

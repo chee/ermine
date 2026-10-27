@@ -318,7 +318,13 @@ export function createLog(o: { store?: Store; writes?: boolean; seed?: Uint8Arra
 		if (b.device === me?.device) return { refused: "own" }
 		if (!b.steps.length) return { added: 0 }
 		// no feed is made for a device until its steps check out
-		const c = chain(b.device, b.steps)
+		let c
+		try {
+			c = chain(b.device, b.steps)
+		} catch {
+			// a step that isn't one
+			return { refused: "chain" }
+		}
 		if (typeof c === "string") return { refused: c }
 		if (c.steps.some((s) => s.lamport > lamport + JUMP)) return { refused: "lamport" }
 		if (!c.steps.length) return { added: 0 }
