@@ -437,11 +437,32 @@ static int count(const sq_runs *r, size_t *n) {
 	return 1;
 }
 
+// how many of the shapes have the bit, in *n
+static int count_bit(const sq_runs *r, int bit, size_t *n) {
+	*n = 0;
+	for (size_t i = 1; i < r->n; i += 2) {
+		if (r->v[i] <= 0 || !(r->v[i - 1] & bit)) continue;
+		if ((uint64_t)r->v[i] > SIZE_MAX - *n) return 0;
+		*n += (size_t)r->v[i];
+	}
+	return 1;
+}
+
+// do the columns hold what the shapes need? counted by runs, before anything is made for them
+static int covers(const sq_columns *c, size_t n) {
+	size_t path, from, size, ranged, values, moves;
+	if (!count(&c->path, &path) || !count(&c->from, &from) || !count(&c->size, &size)) return 0;
+	if (!count_bit(&c->shape, 1, &ranged) || !count_bit(&c->shape, 2, &values) ||
+	    !count_bit(&c->shape, 4, &moves))
+		return 0;
+	return path >= n && from >= ranged && size >= ranged && c->nvalue >= values && c->nmove >= moves;
+}
+
 sq_patch *sq_decode(const sq_columns *c, size_t *n) {
-	if (!count(&c->shape, n)) return *n = (size_t)-1, NULL;
+	if (!count(&c->shape, n) || !covers(c, *n)) return *n = (size_t)-1, NULL;
 	if (!*n) return NULL;
 	sq_patch *out = calloc(*n, sizeof *out);
-	if (!out) abort();
+	if (!out) return *n = (size_t)-1, NULL;
 	cursor path = {&c->path, 0, 0}, shape = {&c->shape, 0, 0}, from = {&c->from, 0, 0},
 	       size = {&c->size, 0, 0};
 	int64_t last = 0, s, x;
