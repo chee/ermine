@@ -10,7 +10,7 @@
 // written, then stops: the same status is not written again
 import type { Id, Table, Tables } from "@ermine/core/table"
 import createEntry, { type Entry } from "@ermine/core/node/entry"
-import update from "@ermine/core/node/update"
+import update from "@ermine/core/changeable/update"
 import type { Patch } from "@ermine/core/changeable/apply"
 import type { Computer, Ended, Scheduler } from "@ermine/core/scheduler"
 import { createChangeHeader } from "./header.ts"

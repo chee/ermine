@@ -1,6 +1,6 @@
 import { assertEquals, assertStrictEquals, assertThrows } from "@std/assert"
 import createEntry, { type ChangeHeader, type Entry as NodeEntry } from "@ermine/core/node/entry"
-import update from "@ermine/core/node/update"
+import update from "@ermine/core/changeable/update"
 import { createTable, type Key } from "@ermine/core/table"
 import * as cbor from "@ermine/encoding/cbor"
 import { deflate, inflate } from "./deflate.ts"

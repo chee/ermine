@@ -29,7 +29,7 @@
 // understood or not given; an update with no patches, or patches not a list; a value whose JSON
 // form stands for none, in a start or an update.
 import createEntry, { type Entry } from "@ermine/core/node/entry"
-import update from "@ermine/core/node/update"
+import update from "@ermine/core/changeable/update"
 import { ApplyError, type Patch } from "@ermine/core/changeable/apply"
 import { type Request, serve } from "../../../conformance/typescript/harness.ts"
 import { revive, toJson } from "../../../conformance/typescript/form.ts"

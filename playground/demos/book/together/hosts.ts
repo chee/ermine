@@ -3,7 +3,7 @@
 // them: the test's in-memory pipe, wrapped so the page can see each message, hold it a moment,
 // and cut it
 import createEntry from "@ermine/core/node/entry"
-import update from "@ermine/core/node/update"
+import update from "@ermine/core/changeable/update"
 import type { Patch } from "@ermine/core/changeable/apply"
 import { createPlaces } from "@ermine/core/places"
 import { createChangeHeader } from "@ermine/core/places/header"

@@ -7,7 +7,7 @@
 //   o.within(() => o.write("value", id, [{ path: ["n"], value: 2 }]))
 import { carryTrace } from "@ermine/core/places/header"
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/entry"
-import update from "@ermine/core/node/update"
+import update from "@ermine/core/changeable/update"
 import apply, { type Key as Step, type Patch } from "@ermine/core/changeable/apply"
 import {
 	type Id,

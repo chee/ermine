@@ -1,8 +1,10 @@
-import apply, { type Patch } from "@ermine/core/changeable/apply"
-import type { ChangeHeader, Entry } from "./entry.ts"
+// a changeable changed in place: the patches applied to its value (apply's, the undo kept), its
+// change the one given with op: { patches, undo }
+import apply, { type Patch } from "./apply.ts"
+import type { Changeable, ChangeHeader } from "./changeable.ts"
 
 export default function update<V>(
-	entry: Entry<V>,
+	entry: Changeable<V>,
 	patches: Iterable<Patch>,
 	change: ChangeHeader,
 ): void {

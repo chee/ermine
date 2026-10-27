@@ -1,4 +1,4 @@
-// Patches applied to an entry's value (core/node/typescript/update.ts), in C: op's apply
+// Patches applied to an entry's value (core/changeable/typescript/update.ts), in C: op's apply
 // (core/changeable/c/apply.h) on the value, and the change given with the patches and their undo (apply's
 // undo option, invert.h's). Same rules as update.ts.
 //
@@ -14,7 +14,7 @@
 
 #include <stddef.h>
 
-#include "node.h"
+#include "../../node/c/node.h"
 
 // the patches, in order, to the entry's value; its change is then the header given with has_op, the
 // patches as given and their undo. The value: none there, a put at [] makes it; nothing left (a

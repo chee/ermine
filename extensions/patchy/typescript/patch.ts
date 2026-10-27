@@ -26,7 +26,7 @@
 // patches on its target for real
 import { carryTrace } from "@ermine/core/places/header"
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/entry"
-import update from "@ermine/core/node/update"
+import update from "@ermine/core/changeable/update"
 import apply, { ApplyError, type Key as Step, type Patch } from "@ermine/core/changeable/apply"
 import { at, type Places, unread } from "@ermine/core/places"
 import type { Id, Key, Table } from "@ermine/core/table"

@@ -6,7 +6,7 @@
 // reads), then on/frame, which paints. measure (/host/on/measure) is the host's too: it is async
 import { createWorld } from "@ermine/slaygrounds/world"
 import type { Ermine } from "@ermine/system"
-import update from "@ermine/core/node/update"
+import update from "@ermine/core/changeable/update"
 import { get } from "@ermine/core/places/lib"
 import { createChangeHeader } from "@ermine/core/places/header"
 import { trace } from "@ermine/core/scheduler/trace"

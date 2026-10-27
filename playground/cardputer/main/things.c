@@ -23,7 +23,7 @@
 #include <strings.h>
 
 #include "core/changeable/c/json.h"
-#include "core/node/c/update.h"
+#include "core/changeable/c/update.h"
 #include "fb.h"
 #include "parts.h"
 #include "host.h"

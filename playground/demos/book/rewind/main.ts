@@ -7,7 +7,7 @@
 // the strip is the page's own list of the day's changes, one card each.
 import { type Computer, createScheduler } from "@ermine/core/scheduler"
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/entry"
-import update from "@ermine/core/node/update"
+import update from "@ermine/core/changeable/update"
 import { createTable } from "@ermine/core/table"
 import type { Patch } from "@ermine/core/changeable/apply"
 import { pondPage } from "../kit/page.ts"

@@ -33,7 +33,7 @@
 import type { Ermine, Feature, FeatureAPI, Node, NodeData, Target, Version } from "@ermine/system"
 import { ensureNode, ErmineError, getNode, patch, readAll, readEntries } from "@ermine/system"
 import type { Key as Step, Patch } from "@ermine/core/changeable/apply"
-import produce from "@ermine/core/changeable/produce"
+import edit from "@ermine/core/changeable/edit"
 import { get } from "@ermine/core/places/lib"
 import { target } from "@ermine/core/places/guard"
 import type { ChangeHeader } from "@ermine/core/node/entry"
@@ -130,7 +130,7 @@ function known(f: FeatureAPI | undefined, h: Node): { node: NodeData } | undefin
 	}
 }
 
-// patches, or a recipe over the saved value (produce: core/changeable's draft)
+// patches, or a recipe over the saved value (edit: core/changeable's draft)
 // deno-lint-ignore no-explicit-any
 export type Change = readonly Patch[] | ((draft: any) => unknown)
 
@@ -144,7 +144,7 @@ export function createPatch(at: string | readonly string[], over: Target, change
 	const shown = readAll(o)
 	const saved = shown.find((v) => v.from.kind === LAYER && v.from.layer === TABLE) ?? shown[0]
 	const patches = typeof change === "function"
-		? produce(saved?.value ?? (od.part === "attributes" ? {} : undefined), change as never)
+		? edit(saved?.value ?? (od.part === "attributes" ? {} : undefined), change as never)
 		: change as readonly Patch[]
 	const node: PatchNode = { on, part: od.part, at: shown[0]?.from.change?.time ?? 0, patches }
 	const n = ensureNode(at as string)

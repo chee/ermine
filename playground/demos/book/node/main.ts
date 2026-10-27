@@ -5,7 +5,7 @@
 // box shows table.get(id): the whole row, which is all a node is.
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/entry"
 import createNode from "@ermine/core/node"
-import update from "@ermine/core/node/update"
+import update from "@ermine/core/changeable/update"
 import { createTable, type Key } from "@ermine/core/table"
 import { pondPage } from "../kit/page.ts"
 import type { Box, Wire } from "../kit/board.ts"

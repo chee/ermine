@@ -38,7 +38,7 @@ jobs:
       - name: Build the harnesses
         run: |
           bins="core/changeable/c/apply-harness core/changeable/c/squish-harness core/node/c/node-harness
-            core/node/c/update-harness core/table/c/table-harness core/unread/c/unread-harness
+            core/changeable/c/update-harness core/table/c/table-harness core/unread/c/unread-harness
             core/scheduler/c/tracker-harness core/scheduler/c/paths-harness
             core/scheduler/c/scheduler-harness"
           make -s $bins $(for b in $bins; do printf '%s-check ' "$b"; done)

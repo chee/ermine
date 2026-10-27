@@ -2,7 +2,7 @@
 // chee's clock face N sits at /work/clock; antranig's skin P sits in my tree at /me/skins/cherry
 // and changes one colour of N, without writing on N
 import createEntry from "@ermine/core/node/entry"
-import update from "@ermine/core/node/update"
+import update from "@ermine/core/changeable/update"
 import { createPlaces, type Places } from "@ermine/core/places"
 import { createChangeHeader } from "@ermine/core/places/header"
 import { get } from "@ermine/core/places/lib"

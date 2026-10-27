@@ -25,7 +25,7 @@ FLAGS = $(BLAKE3FLAGS) $(rename) -I$(OPENSSL)/include
 
 # the table, entries and op; sync, the transport and what they stand on; Subduction's host side, its
 # memory store and a WebSocket over OpenSSL; JSON for presence's messages
-graph = core/table/c/table.c core/node/c/node.c core/node/c/update.c core/changeable/c/value.c core/changeable/c/apply.c core/changeable/c/invert.c
+graph = core/table/c/table.c core/node/c/node.c core/changeable/c/update.c core/changeable/c/value.c core/changeable/c/apply.c core/changeable/c/invert.c
 sync = playground/together/c/sync.c playground/together/c/transport.c playground/together/c/mailroom.c playground/together/stacks/subduction/c/subduction.c playground/together/c/ids.c ermine/ids/c/ids.c playground/together/c/history.c \
 	playground/together/c/replay.c playground/together/c/lists.c playground/together/c/snapshot.c playground/together/c/packer.c \
 	playground/together/c/seal.c core/ed25519/c/ed25519.c core/ed25519/c/sha2.c playground/together/stacks/subduction/c/fragment.c \

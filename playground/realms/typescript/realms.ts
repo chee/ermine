@@ -22,7 +22,7 @@
 // not across yet: start and stop, presence, patch nodes' overlay, live values, iframes
 // costs (measure.ts): startup 33–50 ms, a first read 3–7 ms, a rerun round trip ~0.7 ms
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/entry"
-import update from "@ermine/core/node/update"
+import update from "@ermine/core/changeable/update"
 import apply, { type Patch } from "@ermine/core/changeable/apply"
 import { type Path, unplace } from "@ermine/core/places"
 import { get } from "@ermine/core/places/lib"

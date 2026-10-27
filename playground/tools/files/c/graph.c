@@ -3,7 +3,7 @@
 #include "graph.h"
 
 #include "../../../../core/node/c/node.h"
-#include "../../../../core/node/c/update.h"
+#include "../../../../core/changeable/c/update.h"
 #include "../../../../core/scheduler/c/paths.h"
 #include "../../../../core/table/c/table.h"
 #include "../../../../core/places/c/guard.h"

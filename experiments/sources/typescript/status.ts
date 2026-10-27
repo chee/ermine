@@ -21,7 +21,7 @@
 // a history records it only when its host's rule says so (world.ts leaves these nodes, and the
 // process rows, out: they are this device's, now)
 import createEntry, { type Entry } from "@ermine/core/node/entry"
-import update from "@ermine/core/node/update"
+import update from "@ermine/core/changeable/update"
 import type { Patch } from "@ermine/core/changeable/apply"
 import type { Box } from "@ermine/boxes"
 import type { Places } from "@ermine/core/places"

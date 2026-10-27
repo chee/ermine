@@ -42,7 +42,7 @@
 #include "../../../core/scheduler/c/scheduler.h"
 #include "../../../core/table/c/table.h"
 #include "../../../core/node/c/node.h"
-#include "../../../core/node/c/update.h"
+#include "../../../core/changeable/c/update.h"
 #include "../../../core/unread/c/unread.h"
 
 typedef struct pl pl;

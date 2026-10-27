@@ -9,7 +9,7 @@
 #include "../../../ermine/ids/c/ids.h"
 #include "snapshot.h"
 
-#include "../../../core/node/c/update.h"
+#include "../../../core/changeable/c/update.h"
 #include "../../../ermine/encoding/c/cbor.h"
 
 #include <stdio.h>

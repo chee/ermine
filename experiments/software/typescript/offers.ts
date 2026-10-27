@@ -20,7 +20,7 @@
 // a runner (a runner node's value): { start(code, start) → handle, load?(code, start) → live,
 // api?(start) → api }, or a function, its start (its own load and api too, if it has them)
 import createEntry, { type Entry } from "@ermine/core/node/entry"
-import update from "@ermine/core/node/update"
+import update from "@ermine/core/changeable/update"
 import { type Id, type Path, PlacesError } from "@ermine/core/places"
 import { NODE } from "@ermine/core/places/header"
 import { upsert } from "@ermine/core/places/upsert"

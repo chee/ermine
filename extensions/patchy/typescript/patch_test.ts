@@ -3,9 +3,9 @@
 // at a time given where staleness needs one
 import { assert, assertEquals, assertThrows } from "@std/assert"
 import createEntry from "@ermine/core/node/entry"
-import update from "@ermine/core/node/update"
+import update from "@ermine/core/changeable/update"
 import type { Patch } from "@ermine/core/changeable/apply"
-import produce from "@ermine/core/changeable/produce"
+import editValue from "@ermine/core/changeable/edit"
 import { createPlaces, type Places, unread } from "@ermine/core/places"
 import { createChangeHeader } from "@ermine/core/places/header"
 import { get } from "@ermine/core/places/lib"
@@ -134,7 +134,7 @@ Deno.test("patch nodes: a drag ghost moves a card while dragged, then goes", () 
 	const B = w.watch(() => w.read("N", ["lists", "B"]))
 	// c7 dragged from A into B at index to: patches against the board as it is
 	const to = (i: number) =>
-		produce(board, (d) => {
+		editValue(board, (d) => {
 			const [c] = d.lists.A.splice(2, 1)
 			d.lists.B.splice(i, 0, c)
 		})

@@ -18,7 +18,7 @@
 // the host is. a failure is shrunk (steps dropped while the same check still fails) and printed
 import * as sd from "npm:@automerge/subduction@0.23.0"
 import createEntry, { type ChangeHeader } from "@ermine/core/node/entry"
-import update from "@ermine/core/node/update"
+import update from "@ermine/core/changeable/update"
 import apply, { type Patch } from "@ermine/core/changeable/apply"
 import { decode, name as nameOf } from "@ermine/formats/commit"
 import { createPlaces } from "@ermine/core/places"

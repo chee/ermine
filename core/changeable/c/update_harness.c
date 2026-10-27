@@ -1,4 +1,4 @@
-// The C update on the line protocol (core/node/typescript/update_harness.ts documents it): one
+// The C update on the line protocol (core/changeable/typescript/update_harness.ts documents it): one
 // entry lasts for the process.
 //   {op: "start", value?, header?} -> {}
 //   {op: "update", patches, header?} -> {} | {error: {code, patch}}

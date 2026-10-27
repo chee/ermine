@@ -1,5 +1,5 @@
 import createEntry from "@ermine/core/node/entry"
-import update from "@ermine/core/node/update"
+import update from "@ermine/core/changeable/update"
 import { createPlaces, place, unplace } from "@ermine/core/places"
 import { createChangeHeader } from "@ermine/core/places/header"
 import * as lib from "@ermine/core/places/lib"

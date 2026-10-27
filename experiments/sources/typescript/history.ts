@@ -23,7 +23,7 @@
 // are its own, never named again
 // deno-lint-ignore-file require-await -- the graph answers at once; async so it is a holder like any
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/entry"
-import update from "@ermine/core/node/update"
+import update from "@ermine/core/changeable/update"
 import apply, { type Patch } from "@ermine/core/changeable/apply"
 import type { Fact, Places } from "@ermine/core/places"
 import type { ScopeNodes } from "@ermine/processes/scopes"

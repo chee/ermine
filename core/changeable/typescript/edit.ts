@@ -1,4 +1,4 @@
-// produce: immer's, but it returns the patches (apply.ts) a recipe made, not the value after them.
+// edit: immer's produce, but it returns the patches (apply.ts) a recipe made, not the value after them.
 // the recipe is given a draft of base; each change made to it is a patch as it happens, in the
 // coordinates left by the ones before. base is never changed. a draft keeps a state of its own
 // (a shallow copy, made when it first needs one); what it never touched is shared with base
@@ -24,7 +24,7 @@
 //   not an alias. what is read from it later is a new draft of that value
 //   a map or a set, a class instance, bytes are leaves: read as they are, never drafted. change
 //   one in place and base changes: don't
-//   a draft used after produce returned throws
+//   a draft used after edit returned throws
 import type { Key, Patch } from "./apply.ts"
 import { walk } from "@ermine/core/util/walk-string"
 
@@ -85,7 +85,7 @@ function put(o: any, k: string, v: unknown) {
 	} else o[k] = v
 }
 const alive = (n: Node) => {
-	if (n.context.done) throw new TypeError("a draft is used after produce returned")
+	if (n.context.done) throw new TypeError("a draft is used after edit returned")
 }
 
 // the value at key of the state: a container in it becomes a draft, kept there
@@ -473,7 +473,7 @@ export type Helpers = { splice: Splice; nothing: typeof nothing }
 
 function helpers(context: Context): Helpers {
 	const splice = (...a: any[]): unknown => {
-		if (context.done) throw new TypeError("splice is used after produce returned")
+		if (context.done) throw new TypeError("splice is used after edit returned")
 		const top = typeof a[0] === "string"
 		let at: Node | undefined, key: string | number = ""
 		if (top) {
@@ -536,7 +536,7 @@ function helpers(context: Context): Helpers {
 // the patches the recipe made to base. the recipe may instead return a value (or nothing): a put
 // at [] (a removal), as the whole of what it did. a base that is not a list, a map or a typed array
 // is given as it is: the recipe can only return
-export default function produce<T>(
+export default function edit<T>(
 	base: T,
 	recipe: (draft: T, helpers: Helpers) => T | void | typeof nothing,
 ): Patch[] {

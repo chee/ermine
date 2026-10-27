@@ -41,7 +41,7 @@
 //   {"throw":message}               an error thrown by the run
 // or one of the world's plain forms (world_harness.ts, basic)
 import createEntry from "@ermine/core/node/entry"
-import update from "@ermine/core/node/update"
+import update from "@ermine/core/changeable/update"
 import { ApplyError, type Key as Step, type Patch } from "@ermine/core/changeable/apply"
 import { createPlaces, unread } from "@ermine/core/places"
 import { createChangeHeader } from "@ermine/core/places/header"
