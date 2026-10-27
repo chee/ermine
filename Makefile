@@ -168,6 +168,10 @@ LIBS += clingy-test
 places-test_src = $(filter-out conformance/c/harness.c core/changeable/c/json.c conformance/c/protocol_harness.c core/places/c/places_harness.c core/places/c/world_harness.c,$(places_src)) core/places/c/places_test.c
 places-test = core/places/c/places-test
 LIBS += places-test
+# types (ermine/types): which name of a folder claims an extension first; no suite
+types-test_src = $(filter-out conformance/c/harness.c core/changeable/c/json.c conformance/c/protocol_harness.c core/places/c/places_harness.c core/places/c/world_harness.c,$(places_src)) ermine/encoding/c/json.c ermine/encoding/c/cbor.c ermine/types/c/types.c ermine/types/c/utis.c ermine/types/c/types_test.c
+types-test = ermine/types/c/types-test
+LIBS += types-test
 # programs (playground/programs): satisfy and open (programs) and start, over ermine/types, experiments/software (its processes ermine/processes' start) and
 # the compilers library and host functions; compilers (playground/compilers) on its own.
 # compilers (no boxes) keeps places' own world (world_harness.h); programs and start run on the ermine (ermine/system) and boxes (extensions/boxes),
