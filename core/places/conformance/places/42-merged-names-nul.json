@@ -1,0 +1,150 @@
+{
+	"title": "names with U+0000 merged from several contributors order as one NUL byte, not two: by length in UTF-8 bytes (U+0000 is one) then bytewise",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"\u0000a": "C",
+				"aa": "C"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "a",
+			"value": {
+				"a\u0000b": "A",
+				"a\u0000": "A",
+				"\u0000": "A",
+				"ab": "A"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "b",
+			"value": {
+				"\u0000\u0000": "B",
+				"a": "B",
+				"a\u0001": "B",
+				"\u0000": "B"
+			},
+			"expect": {}
+		},
+		{
+			"op": "rows",
+			"of": [
+				"a",
+				"b"
+			],
+			"expect": {}
+		},
+		{
+			"op": "list",
+			"at": [],
+			"expect": {
+				"names": [
+					"\u0000",
+					"a",
+					"\u0000\u0000",
+					"\u0000a",
+					"a\u0000",
+					"a\u0001",
+					"aa",
+					"ab",
+					"a\u0000b"
+				]
+			}
+		},
+		{
+			"op": "get",
+			"path": [
+				"\u0000"
+			],
+			"expect": {
+				"id": "A"
+			}
+		},
+		{
+			"op": "get",
+			"path": [
+				"a\u0000"
+			],
+			"expect": {
+				"id": "A"
+			}
+		},
+		{
+			"op": "get",
+			"path": [
+				"\u0000a"
+			],
+			"expect": {
+				"id": "C"
+			}
+		},
+		{
+			"op": "get",
+			"path": [
+				"a\u0000b"
+			],
+			"expect": {
+				"id": "A"
+			}
+		},
+		{
+			"op": "value",
+			"id": "a",
+			"value": {
+				"a\u0000b": "A",
+				"\u0000": "A",
+				"ab": "A"
+			},
+			"expect": {}
+		},
+		{
+			"op": "list",
+			"at": [],
+			"expect": {
+				"names": [
+					"\u0000",
+					"a",
+					"\u0000\u0000",
+					"\u0000a",
+					"a\u0001",
+					"aa",
+					"ab",
+					"a\u0000b"
+				]
+			}
+		},
+		{
+			"op": "get",
+			"path": [
+				"a\u0000"
+			],
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"id": "a",
+			"expect": {}
+		},
+		{
+			"op": "list",
+			"at": [],
+			"expect": {
+				"names": [
+					"\u0000",
+					"a",
+					"\u0000\u0000",
+					"\u0000a",
+					"a\u0001",
+					"aa"
+				]
+			}
+		}
+	]
+}

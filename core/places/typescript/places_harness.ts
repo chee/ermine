@@ -22,8 +22,9 @@
 // { op: "spot", key }                       → { spot? }   places' spot of a string key
 // { op: "mark", keys }                      → {}   keys (as track's) marked from outside
 // pruning (places.ts):
-// { op: "rows" }                            → {}   from now on reads go through a view of "R" given
-//    [rows, children]; rows: a trie on value entry "rows" (leaf an id, level a map of names)
+// { op: "rows", of? }                       → {}   from now on reads go through a view of "R" given
+//    [rows, children]; rows: a trie on value entry "rows" (leaf an id, level a map of names). of: a
+//    list of value entries' ids, each a trie called by its id, asked in that order, then children
 // { op: "asked" }                           → { steps, names }   rows' asks since last asked
 //
 // program e: a number, string, boolean or null is itself; a list, its members evaluated; a map,
@@ -91,23 +92,23 @@ export const forms: ((m: Request) => { value: Json } | undefined)[] = []
 const asked = { steps: 0, names: 0 }
 const filled = (v: unknown) =>
 	v !== null && typeof v === "object" && !Array.isArray(v) && Object.keys(v).length > 0
-const rows: Contributor = {
-	from: "rows",
+const trie = (from: string): Contributor => ({
+	from,
 	step: ({ path }, name, r) => {
 		asked.steps++
 		if (path === undefined) return none
-		const v = r.read("value", "rows", [...path, name])
+		const v = r.read("value", from, [...path, name])
 		return asId(v) ?? (filled(v) ? undefined : none)
 	},
 	names: ({ path }, r) => {
 		asked.names++
 		if (path === undefined) return none
-		const names = r.keys("value", "rows", path)
+		const names = r.keys("value", from, path)
 		return names.length ? names : none
 	},
 	level: ({ path }, name, r) =>
-		path !== undefined && filled(r.read("value", "rows", [...path, name])),
-}
+		path !== undefined && filled(r.read("value", from, [...path, name])),
+})
 let reader: Places = places
 
 function evaluate(e: Json): Json {
@@ -208,7 +209,7 @@ export function answer(r: Request): Json | undefined {
 			s.mark((r.keys as string[]).map(keyOf))
 			return {}
 		case "rows":
-			reader = places.view("R", [rows, children])
+			reader = places.view("R", [...((r.of as string[]) ?? ["rows"]).map(trie), children])
 			return {}
 		case "asked": {
 			const was = { ...asked }
