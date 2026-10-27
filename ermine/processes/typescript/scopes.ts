@@ -17,17 +17,19 @@ export type Setup = {
 }
 
 export type ScopeNodes = {
-	// the scope's node id, made the first time (given, or `scope:<uuid>`); the same after
-	give: (scope: Scope, id?: Id) => Id
+	// the scope's node id, made the first time (given, or `scope:<uuid>`); the same after; a scope
+	// torn down has none
+	give: (scope: Scope, id?: Id) => Id | undefined
 }
 
 export function createScopeNodes(setup: Setup): ScopeNodes {
 	const { scheduler, table } = setup
 	const ids = new WeakMap<Scope, Id>()
 
-	function give(scope: Scope, id: Id = `scope:${crypto.randomUUID()}`): Id {
+	function give(scope: Scope, id: Id = `scope:${crypto.randomUUID()}`): Id | undefined {
 		const had = ids.get(scope)
 		if (had !== undefined) return had
+		if (scope.state !== "alive") return undefined
 		ids.set(scope, id)
 		scheduler.registerTeardown(scope, () => {
 			ids.delete(scope)

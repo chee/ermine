@@ -1,0 +1,12 @@
+{
+	"title": "a torn-down scope has no node: giving it one answers no id, and nothing is left for its id",
+	"steps": [
+		{ "op": "root", "name": "host", "info": { "test": "host" }, "expect": {} },
+		{ "op": "scope", "name": "p", "parent": "host", "info": { "test": "p" }, "expect": {} },
+		{ "op": "teardown", "scope": "p", "expect": {} },
+		{ "op": "give", "scope": "p", "id": "P", "expect": {} },
+		{ "op": "write", "id": "P", "part": "value", "value": { "x": 1 }, "expect": {} },
+		{ "op": "give", "scope": "p", "id": "P", "expect": {} },
+		{ "op": "parts", "id": "P", "expect": { "parts": ["value"] } }
+	]
+}

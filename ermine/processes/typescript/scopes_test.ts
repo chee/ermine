@@ -25,7 +25,7 @@ Deno.test("scope nodes: give makes one id, the same after; given or a uuid", () 
 Deno.test("scope nodes: at the scope's teardown its node's entries go, as table events", () => {
 	const { s, table, nodes, host, events } = world()
 	const p = s.createScope({ process: ["p"] }, host)
-	const id = nodes.give(p)
+	const id = nodes.give(p)!
 	s.runWithScope(host, () => {
 		table.add("value", id, createEntry<unknown>({ title: "clock" }, { time: 0, actor: "host" }))
 		table.add(

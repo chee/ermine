@@ -173,7 +173,7 @@ function answer(r: Request): Json {
 			return {}
 		}
 		case "give":
-			return { id: nodes.give(named(r.scope), r.id) }
+			return { id: nodes.give(named(r.scope), r.id) ?? undefined }
 		case "write":
 			hosted(() => table.sub(r.part, r.id, createEntry(r.value, header())))
 			return {}
