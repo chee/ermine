@@ -9,6 +9,7 @@ import { createErmine, read } from "@ermine/system"
 import { traceOf } from "@ermine/core/places/header"
 import type { ChangeHeader } from "@ermine/core/node/entry"
 import ermine, { type Options } from "./unplugin.ts"
+import { manual } from "../../../ermine/system/typescript/manual_fixture.ts"
 
 const toFileUrl = (p: string) => pathToFileURL(p)
 const here = fromFileUrl(new URL(".", import.meta.url))
@@ -57,7 +58,7 @@ const changeAt = (e: E, name: string): ChangeHeader => {
 
 async function run(out: string, options?: Parameters<typeof createErmine>[0]) {
 	const program = (await import(toFileUrl(out).href)).default as () => unknown
-	const e = createErmine({ schedule: () => {}, ...options })
+	const e = createErmine({ features: [manual], ...options })
 	e.start(program, "/work/p")
 	return e
 }

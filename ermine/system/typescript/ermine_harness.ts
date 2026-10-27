@@ -125,6 +125,7 @@ import {
 	ErmineError,
 	type Feature,
 	FeatureError,
+	FEATURES,
 	type ProcessContext,
 	SendError,
 	type Started,
@@ -227,17 +228,23 @@ function make(o: Request = {}): Made {
 	made.ermine = createErmine({
 		root: "R",
 		info: { actor: "test" },
-		features,
-		may,
-		schedule: (f) => void later.push(f),
-		onCreateFunction: (n) => log("onCreateFunction", [n.kind, n.id, n.process]),
-		...!o.uuid && {
-			id: () => {
-				const next = made.next
-				made.next = undefined
-				return next ?? `n${++n}`
+		// the harness's own last (innermost): pulses run when a scenario says, each function made
+		// logged, and ids counted (n1, n2 …; uuid: the base's)
+		features: [...features, {
+			name: HARNESS,
+			setup: (f) => {
+				f.onSchedule((pulse) => void later.push(pulse))
+				f.onCreateFunction((n) => log("onCreateFunction", [n.kind, n.id, n.process]))
+				if (!o.uuid) {
+					f.onId(() => {
+						const next = made.next
+						made.next = undefined
+						return next ?? `n${++n}`
+					})
+				}
 			},
-		},
+		}],
+		may,
 		host: {
 			...o.at !== undefined && { at: o.at },
 			...o.args !== undefined && { args: o.args },
@@ -645,7 +652,7 @@ async function answer(r: Request): Promise<Record<string, unknown>> {
 			make(r)
 			return {}
 		case "features":
-			return { features: e.features }
+			return { features: e.features.filter((f) => f.name !== HARNESS) }
 		case "late":
 			late.get(r.feature)!()
 			return {}
@@ -655,8 +662,21 @@ async function answer(r: Request): Promise<Record<string, unknown>> {
 				/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(id)
 			return { v7 }
 		}
-		case "node":
-			return { id: e.node, attributes: plain(e.table.get("attributes", e.node)?.value) }
+		case "node": {
+			// the harness's own feature not shown, as in features
+			const attrs = e.table.get("attributes", e.node)?.value as
+				| Record<string, unknown>
+				| undefined
+			const shown = attrs?.[FEATURES] as { name: string }[] | undefined
+			return {
+				id: e.node,
+				attributes: plain(
+					shown === undefined
+						? attrs
+						: { ...attrs, [FEATURES]: shown.filter((f) => f.name !== HARNESS) },
+				),
+			}
+		}
 		case "context": {
 			const p = r.process === undefined ? undefined : m.running.get(r.process)?.started.process
 			const o = e.getProcessContext(p as Process | undefined)
@@ -830,6 +850,8 @@ async function answer(r: Request): Promise<Record<string, unknown>> {
 	}
 }
 
+// the harness's own feature's name: not shown as a scenario's
+const HARNESS = "harness"
 const noCalls: Feature = {
 	name: "no-calls",
 	setup: (f) => f.onRecord((r, next) => r.call === undefined && next(r)),

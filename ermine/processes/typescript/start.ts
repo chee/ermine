@@ -126,18 +126,23 @@ type State = Process & {
 	rowed: boolean
 }
 
-export function createProcesses(setup: Setup): Processes {
-	const { scheduler: s, table, places, scopes } = setup
-	const createScope = setup.sites?.createScope ?? s.createScope
-	const ours = new Set([import.meta.url, ...(setup.ours ?? [])])
-	const owner = setup.owner ?? createScope({ processes: "start" })
+// process ids: proc:<boot>-<n>, boot 16 hex random once per maker, n from 1
+export function processIds(): () => string {
 	const boot = Array.from(
 		crypto.getRandomValues(new Uint8Array(8)),
 		(b) => b.toString(16).padStart(2, "0"),
 	)
 		.join("")
 	let made = 0
-	const makeId = setup.id ?? (() => `proc:${boot}-${++made}`)
+	return () => `proc:${boot}-${++made}`
+}
+
+export function createProcesses(setup: Setup): Processes {
+	const { scheduler: s, table, places, scopes } = setup
+	const createScope = setup.sites?.createScope ?? s.createScope
+	const ours = new Set([import.meta.url, ...(setup.ours ?? [])])
+	const owner = setup.owner ?? createScope({ processes: "start" })
+	const makeId = setup.id ?? processIds()
 	const statuses = createStatus({ places, table, scheduler: s, write: setup.write })
 	const { describe, watchAll } = places
 	const runs = describe && watchAll

@@ -23,6 +23,7 @@ import {
 	type Layer,
 	type ProcessContext,
 } from "./ermine.ts"
+import { manual } from "./manual_fixture.ts"
 
 const BASE = ["ermine.ts", "system.ts", "context.ts", "calls.ts", "features.ts"]
 
@@ -46,7 +47,7 @@ Deno.test("close() finishes when a feature holds every teardown back", () => {
 		setup: (f) => f.onTeardown((_scope, why) => void held.push(why)),
 	}
 	const told: string[] = []
-	const e = createErmine({ features: [hold], schedule: () => {} })
+	const e = createErmine({ features: [hold, manual] })
 	e.within(() => ensureNode("/code/p", () => addTeardown((why) => told.push(why))))
 	const p = e.start(programAt(e, "/code/p"), "/code/p")
 	assert(!("refused" in p))
@@ -80,7 +81,7 @@ Deno.test("two onTable layers stack: table events and commits go through both, i
 				return layer
 			}),
 	})
-	const e = createErmine({ features: [counting("outer"), counting("inner")], schedule: () => {} })
+	const e = createErmine({ features: [counting("outer"), counting("inner"), manual] })
 	seen.length = 0
 	e.within(() => ensureNode("/x", { n: 1 }))
 	e.within(() => patch("/x", [{ path: ["n"], value: 2 }]))
@@ -106,7 +107,7 @@ function counted() {
 
 Deno.test("a caller's waits made and answered again and again register one teardown", () => {
 	const { scheduler, on } = counted()
-	const e = createErmine({ scheduler, schedule: () => {} })
+	const e = createErmine({ features: [manual], scheduler })
 	const host = e.getProcessContext()!.scope
 	const before = on.get(host) ?? 0
 	for (let i = 0; i < 20; i++) {
@@ -123,7 +124,7 @@ Deno.test("a caller's waits made and answered again and again register one teard
 
 Deno.test("one method placed again and again registers one teardown", () => {
 	const { scheduler, on } = counted()
-	const e = createErmine({ scheduler, schedule: () => {} })
+	const e = createErmine({ features: [manual], scheduler })
 	const host = e.getProcessContext()!.scope
 	const before = on.get(host) ?? 0
 	for (let i = 0; i < 20; i++) e.within(() => createAction("/svc", () => i))
@@ -139,7 +140,7 @@ Deno.test("close() takes out what features listen to on the scheduler", () => {
 		name: "listening",
 		setup: (f) => void f.scheduler.onAfterPulse(() => void told++),
 	}
-	const e = createErmine({ scheduler: s, features: [listening], schedule: () => {} })
+	const e = createErmine({ scheduler: s, features: [listening, manual] })
 	s.pulse()
 	assertEquals(told, 1)
 	e.close()
@@ -159,15 +160,14 @@ Deno.test("a feature's scheduler works in every member, the on… ones and the r
 			assertEquals(Object.keys(f.scheduler).sort(), Object.keys(s).sort())
 		},
 	}
-	createErmine({ scheduler: s, features: [using], schedule: () => {} }).close()
+	createErmine({ scheduler: s, features: [using, manual] }).close()
 	assert(inside !== undefined)
 })
 
 Deno.test("closed, records, a feature's calling and node throw closed as the other parts do", () => {
 	let api: FeatureAPI | undefined
 	const e = createErmine({
-		schedule: () => {},
-		features: [{ name: "keep", setup: (f) => void (api = f) }],
+		features: [{ name: "keep", setup: (f) => void (api = f) }, manual],
 	})
 	e.close()
 	assertThrows(() => e.records.call("x"), ErmineError, "closed")
@@ -180,7 +180,7 @@ Deno.test("closed, records, a feature's calling and node throw closed as the oth
 Deno.test("a feature's context(process) is undefined once the process stopped, and typed so", () => {
 	let api: FeatureAPI | undefined
 	const keep: Feature = { name: "keep", setup: (f) => void (api = f) }
-	const e = createErmine({ features: [keep], schedule: () => {} })
+	const e = createErmine({ features: [keep, manual] })
 	e.within(() => ensureNode("/code/p", () => 1))
 	const p = e.start(programAt(e, "/code/p"), "/code/p")
 	assert(!("refused" in p))
@@ -204,7 +204,7 @@ function namesLooked(e: { places: { namesOf: (id: string) => unknown } }) {
 }
 
 Deno.test("reads walk the boxes by an index: none of the boxes' names looked up again till a name changes", () => {
-	const e = createErmine({ schedule: () => {} })
+	const e = createErmine({ features: [manual] })
 	e.within(() => ensureNode("/a/b/c/x", 1))
 	for (let i = 0; i < 200; i++) e.within(() => createBox(`/boxes/b${i}`))
 	const looked = namesLooked(e)
@@ -222,7 +222,7 @@ Deno.test("reads walk the boxes by an index: none of the boxes' names looked up 
 })
 
 Deno.test("createBox at one folder again and again is one box; a box nothing reaches, holding no rows, let go", () => {
-	const e = createErmine({ schedule: () => {} })
+	const e = createErmine({ features: [manual] })
 	e.within(() => ensureNode("/x", 1))
 	e.start(() => void createAction("on/box", () => void createBox("./same")), "/code/p")
 	for (let i = 0; i < 100; i++) e.within(() => executeAction("/code/p/on/box"))
@@ -242,7 +242,7 @@ Deno.test("createBox at one folder again and again is one box; a box nothing rea
 })
 
 Deno.test("a read of a node not there, outside a setup or a run, keeps nothing: reads don't slow as they pile up", () => {
-	const e = createErmine({ schedule: () => {} })
+	const e = createErmine({ features: [manual] })
 	e.start(() => void createAction("on/look", (p: string) => read(p)), "/code/p")
 	const missing = (from: string, n: number) => {
 		const t = performance.now()
@@ -296,7 +296,7 @@ Deno.test("close() runs every step when one throws, throws the first error at th
 			return real.teardown(scope)
 		},
 	}
-	const e = createErmine({ scheduler, schedule: () => {} })
+	const e = createErmine({ features: [manual], scheduler })
 	assertEquals(registrations(scheduler), 1)
 	boom = true
 	assertThrows(() => e.close(), Error, "boom")
@@ -308,7 +308,7 @@ Deno.test("close() runs every step when one throws, throws the first error at th
 
 Deno.test("createErmine throwing after it registered its scheduler undoes the registration", () => {
 	const scheduler = createScheduler()
-	assertThrows(() => createErmine({ scheduler, host: { at: "" }, schedule: () => {} }))
+	assertThrows(() => createErmine({ features: [manual], scheduler, host: { at: "" } }))
 	assertEquals(registrations(scheduler), 0)
 })
 

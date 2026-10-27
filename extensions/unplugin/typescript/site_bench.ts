@@ -3,10 +3,11 @@
 // frames deep
 import { createErmine, ensureNode, patch, read } from "@ermine/system"
 import { at, site } from "@ermine/system/site"
+import { manual } from "../../../ermine/system/typescript/manual_fixture.ts"
 
 const S = site("file:///program.ts", 1, 1)
 const make = (trace?: false) => {
-	const e = createErmine({ schedule: () => {}, trace })
+	const e = createErmine({ features: [manual], trace })
 	e.within(() => ensureNode("/x", 0))
 	return e.getProcessContext()!
 }
