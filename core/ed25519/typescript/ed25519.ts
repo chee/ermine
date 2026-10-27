@@ -5,7 +5,7 @@
 //
 //   const key = await publicKeyOf(secret)
 //   const signature = await sign(secret, message)
-//   await verify(key, message, signature)     // true | false, never a throw
+//   await verify(key, message, signature)     // true | false; a throw only when WebCrypto has no Ed25519
 //
 // what an Ed25519 signature must be before the equation is asked, as the C (ed25519.h) has it, so
 // every device takes the same ones: S below the group order L; the key (A) and R each in their one
@@ -106,7 +106,11 @@ export async function verify(
 			"verify",
 		])
 		return await crypto.subtle.verify("Ed25519", k, signature.slice(), message.slice())
-	} catch {
-		return false
+	} catch (e) {
+		// a key that is no point, a signature that is bad: false. no Ed25519 here is not a bad one
+		if (e instanceof DOMException && (e.name === "DataError" || e.name === "OperationError")) {
+			return false
+		}
+		throw e
 	}
 }

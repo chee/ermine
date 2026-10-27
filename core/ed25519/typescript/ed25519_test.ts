@@ -27,3 +27,22 @@ Deno.test("verify: false, never a throw, for another message, a changed signatur
 	assert(!strict(SIGNATURE, identity))
 	assert(!(await verify(identity, EMPTY, SIGNATURE)))
 })
+
+Deno.test("verify: a WebCrypto without Ed25519 throws; it is no bad signature", async () => {
+	const was = crypto.subtle.importKey
+	crypto.subtle.importKey = () => Promise.reject(new DOMException("no", "NotSupportedError"))
+	try {
+		let thrown: unknown
+		await verify(KEY, EMPTY, SIGNATURE).catch((e) => thrown = e)
+		assert(thrown instanceof DOMException && thrown.name === "NotSupportedError")
+	} finally {
+		crypto.subtle.importKey = was
+	}
+})
+
+Deno.test("verify: a key that is no point of the curve is false", async () => {
+	// canonical, not of small order, and y = 2 has no x: importKey refuses it as data
+	const off = new Uint8Array(32)
+	off[0] = 2
+	assert(!(await verify(off, EMPTY, SIGNATURE)))
+})
