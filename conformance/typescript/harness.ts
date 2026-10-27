@@ -32,4 +32,6 @@ export async function serve(answer: (request: Request) => Answer | Promise<Answe
 		}
 		if (lines) await out.write(encoder.encode(lines))
 	}
+	// a last line with no newline is a request too
+	if (buffer.trim() !== "") await out.write(encoder.encode((await one(buffer)) + "\n"))
 }

@@ -139,9 +139,8 @@ export function read(text: string): unknown {
 		if (!m) fail()
 		i += m![0].length
 		const n = Number(m![0])
-		return Number.isInteger(n) && !Number.isSafeInteger(n) && /^-?[0-9]+$/.test(m![0])
-			? BigInt(m![0])
-			: n
+		// digits alone past 2^53 - 1: exact, however long (Number gives Infinity at 309 digits)
+		return !Number.isSafeInteger(n) && /^-?[0-9]+$/.test(m![0]) ? BigInt(m![0]) : n
 	}
 	const out = value()
 	space()
