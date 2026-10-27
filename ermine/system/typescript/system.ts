@@ -58,7 +58,7 @@
 //   executeAction(p, ...args)  the action at p, run as the scope that placed it, under a mark
 //                        { caller: { node, actor }, handler, call } that owns nothing (what the
 //                        action makes is the placing scope's, and lasts as it does); its return.
-//                        a generator action (sync or async) is stepped by the system, each step
+//                        a generator action (a function*; an async function* throws not-a-function) is stepped by the system, each step
 //                        under the mark; the call gives a promise of its return. its record (calls.ts) is
 //                        held as the handler's latest, and open till the generator finishes (a plain
 //                        action's: when it returns, or its promise settles). nothing there: pending, loudly (a wait recorded, PENDING thrown,
@@ -67,13 +67,15 @@
 //   addTeardown(fn)      fn(why) as the owner goes (the scope open, past a call's mark), through
 //                        onTeardown: "replaced", "ended", or a stop's reason. not in an effect's
 //                        act: return a cleanup from the act instead (it runs before the next act
-//                        and as the effect goes; a returned non-function throws)
+//                        and as the effect goes; a returned non-function throws). not in an action
+//                        either (not-here): it would pile onto the placing scope, a closure a call;
+//                        add it in setup
 //   createWriter()       in setup or an action (not a compute, a pipe's function or an act): a writer,
 //                        `const withWriter = createWriter()`, then withWriter(() => patch(...)) runs
 //                        the function as the scope createWriter was called in, with nothing open, its
 //                        writes carrying the mark it was made under (an action's call), each at its own
-//                        line; duringUserEvent on their change while a trusted event is dispatched (the
-//                        mark kept never carries it: only a run during an event does). a write through
+//                        line; userActivated on their change while the page is user-activated (the
+//                        mark kept never carries it: only a run while a person had just interacted does). a write through
 //                        a writer made in an action explains as that call (its view, while it is the
 //                        handler's latest), but is not added to the call's record "writes": the record
 //                        closes when the call finishes. not data, and hidden as a handle is wherever a
@@ -127,7 +129,7 @@ import type { Sited } from "@ermine/sites"
 import type { Key, Table } from "@ermine/core/table"
 import type { FileLocation } from "@ermine/core/util/stacktrace"
 import type { Call, Calls, Going } from "./calls.ts"
-import { duringUserEvent } from "./userevent.ts"
+import { userActivated } from "./useractivation.ts"
 import { enterScheduler, leaveScheduler } from "./registry.ts"
 import type { Target as Aimed } from "@ermine/core/protect"
 import { type Asked, ErmineError, type Errored, type Reading } from "./features.ts"
@@ -145,9 +147,9 @@ import {
 	type Why,
 } from "./context.ts"
 
-// the metadata key a write made through a writer has while a trusted event is dispatched
-// (a ChangeView's duringUserEvent)
-const USER_EVENT = "duringUserEvent"
+// the metadata key a write made through a writer has while the page is user-activated
+// (a ChangeView's userActivated)
+const USER_ACTIVATED = "userActivated"
 
 // the attribute a memo's or effect's node holds its scope in: the NODE key's id of the nearest
 // scope above it with one, written once as the node is made (beside status.ts')
@@ -249,9 +251,9 @@ export type ChangeView = {
 	readonly time: number
 	readonly actor: unknown
 	readonly site?: FileLocation
-	// made through a writer (createWriter) that ran while the browser was dispatching a trusted event
-	// (userevent.ts): a person's event was going on, not that a person made this change
-	readonly duringUserEvent?: true
+	// made through a writer (createWriter) that ran while navigator.userActivation.isActive
+	// (useractivation.ts): a person had just interacted with the page, no more
+	readonly userActivated?: true
 }
 // a change explained: it and its writer. held (a node's only): the latest write there a feature
 // held back, since the change (no change: only that)
@@ -389,7 +391,7 @@ export function viewOf(base: Base, h: ChangeHeader): ChangeView {
 			time: h.time,
 			actor: h.actor,
 			...site !== undefined && { site },
-			...h.metadata?.[USER_EVENT] === true && { duringUserEvent: true as const },
+			...h.metadata?.[USER_ACTIVATED] === true && { userActivated: true as const },
 		})
 		base.views.set(h, v)
 		base.changes.set(v, h)
@@ -502,6 +504,20 @@ function notInAct(own: Scope, fn: string) {
 			? "addTeardown in an effect's act: return a cleanup function from the act instead"
 			: `${fn} in an effect's act: an act makes nothing`,
 	)
+}
+// refused in an action: its teardown would pile onto the scope above the call, one closure a call,
+// till the process ends. a call's mark (an action's, or a writer made in one) is open between the
+// scope open and own
+function notInAction(inner: Inner, own: Scope) {
+	const { s } = here(inner)
+	for (let o = s.getCurrentScope(); o !== undefined && o !== own; o = o.parent) {
+		if (marks.has(o) && "call" in o.info) {
+			throw new ErmineError(
+				"not-here",
+				"addTeardown in an action: add it in setup, or keep what the call started and stop it from setup's teardown",
+			)
+		}
+	}
 }
 // the scope what is made now belongs to: the scope open, past any marks; none open: the context's
 const owner = (inner: Inner) => {
@@ -1465,6 +1481,12 @@ function createAction(inner: Inner, p: string | Path, fn: (...args: any[]) => un
 	const { calls, parts, methods, s, queuePulse, places, inside, resolve, ask } = here(inner)
 	const own = owner(inner)
 	notInAct(own, "createAction")
+	if (Object.prototype.toString.call(fn) === "[object AsyncGeneratorFunction]") {
+		throw new ErmineError(
+			"not-a-function",
+			"createAction takes a function or a function*, not an async function*: use a function* that yields promises",
+		)
+	}
 	const path = resolve(p)
 	const made = inside(() => {
 		const id = get(places, path)
@@ -1498,16 +1520,14 @@ function createAction(inner: Inner, p: string | Path, fn: (...args: any[]) => un
 	return handle(inner, n)
 }
 
-// a generator action (sync or async) is stepped by the system [Solid 2.0's action]: each step
-// runs with the call's mark, so a write after a `yield` carries it and is allowed; `yield promise`
-// waits for the promise (a throw comes back in at the yield). a plain `await` in an async
-// generator is not a step: what follows it runs with nothing open. the call gives a promise of
+// a generator action (a function*; an async function* is refused by createAction: a catch round
+// a rejected yield in one runs with nothing open) is stepped by the system [Solid 2.0's action]:
+// each step runs with the call's mark, so a write after a `yield` carries it and is allowed; `yield
+// promise` waits for the promise (a throw comes back in at the yield). the call gives a promise of
 // the generator's return
-type Steps = Iterator<unknown, unknown, unknown> | AsyncIterator<unknown, unknown, unknown>
-const isGenerator = (fn: unknown) => {
-	const t = Object.prototype.toString.call(fn)
-	return t === "[object GeneratorFunction]" || t === "[object AsyncGeneratorFunction]"
-}
+type Steps = Iterator<unknown, unknown, unknown>
+const isGenerator = (fn: unknown) =>
+	Object.prototype.toString.call(fn) === "[object GeneratorFunction]"
 // the parent going while it waits at a yield: the generator is returned (its finally blocks run,
 // with nothing open: a write there fails as it does after any end), and the promise rejects: gone.
 // each step is the call's (open as the record's) till the generator finishes
@@ -1530,15 +1550,14 @@ function stepped(inner: Inner, call: Scope, g: Going, make: () => Steps): Promis
 			// after the teardown, with nothing open: a write in a finally block fails as after any end
 			queueMicrotask(() => {
 				try {
-					const r = it?.return?.(undefined)
-					if (isThen(r)) return void r.then(() => reject(gone), () => reject(gone))
+					it?.return?.(undefined)
 				} catch { /* a finally block's own throw: the call is gone */ }
 				reject(gone)
 			})
 		})
 		const step = (v?: unknown, thrown?: boolean) => {
 			if (finished) return
-			let r: IteratorResult<unknown> | PromiseLike<IteratorResult<unknown>>
+			let r: IteratorResult<unknown>
 			enterScheduler(s)
 			try {
 				// the first step makes the iterator (in the call's scope too)
@@ -1552,7 +1571,6 @@ function stepped(inner: Inner, call: Scope, g: Going, make: () => Steps): Promis
 			} finally {
 				leaveScheduler()
 			}
-			if (isThen(r)) return void r.then(run, fail)
 			run(r)
 		}
 		const run = (r: IteratorResult<unknown>) => {
@@ -1640,6 +1658,7 @@ function executeAction(inner: Inner, p: Target, ...args: unknown[]): unknown {
 function addTeardown(inner: Inner, fn: (why: Why) => unknown) {
 	const own = owner(inner)
 	notInAct(own, "addTeardown")
+	notInAction(inner, own)
 	teardown(inner, own, fn)
 }
 // fn(why) as scope goes, through onTeardown
@@ -1652,7 +1671,7 @@ function teardown(inner: Inner, own: Scope, fn: (why: Why) => unknown) {
 }
 
 // what a writer runs as: where it was made, and the mark it was made under (an action's call: its
-// info, never the user-event flag; setup: none, the scope's own). no site: each write in it has
+// info, never the user-activated flag; setup: none, the scope's own). no site: each write in it has
 // its own line
 export type WriterAs = {
 	readonly inner: Inner
@@ -1678,12 +1697,12 @@ function notHere(base: Base, own: Scope, message: string) {
 }
 
 // the mark a scope open under own gives what is made now: the nearest call's info, without the
-// user-event flag (only a run that happens during an event has it)
+// user-activated flag (only a run that happens during an event has it)
 function markOf(inner: Inner, own: Scope): Scope["info"] | undefined {
 	const { s } = here(inner)
 	for (let o = s.getCurrentScope(); o !== undefined && o !== own; o = o.parent) {
 		if (marks.has(o)) {
-			const { [USER_EVENT]: _, ...rest } = o.info
+			const { [USER_ACTIVATED]: _, ...rest } = o.info
 			return Object.keys(rest).length === 0 ? undefined : rest
 		}
 	}
@@ -1691,7 +1710,7 @@ function markOf(inner: Inner, own: Scope): Scope["info"] | undefined {
 }
 
 // f run as parent under mark, with nothing else of the caller's: its writes carry the mark (and the
-// user-event flag, when asked)
+// user-activated flag, when asked)
 function runAs<T>(
 	inner: Inner,
 	parent: Scope,
@@ -1700,7 +1719,7 @@ function runAs<T>(
 	during = false,
 ): T {
 	const { s } = here(inner)
-	const info = during ? { ...mark, [USER_EVENT]: true } : mark
+	const info = during ? { ...mark, [USER_ACTIVATED]: true } : mark
 	const at = info === undefined ? parent : s.createScope(info, parent)
 	if (at !== parent) marks.add(at)
 	enterScheduler(s)
@@ -1743,7 +1762,7 @@ function createWriter(inner: Inner): WithWriter {
 		} catch (e) {
 			throw base.errored(e, "createWriter")
 		}
-		return runAs(inner, parent, data.mark, f, duringUserEvent())
+		return runAs(inner, parent, data.mark, f, userActivated())
 	} as unknown as WithWriter & { toJSON: () => never }
 	Object.defineProperties(later, {
 		toJSON: {

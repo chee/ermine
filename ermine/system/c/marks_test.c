@@ -329,6 +329,36 @@ static void case_cleanup_through_action(void) {
 	finish();
 }
 
+// addTeardown in an action is not-here (it would pile onto the scope that placed it, one a call); in
+// setup it is added as ever
+static int teardown_in_action = -1;
+static void torn(void *ctx, const char *why) { (void)ctx, (void)why; }
+static es_out adds_teardown(es_context *c, void *ctx, const op_value *const *args, size_t n) {
+	(void)ctx, (void)args, (void)n;
+	teardown_in_action = es_add_teardown(c, torn, NULL);
+	return es_out_of(NULL);
+}
+static es_out teardown_setup(es_context *c, void *ctx) {
+	(void)ctx;
+	es_handle *h;
+	CHECK(es_add_teardown(c, torn, NULL) == 0);
+	CHECK(es_create_action(c, es_text("adds"), adds_teardown, NULL, &h) == 0);
+	return es_out_of(NULL);
+}
+static void case_teardown_not_in_an_action(void) {
+	fresh();
+	es_refused no = {0};
+	CHECK(es_start(E, teardown_setup, NULL, es_text("/code/p"), NULL, &STARTED, &no) == 0);
+	es_pulse(es_host_context(E));
+	op_value *r = NULL;
+	CHECK(es_execute_action(es_host_context(E), es_on_path(es_text("/code/p/adds")), NULL, 0, &r) == 0);
+	op_free(r);
+	CHECK(teardown_in_action == ES_NOT_HERE);
+	es_clear_thrown();
+	es_started_free(STARTED);
+	finish();
+}
+
 // a writer is a power, never data: shown as "[writer]" in a call's args and returned, where a record is
 // shown (es_show, es_call_view_of)
 static es_handle *ACTION;
@@ -483,8 +513,8 @@ static void case_taken_names_no_holder_to_a_program(void) {
 	finish();
 }
 
-// a writer's own mark never carries duringUserEvent: a writer made inside a writer run during an event
-// does not run its changes as during one, unless the event is going on when it is called
+// a writer's own mark never carries userActivated: a writer made inside a writer run while the page is user-activated
+// does not run its changes as activated, unless it is when it is called
 static int event_now;
 static int in_event(void *ctx) {
 	(void)ctx;
@@ -513,13 +543,13 @@ static es_out setup_with_k(es_context *c, void *ctx) {
 	CHECK(es_create_writer(c, &WRITER) == 0);
 	return es_out_of(NULL);
 }
-static void case_writer_mark_has_no_user_event(void) {
+static void case_writer_mark_has_no_user_activated(void) {
 	fresh();
 	es_close(E);
 	es_free(E);
 	E = NULL;
 	event_now = 0;
-	CHECK(es_create(&(es_options){.user_event = in_event}, &E) == 0);
+	CHECK(es_create(&(es_options){.user_activated = in_event}, &E) == 0);
 	es_refused no = {0};
 	CHECK(es_start(E, setup_with_k, NULL, es_text("/code/p"), NULL, &STARTED, &no) == 0);
 	es_pulse(es_host_context(E));
@@ -531,7 +561,7 @@ static void case_writer_mark_has_no_user_event(void) {
 	CHECK(es_with_writer(E, INNER, writes_k, NULL) == 0);
 	es_explained *x = NULL;
 	CHECK(es_explain(es_host_context(E), es_on_path(es_text("/k")), NULL, 0, &x) == 0);
-	CHECK(x != NULL && x->change != NULL && !x->change->during_user_event);
+	CHECK(x != NULL && x->change != NULL && !x->change->user_activated);
 	es_explained_free(x);
 	// control: the same writer run during an event does say so
 	event_now = 1;
@@ -539,7 +569,7 @@ static void case_writer_mark_has_no_user_event(void) {
 	event_now = 0;
 	x = NULL;
 	CHECK(es_explain(es_host_context(E), es_on_path(es_text("/k")), NULL, 0, &x) == 0);
-	CHECK(x != NULL && x->change != NULL && x->change->during_user_event);
+	CHECK(x != NULL && x->change != NULL && x->change->user_activated);
 	es_explained_free(x);
 	op_free(INNER);
 	op_free(WRITER);
@@ -611,10 +641,11 @@ int main(void) {
 	case_ended_owner();
 	case_child_of_another();
 	case_cleanup_through_action();
+	case_teardown_not_in_an_action();
 	case_writer_hidden_in_records();
 	case_not_here_in_a_pipe();
 	case_taken_names_no_holder_to_a_program();
-	case_writer_mark_has_no_user_event();
+	case_writer_mark_has_no_user_activated();
 	case_child_stop_asks_as_starter();
 	puts(failed ? "FAILED" : "ok");
 	return failed;

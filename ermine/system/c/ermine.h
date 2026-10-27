@@ -538,7 +538,7 @@ typedef struct es_change_view {
 	int has_site;
 	ch_site site;
 	// made through a writer that ran while the host said a person's event was going on
-	int during_user_event;
+	int user_activated;
 } es_change_view;
 
 // where a value is from (From): the change it came from, by reference (change: places' value of it, as
@@ -967,10 +967,10 @@ typedef struct {
 	size_t ninfo;
 	// 1: call records not held (onRecord is still told)
 	int calls_never;
-	// whether a person's event is being dispatched now (a writer asks as it runs: its changes
-	// say duringUserEvent). NULL: never. the host says; the ermine does not look
-	int (*user_event)(void *ctx);
-	void *user_event_ctx;
+	// whether a person just interacted with the page now (a writer asks as it runs: its changes
+	// say userActivated). NULL: never. the host says; the ermine does not look
+	int (*user_activated)(void *ctx);
+	void *user_activated_ctx;
 } es_options;
 
 // the base: everything one ermine's contexts share (Base and Parts, and createErmine's closure). made
@@ -998,8 +998,8 @@ struct es_ermine {
 	void *id_ctx;
 	void (*on_create_function)(void *ctx, const es_created *made);
 	void *on_create_function_ctx;
-	int (*user_event)(void *ctx);
-	void *user_event_ctx;
+	int (*user_activated)(void *ctx);
+	void *user_activated_ctx;
 	// the site of the call in progress (es_enter), for a write's header outside a run
 	const ch_site *site;
 	// every handle, by address → its es_handle_data (A's); handles last till es_close, one a name
@@ -1299,8 +1299,8 @@ int es_is_mark(es_ermine *e, sc_scope *scope);
 // runs with nothing open (a timer, a listener, a promise settling). *writer is a stand-in (a value,
 // never data), the caller's to op_free; it is good while c's owner is alive, then es_with_writer says
 // ES_GONE. what it runs is the owner's: it asks as it, makes what it makes the owner's, and its writes
-// carry the mark es_create_writer was called under (an action's call: call, handler, caller). during a user event
-// (options.user_event) they say so
+// carry the mark es_create_writer was called under (an action's call: call, handler, caller). while the host says a person just interacted
+// (options.user_activated) they say so
 int es_create_writer(es_context *c, op_value **writer);
 // f as the writer's owner, with nothing open, each write at its own line. ES_ALREADY_INSIDE with a scope or
 // run open; ES_GONE after the owner ended; f's code

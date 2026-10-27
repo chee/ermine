@@ -1,7 +1,17 @@
-// a stand-in for the browser's window.event, defined on the global before @ermine/system loads
-// (userevent.ts keeps the native getter then): tests set `current` to say what is being dispatched
-export const dispatching: { current: { isTrusted: boolean } | undefined } = { current: undefined }
-Object.defineProperty(globalThis, "event", {
-	get: () => dispatching.current,
+// a stand-in for the browser's navigator.userActivation, defined before @ermine/system loads
+// (useractivation.ts keeps the getter and the object then): tests set `userActivation.active` to say
+// whether a person just interacted with the page
+export const userActivation: { active: boolean } = { active: false }
+class UserActivation {
+	get isActive() {
+		return userActivation.active
+	}
+	get hasBeenActive() {
+		return userActivation.active
+	}
+}
+Object.defineProperty(globalThis, "UserActivation", { value: UserActivation, configurable: true })
+Object.defineProperty(globalThis.navigator, "userActivation", {
+	value: new UserActivation(),
 	configurable: true,
 })

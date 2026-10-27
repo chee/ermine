@@ -168,6 +168,11 @@ function ermineError(e: ErmineError, seen: Seen | undefined): string | undefined
 				: `${fn} takes a list of patches: [{ path: [], value }] the whole value, ` +
 					`[{ path: ["key"], value }] one key in it.`
 		case "not-a-function":
+			if (/async function\*/.test(e.message)) {
+				return `an async function* cannot be an action: a catch round a rejected yield in one runs ` +
+					`with nothing open, so it can't write. use a function* that yields promises: ` +
+					`createAction(path, function* () { try { yield promise } catch { …write… } }).`
+			}
 			return /pipe takes/.test(e.message)
 				? `pipe(from, fn) tells fn each write at from; pipe(from, to) mirrors it, ` +
 					`pipe(from, to, there) transforms it, pipe(from, to, there, back) translates both ` +
@@ -193,6 +198,11 @@ function ermineError(e: ErmineError, seen: Seen | undefined): string | undefined
 			return `an act returns a function (its cleanup, run before the next act and when the ` +
 				`effect goes) or nothing: a returned value isn't used, so don't return it.`
 		case "not-here":
+			if (fn === "addTeardown") {
+				return `an action's call runs again and again: a teardown added in it would pile up, ` +
+					`one a call, till the process ends. add it in setup, or keep what the call started ` +
+					`(a timer, a listener) and stop it from setup's addTeardown.`
+			}
 			return `${fn} is for setup, an action, or a writer (createWriter): a memo reruns, and an ` +
 				`effect's act makes nothing, so what it made would be made again or lost. do it in ` +
 				`setup, or in an action the memo or effect calls.`

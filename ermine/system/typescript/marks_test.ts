@@ -1,6 +1,6 @@
 // marks (marks-2026-10-27): what the conformance scenarios can't say on the line protocol: the
-// stand-in for window.event is defined before @ermine/system loads (event_fixture.ts)
-import { dispatching } from "./event_fixture.ts"
+// stand-in for navigator.userActivation is defined before @ermine/system loads (event_fixture.ts)
+import { userActivation } from "./event_fixture.ts"
 import { assert, assertEquals, assertThrows } from "@std/assert"
 import { no, type Policy, yes } from "@ermine/core/protect"
 import {
@@ -143,30 +143,32 @@ Deno.test("marks: with hints, the errors say where to make it instead", () => {
 	e.close()
 })
 
-Deno.test("marks: a window.event replaced after load gains a program nothing; only the native getter is read", () => {
+Deno.test("marks: navigator.userActivation or its getter replaced after load gains a program nothing", () => {
 	let withWriter: ReturnType<typeof createWriter> | undefined
 	const { e } = started(() => {
 		ensureNode("/k", 0)
 		withWriter = createWriter()
 	})
-	const changed = () => e.within(() => explain("/k"))?.change?.duringUserEvent
-	// the browser dispatching a trusted event
-	dispatching.current = { isTrusted: true }
+	const changed = () => e.within(() => explain("/k"))?.change?.userActivated
+	// a person just interacted
+	userActivation.active = true
 	withWriter!(() => patch("/k", [{ path: [], value: 1 }]))
 	assertEquals(changed(), true)
-	// a program replaces window.event after the module loaded: the kept getter is the one read
-	dispatching.current = undefined
-	const had = Object.getOwnPropertyDescriptor(globalThis, "event")
-	Object.defineProperty(globalThis, "event", {
-		get: () => ({ isTrusted: true }),
-		configurable: true,
-	})
+	// nobody did; a program replaces navigator.userActivation and the getter after the module loaded
+	userActivation.active = false
+	const nav = globalThis.navigator
+	const had = Object.getOwnPropertyDescriptor(nav, "userActivation")
+	const proto = (globalThis as unknown as { UserActivation: { prototype: object } }).UserActivation
+		.prototype
+	const hadGetter = Object.getOwnPropertyDescriptor(proto, "isActive")
+	Object.defineProperty(nav, "userActivation", { value: { isActive: true }, configurable: true })
+	Object.defineProperty(proto, "isActive", { get: () => true, configurable: true })
 	try {
 		withWriter!(() => patch("/k", [{ path: [], value: 2 }]))
 		assertEquals(changed(), undefined)
 	} finally {
-		if (had === undefined) delete (globalThis as { event?: unknown }).event
-		else Object.defineProperty(globalThis, "event", had)
+		Object.defineProperty(nav, "userActivation", had!)
+		Object.defineProperty(proto, "isActive", hadGetter!)
 		e.close()
 	}
 })
@@ -206,21 +208,21 @@ Deno.test("marks: start asks as the starter for the stop() too: whoever calls it
 	e.close()
 })
 
-Deno.test("marks: a writer made inside a writer during a trusted event does not keep duringUserEvent", () => {
+Deno.test("marks: a writer made inside a writer while user-activated does not keep userActivated", () => {
 	let outer: ReturnType<typeof createWriter> | undefined
 	let inner: ReturnType<typeof createWriter> | undefined
 	const { e } = started(() => {
 		ensureNode("/k", 0)
 		outer = createWriter()
 	})
-	dispatching.current = { isTrusted: true }
+	userActivation.active = true
 	try {
 		outer!(() => void (inner = createWriter()))
 	} finally {
-		dispatching.current = undefined
+		userActivation.active = false
 	}
 	inner!(() => patch("/k", [{ path: [], value: 5 }]))
-	assertEquals(e.within(() => explain("/k"))?.change?.duringUserEvent, undefined)
+	assertEquals(e.within(() => explain("/k"))?.change?.userActivated, undefined)
 	e.close()
 })
 
@@ -373,4 +375,45 @@ Deno.test("marks: a program started by a program stops when the ermine closes", 
 	e.start(programAt(e, "/code/p"), "/code/p")
 	e.close()
 	assertEquals(told, ["ended"])
+})
+
+Deno.test("marks: addTeardown in an action throws not-here, with a hint; in setup it is told as ever", () => {
+	const told: unknown[] = []
+	const e = createErmine({ features: [manual, hints] })
+	e.within(() =>
+		ensureNode("/code/p", () => {
+			addTeardown((why) => told.push(why))
+			createAction("/act", () => addTeardown(() => told.push("action")))
+			createAction("/gen", function* () {
+				yield 1
+				addTeardown(() => told.push("gen"))
+			})
+		})
+	)
+	const s = e.start(programAt(e, "/code/p"), "/code/p")
+	assert(!("refused" in s))
+	const msg = (f: () => unknown) => {
+		try {
+			f()
+		} catch (x) {
+			return (x as Error).message
+		}
+		return ""
+	}
+	const m = msg(() => e.within(() => executeAction("/act")))
+	assert(/not-here/.test(m) && /addTeardown in an action/.test(m), m)
+	assert(/hint: .*add it in setup/.test(m), m)
+	s.stop("bye")
+	assertEquals(told, ["bye"])
+	e.close()
+})
+
+Deno.test("marks: createAction given an async function* throws not-a-function, saying to use a function*", () => {
+	const e = createErmine({ features: [manual] })
+	assertThrows(
+		() => e.within(() => createAction("/a", async function* () {})),
+		ErmineError,
+		"use a function* that yields promises",
+	)
+	e.close()
 })
