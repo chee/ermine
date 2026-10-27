@@ -1,0 +1,111 @@
+{
+	"title": "patchChildren's { path: [name] } at a running process's node stops the process, as unplace does: teardowns told ended, its row gone, so a process may start there again",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/work",
+				{}
+			]
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"addTeardown",
+						"order",
+						"p"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "q",
+			"at": "/work/q",
+			"program": "/code/p",
+			"expect": {
+				"id": "proc:q"
+			}
+		},
+		{
+			"op": "start",
+			"name": "r",
+			"at": "/work/r",
+			"program": "/code/p",
+			"expect": {
+				"id": "proc:r"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"hasNode",
+				"/work/q"
+			],
+			"expect": {
+				"value": true
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patchChildren",
+				"/work",
+				[
+					{
+						"path": [
+							"q"
+						]
+					}
+				]
+			]
+		},
+		{
+			"op": "log",
+			"name": "order",
+			"expect": {
+				"values": [
+					"p:ended"
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"hasNode",
+				"/work/q"
+			],
+			"expect": {
+				"value": false
+			}
+		},
+		{
+			"op": "start",
+			"name": "q2",
+			"at": "/work/q",
+			"program": "/code/p",
+			"expect": {
+				"id": "proc:q2"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"hasNode",
+				"/work/q"
+			],
+			"expect": {
+				"value": true
+			}
+		}
+	]
+}

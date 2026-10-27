@@ -1119,7 +1119,7 @@ const explainPart = (inner: Inner, x: Target, part: "value" | "attributes" | "ch
 // { path: [name] } unplacing it; anything else not-patches (a process never writes a children
 // entry whole: its ids). each name asked "place", as place asks
 function patchChildren(inner: Inner, x: Target, patches: readonly Patch[]) {
-	const { table, queuePulse, inside, ask } = here(inner)
+	const { base, table, queuePulse, places, inside, ask } = here(inner)
 	inside(() => {
 		const n = nodeOf(inner, x)
 		const folder = needId(inner, n)
@@ -1138,9 +1138,21 @@ function patchChildren(inner: Inner, x: Target, patches: readonly Patch[]) {
 				const id = idThrough(inner, p.value as Target)
 				askPlacing(inner, slot, p.value as Target, id)
 				inner.put({ part: "children", id: folder, patches: placing(children, name, id) })
-			} else if (children !== undefined) {
-				ask("place", slot)
-				inner.put({ part: "children", id: folder, patches: unplacing(children, name) })
+			} else {
+				// unplace's rule: a process running at the name (a row names it) is stopped; what was made
+				// at the node and under it, unless a name still reaches it, stops
+				const path = n.path === undefined ? undefined : [...n.path, name]
+				const at = path === undefined ? undefined : get(places, path)
+				if (path !== undefined && runningAt(base, path, at)) {
+					ask("place", slot)
+					base.stop(at!)
+				} else if (children !== undefined) {
+					ask("place", slot)
+					const was = (children.value as Record<string, Id> | undefined)?.[name]
+					const below = was === undefined ? [] : under(inner, was)
+					inner.put({ part: "children", id: folder, patches: unplacing(children, name) })
+					stopMade(inner, below.filter((i) => up(base, places, places.root, i) === undefined))
+				}
 			}
 		}
 	})
