@@ -787,7 +787,7 @@ export type Places = {
 // one step, not n (a copy each place: 10k names in one folder 12.6 s, in place 8 ms). it lets go
 // only of what it is told is held: a host wires keeping(scheduler, unread, handed) (core/unread);
 // unwired, a folder held past a run changes under its holder. one handed on: unread.read(entry)
-export const unread = createUnread()
+export const unread = /* @__PURE__ */ createUnread()
 
 // writing: a parent's children entry, given as it is, changed by unread's update. each gives back the
 // entries it changed, in order, for commit: their change has the patches that landed. refused: it
