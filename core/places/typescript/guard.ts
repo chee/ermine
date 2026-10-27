@@ -34,7 +34,7 @@ import { createChangeBase } from "./header.ts"
 import { at, type Id, type Member, type Path, type Places } from "./places.ts"
 
 // what a refused member's id is, in a list: a stand-in, refused if asked
-export const REFUSED: unique symbol = Symbol.for("ermine.refused")
+export const REFUSED: unique symbol = /* @__PURE__ */ Symbol.for("ermine.refused")
 
 export class Refusal extends Error {
 	// the answer, no, and what was asked

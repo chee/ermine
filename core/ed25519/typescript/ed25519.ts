@@ -18,7 +18,7 @@ const L = 2n ** 252n + 27742317777372353535851937790883648493n
 
 // the eight points of small order, each in its canonical encoding: the identity, the point of order
 // 2, two of order 4, four of order 8
-const SMALL = new Set([
+const SMALL = /* @__PURE__ */ new Set([
 	"0100000000000000000000000000000000000000000000000000000000000000",
 	"ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
 	"0000000000000000000000000000000000000000000000000000000000000000",

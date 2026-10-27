@@ -54,7 +54,7 @@ function isMap(v: unknown): v is Record<string, unknown> {
 }
 
 // where nothing is there yet
-const ABSENT = Symbol("absent")
+const ABSENT = /* @__PURE__ */ Symbol("absent")
 
 class Fail {
 	constructor(readonly code: Code) {}

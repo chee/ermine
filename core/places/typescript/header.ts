@@ -96,7 +96,7 @@ export function createChangeHeader(
 // each change's whole trace text [chee 10-26: "keep what we think is the original file and the whole
 // text of the trace too"], held beside the change by its metadata (a header's copies share it), never
 // in the change: never encoded, stored or synced (where: the builder's pick)
-const traces = new WeakMap<object, string>()
+const traces = /* @__PURE__ */ new WeakMap<object, string>()
 
 // the whole trace text the change was made with; none held (made in a run, given its site, or the
 // trace not asked for): undefined

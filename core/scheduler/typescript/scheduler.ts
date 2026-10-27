@@ -98,7 +98,7 @@ import { createTracker, type Node } from "./tracker.ts"
 // not here: its run ends pending (nothing set, its last result kept, an effect does not act). so
 // a read of something pending can throw it, and every compute above it is pending unasked. a
 // promise resolved to it, or rejected with it, lands pending
-export const PENDING: unique symbol = Symbol.for("ermine.pending")
+export const PENDING: unique symbol = /* @__PURE__ */ Symbol.for("ermine.pending")
 
 // this module's own file, by its URL: for whoever finds a write's site by skipping library frames
 // (ermine's sites). known here, so no one has to resolve a name to find it (a bundled page has no
@@ -308,10 +308,10 @@ const blank = (info: Info) => {
 	return true
 }
 // an empty list shared, never added to
-const none = Object.freeze([]) as never[]
+const none = /* @__PURE__ */ Object.freeze([]) as never[]
 
 // a Run carries the run inside, under a key only this file has
-const inside: unique symbol = Symbol("inside")
+const inside: unique symbol = /* @__PURE__ */ Symbol("inside")
 type Own = Run & { [inside]: Ran }
 
 export function createScheduler(): Scheduler {
