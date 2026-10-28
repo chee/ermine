@@ -59,7 +59,7 @@ type Visitor = {
 }
 
 // what a page posts: its process, the handler, the event's type, and what the element says
-type Said = {
+export type Said = {
 	readonly p: string
 	readonly h: string
 	readonly t: string
@@ -316,20 +316,27 @@ export function createLive(ermine: Ermine, program: Program, options: LiveOption
 	const head = (more = "") =>
 		`<!doctype html><html lang="en"><head><meta charset="utf-8">` +
 		`<meta name="viewport" content="width=device-width,initial-scale=1">` +
-		`<title>${title}</title>${options.head ?? ""}<style>${style}${more}</style></head>`
+		`<title>${title}</title>${options.head ?? ""}<style>${style}${more}${PICKER}</style></head>`
+
+	// the versions a page can pick: this server has every one
+	const offered: readonly Version[] = options.pollClient === undefined
+		? ["stream", "plain"]
+		: ["stream", "poll", "plain"]
 
 	const document = (v: Visitor) =>
 		head() +
-		`<body>${html(v.into)}<script src="/${
+		`<body>${picker(v.mode, offered)}${html(v.into)}<script src="/${
 			v.mode === "poll" ? "live-poll" : "live"
 		}.js" defer></script>` +
 		Object.keys(scripts).map((name) => `<script src="/${name}" defer></script>`).join("") +
 		`</body></html>`
 
-	// how a new page hears: ?plain, no script; ?poll, GET and POST (when there is its script)
+	// how a new page hears: ?v= the version picked (or ?plain, ?poll); poll only when there is its
+	// script
 	function modeOf(q: URLSearchParams): Mode {
-		if (q.has("plain")) return "plain"
-		if (q.has("poll") && options.pollClient !== undefined) return "poll"
+		const v = q.get("v") ?? (q.has("plain") ? "plain" : q.has("poll") ? "poll" : "stream")
+		if (v === "plain") return "plain"
+		if (v === "poll" && options.pollClient !== undefined) return "poll"
 		return "stream"
 	}
 
@@ -338,7 +345,8 @@ export function createLive(ermine: Ermine, program: Program, options: LiveOption
 		const form = `<form id="f" method="post" action="/event" target="ermine-sink">` +
 			`<input type="hidden" name="p" value="${v.path}"></form>`
 		return head(PLAIN) +
-			`<body><iframe name="ermine-sink" hidden></iframe>${form}<div id="ermine">` +
+			`<body>${picker("plain", offered)}<iframe name="ermine-sink" hidden></iframe>${form}` +
+			`<div id="ermine">` +
 			`<template shadowrootmode="open"><style>${style}${PLAIN}</style>${form}` +
 			`${plain(v.into, { process: v.path, slots: true })}</template>`
 	}
@@ -396,6 +404,31 @@ export function createLive(ermine: Ermine, program: Program, options: LiveOption
 // what is sent of what was told: a binding whose kids are new is sent whole, as html written now
 // (what the bindings inside it showed since is in it), and nothing told inside it is; of the rest,
 // each binding's prop once, its last
+// the versions of a page, each with its words, simplest first (the edge's, edge.ts, is GET and
+// POST, and no script held open a while)
+export type Version = Mode
+const VERSIONS: Record<Version, string> = {
+	plain: "no script: streamed html, forms",
+	poll: "GET and POST",
+	stream: "an event stream",
+}
+
+// the picker: a GET form, so it works with no script too (pick, then go)
+export function picker(now: Version, offered: readonly Version[]): string {
+	const options = [...offered].sort((a, b) => ORDER.indexOf(a) - ORDER.indexOf(b)).map((v) =>
+		`<option value="${v}"${v === now ? " selected" : ""}>${VERSIONS[v]}</option>`
+	)
+	return `<form class="ermine-versions" method="get" action="/"><label>version ` +
+		`<select name="v">${options.join("")}</select></label> <button>go</button></form>`
+}
+const ORDER: readonly Version[] = ["plain", "poll", "stream"]
+
+// the picker's look, beside the page's own
+export const PICKER = ".ermine-versions { display: flex; justify-content: flex-end; gap: 4px;" +
+	" align-items: center; margin: 0; padding: 6px 16px; font: 13px system-ui, sans-serif;" +
+	" border-bottom: 1px solid #cde8f6; background: #f9fcff }" +
+	".ermine-versions select, .ermine-versions button { font: inherit; min-height: 28px }"
+
 export function said(told: readonly Update[]): Update[] {
 	const whole = told.filter(([, prop]) => prop === "children").map(([b]) => b)
 	const last = new Map<string, Update>()
@@ -413,7 +446,7 @@ export function said(told: readonly Update[]): Update[] {
 // handler's element (its value, checked, a form's named elements' values, its size); target the
 // element clicked inside it (its value), or the same; offsetX and offsetY inside the handler's
 // element (the page's own are inside target)
-function standIn(e: Said) {
+export function standIn(e: Said) {
 	const elements = Object.fromEntries(
 		Object.entries(e.form ?? {}).map(([name, value]) => [name, { name, value }]),
 	)
@@ -435,17 +468,17 @@ function standIn(e: Said) {
 // with no script: a unit sent again shows in place of its slot's first render (each unit's own
 // rule hides its older copies: :where, so this rule's id does not outweigh theirs); the image
 // input covers its element, unseen
-const PLAIN = ":where(#ermine > [slot]) { display: contents }" +
+export const PLAIN = ":where(#ermine > [slot]) { display: contents }" +
 	".ermine-where { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0;" +
 	" cursor: crosshair }"
 
 // a unit's tag: its name as a custom element's ("view/3/1" is x-view-3-1)
-const tagOf = (name: string) => "x-" + name.toLowerCase().replace(/[^a-z0-9]+/g, "-")
+export const tagOf = (name: string) => "x-" + name.toLowerCase().replace(/[^a-z0-9]+/g, "-")
 
 // a form's post, as a page with a script says it: p; e, a button's handler (and, after a space, the
 // value of the button clicked inside the handler's element); s, a form's handler, the rest its
 // fields; or "xy <handler> <width> <height>.x" and ".y", where an image input was clicked
-function posted(data: FormData): Said {
+export function posted(data: FormData): Said {
 	const fields = Object.fromEntries([...data].map(([k, v]) => [k, String(v)]))
 	const { p = "", e, s, ...rest } = fields
 	if (s !== undefined) return { p, h: s, t: "submit", form: rest }
