@@ -371,7 +371,8 @@ export default function shell() {
 			for (const [k, v] of Object.entries(c.metadata ?? {})) {
 				say("out", `  ${k.padEnd(9)}${typeof v === "string" ? v : preview(v)}`)
 			}
-			const site = c.external?.[0]
+			// of its sites (oldest first), the last: the nearest
+			const site = c.external?.at(-1)
 			if (site) say("out", `  site     ${site.function ?? ""} line ${site.line}`)
 		},
 		watch(args, say) {

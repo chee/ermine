@@ -52,7 +52,8 @@ const where = (t: Any) => "/" + (t.path ?? []).join("/") + (t.range ? `[${t.rang
 function changeOf(c: Any, link: Link): HTMLElement {
 	const box = h("div", "apchange")
 	if (!c) return (box.append(h("p", "empty", "no change")), box)
-	const site = (c.external ?? []).slice(0, 3)
+	// its sites, oldest first: the nearest three
+	const site = (c.external ?? []).slice(-3)
 	box.append(sheet([
 		["who", c.actor],
 		...(c.reader !== undefined ? [["reader", c.reader] as [string, unknown]] : []),

@@ -768,7 +768,8 @@ export function inspector(s: Host, into: HTMLElement, o: InspectorOptions = {}) 
 			const d = h("div", "ver" + (st ? " status" : ""))
 			d.append(h("pre", "", pretty(v.content)))
 			const c = v.change
-			const site = c?.external?.[0]
+			// of its sites (oldest first), the last: the nearest
+			const site = c?.external?.at(-1)
 			const cause = whoOf(c).cause
 			const meta = [
 				st ? "status, in front of the value" : "",
