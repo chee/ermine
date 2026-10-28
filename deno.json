@@ -16,6 +16,8 @@
 		"./playground/demo-world",
 		"./playground/demos",
 		"./playground/libraries/pack-indexeddb",
+		"./playground/libraries/jsx-runtime",
+		"./playground/libraries/render",
 		"./extensions/pully",
 		"./extensions/boxes",
 		"./extensions/unplugin",
