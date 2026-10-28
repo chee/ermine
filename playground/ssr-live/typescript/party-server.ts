@@ -75,6 +75,7 @@ const fonts =
 	`<link href="https://fonts.googleapis.com/css2?family=Jost:wght@400;600&family=IBM+Plex+Mono&display=swap" rel="stylesheet">`
 const read = (name: string) => Deno.readTextFile(new URL(`../client/${name}`, import.meta.url))
 export const client = await read("live.js")
+export const pollClient = await read("live-poll.js")
 export const sound = await read("party-sound.js")
 // a visitor gone this long is stopped (and leaves /shared/here)
 const LINGER = 15_000
@@ -90,6 +91,7 @@ export function serveParty(port: number) {
 		)
 	const live = createLive(ermine, party, {
 		client,
+		pollClient,
 		title: "ermine party",
 		style,
 		head: fonts,
@@ -109,5 +111,5 @@ const PORT = 8788
 if (import.meta.main) {
 	const port = Number(Deno.env.get("PORT") ?? PORT)
 	serveParty(port)
-	console.log(`ermine party: http://localhost:${port}/`)
+	console.log(`ermine party: http://localhost:${port}/ (GET and POST only: /?poll)`)
 }
