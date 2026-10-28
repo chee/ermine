@@ -5,7 +5,7 @@
 //   deno task party        (in playground/ssr-live; from the repo's root: deno task ssr-live-party)
 import { createErmine, hasNode, patch, remove } from "@ermine/system"
 import { createLive } from "./live.ts"
-import { clocks, LOCAL, party, setupShared } from "./party.tsx"
+import { clocks, EPHEMERAL, LOCAL, party, setupShared } from "./party.tsx"
 import { fonts, style } from "./party-style.ts"
 import { createRoom } from "./room.ts"
 
@@ -36,6 +36,7 @@ export async function serveParty(port: number) {
 	const room = await createRoom(ermine, {
 		at: "/shared",
 		local: LOCAL,
+		ephemeral: EPHEMERAL,
 		seen(id, on) {
 			const path = `/visitors/${id}`
 			clearTimeout(leaving.get(path))

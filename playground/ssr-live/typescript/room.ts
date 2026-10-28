@@ -13,11 +13,12 @@ import { createTie, OTHER_ROOM } from "./tie.ts"
 export async function createRoom(ermine: Ermine, o: {
 	at: string
 	local?: string[]
+	ephemeral?: string[]
 	// where pages link
 	path?: string
 	seen?: (visitor: string, here: boolean) => void
 }) {
-	const tie = await createTie(ermine, { at: o.at, local: o.local })
+	const tie = await createTie(ermine, { at: o.at, local: o.local, ephemeral: o.ephemeral })
 	const path = o.path ?? "/tippet"
 	return {
 		tie,
@@ -32,7 +33,7 @@ export async function createRoom(ermine: Ermine, o: {
 				ws.addEventListener("open", () => ws.close(OTHER_ROOM, "another room"))
 				return response
 			}
-			tie.sync.link(socket(ws))
+			tie.link(socket(ws))
 			if (visitor) {
 				ws.addEventListener("open", () => o.seen?.(visitor, true))
 				ws.addEventListener("close", () => o.seen?.(visitor, false))

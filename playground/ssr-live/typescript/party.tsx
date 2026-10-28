@@ -159,6 +159,8 @@ export const beatClock = every(
 )
 // the paths each ermine writes for itself (tippet's version: never synced)
 export const LOCAL = ["/shared/beat-step"]
+// the paths whose values tippet's version sends and never keeps: life, many writes a second
+export const EPHEMERAL = ["/shared/life", "/shared/life-gen"]
 
 export const clocks: readonly (readonly [string, () => void])[] = [
 	// life steps only while someone watches it
@@ -168,7 +170,11 @@ export const clocks: readonly (readonly [string, () => void])[] = [
 		"/clocks/pet",
 		every(
 			PET_MS,
-			() => set("/shared/pet/hunger", Math.min(HUNGRY, now<number>("/shared/pet/hunger") + 1)),
+			// only while it can rise: writing the same value is still a step (tippet's version)
+			() => {
+				const h = now<number>("/shared/pet/hunger")
+				if (h < HUNGRY) set("/shared/pet/hunger", h + 1)
+			},
 		),
 	],
 ]
