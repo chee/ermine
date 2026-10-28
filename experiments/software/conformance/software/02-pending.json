@@ -1,0 +1,100 @@
+{
+	"title": "code not there yet is pending, not special: the process waits, and runs once when the code is placed; new code is not rerun",
+	"steps": [
+		{
+			"op": "loader",
+			"path": "/loaders/note",
+			"kind": "note",
+			"expect": {}
+		},
+		{
+			"op": "run",
+			"loader": "/loaders/note",
+			"program": "/apps/later",
+			"at": "/work/later",
+			"expect": {
+				"at": [
+					"work",
+					"later"
+				]
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": []
+			}
+		},
+		{
+			"op": "status",
+			"path": "/work/later/code",
+			"expect": {
+				"state": "pending"
+			}
+		},
+		{
+			"op": "node",
+			"path": "/apps/later",
+			"value": 21,
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"ran",
+						21
+					]
+				]
+			}
+		},
+		{
+			"op": "read",
+			"path": "/work/later/note",
+			"expect": {
+				"value": 21
+			}
+		},
+		{
+			"op": "status",
+			"path": "/work/later/code",
+			"expect": {
+				"state": "done"
+			}
+		},
+		{
+			"op": "set",
+			"path": "/apps/later",
+			"value": 22,
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"ran",
+						21
+					]
+				]
+			}
+		}
+	]
+}

@@ -138,15 +138,3 @@ Deno.test("contributors: pruning, the walk's return is the here it got to, with 
 	assertEquals(w.places.names({ id: "C0", path: ["work", "clock"] }).gone, 1)
 	assertEquals(w.places.names({ id: "W", path: ["work"] }).gone, 0)
 })
-
-Deno.test("contributors: a watchPath finds its path through them and leaves no spot behind", () => {
-	const w = world([rows, children])
-	const before = w.paths.held().spots
-	const stop = w.places.watchPath(["work", "clock"], () => {})
-	assertEquals(w.paths.held().spots, before)
-	// a write on its route finds the path again: still none left
-	w.put("children", "W", { clock: "C1", notes: "N" })
-	assertEquals(w.paths.held().spots, before)
-	stop()
-	assertEquals(w.paths.held().spots, before)
-})

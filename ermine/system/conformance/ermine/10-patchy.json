@@ -247,7 +247,7 @@
 			"expect": {
 				"value": {
 					"writer": "outside",
-					"site": "program"
+					"site": "setup"
 				}
 			}
 		},
@@ -262,7 +262,7 @@
 			"expect": {
 				"value": {
 					"writer": "outside",
-					"site": "program"
+					"site": "setup"
 				}
 			}
 		},

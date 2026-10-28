@@ -10,10 +10,10 @@ import {
 	executeAction,
 	patch,
 	peep,
-	pipe,
 	read as readNode,
 	ref,
 } from "@ermine/system"
+import { pipe } from "@ermine/pipe"
 import { change } from "@ermine/slaygrounds/tools"
 import { bind, handler } from "ermine-h"
 

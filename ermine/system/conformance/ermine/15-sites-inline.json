@@ -1,5 +1,5 @@
 {
-	"title": "sites skip only the files a feature lists: a feature written in the same file as the programs, listing none, leaves their lines their sites (a write's the program's line, a memo's the line that made it)",
+	"title": "sites skip only the files a feature lists: a feature written in the same file as the programs, listing none, leaves their lines their sites (a write's the program's line; a write or memo in a process's setup takes the process's: \"setup\")",
 	"steps": [
 		{
 			"op": "ermine",
@@ -73,7 +73,7 @@
 			"part": "value",
 			"id": "n4",
 			"expect": {
-				"site": "program"
+				"site": "setup"
 			}
 		},
 		{
@@ -81,7 +81,7 @@
 			"part": "value",
 			"id": "n5",
 			"expect": {
-				"site": "computer"
+				"site": "setup"
 			}
 		},
 		{

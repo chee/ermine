@@ -9,12 +9,11 @@ import {
 	patch,
 	peep,
 	PENDING,
-	pipe,
 	read,
 	ref,
 	unplace,
-	type Watched,
 } from "@ermine/system"
+import { pipe, type Told as Watched } from "@ermine/pipe"
 import { host, inspect } from "@ermine/slaygrounds/tools"
 import type { Extra } from "./host.ts"
 import { bind, handler } from "ermine-h"

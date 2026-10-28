@@ -28,7 +28,7 @@ import update from "@ermine/core/changeable/update"
 import type { Patch } from "@ermine/core/changeable/apply"
 import type { Id, Places } from "@ermine/core/places"
 import { createChangeHeader } from "@ermine/core/places/header"
-import { upsert } from "@ermine/core/places/upsert"
+import { upsert } from "@ermine/upsert"
 import type { Scheduler, Scope } from "@ermine/core/scheduler"
 import type { Table } from "@ermine/core/table"
 

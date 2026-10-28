@@ -6,10 +6,10 @@ import {
 	getStatus,
 	patch,
 	peep,
-	pipe,
 	read,
 	readEntries,
 } from "@ermine/system"
+import { pipe } from "@ermine/pipe"
 import { bind, handler } from "ermine-h"
 
 // piece-oven: each oven is a compute that awaits a bake. while the promise is out its run is

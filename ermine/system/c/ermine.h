@@ -1,4 +1,4 @@
-// ermine (ermine/system/typescript: system.ts, ermine.ts, context.ts, calls.ts, features.ts,
+// ermine (ermine/system/typescript: system/, ermine.ts, context.ts, calls.ts, features.ts,
 // handles.ts, registry.ts), in C. prefix es_. the TypeScript is the reference; the suite,
 // ermine/system/conformance/ermine/, holds both to it, on the line protocol of
 // typescript/ermine_harness.ts (c/ermine_harness.c speaks it). the plan and the choices:
@@ -22,7 +22,7 @@
 //       es_context_writer: where and as whom, and what a context does as itself
 //     handles (handles.ts): es_mint es_handle_lookup es_handle_in es_handle_make es_handle_by_id
 //       es_node_data_copy es_node_data_free: opaque, their data in the ermine's table
-//     paths and seen (system.ts' up, seenIn): es_nodes_new es_nodes_free es_running_set
+//     paths and seen (system/addressing.ts' up, seenIn): es_nodes_new es_nodes_free es_running_set
 //       es_running_clear es_seen_in: a node's path from the root, up its names and through the
 //       processes running
 //     shared: es_node_of es_id_of es_id_through es_ask_placing es_place_under es_build
@@ -33,7 +33,6 @@
 //     writes: es_ensure_node_at es_create_node_at es_ref_at es_patch_at es_patch_attributes_at
 //       es_patch_children_at es_place_at es_unplace_at es_rename_at es_remove_at, and the placement
 //       asks (place on the slot, then read and edit of the node)
-//     pipes (system.ts' pipe): es_pipe_at es_pipes_told es_pipe_looped
 //
 //   B computers.c  memos, effects, their nodes and names, status, runs
 //     state: es_computers_new es_computers_free es_computer_forget
@@ -55,7 +54,7 @@
 //     call records (calls.ts): es_calls_new es_calls_free es_calls_next es_calls_begin es_calls_end
 //       es_calls_calling es_calls_open es_calls_read es_calls_made es_calls_latest
 //       es_calls_drop es_calls_wait es_calls_answered es_calls_waits es_waits_free es_calls_stop
-//     marks and writers (system.ts marks, createWriter): es_mark es_is_mark es_create_writer es_with_writer es_drop_writer es_cleanup
+//     marks and writers (system/scopes.ts marks, system/process.ts createWriter): es_mark es_is_mark es_create_writer es_with_writer es_drop_writer es_cleanup
 //     promises: es_promise_new es_promise_release es_promise_value es_promise_resolve
 //       es_promise_reject es_promise_then
 //
@@ -113,7 +112,7 @@
 // them. values given back are borrowed from the table, good until the node changes, unless the
 // struct says they are its own (op_free them with it: es_*_free); a change's view too. what the
 // reference keeps in WeakMaps goes, here, with what it is kept by [chee 10-26: "the C should
-// "garbage collect" via something like a weakmap"]: a scope's info, records and pipes as the
+// "garbage collect" via something like a weakmap"]: a scope's info and records as the
 // scheduler frees the scope (sc_on_free), a process's context with its scope, a view with its
 // change, a promise once settled and let go of, an entry out of the table after the pulse. handles
 // (one a name) and functions are the ermine's until es_close. strings in result structs are
@@ -478,7 +477,6 @@ typedef struct {
 #define ES_WAITING "ermine.process.waiting"
 // the host's node's attributes
 #define ES_ARGS "ermine.host.args"
-#define ES_MACHINE "ermine.host.machine"
 #define ES_FEATURES_ATTRIBUTE "ermine.features"
 
 // a process context (ProcessContext) with its inner side (Inner): where and as whom a thing is done.
@@ -588,38 +586,6 @@ typedef struct {
 	size_t n;
 } es_children;
 
-// a write landing at a node a pipe listens to (Watched); refused: no patches, no change, no value
-typedef struct {
-	const op_patch *patches;
-	size_t npatches;
-	const es_change_view *change;
-	const op_value *value;
-	int refused;
-} es_watched;
-// a pipe's functions, given the context that made it (it acts as that one): tell is told the write,
-// 0 or a code (it threw: the pipe's status is failed). there and back give the patches to write: given
-// 0 and n 0 both are none; own, if given, is let go of after they are written
-typedef int (*es_pipe_tell)(es_context *c, void *ctx, const es_watched *w);
-typedef struct {
-	const op_patch *patches;
-	size_t n;
-	int given;
-	op_value *own;
-} es_pipe_gave;
-typedef int (*es_pipe_map)(es_context *c, void *ctx, const es_watched *w, es_pipe_gave *out);
-// pipe(from, fn): tell. pipe(from, to, fnA?, fnB?): has_to, there (NULL: the write's patches, a mirror)
-// and back (NULL: no way back). write: timing "write", else "pulse". name: none when it has neither text
-// nor steps (then pipe-<n>, by its order in its owner's run)
-typedef struct {
-	es_pipe_tell tell;
-	int has_to;
-	es_target to;
-	es_pipe_map there, back;
-	void *ctx;
-	int write;
-	es_at name;
-} es_pipe_options;
-
 // what a pending one waits on (Waiting): a memo it read that is pending (its node by path, none: outside),
 // a send to nothing (path, none: outside; since), a process's code not at its path yet (path), a
 // promise, or nothing it says
@@ -697,8 +663,8 @@ typedef struct {
 	size_t nmade;
 } es_call_view;
 
-// what made a change, one step (Writer). the protocol's names: "computer", "method", "pipe", "outside"
-typedef enum { ES_WRITER_COMPUTER, ES_WRITER_ACTION, ES_WRITER_PIPE, ES_WRITER_OUTSIDE } es_writer_kind;
+// what made a change, one step (Writer). the protocol's names: "computer", "method", "outside"
+typedef enum { ES_WRITER_COMPUTER, ES_WRITER_ACTION, ES_WRITER_OUTSIDE } es_writer_kind;
 typedef struct {
 	es_writer_kind kind;
 	int has_path;
@@ -957,13 +923,12 @@ typedef struct {
 	void *on_create_function_ctx;
 	// the root's id; NULL: a new one
 	const char *root;
-	// the host's node: where it is placed (NULL: nowhere), the host's args, the machine it publishes
+	// the host's node: where it is placed (NULL: nowhere), the host's args
 	// (NULL: none)
 	struct {
 		const char *at;
 		const char *const *args;
 		size_t nargs;
-		const op_value *machine;
 	} host;
 	// the host's scope's info (actor, …), beside its node: values are op_values, held by the caller
 	const sc_pair *info;
@@ -1005,6 +970,8 @@ struct es_ermine {
 	void *user_activated_ctx;
 	// the site of the call in progress (es_enter), for a write's header outside a run
 	const ch_site *site;
+	// the setup running now, the innermost (host.c's run_setup): the process's site, es_setup_site
+	struct es_setup *setup;
 	// every handle, by address → its es_handle_data (A's); handles last till es_close, one a name
 	// (es_mint)
 	pm handles;
@@ -1192,19 +1159,6 @@ int es_unplace_at(es_context *c, es_at p, const ch_site *site);
 int es_rename_at(es_context *c, es_at from, es_at to, const ch_site *site);
 // the host's only: x unplaced and its entries deleted
 int es_remove_at(es_context *c, es_target x, const ch_site *site);
-// a node of its own at o->name, told each write at from (and at to, with a way back): asked read of
-// from and edit of to as it is made, and read of from at each write told. its writes are its own, asked
-// as c. "pulse" timing: told at the next pulse (es_pipes_told), "write": as the write lands. a write
-// that would change nothing is not made; a pipe told more than 64 pipes' writes in a row, or that deep,
-// is looping, told no more. a throw fails its own status. made again by a later run of its owner: the
-// same node, the new functions. gone with its scope. out: its node's handle
-int es_pipe_at(es_context *c, es_target from, const es_pipe_options *o, es_handle **out,
-	const ch_site *site);
-#define es_pipe(...) es_pipe_at(__VA_ARGS__, CH_HERE)
-// the writes pipes heard, told: before the scheduler's pulse
-void es_pipes_told(es_ermine *e);
-// whether the node is a pipe whose status says looping
-int es_pipe_looped(es_ermine *e, const char *id);
 #define es_ensure_node(...) es_ensure_node_at(__VA_ARGS__, CH_HERE)
 #define es_create_node(...) es_create_node_at(__VA_ARGS__, CH_HERE)
 #define es_ref(...) es_ref_at(__VA_ARGS__, CH_HERE)
@@ -1241,7 +1195,7 @@ int es_create_effect_at(es_context *c, es_at name, es_compute f, es_act act, voi
 #define es_create_memo(...) es_create_memo_at(__VA_ARGS__, CH_HERE)
 #define es_create_effect(...) es_create_effect_at(__VA_ARGS__, CH_HERE)
 // an effect's act makes nothing: ES_IN_ACT when own is the scope an act is running in. fn names what was
-// called (createMemo, createEffect, createAction, pipe, addTeardown)
+// called (createMemo, createEffect, createAction, addTeardown)
 int es_not_in_act(es_ermine *e, sc_scope *own, const char *fn);
 // the scope an effect's act is running in now; NULL: none
 sc_scope *es_acting(es_ermine *e);
@@ -1321,7 +1275,7 @@ void es_drop_writer(es_ermine *e, const op_value *writer);
 int es_explain(es_context *c, es_target x, const op_key *key, size_t nkey, es_explained **out);
 int es_explain_attributes(es_context *c, es_target x, es_explained **out);
 int es_explain_children(es_context *c, es_target x, es_explained **out);
-// the same, for a change a program was shown (a read's from.view, a pipe's)
+// the same, for a change a program was shown (a read's from.view)
 int es_explain_view(es_context *c, const es_change_view *v, es_explained **out);
 void es_explained_free(es_explained *x);
 // a change's view, made once (held, so explain can take it back); and its change
@@ -1426,7 +1380,7 @@ es_context *es_host_context(es_ermine *e);
 int es_start(es_ermine *e, es_program fn, void *ctx, es_at at, const es_start_options *o,
 	es_started **out, es_refused *refused);
 void es_refused_free(es_refused *r);
-// a process started by a program (system.ts' start): asked as c "place", belonging to the scope that
+// a process started by a program (system/process.ts' start): asked as c "place", belonging to the scope that
 // started it (c's owner: setup's, the scope that placed an action, a writer's parent). it stops as
 // that ends (told "ended"), or by es_child_stop; its record is freed with its own scope. not in a memo or
 // an effect's act: ES_NOT_HERE. taken (or a name code): 0, *out empty and *refused says which
@@ -1506,6 +1460,11 @@ void es_held_drop(es_ermine *e, const char *id);
 int es_header(es_ermine *e, ch_header *out, pl_made **made);
 // the site of the call in progress, set; gives the one before, to put back
 const ch_site *es_enter(es_ermine *e, const ch_site *site);
+// the site a write or a make has now: given, the call's, except with a process's setup's scope open
+// (the scope the setup runs in, not a call's or a run's): the process's, the first given there with
+// the function "setup", the same for all it does [chee 10-28: "this is fine"; system/index.ts]. NULL
+// given and none held yet: NULL
+const ch_site *es_setup_site(es_ermine *e, const ch_site *given);
 // ES_CLOSED once closed
 int es_alive(es_ermine *e);
 // one pulse soon, however many ask

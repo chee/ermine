@@ -6,6 +6,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "../../libraries/upsert/c/upsert.h"
+
 static void *xalloc(size_t n) {
 	void *p = calloc(1, n ? n : 1);
 	if (p == NULL) abort();
@@ -108,7 +110,8 @@ static void beat_in(void *data) {
 	const char *path[1] = {b->session};
 	pl_changed changed;
 	nd_entry *node;
-	pl_upsert(w->places, tb_string(SESS_PART), tb_string(b->node), path, 1, b->beat, h, &changed, &node);
+	up_upsert(w->places, w->table, tb_string(SESS_PART), tb_string(b->node), path, 1, b->beat, h, &changed,
+		&node);
 	hold_header(w, &changed, made);
 	if (node != NULL) pl_hold(w->places, node, made, pl_made_free);
 	else pl_made_free(made);

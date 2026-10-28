@@ -106,18 +106,126 @@ static const char *kept(const ty_install_setup *s, const char *text) {
 	return copy;
 }
 
-// value upserted at (part, id) path, committed, the header's block held as the places' writes' are
-static void put(writing *w, const char *part, const char *id, const char *const *path, size_t n,
-	const op_value *value) {
-	const ty_install_setup *s = w->s;
-	pl_changed changed;
-	nd_entry *node;
-	pl_upsert(s->places, tb_string(part), tb_string(id), path, n, value, w->header, &changed, &node);
-	s->commit(s->commit_ctx, &changed);
-	for (size_t i = 0; i < changed.n; i++) {
-		pl_hold_also(s->places, changed.entries[i], pl_made_ref(w->made), pl_made_free);
+// what an update's patches refer to: kept by the entry till its next update
+typedef struct {
+	op_patch *patches;
+	op_key *keys;
+	char **names;
+	op_value **values;
+	size_t n;
+} block;
+
+static void block_free(void *b) {
+	block *k = b;
+	for (size_t i = 0; i < k->n; i++) {
+		free(k->names[i]);
+		op_free(k->values[i]);
 	}
-	if (node != NULL) pl_hold(s->places, node, pl_made_ref(w->made), pl_made_free);
+	free(k->patches), free(k->keys), free(k->names), free(k->values);
+	free(k);
+}
+
+static block *block_new(size_t n) {
+	block *b = ty_alloc(sizeof *b);
+	b->n = n;
+	b->patches = ty_alloc(n * sizeof *b->patches);
+	b->keys = ty_alloc(n * sizeof *b->keys);
+	b->names = ty_alloc(n * sizeof *b->names);
+	b->values = ty_alloc(n * sizeof *b->values);
+	return b;
+}
+
+// the entry under (part, id) made holding whole (the caller keeps its own hold) and added to the
+// table: its event tells readers, so there is nothing to commit
+static void make(writing *w, const char *part, const char *id, op_value *whole) {
+	const ty_install_setup *s = w->s;
+	nd_entry *node = nd_make_entry(whole, &w->header);
+	pl_own(s->places, node);
+	pl_hold(s->places, node, pl_made_ref(w->made), pl_made_free);
+	tb_add(s->table, tb_string(part), tb_string(id), node);
+}
+
+// the block's patches applied to the entry, which holds the block, and told committed
+static void update_entry(writing *w, nd_entry *there, block *b) {
+	const ty_install_setup *s = w->s;
+	size_t failed;
+	int code = nd_update(there, b->patches, b->n, w->header, &failed);
+	if (code != OP_OK) {
+		fprintf(stderr, "types: %s\n", op_code_name(code));
+		abort();
+	}
+	pl_hold(s->places, there, b, block_free);
+	pl_hold_also(s->places, there, pl_made_ref(w->made), pl_made_free);
+	pl_changed changed = {1, {there}};
+	s->commit(s->commit_ctx, &changed);
+}
+
+// whether the entry's value is ours: a map, list or string (all a type's value holds) the same all
+// through, a map's keys in any order
+static int same(const op_value *there, const op_value *ours) {
+	if (there == NULL || there->type != ours->type) return 0;
+	switch (ours->type) {
+	case OP_STR: return there->bytes == ours->bytes && memcmp(there->str, ours->str, ours->bytes) == 0;
+	case OP_LIST:
+		if (there->count != ours->count) return 0;
+		for (size_t i = 0; i < ours->count; i++) {
+			if (!same(there->items[i], ours->items[i])) return 0;
+		}
+		return 1;
+	case OP_MAP:
+		if (there->count != ours->count) return 0;
+		for (size_t i = 0; i < ours->count; i++) {
+			if (!same(op_get(there, ours->keys[i]), ours->items[i])) return 0;
+		}
+		return 1;
+	default: return 0;
+	}
+}
+
+// the type's value at the node under id: the entry made if none is there, else one patch putting it
+// whole over what is there, if that is another
+static void put_value(writing *w, const char *id, op_value *value) {
+	nd_entry *there = tb_get(w->s->table, tb_string("value"), tb_string(id));
+	if (there == NULL) {
+		make(w, "value", id, value);
+		return;
+	}
+	if (same(there->value, value)) return;
+	block *b = block_new(1);
+	b->values[0] = op_ref(value);
+	b->patches[0] = (op_patch){.has_value = 1, .value = b->values[0]};
+	update_entry(w, there, b);
+}
+
+// the names in the folder's children, each the id after it: the entry made holding them if none is
+// there; else one patch for each if it holds a map, one putting them as a map over it if not
+static void put_names(writing *w, const char *folder, const char *const *names,
+	const char *const *ids, size_t n) {
+	nd_entry *there = tb_get(w->s->table, tb_string("children"), tb_string(folder));
+	int map = there != NULL && there->value != NULL && there->value->type == OP_MAP;
+	op_value *all = NULL;
+	if (!map) {
+		all = op_map();
+		for (size_t i = 0; i < n; i++) op_set(all, names[i], op_str(ids[i]));
+		if (there == NULL) {
+			make(w, "children", folder, all);
+			op_free(all);
+			return;
+		}
+	}
+	block *b = block_new(map ? n : 1);
+	if (!map) {
+		b->values[0] = all;
+		b->patches[0] = (op_patch){.has_value = 1, .value = all};
+	}
+	for (size_t i = 0; map && i < n; i++) {
+		b->names[i] = ty_dup(names[i]);
+		b->keys[i] = (op_key){.type = OP_STR_KEY, .s = b->names[i]};
+		b->values[i] = op_str(ids[i]);
+		b->patches[i] = (op_patch){.place = {.path = &b->keys[i], .length = 1}, .has_value = 1,
+			.value = b->values[i]};
+	}
+	update_entry(w, there, b);
 }
 
 int ty_install(const ty_install_setup *s) {
@@ -135,10 +243,7 @@ int ty_install(const ty_install_setup *s) {
 			continue;
 		}
 		const char *id = made_id(s, ty_path, i + 1);
-		op_value *v = op_str(id);
-		const char *at[] = {ty_path[i]};
-		put(&w, "children", folder, at, 1, v);
-		op_free(v);
+		put_names(&w, folder, &ty_path[i], &id, 1);
 		folder = id;
 	}
 	// the list, the last of a name winning, in the order each name first came
@@ -169,16 +274,11 @@ int ty_install(const ty_install_setup *s) {
 			id = made_id(s, path, TY_DEPTH + 1);
 		}
 		op_value *v = ty_value(t);
-		put(&w, "value", id, NULL, 0, v);
+		put_value(&w, id, v);
 		op_free(v);
 		if (!existing) named[nnamed] = t->name, nameids[nnamed++] = id;
 	}
-	for (size_t i = 0; i < nnamed; i++) {
-		op_value *v = op_str(nameids[i]);
-		const char *at[] = {named[i]};
-		put(&w, "children", folder, at, 1, v);
-		op_free(v);
-	}
+	if (nnamed > 0) put_names(&w, folder, named, nameids, nnamed);
 	free(last), free(order), free(named), free(nameids);
 	pl_made_free(w.made);
 	return 0;

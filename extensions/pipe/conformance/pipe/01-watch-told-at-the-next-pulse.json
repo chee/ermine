@@ -1,0 +1,128 @@
+{
+	"title": "a watch (a function second) is told each write at from at the next pulse, not as the write lands: the write's patches, which node was written (from, as given) and its value now. it writes nothing",
+	"steps": [
+		{
+			"op": "ermine",
+			"features": [
+				"pipe"
+			],
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"/a",
+						0
+					]
+				},
+				{
+					"do": [
+						"pipe",
+						"/a",
+						{
+							"fn": [
+								{
+									"do": [
+										"log",
+										"order",
+										[
+											"all",
+											"told",
+											"$from",
+											"$patches",
+											"$value"
+										]
+									]
+								}
+							]
+						}
+					]
+				},
+				{
+					"do": [
+						"createAction",
+						"go",
+						[
+							{
+								"do": [
+									"patch",
+									"/a",
+									[
+										{
+											"path": [],
+											"value": 1
+										}
+									]
+								]
+							},
+							{
+								"do": [
+									"log",
+									"order",
+									[
+										"all",
+										"wrote"
+									]
+								]
+							}
+						]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"executeAction",
+				"go"
+			],
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "order",
+			"expect": {
+				"values": [
+					[
+						"wrote"
+					],
+					[
+						"told",
+						"/a",
+						[
+							{
+								"path": [],
+								"value": 1
+							}
+						],
+						1
+					]
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/a"
+			],
+			"expect": {
+				"value": 1
+			}
+		}
+	]
+}

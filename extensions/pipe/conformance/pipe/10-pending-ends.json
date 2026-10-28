@@ -1,0 +1,333 @@
+{
+	"title": "an end not there, at the make or removed later: the pipe is pending, waiting on it, and tells nothing; a node there again, it carries on",
+	"steps": [
+		{
+			"op": "ermine",
+			"features": [
+				"pipe"
+			],
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"/a",
+						0
+					]
+				},
+				{
+					"do": [
+						"pipe",
+						"/a",
+						"/b"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"log",
+				"status",
+				[
+					"all",
+					[
+						"pick",
+						[
+							"getStatus",
+							"/code/p/pipe-1"
+						],
+						[
+							"state"
+						]
+					],
+					[
+						"pick",
+						[
+							"getStatus",
+							"/code/p/pipe-1"
+						],
+						[
+							"error"
+						]
+					],
+					[
+						"pick",
+						[
+							"getStatus",
+							"/code/p/pipe-1"
+						],
+						[
+							"waiting"
+						]
+					]
+				]
+			],
+			"expect": {
+				"value": [
+					"pending",
+					null,
+					[
+						{
+							"node": [
+								"b"
+							]
+						}
+					]
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/a",
+				[
+					{
+						"path": [],
+						"value": 1
+					}
+				]
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"hasNode",
+				"/b"
+			],
+			"expect": {
+				"value": false
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/b",
+				0
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"log",
+				"status",
+				[
+					"all",
+					[
+						"pick",
+						[
+							"getStatus",
+							"/code/p/pipe-1"
+						],
+						[
+							"state"
+						]
+					],
+					[
+						"pick",
+						[
+							"getStatus",
+							"/code/p/pipe-1"
+						],
+						[
+							"error"
+						]
+					],
+					[
+						"pick",
+						[
+							"getStatus",
+							"/code/p/pipe-1"
+						],
+						[
+							"waiting"
+						]
+					]
+				]
+			],
+			"expect": {
+				"value": [
+					"done",
+					null,
+					null
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/a",
+				[
+					{
+						"path": [],
+						"value": 2
+					}
+				]
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/b"
+			],
+			"expect": {
+				"value": 2
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"remove",
+				"/a"
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"log",
+				"status",
+				[
+					"all",
+					[
+						"pick",
+						[
+							"getStatus",
+							"/code/p/pipe-1"
+						],
+						[
+							"state"
+						]
+					],
+					[
+						"pick",
+						[
+							"getStatus",
+							"/code/p/pipe-1"
+						],
+						[
+							"error"
+						]
+					],
+					[
+						"pick",
+						[
+							"getStatus",
+							"/code/p/pipe-1"
+						],
+						[
+							"waiting"
+						]
+					]
+				]
+			],
+			"expect": {
+				"value": [
+					"pending",
+					null,
+					[
+						{
+							"node": [
+								"a"
+							]
+						}
+					]
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/a",
+				5
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/a",
+				[
+					{
+						"path": [],
+						"value": 6
+					}
+				]
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/b"
+			],
+			"expect": {
+				"value": 6
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"log",
+				"status",
+				[
+					"all",
+					[
+						"pick",
+						[
+							"getStatus",
+							"/code/p/pipe-1"
+						],
+						[
+							"state"
+						]
+					],
+					[
+						"pick",
+						[
+							"getStatus",
+							"/code/p/pipe-1"
+						],
+						[
+							"error"
+						]
+					],
+					[
+						"pick",
+						[
+							"getStatus",
+							"/code/p/pipe-1"
+						],
+						[
+							"waiting"
+						]
+					]
+				]
+			],
+			"expect": {
+				"value": [
+					"done",
+					null,
+					null
+				]
+			}
+		}
+	]
+}

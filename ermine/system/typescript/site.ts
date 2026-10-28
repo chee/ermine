@@ -4,8 +4,8 @@
 // holder can change where it points or make one of its own from what it holds; the runtime takes a
 // build site only from a token minted here, and only for one of @ermine/system's functions (marked
 // by mod.ts), set as the call starts (after its arguments are evaluated) and taken by the first
-// function to run (system.ts's go), so a call in the arguments, or one the function makes, never
-// gets it. anything else: the trace, as before.
+// function to run (acting.ts's go), so a call in the arguments, or one the function makes, never
+// gets it. anything else: the trace, or in a process's setup the process's site (system/index.ts).
 // this entry (@ermine/system/site) is the plugin's: it refuses to build a program that names it or
 // its module, so a program never holds the mint, only the tokens of its own calls, through calls
 import type { FileLocation } from "@ermine/core/util/stacktrace"
@@ -20,10 +20,11 @@ const sited = new WeakSet<object>()
 // the site of the call starting now, till a function takes it
 let pending: FileLocation | undefined
 
-// a token for file:line:column (the plugin's module's, one per call it rewrote)
-export function site(file: string, line: number, column: number): Site {
+// a token for file:line:column (the plugin's module's, one per call it rewrote); a feature giving
+// the site of something it found (siteOf) gives its function too
+export function site(file: string, line: number, column: number, fn?: string): Site {
 	const s = {} as Site
-	minted.set(s, { at: { file, line, column } })
+	minted.set(s, { at: { file, line, column, ...fn !== undefined && { function: fn } } })
 	return s
 }
 
@@ -56,7 +57,7 @@ export function take(): FileLocation | undefined {
 	pending = undefined
 	return p
 }
-// f, marked as one of @ermine/system's functions (functions.ts, each as it is made)
+// f, marked as one of @ermine/system's functions (nodes.ts, reading.ts …, each as it is made)
 export function marked<F>(f: F): F {
 	mark([f])
 	return f

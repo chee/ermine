@@ -8,7 +8,7 @@ import { createTable, type Id, type Key } from "@ermine/core/table"
 import { createPlaces } from "@ermine/core/places"
 import { createChangeHeader, NODE } from "@ermine/core/places/header"
 import { STATUS, TABLE as STATUS_TABLE } from "@ermine/core/places/status"
-import { upsert } from "@ermine/core/places/upsert"
+import { upsert } from "@ermine/upsert"
 import type { Value } from "@ermine/encoding/cbor"
 import { hash } from "@ermine/formats/hash"
 import {

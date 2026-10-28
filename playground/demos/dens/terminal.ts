@@ -12,7 +12,7 @@
 import { level, type Path, PlacesError } from "@ermine/core/places"
 import { createChangeHeader } from "@ermine/core/places/header"
 import { members } from "@ermine/core/places/lib"
-import { upsert } from "@ermine/core/places/upsert"
+import { upsert } from "@ermine/upsert"
 import { RUNNER } from "@ermine/software"
 import { type Host, KINDS, NAME, OUT } from "./host.ts"
 import { FOLDER, MACHINERY, type Unplaced } from "./made.ts"

@@ -25,8 +25,6 @@
 // { op: "unplace", at, name }                → {}
 // { op: "rename", at, name, to }             → {}
 // { op: "move", at, name, to: { at, name } } → {}
-// { op: "upsert", part, id, path, value }    → {}   upsert.ts; the same value there: no write
-// { op: "getOrSet", part, id, path, value }  → { value }   the value at path, else value put there
 // { op: "peep", request }                    → request's answer, made under places.peep: its reads tell no one
 // status (status.ts):
 // { op: "status" }                           → {}   the status listener, made once
@@ -44,8 +42,9 @@
 // { op: "header", scope?, extra? }           → { actor, reader?, metadata?, timely, sites }
 //    the header places makes with scope open, extra its own info; timely: time is now (whole
 //    seconds); sites: its external's count. nothing open: { error: "unscoped" }
-// { op: "watchPath", name, path, part?, at?, sites? }  → {}   watched: each fact { part, id, patches,
-//    actor? }; sites: true adds sites, the count of its change's external (0: no change)
+// { op: "watchAll", name, id?, part?, sites? } → {}   watched: each fact { part, id, patches, actor? }
+//    of the id and part given (none: every fact); sites: true adds sites, the count of its change's
+//    external (0: no change)
 // anything not understood: { error: text }
 import createEntry, { type ChangeHeader } from "@ermine/core/node/entry"
 import update from "@ermine/core/changeable/update"
@@ -59,7 +58,6 @@ import { createPlaces, move, place, PlacesError, rename, unplace, type Where } f
 import type { Answer, Request } from "../../../conformance/typescript/harness.ts"
 import { toJson } from "../../../conformance/typescript/form.ts"
 import { createChangeHeader } from "./header.ts"
-import { getOrSet, upsert } from "./upsert.ts"
 import { createStatus, PENDING, status } from "./status.ts"
 import { createPathCache, type PathCache } from "./cache.ts"
 import { frames } from "@ermine/core/util/stacktrace"
@@ -193,11 +191,6 @@ export function write(r: Request): void {
 		case "edit":
 			edit(r.part, r.id, r.patches as Patch[])
 			return
-		case "upsert":
-			places.commit(
-				upsert(table, r.part, id(r.id), r.path as string[], r.value, h()),
-			)
-			return
 		case "place":
 			places.commit(place(at(r.at), r.name, id(r.id), h()))
 			return
@@ -282,14 +275,16 @@ export function worldAnswer(r: Request): Json | undefined {
 			cache?.stop()
 			cache = undefined
 			return {}
-		case "watchPath": {
+		case "watchAll": {
 			const told: Json[] = []
-			const stop = places.watchPath(r.path, (f) => {
+			const stop = places.watchAll((f) => {
+				if (r.id !== undefined && f.id !== id(r.id)) return
+				if (r.part !== undefined && f.part !== r.part) return
 				const fact: Record<string, Json> = { part: f.part, id: f.id, patches: f.patches }
 				if (f.change !== undefined) fact.actor = f.change.actor
 				if (r.sites === true) fact.sites = f.change?.external?.length ?? 0
 				told.push(fact)
-			}, { part: r.part, at: r.at })
+			})
 			watches.set(r.name, { told, stop })
 			return {}
 		}
@@ -304,28 +299,12 @@ export function worldAnswer(r: Request): Json | undefined {
 			watches.delete(r.name)
 			return {}
 		case "edit":
-		case "upsert":
 		case "place":
 		case "unplace":
 		case "rename":
 		case "move":
 			hosted(() => write(r))
 			return {}
-		case "getOrSet":
-			return {
-				value: hosted(() => {
-					const got = getOrSet(
-						table,
-						r.part,
-						id(r.id),
-						r.path as string[],
-						() => r.value,
-						header(),
-					)
-					places.commit(got.changed)
-					return toJson(got.value)
-				}),
-			}
 		case "status":
 			statuses ??= createStatus({ places, table, scheduler: s })
 			return {}

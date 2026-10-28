@@ -284,10 +284,16 @@ Deno.test("HELD: what is put in one box is not seen by the host, nor by another 
 	assertEquals(get(places, ["work", "mine"]), undefined, "a put was seen by the host")
 })
 
-Deno.test("HELD: a box watch is not told of a write beside/above it", () => {
+Deno.test("HELD: a read through a box is not rerun by a write beside/above it", () => {
 	const { s, table, places, b, hosted, header } = world()
 	let inside = 0, other = 0
-	const stopInside = b.places.watchPath(["fetch"], () => inside++)
+	s.runWithScope(s.createRootScope({ actor: "x" }), () => {
+		s.createComputer(() => (inside++, get(b.places, ["fetch"])), () => {})
+		// a host reader, to prove writes happened
+		s.createComputer(() => (other++, get(places, ["tools"])), () => {})
+	})
+	s.pulse()
+	const [before, hostBefore] = [inside, other]
 	// a change beside the box: the host's tools value
 	hosted(() => table.sub("value", "T", createEntry("tools-value-2", header())))
 	// a new sibling under the parent R
@@ -298,12 +304,10 @@ Deno.test("HELD: a box watch is not told of a write beside/above it", () => {
 			createEntry({ work: "W", tools: "T", secret: "S", more: "M" }, header()),
 		)
 	)
-	const stopOther = places.watchPath(["tools"], () => other++) // a host watch, to prove writes happened
 	hosted(() => table.sub("value", "T", createEntry("tools-value-3", header())))
-	stopInside()
-	stopOther()
-	assertEquals(inside, 0, "a box watch was told of a change beside it")
-	assert(other >= 1, "sanity: the host watch should have fired")
+	s.pulse()
+	assertEquals(inside, before, "a read through the box was rerun by a change beside it")
+	assert(other > hostBefore, "sanity: the host reader should have rerun")
 })
 
 Deno.test("HELD: satisfy from a box does not reach a loader placed above/beside it", () => {

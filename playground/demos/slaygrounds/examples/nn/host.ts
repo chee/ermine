@@ -5,6 +5,7 @@
 // host runs nn's on/step while it is playing (a pulse after each: the forward pass the next step
 // reads), then on/frame, which paints. measure (/host/on/measure) is the host's too: it is async
 import { createWorld } from "@ermine/slaygrounds/world"
+import pipes from "@ermine/pipe"
 import { createAction, executeAction, peep, read } from "@ermine/system"
 import type { Ermine } from "@ermine/system"
 import update from "@ermine/core/changeable/update"
@@ -54,6 +55,7 @@ const stats: Stats = {
 const world = createWorld({
 	render,
 	processes: [{ name: "nn" }],
+	features: [pipes],
 	actor: "me@laptop",
 	extend: (): Extra => ({
 		bulk(puts) {

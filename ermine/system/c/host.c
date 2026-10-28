@@ -488,6 +488,26 @@ const ch_site *es_enter(es_ermine *e, const ch_site *site) {
 	return was;
 }
 
+// a setup running: its scope, and the process's site once a call there has given one
+struct es_setup {
+	sc_scope *scope;
+	int has_site;
+	ch_site site;
+	struct es_setup *up;
+};
+
+const ch_site *es_setup_site(es_ermine *e, const ch_site *given) {
+	struct es_setup *s = e->setup;
+	if (s == NULL || sc_get_current_scope(e->scheduler) != s->scope) return given;
+	if (!s->has_site) {
+		if (given == NULL) return NULL;
+		s->site = *given;
+		s->site.function = "setup";
+		s->has_site = 1;
+	}
+	return &s->site;
+}
+
 // a write's header now: the open scope's. outside a run its site the call's, in one the running
 // computer's own
 int es_header(es_ermine *e, ch_header *out, pl_made **made) {
@@ -496,7 +516,7 @@ int es_header(es_ermine *e, ch_header *out, pl_made **made) {
 	const ch_site *site = NULL;
 	sc_run *run = sc_get_run(e->scheduler);
 	if (run == NULL) {
-		site = e->site;
+		site = es_setup_site(e, e->site);
 	} else {
 		const st_site *own = st_site_of(e->sites, sc_run_computer(run));
 		if (own != NULL) {
@@ -529,7 +549,6 @@ static void run_pulse(void *data) {
 	hosting *h = host_of(e);
 	h->queued = 0;
 	if (e->closed) return;
-	es_pipes_told(e);
 	sc_pulse(e->scheduler);
 	free(sc_escaped(e->scheduler));
 }
@@ -552,7 +571,6 @@ static void pulse_ended(void *data) {
 int es_pulse(es_context *c) {
 	es_ermine *e = c->ermine;
 	TRY(es_alive(e));
-	es_pipes_told(e);
 	sc_pulse(e->scheduler);
 	char *bad = sc_escaped(e->scheduler);
 	if (bad != NULL) {
@@ -1412,7 +1430,6 @@ static int init_nodes(void *data) {
 	if (code != 0) return code;
 	op_value *attrs = op_map();
 	op_set(attrs, ES_ARGS, names_value(a->o->host.args, a->o->host.nargs));
-	if (a->o->host.machine != NULL) op_set(attrs, ES_MACHINE, op_ref((op_value *)a->o->host.machine));
 	op_set(attrs, ES_FEATURES_ATTRIBUTE, shown_value(e));
 	whole.value = attrs;
 	w = (es_write){.part = PART_ATTRIBUTES, .id = e->node, .patches = &whole, .npatches = 1};
@@ -1894,7 +1911,11 @@ static void run_setup(proc_rec *rec) {
 	setup_call c = {rec, es_out_of(NULL)};
 	// the nodes it reads that are not there are held while it runs, then said in its status
 	es_setting(e, rec->id, 1);
+	// its writes and makes given a site take the process's (es_setup_site)
+	struct es_setup frame = {.scope = at, .up = e->setup};
+	if (at != NULL) e->setup = &frame;
 	int stopped = at == NULL || sc_run_with_scope(at, setup_thunk, &c) != NULL;
+	if (at != NULL) e->setup = frame.up;
 	if (at != NULL) sc_release(at);
 	op_value *waits = NULL;
 	if (!stopped && c.out.kind == ES_OUT_PENDING) waits = waits_value(e, rec->id);
@@ -2119,10 +2140,9 @@ int es_start_in(es_context *c, es_program fn, void *ctx, es_at at, const es_star
 		return es_fail_ermine(ES_GONE, "gone: what this was started in has ended");
 	}
 	const op_value *node = es_pair_of(own, PL_NODE);
-	if ((node != NULL && node->type == OP_STR && es_is_computer(e, node->str)) ||
-		es_pair_of(own, "pipe") != NULL) {
+	if (node != NULL && node->type == OP_STR && es_is_computer(e, node->str)) {
 		return es_fail_ermine(ES_NOT_HERE,
-			"start in a memo, effect or pipe: start a process in setup or an action");
+			"start in a memo or effect: start a process in setup or an action");
 	}
 	if (fn == NULL) return es_fail_ermine(ES_NOT_A_FUNCTION, "start takes the program: its function");
 	es_names path;

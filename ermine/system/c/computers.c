@@ -1,4 +1,4 @@
-// computers (system.ts' createMemo, createEffect, getStatus), in C: memos, effects, their nodes and
+// computers (system/computing.ts' createMemo, createEffect; system/status.ts' getStatus), in C: memos, effects, their nodes and
 // names, status, runs. B's job, function by function (ermine.h says each):
 //   state: es_computers_new, es_computers_free, es_computer_forget (the memos, computers, contexts and
 //     awaiting sets; each context's names for what its owners' runs made)
@@ -624,6 +624,8 @@ static int create(es_context *c, int memo, es_names *path, char **key, es_comput
 	es_ermine *e = c->ermine;
 	struct es_computers *x = e->computers;
 	sc_scope *own = es_owner(c);
+	// made in a process's setup: its site is the process's (es_setup_site)
+	site = es_setup_site(e, site);
 	char *id = es_new_id(e);
 	placing p = {c, path->names, path->n, id, node_above(own)};
 	int code = es_inside(c, place_node, &p);
@@ -890,7 +892,7 @@ static int plain_status(es_context *c, const char *id, const op_value *v, es_sta
 		return 0;
 	}
 	if (!cst_is_pending(v)) {
-		st->state = es_pipe_looped(e, id) ? "looping" : "failed";
+		st->state = "failed";
 		st->error = error_text(v);
 		return 0;
 	}

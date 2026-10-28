@@ -55,6 +55,9 @@ program_libs = $(if $(filter Darwin,$(shell uname -s)),-framework CoreServices -
 manifest_src = playground/tools/files/c/manifest.c playground/tools/files/c/manifest_harness.c playground/tools/files/c/diag.c playground/tools/files/c/saved.c playground/tools/files/c/saved_shown_harness.c \
 	playground/tools/files/c/saved_pack.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c $(blake3_src)
 
+# upsert (playground/libraries/upsert): a value made or patched at a path in a part's entry, for the libraries that write so
+upsert_src = playground/libraries/upsert/c/upsert.c
+
 # BLAKE3 portable only: no SIMD dispatch, no NEON (ermine/encoding/c/blake3 has no such files)
 blake3_src = ermine/encoding/c/blake3/blake3.c ermine/encoding/c/blake3/blake3_dispatch.c ermine/encoding/c/blake3/blake3_portable.c
 BLAKE3FLAGS = -DBLAKE3_NO_SSE2 -DBLAKE3_NO_SSE41 -DBLAKE3_NO_AVX2 -DBLAKE3_NO_AVX512 -DBLAKE3_USE_NEON=0
@@ -83,7 +86,7 @@ program = playground/tools/files/c/program-harness
 sys = playground/tools/files/c/sys-harness
 
 # presence (playground/together/presence): its harness on places, the table and the scheduler (the C harness has no BroadcastChannel)
-presence_src = $(harness_src) playground/together/presence/c/presence_harness.c playground/together/presence/c/presence.c playground/together/presence/c/channel.c core/places/c/places.c core/unread/c/unread.c core/table/c/table.c core/node/c/node.c core/changeable/c/update.c core/changeable/c/value.c core/changeable/c/apply.c core/changeable/c/invert.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c playground/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c
+presence_src = $(harness_src) playground/together/presence/c/presence_harness.c playground/together/presence/c/presence.c playground/together/presence/c/channel.c $(upsert_src) core/places/c/places.c core/unread/c/unread.c core/table/c/table.c core/node/c/node.c core/changeable/c/update.c core/changeable/c/value.c core/changeable/c/apply.c core/changeable/c/invert.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c playground/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c
 presence = playground/together/presence/c/presence-harness
 presence_suite = presence
 presence_tests = $(wildcard playground/together/presence/typescript/presence_harness_test.ts)
@@ -177,19 +180,19 @@ LIBS += types-test
 # the compilers library and host functions; compilers (playground/compilers) on its own.
 # compilers (no boxes) keeps places' own world (world_harness.h); programs and start run on the ermine (ermine/system) and boxes (extensions/boxes),
 # their world playground/programs/c/pw.c
-compilers_base = $(filter-out core/places/c/places_harness.c,$(places_src)) ermine/processes/c/processes.c playground/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c playground/encoding/c/hash.c $(blake3_src) experiments/software/c/functions.c
-programs_base = $(filter-out ermine/system/c/ermine_harness.c,$(system_src)) playground/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c playground/encoding/c/hash.c $(blake3_src) experiments/software/c/functions.c extensions/boxes/c/boxes.c playground/programs/c/pw.c
+compilers_base = $(filter-out core/places/c/places_harness.c,$(places_src)) ermine/processes/c/processes.c playground/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c playground/encoding/c/hash.c $(blake3_src)
+programs_base = $(filter-out ermine/system/c/ermine_harness.c,$(system_src)) playground/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c playground/encoding/c/hash.c $(blake3_src) extensions/boxes/c/boxes.c playground/programs/c/pw.c
 programs_lib = ermine/types/c/types.c ermine/types/c/utis.c playground/programs/c/programs.c playground/programs/c/programs_json.c
 # software's own files (experiments/software): start runs its processes on it
-software_lib = experiments/software/c/common.c experiments/software/c/offers.c experiments/software/c/run.c experiments/software/c/software.c
-programs_src = $(programs_base) $(programs_lib) playground/programs/c/programs_harness.c
+
+programs_src = $(programs_base) $(programs_lib) $(upsert_src) playground/programs/c/programs_harness.c
 programs = playground/programs/c/programs-harness
 programs_suite = programs
 programs_tests = $(wildcard playground/programs/typescript/programs_harness_test.ts)
-compilers_src = $(compilers_base) playground/compilers/c/compilers.c playground/compilers/c/compilers_harness.c
+compilers_src = $(compilers_base) $(upsert_src) playground/compilers/c/compilers.c playground/compilers/c/compilers_harness.c
 compilers = playground/compilers/c/compilers-harness
 compilers_suite = compilers
-programs-start_src = $(programs_base) $(programs_lib) playground/compilers/c/compilers.c $(software_lib) playground/programs/c/start.c playground/programs/c/start_harness.c playground/programs/c/dlopen.c
+programs-start_src = $(programs_base) $(programs_lib) $(upsert_src) playground/compilers/c/compilers.c $(software_lib) playground/programs/c/start.c playground/programs/c/start_harness.c playground/programs/c/dlopen.c
 programs-start = playground/programs/c/start-harness
 programs-start_suite = start
 programs-start_flags = -DPG_FIXTURES='"$(CURDIR)/playground/programs/c/fixtures/"'
@@ -228,7 +231,7 @@ installs = playground/installs/c/installs-harness
 installs_suite = installs
 LIBS += installs
 # sessions (playground/sessions): the "online" part, a session's entry at a node; places' harness's world, without its harnesses
-sessions_src = $(filter-out core/places/c/places_harness.c core/places/c/world_harness.c,$(places_src)) ermine/ids/c/ids.c $(blake3_src) playground/sessions/c/sessions.c playground/sessions/c/sessions_harness.c core/ed25519/c/ed25519.c core/ed25519/c/sha2.c
+sessions_src = $(filter-out core/places/c/places_harness.c core/places/c/world_harness.c,$(places_src)) ermine/ids/c/ids.c $(blake3_src) playground/sessions/c/sessions.c playground/sessions/c/sessions_harness.c $(upsert_src) core/ed25519/c/ed25519.c core/ed25519/c/sha2.c
 sessions = playground/sessions/c/sessions-harness
 sessions_suite = sessions
 LIBS += sessions
@@ -237,12 +240,19 @@ trust_src = $(filter-out playground/sessions/c/sessions_harness.c,$(sessions_src
 trust = playground/trust/c/trust-harness
 trust_suite = trust
 LIBS += trust
-# software (experiments/software): offers and run, with no den, policy or asks; processes of its own; ermine/types,
-# for matching by conformance; the ermine (ermine/system) the world is, and boxes (extensions/boxes), for its box runs
-software_src = $(filter-out ermine/system/c/ermine_harness.c,$(system_src)) experiments/software/c/functions.c ermine/types/c/types.c ermine/types/c/utis.c playground/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c playground/encoding/c/hash.c $(blake3_src) extensions/boxes/c/boxes.c experiments/software/c/common.c experiments/software/c/offers.c experiments/software/c/run.c experiments/software/c/software.c experiments/software/c/software_harness.c
+# software (experiments/software): run a program through a loader, on the ermine (ermine/system). its harness runs the suite;
+# ermine-run is the terminal program: make experiments/software/c/ermine-run, and hello.so beside it
+software_lib = experiments/software/c/software.c
+software_src = $(filter-out ermine/system/c/ermine_harness.c,$(system_src)) $(software_lib) experiments/software/c/software_harness.c
 software = experiments/software/c/software-harness
 software_suite = software
 LIBS += software
+ermine-run_src = $(filter-out ermine/system/c/ermine_harness.c conformance/c/harness.c conformance/c/protocol_harness.c,$(system_src)) $(software_lib) experiments/software/c/ermine-run.c
+ermine-run = experiments/software/c/ermine-run
+ermine-run_flags = -rdynamic
+$(ermine-run) $(ermine-run)-check: $(wildcard */*/c/*.h)
+experiments/software/c/hello.so: experiments/software/c/hello.c experiments/software/c/software.h
+	$(CC) $(CFLAGS) -shared -fPIC $(if $(filter Darwin,$(shell uname -s)),-undefined dynamic_lookup,) -o $@ experiments/software/c/hello.c
 # sync's pieces for the new commit shape (playground/encoding commit, playground/together): their own loop (lines_harness.c is conformance/c/harness.c
 # reading a symbol as a string no one can carry), against the suites in playground/encoding/conformance and playground/together/conformance.
 # commit_form_harness.c (a commit's forms on the line) and commits_harness.c (the commits a harness makes by label) are the harnesses', never
@@ -351,6 +361,8 @@ endef
 $(foreach l,$(LIBS),$(eval $(call harness,$(l))))
 # pully's C, not in LIBS (its section above): a rule to build it alone
 $(eval $(call harness,pullynode))
+# software's terminal program (its section above)
+$(eval $(call harness,ermine-run))
 # start's stop (ermine/processes/c/start_test.c): what its scope's teardown threw is given back. make test-start-processes, test-check-start-processes (the sanitizers)
 processes-start_src = $(filter-out core/places/c/places_harness.c conformance/c/harness.c conformance/c/protocol_harness.c core/places/c/world_harness.c,$(places_src)) ermine/processes/c/processes.c ermine/processes/c/scopes.c ermine/processes/c/start.c ermine/processes/c/runs.c ermine/sites/c/sites.c ermine/processes/c/start_test.c
 processes-start = ermine/processes/c/start-test
@@ -387,7 +399,7 @@ test-check-refuse-system: $(system-refuse)-check
 	@echo "== system (refuse, sanitizers)"
 	@$(system-refuse)-check
 # what a review found that the harness cannot show (ermine/system/c/review_test.c): a wait made as its
-# scope goes, a hook calling next twice, a handler failing with no text, a policy answering pending.
+# scope goes, a hook calling next twice, a handler failing with no text.
 # make test-review-system, test-check-review-system (the sanitizers)
 system-review_src = $(filter-out conformance/c/harness.c conformance/c/protocol_harness.c ermine/system/c/ermine_harness.c,$(system_src)) ermine/system/c/review_test.c
 system-review = ermine/system/c/review-test
@@ -438,7 +450,7 @@ test-steady-system: $(system-steady)
 	@$(system-steady)
 
 # headers: any change rebuilds what includes them
-$(HARNESSES) $(CHECKS): $(wildcard */*/c/*.h */*/stacks/*/c/*.h conformance/c/*.h)
+$(HARNESSES) $(CHECKS): $(wildcard */*/c/*.h */*/stacks/*/c/*.h conformance/c/*.h playground/libraries/*/c/*.h)
 
 # a suite on the one runner (conformance/run.ts): its scenarios (<package>/conformance/<suite>/), and
 # the package's tests of its harness (<package>/typescript/<suite>_harness_test.ts), both asked of
@@ -564,6 +576,7 @@ playground/tools/files/c/files-check: $(files_src) $(wildcard */*/c/*.h */*/stac
 clean:
 	rm -rf playground/tools/files/c/files playground/tools/files/c/files-check playground/tools/files/c/files-check.dSYM
 	rm -rf $(HARNESSES) $(CHECKS) $(BENCHES) $(addsuffix .dSYM,$(HARNESSES) $(CHECKS))
+	rm -rf $(ermine-run) $(ermine-run)-check $(ermine-run).dSYM $(ermine-run)-check.dSYM experiments/software/c/hello.so
 	rm -rf $(system-steady) $(system-steady)-check $(system-steady).dSYM
 	rm -rf $(system-review) $(system-review)-check $(system-review).dSYM
 	rm -rf $(system-promise) $(system-promise)-check $(system-promise).dSYM

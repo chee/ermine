@@ -8,7 +8,9 @@
 // - bytes major type 2, strings 3, lists 4, maps 5; map keys strings, sorted bytewise by encoding
 // - typed arrays: tag over little-endian bytes (uint16 69 … float64 86); NaN elements quiet, no
 //   payload; -0 elements kept; no uint8 kind (tag 64 never written)
-// - stand-ins: tag 0x12345678 over the kind; live values and symbols have no encoding
+// - stand-ins: tag 0x12345678 over the kind; live values and symbols have no encoding, unless
+//   encode(x, { live: true }): each then a stand-in of a string kind naming it ("function f",
+//   "function anonymous", a symbol's toString, a class object's constructor name or "object")
 // - at most DEPTH nested containers
 // bytes: any Uint8Array view in, a fresh one out. a stand-in is the class Stand; a function, Map,
 // ArrayBuffer (for now) or other class object is live. decoding accepts exactly what encoding
@@ -292,7 +294,21 @@ const SHALLOW = 64
 export const DEPTH = 1024
 const tooDeep = `nested deeper than ${DEPTH}`
 
-function value(out: Out, x: unknown, open: Set<object>, depth: number) {
+// what a live value is called, as the kind of its stand-in
+function liveKind(x: unknown): string {
+	if (typeof x === "function") return `function ${x.name || "anonymous"}`
+	if (typeof x === "symbol") return x.toString()
+	const name = (x as { constructor?: { name?: unknown } }).constructor?.name
+	return typeof name === "string" && name ? name : "object"
+}
+
+function stand(out: Out, x: unknown, depth: number) {
+	if (depth >= DEPTH) throw new CborError(`a value ${tooDeep} has no encoding`)
+	out.head(6, STAND)
+	text(out, liveKind(x))
+}
+
+function value(out: Out, x: unknown, open: Set<object>, depth: number, live: boolean) {
 	if (typeof x === "number") return number(out, x)
 	if (typeof x === "string") return text(out, x)
 	if (typeof x === "bigint") {
@@ -301,6 +317,7 @@ function value(out: Out, x: unknown, open: Set<object>, depth: number) {
 	if (x === null) return out.byte(0xf6)
 	if (x === false) return out.byte(0xf4)
 	if (x === true) return out.byte(0xf5)
+	if (live && (typeof x === "function" || typeof x === "symbol")) return stand(out, x, depth)
 	if (typeof x !== "object") throw new CborError(`a ${typeof x} is not a value`)
 	if (x instanceof Uint8Array) {
 		out.head(2, x.length)
@@ -309,11 +326,14 @@ function value(out: Out, x: unknown, open: Set<object>, depth: number) {
 	if (x instanceof Stand) {
 		if (depth >= DEPTH) throw new CborError(`a value ${tooDeep} has no encoding`)
 		out.head(6, STAND)
-		return value(out, x.kind, open, depth + 1)
+		return value(out, x.kind, open, depth + 1, live)
 	}
 	if (ArrayBuffer.isView(x)) {
 		const kind = BY_CLASS.get(x.constructor)
-		if (!kind) throw new CborError(`a ${x.constructor.name} is not a value`)
+		if (!kind) {
+			if (live) return stand(out, x, depth)
+			throw new CborError(`a ${x.constructor.name} is not a value`)
+		}
 		const t = x as Typed
 		out.head(6, kind.tag)
 		out.head(2, t.byteLength)
@@ -324,6 +344,10 @@ function value(out: Out, x: unknown, open: Set<object>, depth: number) {
 		return out.bytes(elements(t, kind))
 	}
 	if (depth >= DEPTH) throw new CborError(`a value ${tooDeep} has no encoding`)
+	if (live && !Array.isArray(x)) {
+		const proto = Object.getPrototypeOf(x)
+		if (proto !== Object.prototype && proto !== null) return stand(out, x, depth)
+	}
 	const deep = depth > SHALLOW
 	if (deep) {
 		if (open.has(x)) throw new CborError("a value cannot hold itself")
@@ -331,7 +355,7 @@ function value(out: Out, x: unknown, open: Set<object>, depth: number) {
 	}
 	if (Array.isArray(x)) {
 		out.head(4, x.length)
-		for (let i = 0; i < x.length; i++) value(out, x[i], open, depth + 1)
+		for (let i = 0; i < x.length; i++) value(out, x[i], open, depth + 1, live)
 	} else {
 		const proto = Object.getPrototypeOf(x)
 		if (proto !== Object.prototype && proto !== null) {
@@ -357,16 +381,20 @@ function value(out: Out, x: unknown, open: Set<object>, depth: number) {
 		out.head(5, ks.length)
 		for (let i = 0; i < ks.length; i++) {
 			out.bytes(bs[i])
-			value(out, (x as { [k: string]: unknown })[ks[i]], open, depth + 1)
+			value(out, (x as { [k: string]: unknown })[ks[i]], open, depth + 1, live)
 		}
 	}
 	if (deep) open.delete(x)
 }
 
-/** The deterministic CBOR of a value. A live value, a symbol, or anything not a value, throws. */
-export function encode(x: Value): Uint8Array {
+/**
+ * The deterministic CBOR of a value. A live value, a symbol, or anything not a value, throws;
+ * with `live`, a live value or symbol is a Stand of its name (a function "function name", a
+ * symbol its toString, a class object its constructor's name) and only the rest throws.
+ */
+export function encode(x: Value, options?: { live?: boolean }): Uint8Array {
 	const out = new Out()
-	value(out, x, new Set(), 0)
+	value(out, x, new Set(), 0, options?.live === true)
 	return out.buf.slice(0, out.n)
 }
 

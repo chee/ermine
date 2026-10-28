@@ -1,5 +1,5 @@
 // what a review found that the harness cannot show (it needs a scope torn down as a wait is made, a
-// hook calling next twice, a handler failing with no text, a policy answering pending). each is
+// hook calling next twice, a handler failing with no text). each is
 // checked here, and the memory ones under AddressSanitizer. make test-review-system,
 // test-check-review-system (the sanitizers)
 #include "ermine.h"
@@ -120,56 +120,6 @@ static void failing_with_no_text(void) {
 	es_started_free(started);
 	CHECK(es_close(e) == 0);
 	es_free(e);
-}
-
-// a pipe's from read: allowed as it is made, then the policy answers as the test says
-static int answer;
-static int told;
-static pr_answer reads_as_asked(void *ctx, const pr_ask *ask, const pr_read *read) {
-	(void)ctx, (void)read;
-	if (strcmp(ask->op, "read") == 0 && answer != PR_YES) return (pr_answer){.verdict = answer};
-	return (pr_answer){.verdict = PR_YES};
-}
-static int counts(es_context *c, void *ctx, const es_watched *w) {
-	(void)c, (void)ctx, (void)w;
-	told++;
-	return 0;
-}
-static es_out makes_a_pipe(es_context *c, void *ctx) {
-	(void)ctx;
-	es_pipe_options o = {.tell = counts};
-	es_handle *h;
-	CHECK(es_pipe(c, es_on_path(es_text("/src")), &o, &h) == 0);
-	return es_out_of(NULL);
-}
-static void pipe_heard_with(int verdict) {
-	pr_policy *may = pr_call(reads_as_asked, NULL);
-	es_options o = {.may = may};
-	es_ermine *e = NULL;
-	answer = PR_YES;
-	told = 0;
-	CHECK(es_create(&o, &e) == 0);
-	es_handle *h;
-	op_value *zero = op_num(0);
-	CHECK(es_ensure_node(e->host_context, es_text("/src"), zero, &h) == 0);
-	es_started *started = NULL;
-	es_refused no = {0};
-	CHECK(es_start(e, makes_a_pipe, NULL, es_text("/code/p"), NULL, &started, &no) == 0);
-	CHECK(es_pulse(e->host_context) == 0);
-	answer = verdict;
-	op_value *five = op_num(5);
-	op_patch p = {.has_value = 1, .value = five};
-	CHECK(es_patch(e->host_context, es_on_path(es_text("/src")), &p, 1) == 0);
-	CHECK(es_pulse(e->host_context) == 0);
-	// neither pending nor failed is an answer of yes
-	CHECK(told == 0);
-	es_stop(started, NULL);
-	es_started_free(started);
-	op_free(five);
-	op_free(zero);
-	CHECK(es_close(e) == 0);
-	es_free(e);
-	pr_policy_free(may);
 }
 
 // a memo giving a promise on each run: an earlier one settling late leaves it awaiting the latest's
@@ -305,7 +255,6 @@ int main(int argc, char **argv) {
 	RUN("next", next_called_twice(0));
 	RUN("next-changed", next_called_twice(1));
 	RUN("no-text", failing_with_no_text());
-	RUN("pipe-pending", pipe_heard_with(PR_PENDING));
 	RUN("stale-promise", stale_promise_settling());
 	RUN("foreign-seen", seen_by_a_foreign_context());
 	RUN("stop-thrown", teardown_thrown(0));

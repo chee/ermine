@@ -4,6 +4,7 @@
 // write in, so the host runs the process's on/typed with each change (executeAction, as the host)
 import { createWorld } from "@ermine/slaygrounds/world"
 import { executeAction } from "@ermine/system"
+import pipes from "@ermine/pipe"
 import { render } from "ermine-h"
 
 const cm = await import(
@@ -13,6 +14,7 @@ const cm = await import(
 const world = createWorld({
 	render,
 	processes: [{ name: "lens" }],
+	features: [pipes],
 	extend: ({ at }) => ({
 		// a CodeMirror; its changes and the ones it is given are in UTF-16 units. its typing runs
 		// the process's on/typed

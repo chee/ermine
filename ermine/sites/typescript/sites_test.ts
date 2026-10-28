@@ -109,3 +109,16 @@ Deno.test("a site given (a build's) is taken over the stack; none given, capture
 	const d = scheduler.runWithScope(root, () => sited.createComputer(() => 1, () => {}))
 	assertEquals(base(sited.siteOf(d)?.file), "sites_test.ts")
 })
+
+Deno.test("a given site is told what is being made: a scope, or a computer", () => {
+	const scheduler = createScheduler()
+	const asked: string[] = []
+	const sited = createSites(scheduler, { given: (made) => (asked.push(made), undefined) })
+	const root = sited.createRootScope(INFO)
+	scheduler.runWithScope(root, () => {
+		sited.createScope(INFO, root)
+		sited.createComputer(() => 1, () => {})
+		sited.createEffect(() => 1, () => {})
+	})
+	assertEquals(asked, ["scope", "scope", "computer", "computer"])
+})

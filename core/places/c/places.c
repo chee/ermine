@@ -41,27 +41,10 @@ struct hold {
 
 struct pl_watch {
 	pl *l;
-	char **path;
-	size_t n;
-	int has_part;
-	tb_key part;
-	int has_at;
-	op_key *at;
-	size_t at_length;
 	pl_watch_fn fn;
 	void *ctx;
 	int stopped;
-	// told every fact (pl_watch_all): in the alls, not the watches
-	int all;
 	pl_watch *prev, *next;
-	// the order made; the node its path finds now (has_id), and the ids of the folders on its
-	// route, their strings the watch's own; the telling that last marked it
-	size_t seq;
-	int has_id;
-	tb_key id;
-	tb_key *route;
-	size_t nroute;
-	size_t epoch;
 };
 
 // an entry the places owns, and the table it is let go of out of (NULL: at pl_free only)
@@ -71,7 +54,8 @@ typedef struct {
 } owned_t;
 
 // what every view of a places shares: the table, paths and scheduler, the spots, the holds and keeps,
-// the record, the watches and what it owns. let go with the last of the places and views over it
+// the record, the pl_watch_all functions and what it owns. let go with the last of the places and
+// views over it
 typedef struct {
 	tb_table *table;
 	pt_paths *paths;
@@ -93,17 +77,12 @@ typedef struct {
 	// on, till it ends (a fact being told may point into them)
 	pm holds;
 	hold *held, *dropped;
-	// the watches, in the order made; the ones stopped while being told, till the telling ends
-	pl_watch *watches, *watches_end, *dead;
-	// pl_watch_all's, in the order made
-	pl_watch *alls, *alls_end;
+	// pl_watch_all's, in the order made; the ones stopped while being told, till the telling ends
+	pl_watch *alls, *alls_end, *dead;
 	int telling;
-	// the watches by the id they are at, and by each id on their route: buckets, by (a tag, the id)
-	tb_table *by_id, *on_route;
-	size_t seqs, epochs;
 	// the one unread children's writes go through (pl_unread)
 	un_unread *unread;
-	// the entries pl_upsert made, and those pl_own was given: the places', let go of at pl_free;
+	// the entries pl_own was given: the places', let go of at pl_free;
 	// one pl_own_in was given (in its table) as pl_sweep finds it out of that table. swept: how
 	// many were left by the last sweep
 	owned_t *owned;
@@ -182,8 +161,6 @@ pl *pl_new(void) {
 	l->s = xalloc(sizeof *l->s);
 	l->s->refs = 1;
 	l->s->pairs = tb_new();
-	l->s->by_id = tb_new();
-	l->s->on_route = tb_new();
 	l->s->kept = tb_new();
 	l->s->indexed = tb_new();
 	l->s->folders = tb_new();
@@ -247,11 +224,7 @@ static void names_free(shared *s);
 
 void pl_free(pl *l) {
 	if (l == NULL) return;
-	// its own watches stopped: they find their path from its root
-	for (pl_watch *w = l->s->watches, *next; w != NULL; w = next) {
-		next = w->next;
-		if (w->l == l) pl_stop(w);
-	}
+	// its own pl_watch_all functions stopped
 	for (pl_watch *w = l->s->alls, *next; w != NULL; w = next) {
 		next = w->next;
 		if (w->l == l) pl_stop(w);
@@ -262,7 +235,6 @@ void pl_free(pl *l) {
 		return;
 	}
 	while (s->held != NULL) unhold(l, s->held);
-	while (s->watches != NULL) pl_stop(s->watches);
 	while (s->alls != NULL) pl_stop(s->alls);
 	free_dead(l);
 	for (size_t i = 0; i < s->nowned; i++) nd_free_entry(s->owned[i].node);
@@ -275,8 +247,6 @@ void pl_free(pl *l) {
 	pm_clear(&s->made_by);
 	names_free(s);
 	tb_free(s->kept);
-	tb_free(s->by_id);
-	tb_free(s->on_route);
 	pm_clear(&s->mine);
 	tb_free(s->pairs);
 	while (s->all != NULL) {
@@ -796,7 +766,6 @@ static void names_free(shared *s) {
 	tb_free(s->named);
 }
 
-static void tell_watches(pl *l, const pl_fact *facts, size_t n);
 static void tell_alls(pl *l, const pl_fact *facts, size_t n);
 
 void pl_event(void *ctx, tb_key part, tb_key id) {
@@ -808,14 +777,14 @@ void pl_event(void *ctx, tb_key part, tb_key id) {
 	add_spots(&out, spots, n);
 	say(l, &out);
 	free(out.v);
-	if (l->s->watches == NULL && l->s->alls == NULL) return;
+	if (l->s->alls == NULL) return;
 	const nd_entry *entry = tb_get(l->s->table, part, id);
 	op_patch patch = {0};
 	if (entry != NULL && entry->value != NULL) {
 		patch.has_value = 1;
 		patch.value = op_ref(entry->value);
 	}
-	// the value and change as they are now: a watch that writes the entry changes them. taken out:
+	// the value and change as they are now: a function that writes the entry changes them. taken out:
 	// a change made now from the scope open (none open: none), as a write's is; its site is here,
 	// pl_event: the table's hook gives no caller of tb_del (places.ts has table.del's)
 	ch_header change = entry != NULL ? entry->change : (ch_header){0};
@@ -827,18 +796,14 @@ void pl_event(void *ctx, tb_key part, tb_key id) {
 		free(error);
 	}
 	pl_fact fact = {part, id, &patch, 1, changed ? &change : NULL, entry};
-	l->s->telling++;
 	tell_alls(l, &fact, 1);
-	tell_watches(l, &fact, 1);
-	l->s->telling--;
-	if (l->s->telling == 0) free_dead(l);
 	if (made != NULL) pl_made_free(made);
 	op_free((op_value *)patch.value);
 }
 
 // what a write landed: a fact for each entry with a latest op, at every key it is under (tb_who).
 // The caller's, pl_facts_free; the patches are the entries', the change a copy of each entry's
-// (a watch that writes an entry changes its change)
+// (a function that writes an entry changes its change)
 typedef struct {
 	size_t n;
 	pl_fact *items;
@@ -892,189 +857,18 @@ void pl_commit(pl *l, const pl_changed *changed) {
 	}
 	say(l, &out);
 	free(out.v);
-	// one telling over both: what a watch's write lets go of waits till every watch is told
-	l->s->telling++;
 	tell_alls(l, facts.items, facts.n);
-	tell_watches(l, facts.items, facts.n);
-	l->s->telling--;
-	if (l->s->telling == 0) free_dead(l);
 	pl_facts_free(&facts);
 }
 
 // watches ---------------------------------------------------------------------------------------
 
-static int key_same(const op_key *a, const op_key *b) {
-	if (a->type != b->type) return 0;
-	switch (a->type) {
-	case OP_NUM_KEY: return a->n == b->n;
-	case OP_STR_KEY: return strcmp(a->s, b->s) == 0;
-	default: return a->a == b->a && a->b == b->b;
-	}
-}
-
-// whether two paths in a value touch: one is the other or above it
-static int touch(const op_key *a, size_t an, const op_key *b, size_t bn) {
-	for (size_t i = 0; i < an && i < bn; i++) {
-		if (!key_same(&a[i], &b[i])) return 0;
-	}
-	return 1;
-}
-
-static int touches(const op_patch *p, const op_key *at, size_t n) {
-	return touch(p->place.path, p->place.length, at, n) ||
-		(p->has_move && touch(p->move.path, p->move.length, at, n));
-}
-
-// the watches at a key, in a table of buckets
-typedef struct {
-	pl_watch **v;
-	size_t n, cap;
-} bucket;
-static const char bucket_tag;
-
-static void bucket_add(tb_table *t, tb_key id, pl_watch *w) {
-	bucket *b = tb_get(t, tb_symbol(&bucket_tag), id);
-	if (b == NULL) {
-		b = xalloc(sizeof *b);
-		tb_add(t, tb_symbol(&bucket_tag), id, b);
-	}
-	if (b->n == b->cap) {
-		b->cap = b->cap ? b->cap * 2 : 2;
-		b->v = realloc(b->v, b->cap * sizeof *b->v);
-		if (b->v == NULL) abort();
-	}
-	b->v[b->n++] = w;
-}
-
-static void bucket_del(tb_table *t, tb_key id, pl_watch *w) {
-	bucket *b = tb_get(t, tb_symbol(&bucket_tag), id);
-	if (b == NULL) return;
-	for (size_t i = 0; i < b->n; i++) {
-		if (b->v[i] != w) continue;
-		b->v[i] = b->v[--b->n];
-		break;
-	}
-	if (b->n == 0) {
-		tb_del(t, tb_symbol(&bucket_tag), id);
-		free(b->v);
-		free(b);
-	}
-}
-
-// the watch out of the indexes, its id and route let go
-static void unindex(pl *l, pl_watch *w) {
-	if (w->has_id) bucket_del(l->s->by_id, w->id, w);
-	for (size_t i = 0; i < w->nroute; i++) bucket_del(l->s->on_route, w->route[i], w);
-	if (w->has_id) key_disown(w->id);
-	for (size_t i = 0; i < w->nroute; i++) key_disown(w->route[i]);
-	free(w->route);
-	w->route = NULL;
-	w->nroute = 0;
-	w->has_id = 0;
-}
-
-// the watch finds its path again, from the table, untold; moves in the indexes
-static int go(pl *l, const pl_here *here, const char *name, tb_key *out, const char **by,
-	uint32_t *under);
-
-static void refind(pl *l, pl_watch *w) {
-	unindex(l, w);
-	w->route = xalloc((w->n + 1) * sizeof *w->route);
-	tb_key at = l->root;
-	int found = 1;
-	if (!l->given) {
-		for (size_t i = 0; i < w->n; i++) {
-			w->route[w->nroute++] = key_own(at);
-			if (!child_of(tb_get(l->s->table, tb_string(children_part), at), w->path[i], &at)) {
-				found = 0;
-				break;
-			}
-		}
-	} else {
-		// as pl_get finds it, through the contributors, the reads told to no one
-		pl_set told = {0}, fresh = {0}, *was = l->s->into, *was_made = l->s->made;
-		l->s->into = &told;
-		l->s->made = &fresh;
-		pl_here here = {.id = l->root, .has_path = 1, .path = (const char *const *)w->path, .length = 0};
-		for (size_t i = 0; i < w->n; i++) {
-			if (!same_key(here.id, pl_level())) w->route[w->nroute++] = key_own(here.id);
-			const char *by;
-			uint32_t under;
-			if (!go(l, &here, w->path[i], &at, &by, &under)) {
-				found = 0;
-				break;
-			}
-			here.id = at;
-			here.length = i + 1;
-			here.gone = under;
-		}
-		l->s->into = was;
-		l->s->made = was_made;
-		// the spots they made go again, nothing tracks them
-		for (size_t i = 0; i < fresh.n; i++) pl_forget(fresh.items[i], l);
-		pl_set_free(&fresh);
-		pl_set_free(&told);
-		if (found && same_key(at, pl_level())) found = 0;
-	}
-	if (found) {
-		w->id = key_own(at);
-		w->has_id = 1;
-		bucket_add(l->s->by_id, w->id, w);
-	}
-	for (size_t i = 0; i < w->nroute; i++) bucket_add(l->s->on_route, w->route[i], w);
-}
-
-pl_watch *pl_watch_path(pl *l, const char *const *path, size_t n, pl_watch_fn fn, void *ctx,
-	const pl_watching *options) {
-	pl_watch *w = xalloc(sizeof *w);
-	w->l = l;
-	w->path = xalloc(n * sizeof *w->path);
-	for (size_t i = 0; i < n; i++) w->path[i] = xdup(path[i]);
-	w->n = n;
-	w->fn = fn;
-	w->ctx = ctx;
-	if (options != NULL) {
-		if (options->has_part) {
-			w->has_part = 1;
-			// a part is a name: copied
-			w->part = options->part.symbol ? options->part : tb_string(xdup(options->part.string));
-		}
-		if (options->has_at) {
-			w->has_at = 1;
-			w->at_length = options->at_length;
-			w->at = xalloc(options->at_length * sizeof *w->at);
-			for (size_t i = 0; i < options->at_length; i++) {
-				w->at[i] = options->at[i];
-				if (w->at[i].type == OP_STR_KEY) w->at[i].s = xdup(options->at[i].s);
-			}
-		}
-	}
-	w->prev = l->s->watches_end;
-	if (w->prev != NULL) w->prev->next = w;
-	else l->s->watches = w;
-	l->s->watches_end = w;
-	w->seq = l->s->seqs++;
-	refind(l, w);
-	return w;
-}
-
-static void free_watch(pl_watch *w) {
-	for (size_t i = 0; i < w->n; i++) free(w->path[i]);
-	free(w->path);
-	if (w->has_part && w->part.symbol == NULL) free((char *)w->part.string);
-	for (size_t i = 0; i < w->at_length; i++) {
-		if (w->at[i].type == OP_STR_KEY) free((char *)w->at[i].s);
-	}
-	free(w->at);
-	free(w);
-}
-
-// the watches stopped and the holds let go of while a telling was on
+// the pl_watch_all functions stopped and the holds let go of while a telling was on
 static void free_dead(pl *l) {
 	while (l->s->dead != NULL) {
 		pl_watch *w = l->s->dead;
 		l->s->dead = w->next;
-		free_watch(w);
+		free(w);
 	}
 	while (l->s->dropped != NULL) {
 		hold *h = l->s->dropped;
@@ -1089,7 +883,6 @@ pl_watch *pl_watch_all(pl *l, pl_watch_fn fn, void *ctx) {
 	w->l = l;
 	w->fn = fn;
 	w->ctx = ctx;
-	w->all = 1;
 	w->prev = l->s->alls_end;
 	if (w->prev != NULL) w->prev->next = w;
 	else l->s->alls = w;
@@ -1121,113 +914,14 @@ void pl_stop(pl_watch *w) {
 	if (w == NULL || w->stopped) return;
 	pl *l = w->l;
 	w->stopped = 1;
-	if (w->all) {
-		if (w->prev != NULL) w->prev->next = w->next;
-		else l->s->alls = w->next;
-		if (w->next != NULL) w->next->prev = w->prev;
-		else l->s->alls_end = w->prev;
-		w->prev = NULL;
-		w->next = l->s->dead;
-		l->s->dead = w;
-		if (l->s->telling == 0) free_dead(l);
-		return;
-	}
-	unindex(l, w);
 	if (w->prev != NULL) w->prev->next = w->next;
-	else l->s->watches = w->next;
+	else l->s->alls = w->next;
 	if (w->next != NULL) w->next->prev = w->prev;
-	else l->s->watches_end = w->prev;
+	else l->s->alls_end = w->prev;
 	// a telling in progress may hold it: freed when the telling ends
 	w->prev = NULL;
 	w->next = l->s->dead;
 	l->s->dead = w;
-	if (l->s->telling == 0) free_dead(l);
-}
-
-// a watch and the index of the fact it is to be told
-typedef struct {
-	pl_watch *w;
-	size_t fact;
-} hit;
-
-static int by_seq(const void *a, const void *b) {
-	const hit *x = a, *y = b;
-	if (x->w->seq != y->w->seq) return x->w->seq < y->w->seq ? -1 : 1;
-	return x->fact < y->fact ? -1 : x->fact > y->fact;
-}
-
-// each watch told the facts at its node, in the order the watches were made; a fact costs one get
-// in by_id. a watch stopped on the way is not told. then each watch with a changed children entry
-// on its route finds its path again
-static void tell_watches(pl *l, const pl_fact *facts, size_t n) {
-	if (l->s->watches == NULL || n == 0) return;
-	hit *hits = NULL;
-	size_t nh = 0, caph = 0;
-	for (size_t f = 0; f < n; f++) {
-		bucket *b = tb_get(l->s->by_id, tb_symbol(&bucket_tag), facts[f].id);
-		if (b == NULL) continue;
-		for (size_t i = 0; i < b->n; i++) {
-			pl_watch *w = b->v[i];
-			if (w->has_part && !same_key(facts[f].part, w->part)) continue;
-			if (nh == caph) {
-				caph = caph ? caph * 2 : 8;
-				hits = realloc(hits, caph * sizeof *hits);
-				if (hits == NULL) abort();
-			}
-			hits[nh++] = (hit){w, f};
-		}
-	}
-	if (nh > 1) qsort(hits, nh, sizeof *hits, by_seq);
-	l->s->telling++;
-	for (size_t i = 0; i < nh; i++) {
-		pl_watch *w = hits[i].w;
-		if (w->stopped) continue;
-		const pl_fact *fact = &facts[hits[i].fact];
-		if (!w->has_at) {
-			w->fn(fact, w->ctx);
-			continue;
-		}
-		op_patch *kept = xalloc((fact->patches_length + 1) * sizeof *kept);
-		size_t m = 0;
-		for (size_t j = 0; j < fact->patches_length; j++) {
-			if (touches(&fact->patches[j], w->at, w->at_length)) kept[m++] = fact->patches[j];
-		}
-		if (m > 0) {
-			pl_fact told = *fact;
-			told.patches = kept;
-			told.patches_length = m;
-			w->fn(&told, w->ctx);
-		}
-		free(kept);
-	}
-	free(hits);
-	// the watches with a changed children entry on their route, each once (the view they were made
-	// on given contributors: any part but value, theirs)
-	size_t epoch = ++l->s->epochs, nm = 0, capm = 0;
-	pl_watch **moved = NULL;
-	for (size_t f = 0; f < n; f++) {
-		int kids = same_key(facts[f].part, tb_string(children_part));
-		int value = same_key(facts[f].part, tb_string("value"));
-		bucket *b = tb_get(l->s->on_route, tb_symbol(&bucket_tag), facts[f].id);
-		if (b == NULL) continue;
-		for (size_t i = 0; i < b->n; i++) {
-			pl_watch *w = b->v[i];
-			if (!kids && (!w->l->given || value)) continue;
-			if (w->epoch == epoch) continue;
-			w->epoch = epoch;
-			if (nm == capm) {
-				capm = capm ? capm * 2 : 8;
-				moved = realloc(moved, capm * sizeof *moved);
-				if (moved == NULL) abort();
-			}
-			moved[nm++] = w;
-		}
-	}
-	for (size_t i = 0; i < nm; i++) {
-		if (!moved[i]->stopped) refind(moved[i]->l, moved[i]);
-	}
-	free(moved);
-	l->s->telling--;
 	if (l->s->telling == 0) free_dead(l);
 }
 
@@ -1759,90 +1453,7 @@ int pl_move(pl *l, nd_entry *from, const char *name, nd_entry *into, const char 
 	return do_unplace(l, from, name, header, changed);
 }
 
-// upsert ----------------------------------------------------------------------------------------
-
-// whether two values are the same: maps by their keys (in any order), lists, bytes and typed arrays
-// by their elements, a stand-in by its kind
-static int same(const op_value *a, const op_value *b) {
-	if (a == b) return 1;
-	if (a == NULL || b == NULL || a->type != b->type) return 0;
-	switch (a->type) {
-	case OP_NULL: return 1;
-	case OP_BOOL: return !a->bool_ == !b->bool_;
-	case OP_NUM: return op_same_num(a, b);
-	case OP_STR: return a->bytes == b->bytes && memcmp(a->str, b->str, a->bytes) == 0;
-	case OP_BYTES: return a->bytes == b->bytes && (!a->bytes || memcmp(a->data, b->data, a->bytes) == 0);
-	case OP_TYPED:
-		return a->kind == b->kind && a->bytes == b->bytes && (!a->bytes || memcmp(a->data, b->data, a->bytes) == 0);
-	case OP_LIST:
-	case OP_STAND:
-		if (a->count != b->count) return 0;
-		for (size_t i = 0; i < a->count; i++) {
-			if (!same(a->items[i], b->items[i])) return 0;
-		}
-		return 1;
-	case OP_MAP:
-		if (a->count != b->count) return 0;
-		for (size_t i = 0; i < a->count; i++) {
-			if (!same(a->items[i], op_get(b, a->keys[i]))) return 0;
-		}
-		return 1;
-	}
-	return 0;
-}
-
-// the value nested under names: {a: {b: value}}; a new hold, the caller's
-static op_value *nest(const char *const *names, size_t n, const op_value *value) {
-	op_value *v = op_ref((op_value *)value);
-	for (size_t i = n; i-- > 0;) {
-		op_value *m = op_map();
-		op_set(m, names[i], v);
-		v = m;
-	}
-	return v;
-}
-
-// what the patch of an upsert refers to: kept by the node till its next update
-typedef struct {
-	op_patch patch;
-	op_key *keys;
-	char **names;
-	size_t n;
-	op_value *value;
-} ublock;
-
-static void ublock_free(void *b) {
-	ublock *k = b;
-	for (size_t i = 0; i < k->n; i++) free(k->names[i]);
-	free(k->names);
-	free(k->keys);
-	op_free(k->value);
-	free(k);
-}
-
-// the value at names in a map; NULL: nothing there
-static const op_value *value_at(const op_value *v, const char *const *names, size_t n) {
-	for (size_t i = 0; i < n; i++) {
-		if (!is_map(v)) return NULL;
-		v = op_get(v, names[i]);
-		if (v == NULL) return NULL;
-	}
-	return v;
-}
-
-// the one patch of an upsert applied to the entry and held by it
-static void write_one(pl *l, nd_entry *entry, ublock *b, ch_header header, pl_changed *changed,
-	int through_unread) {
-	size_t failed;
-	int code = through_unread ? un_update(l->s->unread, entry, &b->patch, 1, header, &failed)
-					  : nd_update(entry, &b->patch, 1, header, &failed);
-	if (code != OP_OK) {
-		fprintf(stderr, "places: upsert: %s\n", op_code_name(code));
-		abort();
-	}
-	pl_hold(l, entry, b, ublock_free);
-	changed->entries[changed->n++] = entry;
-}
+// owned entries ---------------------------------------------------------------------------------
 
 void pl_own_in(pl *l, nd_entry *node, tb_table *in) {
 	if (l->s->nowned == l->s->capowned) {
@@ -1877,75 +1488,6 @@ void pl_sweep(pl *l) {
 		nd_free_entry(o.node);
 	}
 	s->nowned = s->swept = k;
-}
-
-static int upsert(pl *l, tb_key part, tb_key id, const char *const *path, size_t n,
-	const op_value *value, ch_header header, pl_changed *changed, nd_entry **made, int through_unread) {
-	*changed = (pl_changed){0};
-	if (made != NULL) *made = NULL;
-	nd_entry *there = tb_get(l->s->table, part, id);
-	if (there == NULL) {
-		op_value *nested = nest(path, n, value);
-		nd_entry *node = nd_make_entry(nested, &header);
-		op_free(nested);
-		pl_own(l, node);
-		if (made != NULL) *made = node;
-		tb_add(l->s->table, part, id, node);
-		return 0;
-	}
-	// the first level the entry has no map for, or no key at: the nested remainder goes there
-	size_t at = n;
-	const op_value *v = there->value;
-	int missing = 0;
-	for (size_t i = 0; i < n; i++) {
-		if (!is_map(v)) {
-			at = i, missing = 1;
-			break;
-		}
-		const op_value *next = op_get(v, path[i]);
-		if (next == NULL) {
-			at = i + 1, missing = 1;
-			break;
-		}
-		v = next;
-	}
-	if (!missing && same(v, value)) return 0;
-	ublock *b = xalloc(sizeof *b);
-	b->n = at;
-	b->names = xalloc(at * sizeof *b->names);
-	b->keys = xalloc(at * sizeof *b->keys);
-	for (size_t i = 0; i < at; i++) {
-		b->names[i] = xdup(path[i]);
-		b->keys[i] = (op_key){.type = OP_STR_KEY, .s = b->names[i]};
-	}
-	b->value = nest(path + at, n - at, value);
-	b->patch = (op_patch){.place = {.path = b->keys, .length = at}, .has_value = 1, .value = b->value};
-	write_one(l, there, b, header, changed, through_unread);
-	return 0;
-}
-
-int pl_upsert(pl *l, tb_key part, tb_key id, const char *const *path, size_t n,
-	const op_value *value, ch_header header, pl_changed *changed, nd_entry **made) {
-	return upsert(l, part, id, path, n, value, header, changed, made, 0);
-}
-
-int pl_upsert_unread(pl *l, tb_key part, tb_key id, const char *const *path, size_t n,
-	const op_value *value, ch_header header, pl_changed *changed, nd_entry **made) {
-	return upsert(l, part, id, path, n, value, header, changed, made, 1);
-}
-
-const op_value *pl_get_or_set(pl *l, tb_key part, tb_key id, const char *const *path, size_t n,
-	op_value *(*make)(void *ctx), void *ctx, ch_header header, pl_changed *changed,
-	nd_entry **made) {
-	*changed = (pl_changed){0};
-	if (made != NULL) *made = NULL;
-	const nd_entry *there = tb_get(l->s->table, part, id);
-	const op_value *v = there != NULL ? value_at(there->value, path, n) : NULL;
-	if (v != NULL) return v;
-	op_value *fresh = make(ctx);
-	pl_upsert(l, part, id, path, n, fresh, header, changed, made);
-	op_free(fresh);
-	return value_at(((nd_entry *)tb_get(l->s->table, part, id))->value, path, n);
 }
 
 // who ------------------------------------------------------------------------------------------

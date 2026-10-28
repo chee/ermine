@@ -1,5 +1,5 @@
 {
-	"title": "createErmine and its options: the root at the root's id; the host's node, its id the first new one, placed where host.at says, its attributes the host's args, its machine, and the features (none); id: the ids every new node gets (uuid: uuidv7s); onCreateFunction told of each memo, effect and method made, with who made it; may: what the host's functions are asked of too",
+	"title": "createErmine and its options: the root at the root's id; the host's node, its id the first new one, placed where host.at says, its attributes the host's args and the features (none); id: the ids every new node gets (uuid: uuidv7s); onCreateFunction told of each memo, effect and method made, with who made it; may: what the host's functions are asked of too",
 	"steps": [
 		{
 			"op": "ermine",
@@ -7,10 +7,6 @@
 			"args": [
 				"--quiet"
 			],
-			"machine": {
-				"arch": "arm64",
-				"os": "macos"
-			},
 			"expect": {}
 		},
 		{
@@ -21,10 +17,6 @@
 					"ermine.host.args": [
 						"--quiet"
 					],
-					"ermine.host.machine": {
-						"arch": "arm64",
-						"os": "macos"
-					},
 					"ermine.features": []
 				}
 			}

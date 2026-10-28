@@ -138,7 +138,7 @@
 			"expect": {
 				"value": {
 					"state": "failed",
-					"error": "not-here: start in a memo, effect or pipe: start a process in setup or an action",
+					"error": "not-here: start in a memo or effect: start a process in setup or an action",
 					"phase": "run",
 					"n": 1
 				}

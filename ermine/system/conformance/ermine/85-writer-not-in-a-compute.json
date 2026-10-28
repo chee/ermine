@@ -101,7 +101,7 @@
 			"expect": {
 				"value": {
 					"state": "failed",
-					"error": "not-here: createWriter in a memo, effect or pipe: create it in setup or an action, and use the writer there",
+					"error": "not-here: createWriter in a memo or effect: create it in setup or an action, and use the writer there",
 					"phase": "run",
 					"n": 1
 				}

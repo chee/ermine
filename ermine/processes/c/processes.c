@@ -85,6 +85,35 @@ void pr_processes_init(pr_processes *p, tb_key root) { pr_trie_init(p, PR_PART, 
 
 static int bad(const char *name) { return !pl_is_name(name); }
 
+// what a start's or a stop's patch refers to: kept by the node till its next update
+typedef struct {
+	op_patch patch;
+	op_key *keys;
+	char **names;
+	size_t n;
+	// what a start puts (a stop puts nothing: NULL)
+	op_value *value;
+} block;
+
+static void block_free(void *b) {
+	block *k = b;
+	for (size_t i = 0; i < k->n; i++) free(k->names[i]);
+	free(k->names);
+	free(k->keys);
+	op_free(k->value);
+	free(k);
+}
+
+// inner under the names, the first outermost: { a: { b: inner } }; inner is taken
+static op_value *nest(const char *const *names, size_t n, op_value *inner) {
+	for (size_t i = n; i-- > 0;) {
+		op_value *m = op_map();
+		op_set(m, names[i], inner);
+		inner = m;
+	}
+	return inner;
+}
+
 static int add(pl *l, tb_table *table, const char *part, tb_key root, const char *const *path,
 	size_t n, tb_key id, ch_header header, pl_changed *changed, nd_entry **made, int nested);
 
@@ -111,84 +140,77 @@ static int add(pl *l, tb_table *table, const char *part, tb_key root, const char
 	nd_entry *there = tb_get(table, tb_string(part), root);
 	op_value *leaf = op_str(id.string);
 	if (there == NULL) {
-		op_value *trie = leaf;
-		for (size_t i = n; i-- > 0;) {
-			op_value *m = op_map();
-			op_set(m, path[i], trie);
-			trie = m;
-		}
+		op_value *trie = nest(path, n, leaf);
 		nd_entry *node = nd_make_entry(trie, &header);
 		op_free(trie);
 		pl_own(l, node);
-		tb_add(table, tb_string(part), root, node);
 		if (made != NULL) *made = node;
+		tb_add(table, tb_string(part), root, node);
 		return 0;
 	}
-	// a leaf above the path becomes a level: its id under "", the rest of the path beside it
+	// the one patch: value at the first at names of the path. the id at the path, unless the path is
+	// not all there: then the rest of it, nested, at the first level that is no map (put over) or has
+	// no such name
 	const op_value *v = there->value;
 	op_value *value = leaf;
 	size_t at = n;
+	int whole = 1;
 	for (size_t i = 0; i < n; i++) {
 		if (v != NULL && v->type == OP_STR) {
 			if (!nested) {
 				op_free(leaf);
 				return PL_ALREADY_THERE;
 			}
-			op_value *rest = leaf;
-			for (size_t j = n; j-- > i + 1;) {
-				op_value *m = op_map();
-				op_set(m, path[j], rest);
-				rest = m;
-			}
+			// a leaf above becomes a level: its id under "", the rest of the path beside it
 			value = op_map();
 			op_set(value, SELF, op_str(v->str));
-			op_set(value, path[i], rest);
-			at = i;
+			op_set(value, path[i], nest(path + i + 1, n - i - 1, leaf));
+			at = i, whole = 0;
 			break;
 		}
-		v = is_map(v) ? op_get(v, path[i]) : NULL;
+		if (!is_map(v)) {
+			value = nest(path + i, n - i, leaf);
+			at = i, whole = 0;
+			break;
+		}
+		const op_value *next = op_get(v, path[i]);
+		if (next == NULL) {
+			value = nest(path + i + 1, n - i - 1, leaf);
+			at = i + 1, whole = 0;
+			break;
+		}
+		v = next;
 	}
-	const char *const *where = path;
-	const char *own[64];
-	const char **grown = NULL;
-	if (at == n) {
-		if (v != NULL && (v->type == OP_STR || (is_map(v) && op_get(v, SELF) != NULL))) {
+	if (whole) {
+		if (v->type == OP_STR || (is_map(v) && op_get(v, SELF) != NULL)) {
 			op_free(leaf);
 			return PL_ALREADY_THERE;
 		}
-		// a level of processes under the path: the process goes in beside them
+		// a level of processes under the path: the process goes in beside them, under ""
 		if (is_map(v) && v->count > 0) {
 			if (!nested) {
 				op_free(leaf);
 				return PL_ALREADY_THERE;
 			}
-			const char **w = n + 1 <= 64 ? own : (grown = xalloc((n + 1) * sizeof *grown));
-			memcpy(w, path, n * sizeof *w);
-			w[n] = SELF;
-			where = w;
 			at = n + 1;
 		}
 	}
-	pl_upsert_unread(l, tb_string(part), root, where, at, value, header, changed, NULL);
-	op_free(value);
-	free(grown);
+	block *b = xalloc(sizeof *b);
+	b->n = at;
+	b->names = xalloc(at * sizeof *b->names);
+	for (size_t i = 0; i < at; i++) b->names[i] = xdup(i < n ? path[i] : SELF);
+	b->keys = keys_of((const char *const *)b->names, at, NULL);
+	b->value = value;
+	b->patch = (op_patch){.place = {.path = b->keys, .length = at}, .has_value = 1, .value = value};
+	size_t failed;
+	int code = un_update(pl_unread(l), there, &b->patch, 1, header, &failed);
+	if (code != OP_OK) {
+		fprintf(stderr, "processes: add: %s\n", op_code_name(code));
+		abort();
+	}
+	pl_hold(l, there, b, block_free);
+	changed->entries[changed->n++] = there;
 	return 0;
-}
-
-// what a stop's patch refers to: kept by the node till its next update
-typedef struct {
-	op_patch patch;
-	op_key *keys;
-	char **names;
-	size_t n;
-} block;
-
-static void block_free(void *b) {
-	block *k = b;
-	for (size_t i = 0; i < k->n; i++) free(k->names[i]);
-	free(k->names);
-	free(k->keys);
-	free(k);
 }
 
 int pr_remove(pl *l, tb_table *table, tb_key root, const char *const *path, size_t n,

@@ -1,0 +1,63 @@
+{
+	"title": "a process places a loader; a program runs through it; stopping that process stops what it ran (the loader goes with it)",
+	"steps": [
+		{
+			"op": "node",
+			"path": "/apps/prog",
+			"value": 3,
+			"expect": {}
+		},
+		{
+			"op": "interpreter",
+			"at": "/lisp",
+			"name": "loaders/lisp",
+			"kind": "double",
+			"expect": {}
+		},
+		{
+			"op": "run",
+			"loader": "/lisp/loaders/lisp",
+			"program": "/apps/prog",
+			"at": "/work/prog",
+			"expect": {
+				"at": [
+					"work",
+					"prog"
+				]
+			}
+		},
+		{
+			"op": "read",
+			"path": "/work/prog",
+			"expect": {
+				"value": 6
+			}
+		},
+		{
+			"op": "stop",
+			"at": "/lisp",
+			"expect": {}
+		},
+		{
+			"op": "has",
+			"path": "/work/prog",
+			"expect": {
+				"has": false
+			}
+		},
+		{
+			"op": "has",
+			"path": "/lisp",
+			"expect": {
+				"has": false
+			}
+		},
+		{
+			"op": "read",
+			"path": "/apps/prog",
+			"expect": {
+				"value": 3
+			}
+		}
+	]
+}

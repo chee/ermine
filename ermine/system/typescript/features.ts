@@ -52,14 +52,14 @@
 // changed it, in chain order). sites skip the feature's files, and only those: a feature lists its
 // own.
 // hooks are setup-only: one added after createErmine has returned throws.
-import type { Entry } from "@ermine/core/node/entry"
+import type { ChangeHeader, Entry } from "@ermine/core/node/entry"
 import type { FileLocation } from "@ermine/core/util/stacktrace"
 import type { Key as Step } from "@ermine/core/changeable/apply"
 import type { Id, Path, Places } from "@ermine/core/places"
 import type { Process, Processes } from "@ermine/processes/start"
 import type { Call } from "./calls.ts"
 import type { Run } from "@ermine/processes/runs"
-import { PENDING, type Scheduler, type Scope } from "@ermine/core/scheduler"
+import { type Computer, PENDING, type Scheduler, type Scope } from "@ermine/core/scheduler"
 import type { Key, Table } from "@ermine/core/table"
 import { Refusal } from "@ermine/core/places/guard"
 import type {
@@ -71,7 +71,7 @@ import type {
 	Why,
 	Write,
 } from "./context.ts"
-import type { Status } from "./system.ts"
+import type { ChangeView, Status } from "./system/shapes.ts"
 
 // what createErmine and its parts throw, by code
 export type Code =
@@ -88,8 +88,6 @@ export type Code =
 	| "not-patches"
 	| "not-a-function"
 	| "closed"
-	// a pipe told by pipes' writes, as they land, too deep: told no more
-	| "looping"
 	// something made, or a teardown added, in an effect's act (an act makes nothing)
 	| "in-act"
 	// an act returned something that is no function (its cleanup)
@@ -241,6 +239,13 @@ export type FeatureAPI = {
 	// now (the scope open, or one above it), its record so far, the caller's context in it; none:
 	// undefined. for a service acting for its caller (patchy's land)
 	calling: () => Calling | undefined
+	// pipe-extension: core gap. a change (a table fact's, an entry's) as a process is shown it:
+	// the view reads give, so explain takes it back. one view for each change
+	viewOf: (change: ChangeHeader) => ChangeView
+	// pipe-extension: core gap. where a memo or effect was made: a build site, the process's site
+	// when made in its setup, else the line that called the function (read now: the first read
+	// parses the stack held at the make)
+	siteOf: (computer: Computer) => FileLocation | undefined
 }
 
 // a send being answered: its record so far
@@ -317,6 +322,8 @@ export function install(
 			| undefined
 		seen: () => ((id: Id, context: ProcessContext) => Path | undefined) | undefined
 		calling: () => (() => Calling | undefined) | undefined
+		viewOf: () => ((change: ChangeHeader) => ChangeView) | undefined
+		siteOf: (computer: Computer) => FileLocation | undefined
 	},
 ): Installed {
 	const hooks = Object.fromEntries(HOOKS.map((h) => [h, []])) as unknown as {
@@ -367,6 +374,8 @@ export function install(
 			dataOf: (x) => got("dataOf", parts.dataOf)(x),
 			seen: (id, context) => got("seen", parts.seen)(id, context),
 			calling: () => got("calling", parts.calling)(),
+			viewOf: (change) => got("viewOf", parts.viewOf)(change),
+			siteOf: parts.siteOf,
 			reserveSlot: <T>(): Slot<T> => {
 				if (!open) throw new ErmineError("setup-only", `${f.name}'s reserveSlot`)
 				const held = new WeakMap<ProcessContext, T>()

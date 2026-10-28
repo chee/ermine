@@ -16,11 +16,9 @@
 			"expect": {}
 		},
 		{
-			"op": "watchPath",
+			"op": "watchAll",
 			"name": "w",
-			"path": [
-				"notes"
-			],
+			"id": "N",
 			"sites": true,
 			"expect": {}
 		},

@@ -2,11 +2,13 @@
 // game (the default export) and the clock that ticks it (the export clock), which keeps its own
 // metronome
 import { createWorld } from "@ermine/slaygrounds/world"
+import pipes from "@ermine/pipe"
 import { render } from "ermine-h"
 
 const world = createWorld({
 	render,
 	processes: [{ name: "game" }, { name: "clock", export: "clock" }],
+	features: [pipes],
 })
 
 export const reload = world.reload

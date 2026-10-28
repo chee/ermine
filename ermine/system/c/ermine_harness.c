@@ -7,7 +7,7 @@
 //     api), host, code, start, stop, status, close, service (land), record, waits,
 //     slot, do, settle, log, pulse, saved, id, metadata, caller, site
 //   programs as data steps: { do: [fn, ...args], as? }, "$x" in an arg, the forms (createMemo,
-//     createEffect, createAction, addTeardown, getStatus, explain, peep, ref, watch, pipe, log, later, if,
+//     createEffect, createAction, addTeardown, getStatus, explain, peep, ref, log, later, if,
 //     throw, each, pick, is, keys, whole, inc, explaincall, explainargs, explainfrom, share), and every es_
 //     function called as it is. a program is an es_program whose ctx holds its steps; a memo's
 //     function an es_compute whose ctx holds its expression; an action's an es_action whose ctx
@@ -489,17 +489,6 @@ static int patches_of(const op_value *v, const op_patch **out, size_t *n) {
 	*n = v->count;
 	return 0;
 }
-static op_value *patch_value(const op_patch *p) {
-	char *buffer;
-	size_t size;
-	FILE *s = open_memstream(&buffer, &size);
-	if (s == NULL) hh_fail("out of memory");
-	hh_put_patch(s, p);
-	fclose(s);
-	op_value *v = op_json_read(buffer, NULL);
-	free(buffer);
-	return v;
-}
 
 // --- results, as a program is given them ----------------------------------------------------------------
 
@@ -589,10 +578,11 @@ static op_value *status_value(const es_status *st) {
 	return m;
 }
 
-// where a site is: "none", the harness's own ("computer" for the line define made, else "program"),
-// ermine's files ("api"), any other ("other")
+// where a site is: "none", a process's setup's ("setup": the function it is given), the harness's own
+// ("computer" for the line define made, else "program"), ermine's files ("api"), any other ("other")
 static const char *site_of(const ch_site *s) {
 	if (s == NULL) return "none";
+	if (s->function != NULL && strcmp(s->function, "setup") == 0) return "setup";
 	if (s->file != NULL && strcmp(s->file, __FILE__) == 0) {
 		return s->function != NULL && strcmp(s->function, "define") == 0 ? "computer" : "program";
 	}
@@ -622,10 +612,6 @@ static op_value *explained_value(const es_explained *x) {
 			op_set(m, "writer", op_str("method"));
 			op_set(m, "path", path_value(w->has_path, w->path, w->npath));
 			if (w->call != NULL) op_set(m, "n", op_int(w->call->n));
-			break;
-		case ES_WRITER_PIPE:
-			op_set(m, "writer", op_str("pipe"));
-			op_set(m, "path", path_value(w->has_path, w->path, w->npath));
 			break;
 		case ES_WRITER_OUTSIDE:
 			op_set(m, "writer", op_str("outside"));
@@ -1086,76 +1072,6 @@ static void td_run(void *ctx, const char *why) {
 	log_push(k->log, op_str_take(s, strlen(s)));
 }
 
-// a pipe's function: its steps, run with the write as $0 ({ patches, value, refused? }), and what it
-// gives back; one pipe's functions, or (a watch) the log its patches go to
-typedef struct {
-	sys_t sys;
-	env_t *env;
-	const op_value *steps, *gives;
-} pf_t;
-typedef struct {
-	const char *log;
-	pf_t *tell, *there, *back;
-} pk_t;
-static int pf_call(const pf_t *f, const es_watched *w, op_value **out) {
-	*out = NULL;
-	env_t *inner = env_new(f->env);
-	op_value *m = op_map();
-	op_value *list = op_list();
-	for (size_t i = 0; i < w->npatches; i++) op_push(list, patch_value(&w->patches[i]));
-	op_set(m, "patches", list);
-	if (w->value != NULL) op_set(m, "value", op_ref((op_value *)w->value));
-	if (w->refused) op_set(m, "refused", op_bool(1));
-	env_set(inner, "0", m);
-	TRY(run_steps(f->sys, inner, f->steps));
-	if (f->gives == NULL) return 0;
-	return expr(f->sys, inner, f->gives, out);
-}
-static int pk_tell(es_context *c, void *ctx, const es_watched *w) {
-	(void)c;
-	pk_t *k = ctx;
-	if (k->log != NULL) {
-		if (w->refused) {
-			log_push(k->log, op_str("refused"));
-			return 0;
-		}
-		op_value *list = op_list();
-		for (size_t i = 0; i < w->npatches; i++) op_push(list, patch_value(&w->patches[i]));
-		log_push(k->log, list);
-		return 0;
-	}
-	op_value *v;
-	int code = pf_call(k->tell, w, &v);
-	op_free(v);
-	return code;
-}
-static int pk_map(const pf_t *f, const es_watched *w, es_pipe_gave *out) {
-	op_value *v;
-	TRY(pf_call(f, w, &v));
-	if (v == NULL || v->type == OP_NULL) {
-		op_free(v);
-		return 0;
-	}
-	const op_patch *ps;
-	size_t n;
-	int code = v->type == OP_LIST ? patches_of(v, &ps, &n)
-		: es_fail(ES_NOT_PATCHES, "not-patches: a pipe's function gives patches: [{ path, value }]");
-	if (code) return op_free(v), code;
-	out->given = 1;
-	out->patches = ps;
-	out->n = n;
-	out->own = v;
-	return 0;
-}
-static int pk_there(es_context *c, void *ctx, const es_watched *w, es_pipe_gave *out) {
-	(void)c;
-	return pk_map(((pk_t *)ctx)->there, w, out);
-}
-static int pk_back(es_context *c, void *ctx, const es_watched *w, es_pipe_gave *out) {
-	(void)c;
-	return pk_map(((pk_t *)ctx)->back, w, out);
-}
-
 // ref's maker: the value given
 static op_value *ref_make(void *ctx) { return op_ref(ctx); }
 
@@ -1539,78 +1455,6 @@ static op_value *keys_value(const op_value *v) {
 	return list;
 }
 
-// a function a pipe's argument is: a map with steps
-static int is_fn(const op_value *x) { return x != NULL && x->type == OP_MAP && field(x, "steps") != NULL; }
-static pf_t *pf_new(sys_t sys, env_t *env, const op_value *x) {
-	pf_t *f = owned_alloc(sizeof *f);
-	*f = (pf_t){sys, env, field(x, "steps"), field(x, "gives")};
-	return f;
-}
-// a step watching: a pipe told as each write lands, logging its patches (the form watch had)
-static int form_watch(sys_t sys, env_t *env, const op_value *const *raw, size_t nraw, op_value **out) {
-	CTX("watch");
-	es_target x;
-	es_handle *h;
-	op_value *t = arg(env, nraw > 0 ? raw[0] : NULL);
-	int code = target_of(t, &x);
-	if (code == 0) {
-		pk_t *k = owned_alloc(sizeof *k);
-		k->log = nraw > 1 && is_str(raw[1]) ? raw[1]->str : "";
-		es_pipe_options o = {.tell = pk_tell, .ctx = k, .write = 1};
-		code = es_pipe(c, x, &o, &h);
-		if (code == 0) *out = es_handle_value(h);
-	}
-	op_free(t);
-	return code;
-}
-// pipe(from, to | fn, fnA?, fnB?, options?): a function is { steps, gives? }; options { timing, name }
-static int form_pipe(sys_t sys, env_t *env, const op_value *const *raw, size_t nraw, op_value **out) {
-	CTX("pipe");
-	es_target from;
-	es_handle *h;
-	op_value *f = arg(env, nraw > 0 ? raw[0] : NULL);
-	int code = target_of(f, &from);
-	op_free(f);
-	if (code) return code;
-	const op_value *const *rest = raw + 1;
-	size_t n = nraw > 0 ? nraw - 1 : 0;
-	const op_value *options = NULL;
-	if (n > 1 && rest[n - 1] != NULL && rest[n - 1]->type == OP_MAP && !is_fn(rest[n - 1])) {
-		options = rest[--n];
-	}
-	es_pipe_options o = {0};
-	pk_t *k = owned_alloc(sizeof *k);
-	o.ctx = k;
-	o.write = options != NULL && text(options, "timing") != NULL && strcmp(text(options, "timing"), "write") == 0;
-	if (options != NULL && field(options, "name") != NULL) TRY(at_of(field(options, "name"), &o.name));
-	op_value *to = NULL;
-	if (n > 0 && is_fn(rest[0])) {
-		k->tell = pf_new(sys, env, rest[0]);
-		o.tell = pk_tell;
-	} else if (n > 0) {
-		to = arg(env, rest[0]);
-		code = target_of(to, &o.to);
-		o.has_to = 1;
-		for (size_t i = 1; i < n && i < 3 && code == 0; i++) {
-			if (!is_fn(rest[i])) {
-				code = es_fail(ES_NOT_A_FUNCTION,
-					"not-a-function: pipe takes (from, fn) or (from, to, fnA?, fnB?)");
-			} else if (i == 1) {
-				k->there = pf_new(sys, env, rest[i]);
-				o.there = pk_there;
-			} else {
-				k->back = pf_new(sys, env, rest[i]);
-				o.back = pk_back;
-			}
-		}
-	}
-	if (code == 0) {
-		code = es_pipe(c, from, &o, &h);
-		if (code == 0) *out = es_handle_value(h);
-	}
-	op_free(to);
-	return code;
-}
 static int form_status(sys_t sys, env_t *env, const op_value *const *raw, size_t nraw, op_value **out) {
 	CTX("getStatus");
 	es_target x;
@@ -1809,8 +1653,6 @@ static int call_form(sys_t sys, env_t *env, const op_value *form, op_value **out
 		}
 		return 0;
 	}
-	if (strcmp(fn, "watch") == 0) return form_watch(sys, env, raw, nraw, out);
-	if (strcmp(fn, "pipe") == 0) return form_pipe(sys, env, raw, nraw, out);
 	if (strcmp(fn, "ref") == 0) {
 		CTX(fn);
 		es_at at;
@@ -2277,9 +2119,8 @@ static void py_commit(void *ctx, const pl_changed *changed) {
 	py_t *p = ctx;
 	if (py_connect(p) == 0) pn_commit(p->overlay, changed);
 }
-// the view's event: an entry a library made in places' own table (pl_upsert adds one there, as the
-// TypeScript's places add to a table that forwards them) goes to the table the writes go to, then the
-// overlay says places
+// the view's event: an entry made in places' own table (by a library handed it as its table) goes to
+// the table the writes go to, then the overlay says places
 static void py_view_event(void *ctx, tb_key part, tb_key id) {
 	py_t *p = ctx;
 	nd_entry *made = p->connected ? tb_get(p->view, part, id) : NULL;
@@ -2645,7 +2486,6 @@ static int make(const op_value *r) {
 		o.host.args = (const char *const *)w->args;
 		o.host.nargs = w->nargs;
 	}
-	if (field(r, "machine") != NULL) o.host.machine = field(r, "machine");
 	return es_create(&o, &w->e);
 }
 

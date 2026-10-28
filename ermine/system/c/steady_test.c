@@ -63,7 +63,6 @@ typedef enum {
 	IN_READ_CHILDREN,
 	IN_READ_ALL,
 	IN_EXPLAIN,
-	IN_PIPE,
 	IN_TEARDOWN,
 } in_memo;
 
@@ -77,10 +76,6 @@ typedef struct {
 } world;
 
 static void noop_teardown(void *ctx, const char *why) { (void)ctx, (void)why; }
-static int noop_tell(es_context *c, void *ctx, const es_watched *w) {
-	(void)c, (void)ctx, (void)w;
-	return 0;
-}
 
 static es_out memo_fn(es_context *c, void *ctx, const op_value *previous) {
 	(void)previous;
@@ -111,12 +106,6 @@ static es_out memo_fn(es_context *c, void *ctx, const op_value *previous) {
 		es_explained *x = NULL;
 		CHECK(es_explain(c, es_on_path(es_text("/a")), NULL, 0, &x) == 0);
 		es_explained_free(x);
-		break;
-	}
-	case IN_PIPE: {
-		es_pipe_options o = {.tell = noop_tell};
-		es_handle *h;
-		CHECK(es_pipe(c, es_on_path(es_text("/dir")), &o, &h) == 0);
 		break;
 	}
 	case IN_TEARDOWN: CHECK(es_add_teardown(c, noop_teardown, NULL) == 0); break;
@@ -220,7 +209,6 @@ typedef enum {
 	ROW_READ_ALL_HOST,
 	ROW_READ_ALL_MEMO,
 	ROW_EXPLAIN_MEMO,
-	ROW_PIPE_MEMO,
 	ROW_TEARDOWN_MEMO,
 	ROW_EXECUTE_HOST,
 	ROW_ENSURE_REMOVE_HOST,
@@ -244,7 +232,6 @@ static const struct {
 	[ROW_READ_ALL_HOST] = {"readAll (host)", IN_NOTHING},
 	[ROW_READ_ALL_MEMO] = {"readAll (memo)", IN_READ_ALL},
 	[ROW_EXPLAIN_MEMO] = {"explain (memo)", IN_EXPLAIN},
-	[ROW_PIPE_MEMO] = {"pipe (memo)", IN_PIPE},
 	[ROW_TEARDOWN_MEMO] = {"addTeardown (memo)", IN_TEARDOWN},
 	[ROW_EXECUTE_HOST] = {"executeAction (host)", IN_NOTHING},
 	[ROW_ENSURE_REMOVE_HOST] = {"ensureNode + remove (host)", IN_NOTHING},

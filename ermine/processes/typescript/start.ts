@@ -33,6 +33,7 @@ import { createStatus, STATUS, TABLE } from "@ermine/core/places/status"
 import { type Computer, PENDING, type Scheduler, type Scope } from "@ermine/core/scheduler"
 import type { Sited } from "@ermine/sites"
 import type { Table } from "@ermine/core/table"
+import type { FileLocation } from "@ermine/core/util/stacktrace"
 import { addProcess, removeProcess } from "./processes.ts"
 import { createRuns, type Runs } from "./runs.ts"
 import type { ScopeNodes } from "./scopes.ts"
@@ -70,6 +71,8 @@ export type Options = {
 	attributes?: Readonly<Record<string, unknown>>
 	// the scope its scope is made under: torn down, the process goes. none: the owner
 	under?: Scope
+	// the site its writes take (its starter's rule gives it); none: the call into start's, found once
+	site?: FileLocation
 }
 
 // body's: what to do at the stop
@@ -87,7 +90,7 @@ export type Setup = {
 	scopes: Pick<ScopeNodes, "give">
 	// where the processes' scopes are made, noting each one's site (ermine/sites; its ours holds
 	// this file); none: the scheduler's, no sites
-	sites?: Pick<Sited, "createScope">
+	sites?: Pick<Sited, "createScope" | "siteOf">
 	// the scope the processes' are made under; torn down, every process goes. none: one made now
 	// (through sites), under the scope open, its info [["processes", "start"]]
 	owner?: Scope
@@ -183,13 +186,21 @@ export function createProcesses(setup: Setup): Processes {
 	): Process | Refused {
 		const { at, folder } = pathsOf(address, options.folder)
 		const id: Id = makeId()
+		// its writes' headers: the site given, else its scope's (held as it was made: the call into
+		// start, read once), else the first header's
+		let site = options.site
+		const header = (): ChangeHeader => {
+			site ??= setup.sites?.siteOf(scope)
+			const h = createChangeHeader(s, undefined, ours, start, site)
+			site ??= h.external?.[0]
+			return h
+		}
 		const scope = createScope({ process: at, [NODE]: id }, options.under ?? owner)
 		scopes.give(scope, id)
 		try {
 			s.runWithScope(
 				scope,
-				() =>
-					places.commit(addProcess(table, places.root, at, id, headerOf(start), setup.write)),
+				() => places.commit(addProcess(table, places.root, at, id, header(), setup.write)),
 			)
 		} catch (e) {
 			s.teardown(scope)
@@ -211,12 +222,12 @@ export function createProcesses(setup: Setup): Processes {
 			const status = { [STATUS]: PENDING }
 			s.runWithScope(scope, () => {
 				if (setup.write) {
-					setup.write("attributes", id, [{ path: [], value: attrs }], headerOf(start))
-					setup.write(TABLE, id, [{ path: [], value: status }], headerOf(start))
+					setup.write("attributes", id, [{ path: [], value: attrs }], header())
+					setup.write(TABLE, id, [{ path: [], value: status }], header())
 					return
 				}
-				table.add("attributes", id, createEntry(attrs, headerOf(start)))
-				table.add(TABLE, id, createEntry(status, headerOf(start)))
+				table.add("attributes", id, createEntry(attrs, header()))
+				table.add(TABLE, id, createEntry(status, header()))
 			})
 		} catch (e) {
 			stop(process)

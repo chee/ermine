@@ -35,22 +35,19 @@ import {
 	unread,
 	type Writer,
 } from "@ermine/core/places"
-import { upsert } from "@ermine/core/places/upsert"
 import type { Key, Table } from "@ermine/core/table"
+import { isPojo } from "@ermine/core/util/kinds"
 
 // the process part. not declared on the table's Tables: a prototype in playground/union-check
 // declares "process" another way
 export const PROCESS = "process" as string as Key
-
-const isMap = (v: unknown): v is Record<string, unknown> =>
-	typeof v === "object" && v !== null && !Array.isArray(v) && !ArrayBuffer.isView(v)
 
 // the key a level holds the id of a process at the level's own path under
 const SELF = ""
 
 // a map with a name in it: a level of a trie (one emptied is taken out, but the top)
 function filled(v: unknown): boolean {
-	if (!isMap(v)) return false
+	if (!isPojo(v)) return false
 	for (const _ in v) return true
 	return false
 }
@@ -62,10 +59,10 @@ const bad = (name: string) => name === "" || name === "." || name === ".." || na
 export function idAt(rows: unknown, path: Path): Id | undefined {
 	let v: unknown = rows
 	for (const name of path) {
-		if (name === SELF || !isMap(v) || !Object.hasOwn(v, name)) return undefined
+		if (name === SELF || !isPojo(v) || !Object.hasOwn(v, name)) return undefined
 		v = v[name]
 	}
-	return asId(isMap(v) ? v[SELF] : v)
+	return asId(isPojo(v) ? v[SELF] : v)
 }
 
 // each name directly under path that a process is at, with its id (a leaf's, or a level's own); a
@@ -73,14 +70,14 @@ export function idAt(rows: unknown, path: Path): Id | undefined {
 export function idsUnder(rows: unknown, path: Path): [string, Id][] {
 	let v: unknown = rows
 	for (const name of path) {
-		if (name === SELF || !isMap(v) || !Object.hasOwn(v, name)) return []
+		if (name === SELF || !isPojo(v) || !Object.hasOwn(v, name)) return []
 		v = v[name]
 	}
 	const out: [string, Id][] = []
-	if (!isMap(v)) return out
+	if (!isPojo(v)) return out
 	for (const [name, x] of Object.entries(v)) {
 		if (name === SELF) continue
-		const id = asId(isMap(x) ? x[SELF] : x)
+		const id = asId(isPojo(x) ? x[SELF] : x)
 		if (id !== undefined) out.push([name, id])
 	}
 	return out
@@ -106,7 +103,7 @@ export function trie(part: Key, root: Id, from: string): Contributor {
 			// "" is the key a level holds its own process under, never a name
 			if (path === undefined || name === SELF) return none
 			const v = r.read(part, root, [...path, name])
-			if (isMap(v) && Object.hasOwn(v, SELF)) return asId(v[SELF]) ?? none
+			if (isPojo(v) && Object.hasOwn(v, SELF)) return asId(v[SELF]) ?? none
 			return asId(v) ?? (filled(v) ? undefined : none)
 		},
 		names: ({ path }, r) => {
@@ -116,7 +113,7 @@ export function trie(part: Key, root: Id, from: string): Contributor {
 		},
 		// a level of the trie (leaves deeper, no id of its own): a walk goes on through it
 		level: ({ path }, name, r) =>
-			path !== undefined && name !== SELF && isMap(r.read(part, root, [...path, name])),
+			path !== undefined && name !== SELF && isPojo(r.read(part, root, [...path, name])),
 	}
 }
 
@@ -151,6 +148,10 @@ export const addLeaf = (
 	write?: Writer,
 ): Entry<unknown>[] => put(table, part, root, path, id, header, write, false)
 
+// the value nested under names: { a: { b: value } }
+const nest = (names: Path, value: unknown): unknown =>
+	names.reduceRight<unknown>((v, k) => ({ [k]: v }), value)
+
 function put(
 	table: Pick<Table, "get" | "add">,
 	part: Key,
@@ -163,13 +164,15 @@ function put(
 ): Entry<unknown>[] {
 	if (path.length === 0) throw new PlacesError("not-a-name")
 	for (const name of path) if (bad(name)) throw new PlacesError("not-a-name", name)
-	const there = table.get(part, root)
+	const there = table.get(part, root) as Entry<unknown> | undefined
 	if (there === undefined) {
-		const trie = path.reduceRight<unknown>((v, k) => ({ [k]: v }), id)
+		const trie = nest(path, id)
 		if (write !== undefined) write(part, root, [{ path: [], value: trie }], header)
 		else table.add(part, root, createEntry(trie, header) as never)
 		return []
 	}
+	// the one patch: value at `at`. the id at the path, unless the path is not all there: then the
+	// rest of it, nested, at the first level that is no map (put over) or has no such name
 	let v: unknown = there.value
 	let value: unknown = id
 	let at: Path = path
@@ -177,36 +180,39 @@ function put(
 		if (asId(v) !== undefined) {
 			if (!nested) throw new PlacesError("already-there", path[i - 1])
 			// a leaf above becomes a level: its id under "", the rest of the path beside it
-			value = {
-				[SELF]: v,
-				[path[i]]: path.slice(i + 1).reduceRight<unknown>((x, k) => ({ [k]: x }), id),
-			}
+			value = { [SELF]: v, [path[i]]: nest(path.slice(i + 1), id) }
 			at = path.slice(0, i)
 			break
 		}
-		v = isMap(v) && Object.hasOwn(v, path[i]) ? v[path[i]] : undefined
+		if (!isPojo(v)) {
+			value = nest(path.slice(i), id)
+			at = path.slice(0, i)
+			break
+		}
+		if (!Object.hasOwn(v, path[i])) {
+			value = nest(path.slice(i + 1), id)
+			at = path.slice(0, i + 1)
+			break
+		}
+		v = v[path[i]]
 	}
 	if (at === path) {
-		if (asId(v) !== undefined || (isMap(v) && Object.hasOwn(v, SELF))) {
+		if (asId(v) !== undefined || (isPojo(v) && Object.hasOwn(v, SELF))) {
 			throw new PlacesError("already-there", path[path.length - 1])
 		}
 		// a level of processes under the path: the process goes in beside them
-		if (isMap(v) && Object.keys(v).length) {
+		if (isPojo(v) && Object.keys(v).length) {
 			if (!nested) throw new PlacesError("already-there", path[path.length - 1])
 			at = [...path, SELF]
 		}
 	}
-	if (write === undefined) return upsert(table, part, root, at, value, header, unread.update)
-	upsert(
-		table,
-		part,
-		root,
-		at,
-		value,
-		header,
-		(_e, patches, h) => void write(part, root, [...patches], h),
-	)
-	return []
+	const patch = { path: [...at], value }
+	if (write !== undefined) {
+		write(part, root, [patch], header)
+		return []
+	}
+	unread.update(there, [patch], header)
+	return [there]
 }
 
 // the process at path under root taken out, and with it every level left empty: one patch, at the
@@ -232,12 +238,12 @@ export function removeLeaf(
 	const levels: Record<string, unknown>[] = []
 	let v: unknown = entry?.value
 	for (const name of path) {
-		if (!isMap(v) || !Object.hasOwn(v, name)) throw new PlacesError("nothing-there", name)
+		if (!isPojo(v) || !Object.hasOwn(v, name)) throw new PlacesError("nothing-there", name)
 		levels.push(v)
 		v = v[name]
 	}
 	// a process with processes under it: its id is under "" in its level
-	if (isMap(v) && Object.hasOwn(v, SELF)) {
+	if (isPojo(v) && Object.hasOwn(v, SELF)) {
 		levels.push(v)
 		path = [...path, SELF]
 		v = v[SELF]

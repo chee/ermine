@@ -13,7 +13,6 @@ import {
 	executeAction,
 	explain,
 	patch,
-	pipe,
 	read,
 	start,
 } from "@ermine/system"
@@ -339,38 +338,6 @@ Deno.test("marks: a generator action whose process stops mid-yield is returned (
 	assertEquals(await settled, "gone")
 	assertEquals(log, ["finally", "nothing-open"])
 	assertEquals(e.within(() => read("/k")), 0)
-	e.close()
-})
-
-Deno.test("marks: createWriter and start are not-here in a pipe's function, as in a compute", () => {
-	const caught: string[] = []
-	const e = createErmine({ features: [manual] })
-	e.within(() => {
-		ensureNode("/from", 0)
-		ensureNode("/to", 0)
-		ensureNode("/code/p", () => {
-			pipe(
-				"/from",
-				"/to",
-				() => {
-					for (const f of [() => createWriter(), () => start(() => {}, "/work/x")]) {
-						try {
-							f()
-						} catch (x) {
-							caught.push((x as ErmineError).code)
-						}
-					}
-					return []
-				},
-				undefined,
-				{ timing: "write" },
-			)
-		})
-	})
-	e.start(programAt(e, "/code/p"), "/code/p")
-	e.within(() => patch("/from", [{ path: [], value: 1 }]))
-	e.scheduler.pulse()
-	assertEquals(caught, ["not-here", "not-here"])
 	e.close()
 })
 

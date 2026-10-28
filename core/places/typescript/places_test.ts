@@ -581,53 +581,6 @@ Deno.test("places: a click dispatched in a run is the process's: its scope is un
 	assert(moments.some((m) => "due" in m && m.due === c && m.by === c))
 })
 
-Deno.test("places: watchPath is told each write's patches at the node at its path, with the change, as it lands", () => {
-	const { l, kids, value, edit, hosted } = world()
-	kids("R", { notes: "N" })
-	value("N", { title: "a", body: "b" })
-	const told: unknown[] = []
-	const stop = l.watchPath(["notes"], (f) => told.push([f.part, f.id, f.patches, f.change?.actor]))
-	hosted(() => edit("value", "N", [{ path: ["title"], value: "z" }]))
-	hosted(() => edit("value", "X", [{ path: [], value: 1 }]))
-	assertEquals(told, [["value", "N", [{ path: ["title"], value: "z" }], "host"]])
-	stop()
-	hosted(() => edit("value", "N", [{ path: ["body"], value: "y" }]))
-	assertEquals(told.length, 1)
-})
-
-Deno.test("places: watchPath is told a table swap as one patch at the root, and a removal as one with no value", () => {
-	const { l, table, kids, value, hosted } = world()
-	kids("R", { notes: "N" })
-	const told: unknown[] = []
-	l.watchPath(["notes"], (f) => told.push(f.patches))
-	value("N", { title: "a" })
-	hosted(() => table.del("value", "N"))
-	assertEquals(told, [[{ path: [], value: { title: "a" } }], [{ path: [] }]])
-})
-
-Deno.test("places: watchPath only part, only the patches touching at; it follows its path as the tree changes", () => {
-	const { l, kids, value, edit, hosted } = world()
-	kids("R", { notes: "N", other: "O" })
-	value("N", { title: "a", body: "b" })
-	value("O", { title: "o" })
-	const told: unknown[] = []
-	l.watchPath(["notes"], (f) => told.push([f.id, f.patches]), { part: "value", at: ["title"] })
-	hosted(() =>
-		edit("value", "N", [{ path: ["body"], value: "y" }, { path: ["title"], value: "z" }])
-	)
-	hosted(() => edit("value", "N", [{ path: [], value: { title: "w" } }]))
-	hosted(() => edit("attributes", "N", [{ path: [], value: { title: "no" } }]))
-	// /notes now holds O: the watch is told O's writes, not N's
-	hosted(() => edit("children", "R", [{ path: ["notes"], value: "O" }]))
-	hosted(() => edit("value", "N", [{ path: ["title"], value: "gone" }]))
-	hosted(() => edit("value", "O", [{ path: ["title"], value: "here" }]))
-	assertEquals(told, [
-		["N", [{ path: ["title"], value: "z" }]],
-		["N", [{ path: [], value: { title: "w" } }]],
-		["O", [{ path: ["title"], value: "here" }]],
-	])
-})
-
 Deno.test("places: eachEntryChange gives a fact at every key a written entry is under", () => {
 	const { s, l, table, hosted } = world()
 	const shared = createEntry<unknown>({ a: 1 }, { time: 0, actor: "host" })
@@ -641,20 +594,19 @@ Deno.test("places: eachEntryChange gives a fact at every key a written entry is 
 	])
 })
 
-Deno.test("places: a watch that writes lands in the writer's run: a pipe's readers are due by it", () => {
+Deno.test("places: a watchAll that writes lands in the writer's run: a pipe's readers are due by it", () => {
 	const { s, l, kids, value, edit, hosted, notes, moments } = world()
 	kids("R", { a: "A", b: "B" })
 	value("A", 1)
 	value("B", 2)
 	const pipe = s.createScope({ pipe: "a→b" }, notes)
-	l.watchPath(
-		["a"],
-		(f) =>
-			s.runWithScope(
-				pipe,
-				() => edit("value", "B", [{ path: [], value: (f.entry!.value as number) * 2 }]),
-			),
-	)
+	l.watchAll((f) => {
+		if (f.part !== "value" || f.id !== "A") return
+		s.runWithScope(
+			pipe,
+			() => edit("value", "B", [{ path: [], value: (f.entry!.value as number) * 2 }]),
+		)
+	})
 	let w!: Computer
 	const seen: unknown[] = []
 	// a reader of b, run once
@@ -674,47 +626,7 @@ Deno.test("places: a watch that writes lands in the writer's run: a pipe's reade
 	assertEquals("pipe" in (l.readChange("value", "B")?.metadata ?? {}), true)
 })
 
-Deno.test("places: many watches, many commits: each is told only its own node's facts, and no path is walked to tell them", () => {
-	const { l, table, kids, value, edit, hosted } = world()
-	const N = 200
-	const names: Record<string, string> = {}
-	for (let i = 0; i < N; i++) names[`n${i}`] = `N${i}`
-	kids("R", { dir: "D" })
-	kids("D", names)
-	const counts = new Array<number>(N).fill(0)
-	for (let i = 0; i < N; i++) {
-		value(`N${i}`, 0)
-		l.watchPath(["dir", `n${i}`], () => void counts[i]++)
-	}
-	// a second watch on a node, and one on a path not there yet
-	let twin = 0, later = 0
-	l.watchPath(["dir", "n7"], () => void twin++)
-	l.watchPath(["dir", "late"], () => void later++)
-	// the walks the table is asked for from here on
-	const get = table.get.bind(table)
-	let walked = 0
-	table.get =
-		((part: Key, id: Id) => (part === "children" && walked++, get(part, id))) as typeof table.get
-	const COMMITS = 1000
-	hosted(() => {
-		for (let c = 0; c < COMMITS; c++) edit("value", `N${c % 50}`, [{ path: [], value: c }])
-	})
-	assertEquals(walked, 0)
-	for (let i = 0; i < N; i++) assertEquals(counts[i], i < 50 ? COMMITS / 50 : 0, `n${i}`)
-	assertEquals([twin, later], [COMMITS / 50, 0])
-	// a name placed: the watch at it finds its node and is told from then on
-	hosted(() => edit("children", "D", [{ path: ["late"], value: "N3" }]))
-	hosted(() => edit("value", "N3", [{ path: [], value: "x" }]))
-	assertEquals(later, 1)
-	assertEquals(counts[3], COMMITS / 50 + 1)
-	// a name pointed at another node: its watch follows, and N9, no longer reached by n9, tells it nothing
-	hosted(() => edit("children", "D", [{ path: ["n9"], value: "N10" }]))
-	hosted(() => edit("value", "N9", [{ path: [], value: "y" }]))
-	hosted(() => edit("value", "N10", [{ path: [], value: "y" }]))
-	assertEquals([counts[9], counts[10]], [COMMITS / 50 + 1, COMMITS / 50 + 1])
-})
-
-Deno.test("places: a view reads from its own root, nothing above it, and shares the spots, commit and watches", () => {
+Deno.test("places: a view reads from its own root, nothing above it, and shares the spots, commit and watchAll", () => {
 	const w = world()
 	w.kids("R", { work: "W", tools: "T" })
 	w.kids("W", { notes: "N" })
@@ -739,9 +651,9 @@ Deno.test("places: a view reads from its own root, nothing above it, and shares 
 	w.kids("W", { c: "C" })
 	w.s.pulse()
 	assertEquals([seen.runs, seen.value], [4, ["c"]])
-	// a watch on the view finds its path from the view's root, told on a commit to the host
+	// a watchAll on the view is told a commit to the host
 	let told = 0
-	inside.watchPath(["c"], () => void told++)
+	inside.watchAll((f) => void (f.part === "value" && f.id === "C" && told++))
 	w.value("C", 1)
 	w.hosted(() => w.edit("value", "C", [{ path: [], value: 2 }]))
 	assertEquals(told, 2)

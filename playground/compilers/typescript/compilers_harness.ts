@@ -13,8 +13,8 @@
 // { op: "attrs", id, value }                → {}   the attributes entry, replaced (a table event)
 // { op: "value", id, value }                → {}   the value entry, replaced (a table event)
 // { op: "compiler", id, compiler }          → {}   value entry: the compiler named (live, unsaved)
-// { op: "upsert", part, id, path, value }   → {}   places' upsert at path: a patch, telling only
-//    the reads it touches
+// { op: "upsert", part, id, path, value }   → {}   upsert (libraries/upsert) at path: a patch,
+//    telling only the reads it touches
 // compilers:
 // { op: "builds", cache }                   → {}   a fresh createBuilds over the same table, cache
 //    folder id cache; the last one's watches torn down first, then it stopped
@@ -52,7 +52,7 @@ import { createPaths } from "@ermine/core/scheduler/paths"
 import { createTable, type Id, type Key } from "@ermine/core/table"
 import { createPlaces, PlacesError } from "@ermine/core/places"
 import { createChangeHeader } from "@ermine/core/places/header"
-import { upsert } from "@ermine/core/places/upsert"
+import { upsert } from "@ermine/upsert"
 import type { Value } from "@ermine/encoding/cbor"
 import { type Request, serve } from "../../../conformance/typescript/harness.ts"
 import { hash } from "@ermine/formats/hash"

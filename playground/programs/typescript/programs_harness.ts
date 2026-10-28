@@ -11,8 +11,8 @@
 // { op: "attrs", id, value }                → {}   the attributes entry, replaced (a table event)
 // { op: "value", id, value }                → {}   the value entry, replaced (a table event)
 // { op: "host", id }                        → {}   the value entry: a live host runner, never saved
-// { op: "upsert", part, id, path, value }   → {}   places' upsert at path: a patch, telling only
-//    the reads it touches
+// { op: "upsert", part, id, path, value }   → {}   upsert (libraries/upsert) at path: a patch,
+//    telling only the reads it touches
 // { op: "types", list? }                    → {}   installTypes at R, the list given ([{ name,
 //    conformsTo?, fileNameExtension?, mimeType? }]; none: the excerpt and EXTRA); a new node's id
 //    its path joined by "/" ("ermine/types/public.text")
@@ -42,7 +42,7 @@ import { type Computer, createScheduler, type Scope } from "@ermine/core/schedul
 import type { Id } from "@ermine/core/table"
 import { PlacesError } from "@ermine/core/places"
 import { createChangeHeader } from "@ermine/core/places/header"
-import { upsert } from "@ermine/core/places/upsert"
+import { upsert } from "@ermine/upsert"
 import { type Address, type Box, createBox } from "@ermine/boxes"
 import { createErmine } from "@ermine/system"
 import { type Request, serve } from "../../../conformance/typescript/harness.ts"

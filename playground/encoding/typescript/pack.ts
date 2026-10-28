@@ -38,6 +38,9 @@ export type Entry = readonly [part: Key, id: Key, node: NodeEntry<unknown>]
 export type Options = {
 	// false: a change's op (its latest patches and their undo) is not written. default true
 	op?: boolean
+	// true: a live value (a function, a Map, a class object) is written as a stand-in naming it,
+	// as cbor's encode does with live. default false: it is cannot-carry
+	live?: boolean
 }
 
 export type Reading = {
@@ -246,7 +249,7 @@ function bytes(n: NodeEntry<unknown>, o: Options, part?: string, id?: string): U
 	const w = written(n, o)
 	if (STRICT.header(w.change) === undefined) throw new PackError("cannot-carry", part, id)
 	try {
-		return cbor.encode(w)
+		return cbor.encode(w as cbor.Value, { live: o.live })
 	} catch (e) {
 		if (e instanceof cbor.CborError) throw new PackError("cannot-carry", part, id)
 		throw e
@@ -355,9 +358,9 @@ function map(fields: [string, Uint8Array][]): Uint8Array {
 const HAS = { actor: 1, reader: 2, external: 4, metadata: 8, op: 16, value: 32 }
 
 // a value's encoding; one that cannot be carried: cannot-carry at the key given
-function carried(x: unknown, part?: string, id?: string): Uint8Array {
+function carried(x: unknown, part?: string, id?: string, live?: boolean): Uint8Array {
 	try {
-		return cbor.encode(x as cbor.Value)
+		return cbor.encode(x as cbor.Value, { live })
 	} catch (e) {
 		if (e instanceof cbor.CborError) throw new PackError("cannot-carry", part, id)
 		throw e
@@ -409,12 +412,18 @@ export function pack(entries: Iterable<Entry>, options: Options = {}): Uint8Arra
 		if (STRICT.header(w.change) === undefined) throw new PackError("cannot-carry", r.part, r.id)
 		const c = w.change as Fields
 		let bits = 0
-		if ("actor" in c) bits |= HAS.actor, actor.push(carried(c.actor, r.part, r.id))
-		if ("reader" in c) bits |= HAS.reader, reader.push(carried(c.reader, r.part, r.id))
-		if ("external" in c) bits |= HAS.external, external.push(carried(c.external, r.part, r.id))
-		if ("metadata" in c) bits |= HAS.metadata, metadata.push(carried(c.metadata, r.part, r.id))
-		if ("op" in c) bits |= HAS.op, op.push(carried(c.op, r.part, r.id))
-		if ("value" in w) bits |= HAS.value, values.push(carried(w.value, r.part, r.id))
+		if ("actor" in c) bits |= HAS.actor, actor.push(carried(c.actor, r.part, r.id, options.live))
+		if ("reader" in c) {
+			bits |= HAS.reader, reader.push(carried(c.reader, r.part, r.id, options.live))
+		}
+		if ("external" in c) {
+			bits |= HAS.external, external.push(carried(c.external, r.part, r.id, options.live))
+		}
+		if ("metadata" in c) {
+			bits |= HAS.metadata, metadata.push(carried(c.metadata, r.part, r.id, options.live))
+		}
+		if ("op" in c) bits |= HAS.op, op.push(carried(c.op, r.part, r.id, options.live))
+		if ("value" in w) bits |= HAS.value, values.push(carried(w.value, r.part, r.id, options.live))
 		has.put(bits)
 		time.diff(c.time as number, before)
 		before = c.time as number
