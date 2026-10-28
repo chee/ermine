@@ -20,9 +20,9 @@ export const getArgs: System["getArgs"] = /* @__PURE__ */ marked(() =>
 	go("getArgs", false, getArgsAs)
 )
 // a writer for a function to run later as this one, with nothing open: createWriter in setup or an
-// action. it writes nothing itself: not entered, no pulse asked
+// action. it writes nothing itself, but is entered: its frame takes the site of the line calling in
 export const createWriter: System["createWriter"] = /* @__PURE__ */ marked(() =>
-	go("createWriter", false, createWriterAs)
+	go("createWriter", true, createWriterAs)
 )
 // a process running fn at at, belonging to the scope that started it: setup, an action, a writer
 export const start: System["start"] = /* @__PURE__ */ marked((fn, at, options) =>
@@ -50,6 +50,8 @@ export function createWriterAs(inner: Inner): WithWriter {
 		"createWriter in a memo or effect: create it in setup or an action, and use the writer there",
 	)
 	const mark = markOf(inner, own)
+	// the writer's own frame: its site this call's (in a setup: the process's)
+	const frame = base.sited.createFrame({}, own.frame)
 	const later = function (f: () => unknown) {
 		const data = base.writers.get(later)!
 		const { inner, parent } = data
@@ -71,7 +73,7 @@ export function createWriterAs(inner: Inner): WithWriter {
 		} catch (e) {
 			throw base.errored(e, "createWriter")
 		}
-		return runAs(inner, parent, data.mark, f, userActivated())
+		return runAs(inner, parent, data.mark, f, userActivated(), data.frame)
 	} as unknown as WithWriter & { toJSON: () => never }
 	Object.defineProperties(later, {
 		toJSON: {
@@ -87,7 +89,7 @@ export function createWriterAs(inner: Inner): WithWriter {
 		[Symbol.for("Deno.customInspect")]: { value: () => "[writer]" },
 	})
 	Object.freeze(later)
-	base.writers.set(later, { inner, parent: own, mark })
+	base.writers.set(later, { inner, parent: own, mark, frame })
 	return later
 }
 

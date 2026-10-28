@@ -1,5 +1,5 @@
 {
-	"title": "createWriter(), in setup [marks 10-27; chee: \"i think that's right\"]: gives a writer; withWriter(f), called with nothing open (a timer, a listener), runs f as the process: its writes are the process's own (no call mark), what f makes belongs to the process and lasts, and the writer reads as outside, each write at its own line",
+	"title": "createWriter(), in setup [marks 10-27; chee: \"i think that's right\"]: gives a writer; withWriter(f), called with nothing open (a timer, a listener), runs f as the process: its writes are the process's own (no call mark), what f makes belongs to the process and lasts, and the writer reads as outside, each write at the writer's site (made in setup: the process's, \"setup\" [chee 10-28: frames walked])",
 	"steps": [
 		{
 			"op": "ermine",
@@ -119,7 +119,7 @@
 			"expect": {
 				"value": {
 					"writer": "outside",
-					"site": "program"
+					"site": "setup"
 				}
 			}
 		},

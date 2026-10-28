@@ -1,5 +1,5 @@
 {
-	"title": "a pipe's writes carry its memo's site, at either timing: made in a process's setup, the process's (\"setup\", the base's rule); made in an action's call, the line that made the pipe",
+	"title": "a pipe's writes carry its memo's site, at either timing: made in a process's setup, the process's (\"setup\", the base's rule); made in an action's call, its handler's (placed in setup: \"setup\" too [chee 10-28: frames walked])",
 	"steps": [
 		{
 			"op": "ermine",
@@ -180,7 +180,7 @@
 				"d"
 			],
 			"expect": {
-				"site": "pipe"
+				"site": "setup"
 			}
 		},
 		{
@@ -190,7 +190,7 @@
 				"e"
 			],
 			"expect": {
-				"site": "pipe"
+				"site": "setup"
 			}
 		},
 		{

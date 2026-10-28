@@ -50,7 +50,9 @@
 //    id, value }; { op: "saved", part, id, path? }; { op: "id", path }; { op: "metadata", part, id }
 //    → { keys, node?, features?, call?, handler?, caller? }; { op: "site", part, id } → { site }
 //    (setup: the process's, for its setup; computer: a memo or effect made at define's line;
-//    program: the harness's other lines; api: ermine's files; other; none)
+//    handler: an action made at handler's line; program: the harness's other lines; api: ermine's files; other; none); { op: "samesite",
+//    part, ids: [a, b] } → { same }: whether their changes' sites are one place (file, line,
+//    column); { op: "callsite", id } → { site }: the handler id's latest call's, where it was called
 //
 // a test feature: { name, needs?, onTable?, onRead?, onWrite?, onTeardown?, onRecord?, onStatus?, slot?,
 // early?, late? }. early: its setup reads places (not made yet); late: it keeps its FeatureAPI.
@@ -375,6 +377,7 @@ function call(api: Sys, env: Env, [fn, ...raw]: [string, ...unknown[]]): unknown
 		}
 		case "createAction": {
 			const [path, steps, back, kind] = raw as [string, Step[], unknown, "gen"?]
+			// its steps run as the call open then (imported's), never reopening the maker's scope.
 			// a generator action: steps run in order; ["yield", expr] yields expr's value (a
 			// promise is waited for) and takes what comes back as its value
 			if (kind !== undefined) {
@@ -384,27 +387,27 @@ function call(api: Sys, env: Env, [fn, ...raw]: [string, ...unknown[]]): unknown
 					return inner
 				}
 				const one = (inner: Env, step: Step) => {
-					const v = call(api, inner, step.do)
+					const v = call(imported, inner, step.do)
 					if (step.as !== undefined) inner.set(step.as, v)
 				}
 				if (kind === "gen") {
-					return api.createAction(path, function* (...args: unknown[]) {
+					return handler(api, path, function* (...args: unknown[]) {
 						const inner = body(args)
 						for (const step of steps) {
 							if (step.do[0] === "yield") {
-								const v: unknown = yield expr(api, inner, step.do[1])
+								const v: unknown = yield expr(imported, inner, step.do[1])
 								if (step.as !== undefined) inner.set(step.as, v)
 							} else one(inner, step)
 						}
-						return back === undefined ? undefined : expr(api, inner, back)
+						return back === undefined ? undefined : expr(imported, inner, back)
 					})
 				}
 			}
-			return api.createAction(path, (...args: unknown[]) => {
+			return handler(api, path, (...args: unknown[]) => {
 				const inner: Env = new Map(env)
 				args.forEach((a, i) => inner.set(String(i), a))
-				run(api, inner, steps)
-				return back === undefined ? undefined : expr(api, inner, back)
+				run(imported, inner, steps)
+				return back === undefined ? undefined : expr(imported, inner, back)
 			})
 		}
 		case "addTeardown":
@@ -590,6 +593,15 @@ function minted(e: Ermine, x: unknown): unknown {
 	return node ? e.handleOf(x as never) : x
 }
 
+// an action made: the line its handler's site is, when none is known ("handler" to site)
+// deno-lint-ignore no-explicit-any
+function handler(api: Sys, path: string, fn: (...a: any[]) => unknown) {
+	// called here, not through opened's wrapper (its line would be every call's)
+	return api.within(function handler() {
+		return system.createAction(path, fn)
+	})
+}
+
 // a memo or effect made: the line a computer's site is ("computer" to site)
 function define(api: Sys, env: Env, fn: string, raw: unknown[]): unknown {
 	if (fn === "createMemo") {
@@ -732,7 +744,13 @@ const runShown = (r: Run) =>
 function siteOf(at: { file: string; function?: string } | undefined): string {
 	if (at === undefined) return "none"
 	if (at.function === "setup") return "setup"
-	if (at.file === import.meta.url) return at.function === "define" ? "computer" : "program"
+	if (at.file === import.meta.url) {
+		return at.function === "define"
+			? "computer"
+			: at.function === "handler"
+			? "handler"
+			: "program"
+	}
 	if (OURS.includes(at.file)) return "api"
 	return "other"
 }
@@ -996,6 +1014,15 @@ async function answer(r: Request): Promise<Record<string, unknown>> {
 		}
 		case "site":
 			return { site: siteOf(e.table.get(r.part as Key, r.id)?.change?.external?.[0]) }
+		case "samesite": {
+			const [a, b] = (r.ids as string[]).map((id) =>
+				e.table.get(r.part as Key, id)?.change?.external?.[0]
+			)
+			const at = (x: typeof a) => x && [x.file, x.line, x.column ?? null].join(":")
+			return { same: a !== undefined && at(a) === at(b) }
+		}
+		case "callsite":
+			return { site: siteOf(e.records.call(r.id)?.site) }
 		default: {
 			const extra = ops.get(r.op)
 			if (extra === undefined) throw new Error(`no op ${r.op}`)

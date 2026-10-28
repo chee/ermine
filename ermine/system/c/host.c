@@ -489,42 +489,55 @@ const ch_site *es_enter(es_ermine *e, const ch_site *site) {
 	return was;
 }
 
-// a setup running: its scope, and the process's site once a call there has given one
+// a setup running: its scope's frame, and the process's site once a call there has given one
 struct es_setup {
-	sc_scope *scope;
+	sc_frame *frame;
 	int has_site;
 	ch_site site;
 	struct es_setup *up;
 };
 
-const ch_site *es_setup_site(es_ermine *e, const ch_site *given) {
-	struct es_setup *s = e->setup;
-	if (s == NULL || sc_get_current_scope(e->scheduler) != s->scope) return given;
-	if (!s->has_site) {
-		if (given == NULL) return NULL;
-		s->site = *given;
-		s->site.function = "setup";
-		s->has_site = 1;
-	}
-	return &s->site;
+static struct es_setup *setup_of(es_ermine *e, const sc_frame *f) {
+	for (struct es_setup *s = e->setup; s != NULL; s = s->up)
+		if (s->frame == f) return s;
+	return NULL;
 }
 
-// a write's header now: the open scope's. outside a run its site the call's, in one the running
-// computer's own
+// the nearest site up from f: each frame's own (sites.h), or a running setup's (the first given
+// there, with the function "setup", the same for all it does [chee 10-28: "this is fine"]; noted on
+// its frame once found). none: given, the call's own (NULL: none). *buf is where a site found is put
+const ch_site *es_site_up(es_ermine *e, sc_frame *f, const ch_site *given, ch_site *buf) {
+	for (; f != NULL; f = sc_frame_parent(f)) {
+		const st_site *own = e->sites != NULL ? st_site_of(e->sites, f) : NULL;
+		if (own != NULL) {
+			*buf = (ch_site){own->file, own->line, 0, own->func, 0};
+			return buf;
+		}
+		struct es_setup *s = setup_of(e, f);
+		if (s == NULL) continue;
+		if (!s->has_site) {
+			if (given == NULL) continue;
+			s->site = *given;
+			s->site.function = "setup";
+			s->has_site = 1;
+			if (e->sites != NULL) {
+				st_note_frame(e->sites, f, s->site.file, (int)s->site.line, "setup");
+			}
+		}
+		return &s->site;
+	}
+	return given;
+}
+
+const ch_site *es_site_here(es_ermine *e, const ch_site *given, ch_site *buf) {
+	return es_site_up(e, sc_get_current_frame(e->scheduler), given, buf);
+}
+
+// a write's header now: the open scope's. its site found up the frame open, else the call's
 int es_header(es_ermine *e, ch_header *out, pl_made **made) {
 	pl_made *block = NULL;
 	ch_site buf;
-	const ch_site *site = NULL;
-	sc_run *run = sc_get_run(e->scheduler);
-	if (run == NULL) {
-		site = es_setup_site(e, e->site);
-	} else {
-		const st_site *own = st_site_of(e->sites, sc_run_computer(run));
-		if (own != NULL) {
-			buf = (ch_site){own->file, own->line, 0, own->func, 0};
-			site = &buf;
-		}
-	}
+	const ch_site *site = es_site_here(e, e->site, &buf);
 	char *bad = pl_header(e->places, NULL, 0, site, out, &block);
 	if (bad != NULL) {
 		int code = strcmp(bad, SC_UNSCOPED) == 0
@@ -1912,11 +1925,15 @@ static void run_setup(proc_rec *rec) {
 	setup_call c = {rec, es_out_of(NULL)};
 	// the nodes it reads that are not there are held while it runs, then said in its status
 	es_setting(e, rec->id, 1);
-	// its writes and makes given a site take the process's (es_setup_site)
-	struct es_setup frame = {.scope = at, .up = e->setup};
+	// its writes and makes take the process's site (es_site_up)
+	struct es_setup frame = {.frame = at != NULL ? sc_scope_frame(at) : NULL, .up = e->setup};
 	if (at != NULL) e->setup = &frame;
 	int stopped = at == NULL || sc_run_with_scope(at, setup_thunk, &c) != NULL;
 	if (at != NULL) e->setup = frame.up;
+	// the process's own site from now: its setup's if one was found, else its start's (noted then)
+	if (frame.has_site && e->sites != NULL && sc_scope_alive(pr_scope(rec->started.process))) {
+		st_note(e->sites, pr_scope(rec->started.process), frame.site.file, (int)frame.site.line, "setup");
+	}
 	if (at != NULL) sc_release(at);
 	op_value *waits = NULL;
 	if (!stopped && c.out.kind == ES_OUT_PENDING) waits = waits_value(e, rec->id);

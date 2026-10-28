@@ -603,7 +603,6 @@ sc_scope *sc_frame_scope(const sc_frame *f) { return f->scope; }
 bool sc_frame_step(const sc_frame *f) { return f->step; }
 
 sc_frame *sc_create_frame(sc_scheduler *s, const sc_pair *info, size_t n, sc_frame *up) {
-	if (n == 0) return NULL;
 	sc_frame *f = xalloc(sizeof *f);
 	f->block = block_new(n);
 	for (size_t i = 0; i < n; i++) f->block->pairs[i] = info[i];

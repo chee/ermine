@@ -1,5 +1,5 @@
 {
-	"title": "why(x), one step: the change at x and who made it. from outside any run or call: its site (the program's line; written in a process's setup, the process's: \"setup\"); by a memo's run: the computer and the run, while its latest run's record holds the change; by a send: the handler and the call, likewise; a newer record not holding it: replaced, naming the writer's node. nothing there: none",
+	"title": "why(x), one step: the change at x and who made it. from outside any run or call: its site (the program's line; written as a process, in its setup or after, the process's: \"setup\" [chee 10-28: frames walked]); by a memo's run: the computer and the run, while its latest run's record holds the change; by a send: the handler and the call, likewise; a newer record not holding it: replaced, naming the writer's node. nothing there: none",
 	"steps": [
 		{
 			"op": "ermine",
@@ -176,7 +176,7 @@
 			"expect": {
 				"value": {
 					"writer": "outside",
-					"site": "program"
+					"site": "setup"
 				}
 			}
 		},

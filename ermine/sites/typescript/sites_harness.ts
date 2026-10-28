@@ -9,25 +9,29 @@
 // { op: "effect", name, parent, wrapped? }    → {}   an effect made with parent open
 //    wrapped: false makes it with the scheduler alone (default true: through the sites). each
 //    computer and effect reads one key, the same for all
+// { op: "frame", name, parent, wrapped? } → {}   a frame alone under parent's (a scope's: its own)
+// { op: "note", name }                        → {}   a site noted on it, the harness's
 // { op: "rerun" }                             → {}   a pulse, the key marked, a pulse: each
 //    computer and effect runs again
-// { op: "site", name }                        → { site }   whether the scope has a site of its own
-// { op: "chain", name }                       → { length } how many sites its chain has
-import { createScheduler, type Scope } from "@ermine/core/scheduler"
+// { op: "site", name }                        → { site }   whether it has a site of its own
+// { op: "chain", name }                       → { length } how many sites its chain has (frames)
+import { createScheduler, type Frame, type Scope } from "@ermine/core/scheduler"
 import { type Request, serve } from "../../../conformance/typescript/harness.ts"
 import { createSites } from "./sites.ts"
 
 const info = { owner: "test" }
 const scheduler = createScheduler()
 const sites = createSites(scheduler)
-const named = new Map<string, Scope>()
+const named = new Map<string, Scope | Frame>()
 // what every computer and effect reads
 const KEY = {}
 const read = () => (scheduler.track(KEY), 1)
 
 function find(name: unknown): Scope | undefined {
-	return typeof name === "string" ? named.get(name) : undefined
+	const x = typeof name === "string" ? named.get(name) : undefined
+	return x !== undefined && "frame" in x ? x : undefined
 }
+const either = (name: unknown) => typeof name === "string" ? named.get(name) : undefined
 
 export function answer(r: Request): Record<string, unknown> {
 	const wrapped = r.wrapped !== false
@@ -55,19 +59,33 @@ export function answer(r: Request): Record<string, unknown> {
 			named.set(r.name, made)
 			return {}
 		}
+		case "frame": {
+			if (typeof r.name !== "string") throw new Error("frame: no name")
+			const up = either(r.parent)
+			if (up === undefined) throw new Error("frame: no parent")
+			const f = "frame" in up ? up.frame : up
+			named.set(r.name, via.createFrame(info, f))
+			return {}
+		}
+		case "note": {
+			const o = either(r.name)
+			if (o === undefined) throw new Error(`note: no ${r.name}`)
+			sites.note(o, { file: import.meta.url, line: 1 })
+			return {}
+		}
 		case "rerun":
 			scheduler.pulse()
 			scheduler.mark([KEY])
 			scheduler.pulse()
 			return {}
 		case "site": {
-			const o = find(r.name)
-			if (o === undefined) throw new Error(`site: no scope ${r.name}`)
+			const o = either(r.name)
+			if (o === undefined) throw new Error(`site: no ${r.name}`)
 			return { site: sites.siteOf(o) !== undefined }
 		}
 		case "chain": {
-			const o = find(r.name)
-			if (o === undefined) throw new Error(`chain: no scope ${r.name}`)
+			const o = either(r.name)
+			if (o === undefined) throw new Error(`chain: no ${r.name}`)
 			return { length: sites.sitesOf(o).length }
 		}
 		default:

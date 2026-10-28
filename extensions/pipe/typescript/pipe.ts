@@ -52,10 +52,10 @@
 // that begins after the write: a write made outside every run and act is told in the pulse it asks
 // for, one made in a run or act (a pipe's own telling's) in the next. a cycle of pulse pipes turns
 // once a pulse, as long as its functions write: nothing stops it.
-// sites: told in its run (pulse), its writes have the memo's site, the line that made the pipe;
-// told as a write lands outside a run, the line that made the pipe too (its stack held at the make,
-// read once at the first such write, then given as a build site: nothing captured a write); inside
-// a run, the running computer's (the base's rule).
+// sites: told in its run (pulse), its writes have the memo's site (found as it was made: the line
+// that made the pipe, or the frame's it was made in, a setup's or a handler's); told as a write lands
+// outside a run, the memo's too (read once at the first such write, then given as a build site:
+// nothing captured a write); inside a run, the running computer's (the base's rule).
 import {
 	createMemo,
 	getNode,
@@ -224,8 +224,8 @@ const pipes: Feature = {
 			return f.dataOf(it.node)!.node.id!
 		}
 
-		// its writes: given its memo's site as a build site (the line that made the pipe, or its
-		// setup's), read once at the first; in a run the base takes the running computer's, the same
+		// its writes: given its memo's site as a build site, read once at the first; in a run the base
+		// takes the running computer's, the same
 		const writer = (p: Pipe) => {
 			if (p.write !== undefined) return p.write
 			const w = f.siteOf(p.c)

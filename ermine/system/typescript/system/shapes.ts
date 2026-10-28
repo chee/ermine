@@ -1,6 +1,6 @@
 import type { Path } from "@ermine/core/places"
 import type { Run } from "@ermine/processes/runs"
-import type { Equal, Scope } from "@ermine/core/scheduler"
+import type { Equal, Frame, Scope } from "@ermine/core/scheduler"
 import type { Key } from "@ermine/core/table"
 import type { FileLocation } from "@ermine/core/util/stacktrace"
 import type { Call } from "../calls.ts"
@@ -130,8 +130,7 @@ export class SendError extends Error {
 }
 
 // what a writer runs as: where it was made, and the mark it was made under (an action's call: its
-// info, never the user-activated flag; setup: none, the scope's own). no site: each write in it has
-// its own line
+// info, never the user-activated flag; setup: none, the scope's own), and its own frame
 export type WriterAs = {
 	readonly inner: Inner
 	// what f's makings and asks belong to: the scope createWriter was called in
@@ -139,9 +138,13 @@ export type WriterAs = {
 	// the info of the frame it was made under (an action's call), when not that scope's own: its
 	// runs are made in a frame of that info under the scope's
 	readonly mark: Scope["info"] | undefined
+	// the writer's own frame, made as createWriter was called, under that scope's (its site where
+	// createWriter was called): its runs are under it
+	readonly frame: Frame
 }
 // a writer: withWriter(f) runs f as the parent createWriter was called in, its writes carrying the
-// frame it was made under, each at its own line [marks-2026-10-27; scope and frame, 10-28]
+// frame it was made under, each at the writer's site [marks-2026-10-27; scope and frame, frames
+// walked, 10-28]
 export type WithWriter = <T>(f: () => T) => T
 
 // what start gives a program: where the process is, its stop and its status; or taken

@@ -154,14 +154,59 @@ typedef struct {
 	size_t index;
 } fnslot;
 
+// a frame a handler or a writer owns [chee 10-28]: made alone under its scope's own frame as it is
+// made, its site found then (es_site_up) and noted; a handler's info { handler: its node }, a
+// writer's none. its owner holds it, and each frame made under it (a call's), so it outlasts its
+// owner while one goes
+typedef struct hframe {
+	es_ermine *e;
+	sc_frame *frame;
+	op_value *id;
+	sc_pair info[1];
+	size_t refs;
+} hframe;
+
+static hframe *hframe_new(es_context *c, const char *handler, sc_scope *own, const ch_site *given) {
+	es_ermine *e = c->ermine;
+	hframe *h = es_alloc(sizeof *h);
+	h->e = e;
+	h->refs = 1;
+	if (handler != NULL) {
+		h->id = op_str(handler);
+		h->info[0] = (sc_pair){"handler", h->id};
+	}
+	h->frame = sc_create_frame(e->scheduler, h->info, handler != NULL ? 1 : 0, sc_scope_frame(own));
+	ch_site found;
+	const ch_site *site = es_site_up(e, es_open_frame(c), given, &found);
+	if (site != NULL && e->sites != NULL) {
+		st_note_frame(e->sites, h->frame, site->file, (int)site->line, site->function);
+	}
+	return h;
+}
+
+static void hframe_drop(hframe *h) {
+	if (h == NULL || --h->refs > 0) return;
+	if (h->e->sites != NULL) st_forget_frame(h->e->sites, h->frame);
+	sc_free_frame(h->frame);
+	op_free(h->id);
+	free(h);
+}
+
 // an action placed: the function (its slot, and the gen it had), the scope that placed it, the context
-// it was placed as
+// it was placed as, and its handler's frame
 typedef struct {
 	es_function *fn;
 	uint32_t gen;
 	sc_scope *scope;
 	es_context *context;
+	hframe *frame;
 } placed;
+
+static void placed_free(placed *p) {
+	if (p == NULL) return;
+	hframe_drop(p->frame);
+	free(p);
+}
 
 typedef struct writer_rec writer_rec;
 // a writer: where it was made (its parent: what it makes and asks as belongs to it), and the
@@ -177,6 +222,8 @@ struct writer_rec {
 	uint64_t serial;
 	op_value *mark[3];
 	size_t nmark;
+	// its own frame, under its parent's: its site where createWriter was called; each run is under it
+	hframe *frame;
 };
 struct writer_owner {
 	struct es_actions *x;
@@ -225,7 +272,7 @@ struct es_actions *es_actions_new(es_ermine *e) {
 void es_actions_free(struct es_actions *x) {
 	if (x == NULL) return;
 	if (x->sweeping != NULL) sc_remove_listener(x->sweeping);
-	for (size_t i = 0; i < x->methods.n; i++) free(x->methods.vals[i]);
+	for (size_t i = 0; i < x->methods.n; i++) placed_free(x->methods.vals[i]);
 	es_map_free(&x->methods);
 	es_map_free(&x->placers);
 	for (size_t i = 0; i < x->nfns; i++) free(x->fns[i]);
@@ -843,6 +890,9 @@ struct es_going {
 	size_t refs;
 	// its handler gone while it went: told onRecord as it ends, never held
 	int gone;
+	// where it was called from
+	int has_site;
+	ch_site site;
 };
 
 struct es_calls {
@@ -871,10 +921,13 @@ struct es_calls {
 typedef struct call_info {
 	op_value *values[4];
 	size_t n;
+	// the handler's frame the call frame is under, held till it is freed
+	hframe *up;
 } call_info;
 
 static void call_info_free(call_info *k) {
 	for (size_t i = 0; i < k->n; i++) op_free(k->values[i]);
+	hframe_drop(k->up);
 	free(k);
 }
 
@@ -924,6 +977,8 @@ static es_call *call_copy(const es_call *c) {
 	if (c->nargs > 0) o->args = es_alloc(c->nargs * sizeof *o->args);
 	for (size_t i = 0; i < c->nargs; i++) o->args[o->nargs++] = op_ref(c->args[i]);
 	o->end = c->end;
+	o->has_site = c->has_site;
+	o->site = c->site;
 	o->has_returned = c->has_returned;
 	o->returned = op_ref(c->returned);
 	o->error = opt_dup(c->error);
@@ -1253,6 +1308,8 @@ static int record(es_going *g, const char *end, const more_of *m) {
 	c.nwrites = g->nwrites;
 	c.made = g->made;
 	c.nmade = g->nmade;
+	c.has_site = g->has_site;
+	c.site = g->site;
 	keeping k = {x, call_copy(&c), 0, g->gone};
 	es_recorded r = {g->handler, NULL, k.owned, NULL};
 	int code = es_hook_record(x->e, &r, keep_record, &k);
@@ -1562,7 +1619,7 @@ static char *placed_gone(void *data) {
 	// its record with the scope, unless the node's value was already let go and the slot used again
 	fnslot *slot = (fnslot *)p->fn;
 	if (slot->gen == p->gen) fn_forget(x, slot);
-	free(p);
+	placed_free(p);
 	placer_forget(k);
 	return NULL;
 }
@@ -1577,7 +1634,7 @@ int es_stop_action(es_ermine *e, const char *id) {
 	es_calls_drop(e, id);
 	fnslot *slot = (fnslot *)p->fn;
 	if (slot->gen == p->gen) fn_forget(x, slot);
-	free(p);
+	placed_free(p);
 	return 1;
 }
 
@@ -1643,8 +1700,9 @@ static int create_action(es_context *c, es_at p, es_action fn, void *ctx, es_han
 	entry->gen = f->gen;
 	entry->scope = own;
 	entry->context = c;
+	entry->frame = hframe_new(c, m.id, own, e->site);
 	es_map_set(&x->methods, m.id, entry);
-	free(was);
+	placed_free(was);
 	size_t len = strlen(m.id) + 40;
 	char *tag = es_alloc(len);
 	snprintf(tag, len, "%p\x1f%s", (void *)own, m.id);
@@ -1728,8 +1786,9 @@ static void call_ended(void *ctx, int ok, const op_value *value, const char *err
 
 // the call's frame: its info { caller: { node, actor }, handler, call }, the values held by the
 // record till it is freed (a frame borrows its info), made alone under the scope the call runs in
-// (under's own frame). the record frees it (call_over lets go the hold its beginning took)
-static sc_frame *call_frame(es_context *c, const char *id, unsigned k, sc_scope *under,
+// (under's own frame), or under the handler's frame (up: the placed function is the one called, so its
+// writes take the handler's site). the record frees it (call_over lets go the hold its beginning took)
+static sc_frame *call_frame(es_context *c, const char *id, unsigned k, sc_scope *under, hframe *up,
 	call_info **held) {
 	es_ermine *e = c->ermine;
 	op_value *caller = op_map();
@@ -1739,9 +1798,10 @@ static sc_frame *call_frame(es_context *c, const char *id, unsigned k, sc_scope 
 	op_value *handler = op_str(id), *call = op_num((double)k);
 	sc_pair pairs[3] = {{"caller", caller}, {"handler", handler}, {"call", call}};
 	call_info *info = es_alloc(sizeof *info);
-	*info = (call_info){{caller, handler, call}, 3};
+	*info = (call_info){{caller, handler, call}, 3, up};
+	if (up != NULL) up->refs++;
 	*held = info;
-	return sc_create_frame(e->scheduler, pairs, 3, sc_scope_frame(under));
+	return sc_create_frame(e->scheduler, pairs, 3, up != NULL ? up->frame : sc_scope_frame(under));
 }
 
 // the action f found at n (id): asked "execute" in a call frame, run there, its record held
@@ -1753,11 +1813,13 @@ static int call_action(es_context *c, const es_node_data *n, const char *id,
 	placed *p = es_map_get(&e->actions->methods, id);
 	int mine = p != NULL && p->fn == f && p->gen == ((fnslot *)f)->gen;
 	unsigned k = es_calls_next(e);
-	(void)site;
-	// what the action makes is under's; what a change it makes is made as is the call's
+	// what the action makes is under's; what a change it makes is made as is the call's, under the
+	// handler's frame. where it was called from (the click): found up the caller's frame open, else site
 	sc_scope *under = mine ? p->scope : c->scope;
+	ch_site found;
+	const ch_site *from = es_site_up(e, es_open_frame(c), site, &found);
 	call_info *held;
-	sc_frame *call = call_frame(c, id, k, under, &held);
+	sc_frame *call = call_frame(c, id, k, under, mine ? p->frame : NULL, &held);
 	asking a = {c, id, n, 0};
 	const char *bad = sc_run_with(under, call, do_ask, &a);
 	int code = bad != NULL ? es_fail_text(bad) : a.code;
@@ -1769,6 +1831,10 @@ static int call_action(es_context *c, const es_node_data *n, const char *id,
 	op_value *called = change_at(e, "value", id);
 	es_calling_view base = {k, c->node, c, id, called, args, nargs, 0};
 	es_going *g = es_calls_begin(e, k, call, held, &base);
+	if (from != NULL) {
+		g->has_site = 1;
+		g->site = *from;
+	}
 	op_free(called);
 	// the call's frame lasts as the record does: a promise's till it settles (the record ended
 	// first), else till the handler returns or throws
@@ -1998,6 +2064,7 @@ int es_cleanup(es_context *c, es_teardown fn, void *ctx) {
 // --- writer ------------------------------------------------------------------------------------------------------
 
 static void writer_free(writer_rec *b) {
+	hframe_drop(b->frame);
 	for (size_t i = 0; i < b->nmark; i++) op_free(b->mark[i]);
 	free(b);
 }
@@ -2017,7 +2084,7 @@ static char *writer_gone(void *data) {
 
 static const char *const MARK_KEYS[3] = {"caller", "handler", "call"};
 
-int es_create_writer(es_context *c, op_value **writer) {
+int es_create_writer_at(es_context *c, op_value **writer, const ch_site *site) {
 	es_ermine *e = c->ermine;
 	struct es_actions *x = e->actions;
 	*writer = NULL;
@@ -2037,6 +2104,7 @@ int es_create_writer(es_context *c, op_value **writer) {
 	b->c = c;
 	b->parent = own;
 	b->serial = ++x->serials;
+	b->frame = hframe_new(c, NULL, own, site);
 	// the mark it is made under: the frame open when it is not own's (a call's, a writer's run's)
 	sc_frame *at = sc_get_current_frame(e->scheduler);
 	if (at != NULL && at != sc_scope_frame(own)) {
@@ -2122,7 +2190,9 @@ int es_with_writer(es_ermine *e, const op_value *writer, es_thunk f, void *ctx) 
 	}
 	int during = e->user_activated != NULL && e->user_activated(e->user_activated_ctx);
 	sc_scope *at = b->parent;
-	sc_frame *frame = NULL;
+	hframe *under = b->frame;
+	under->refs++;
+	sc_frame *frame = under->frame;
 	call_info *info = NULL;
 	// f may free b (it lets its writer go, or stops what it was created in): nothing of b is read after it
 	int own_mark = b->nmark > 0 || during;
@@ -2139,7 +2209,7 @@ int es_with_writer(es_ermine *e, const op_value *writer, es_thunk f, void *ctx) 
 			info->values[info->n++] = op_bool(1);
 			pairs[n++] = (sc_pair){"userActivated", info->values[info->n - 1]};
 		}
-		frame = sc_create_frame(e->scheduler, pairs, n, sc_scope_frame(b->parent));
+		frame = sc_create_frame(e->scheduler, pairs, n, under->frame);
 	}
 	later_call l = {f, ctx, 0};
 	const char *bad = sc_run_with(at, frame, later_run, &l);
@@ -2148,6 +2218,7 @@ int es_with_writer(es_ermine *e, const op_value *writer, es_thunk f, void *ctx) 
 		call_info_free(info);
 		es_queue_pulse(e);
 	}
+	hframe_drop(under);
 	if (bad != NULL) return es_fail_text(bad);
 	return l.code;
 }

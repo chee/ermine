@@ -114,17 +114,18 @@ export function markOf(inner: Inner, own: Scope): Scope["info"] | undefined {
 }
 
 // f run as parent under mark, with nothing else of the caller's: its writes carry the mark (and the
-// user-activated flag, when asked)
+// user-activated flag, when asked). up: the frame it runs under (a writer's own; none: parent's)
 export function runAs<T>(
 	inner: Inner,
 	parent: Scope,
 	mark: Scope["info"] | undefined,
 	f: () => T,
 	during = false,
+	up: Frame = parent.frame,
 ): T {
 	const { s } = here(inner)
 	const info = during ? { ...mark, [USER_ACTIVATED]: true } : mark
-	const frame = info === undefined ? parent.frame : s.createFrame(info, parent.frame)
+	const frame = info === undefined ? up : s.createFrame(info, up)
 	enterScheduler(s)
 	try {
 		return s.runWith(parent, frame, f)
