@@ -2,6 +2,7 @@
 // by id. LLM generated
 import { assert, assertEquals } from "@std/assert"
 import { setFlagsFromString } from "node:v8"
+import { parseHTML } from "npm:linkedom@0.18.12"
 import { runInNewContext } from "node:vm"
 import {
 	createAction,
@@ -94,27 +95,31 @@ const settled = () => new Promise((r) => setTimeout(r, 0))
 Deno.test("the html says each binding's node, its target and the process's", () => {
 	const { ermine, into } = visitor()
 	const page = html(into)
-	assert(page.startsWith(`<main><div data-ermine-process="/visitors/a">`))
+	assert(
+		page.startsWith(
+			`<main><div data-ermine-process="/visitors/a" data-ermine-base="/visitors/a">`,
+		),
+	)
 	assert(page.includes(
-		`<output data-ermine-bind:class="/visitors/a/count" data-ermine-binding="view/0 view/1" class ` +
-			`data-ermine-bind:text="/visitors/a/count">0</output>`,
+		`<output data-ermine-bind:class="count" data-ermine-binding="view/0 view/1" class ` +
+			`data-ermine-bind:text="count">0</output>`,
 	))
 	assert(
 		page.includes(
 			`<span data-ermine-binding="view/2" data-ermine-bind:text="/shared/clicks">0</span>`,
 		),
 	)
-	assert(page.includes(`data-ermine-on:click="/visitors/a/on/inc" data-ermine-handler:click="`))
+	assert(page.includes(`data-ermine-on:click="on/inc" data-ermine-handler:click="`))
 	ermine.close()
 })
 
 Deno.test("a click: each binding's new value once, by its node", async () => {
 	const { ermine, into } = visitor()
-	assertEquals(fire(into, idOf(html(into), "/visitors/a/on/inc"), {}), true)
+	assertEquals(fire(into, idOf(html(into), "on/inc"), {}), true)
 	await settled()
 	assertEquals(take(into), [["view/1", "text", "1"], ["view/2", "text", "1"]])
-	fire(into, idOf(html(into), "/visitors/a/on/dec"), {})
-	fire(into, idOf(html(into), "/visitors/a/on/dec"), {})
+	fire(into, idOf(html(into), "on/dec"), {})
+	fire(into, idOf(html(into), "on/dec"), {})
 	await settled()
 	assertEquals(take(into), [
 		["view/0", "className", "below"],
@@ -135,11 +140,9 @@ Deno.test("a list's kids, changed: sent whole, and nothing inside apart", async 
 	const kids = told[0][2] as string
 	// in the order the list gives (a folder's: any)
 	assert(kids.includes(">apple<"))
-	assert(
-		kids.includes(
-			`data-ermine-binding="view/3/pear:0" data-ermine-bind:text="/visitors/a/items/pear">pear<`,
-		),
-	)
+	// a row says its list; a name in it, from it
+	assert(kids.includes(`<li data-ermine-key="pear" data-ermine-in="view/3">`))
+	assert(kids.includes(`data-ermine-binding=":0" data-ermine-bind:text="items/pear">pear<`))
 	// a row's own change: told by its own binding
 	ermine.within(() => patch("/visitors/a/items/pear", [{ path: [], value: "ripe" }]))
 	await settled()
@@ -327,5 +330,93 @@ Deno.test("not a root: render says so", () => {
 		})
 	}, "/p")
 	assert(!("refused" in started) && started.status()?.state === "failed")
+	ermine.close()
+})
+
+// a page's whole name for a name an element says, by the rule the page scripts keep (ssr-live's
+// client/live.js, whole): one in a row (":0") from the row's data-ermine-in, then its key
+type Found = {
+	getAttribute(name: string): string | null
+	closest(selector: string): Found | null
+	readonly parentElement: Found | null
+	readonly children: ArrayLike<Found>
+}
+const whole = (name: string, el: Found): string => {
+	const row = name[0] === ":" ? el.closest("[data-ermine-in]") : null
+	if (!row) return name
+	const list = whole(row.getAttribute("data-ermine-in")!, row.parentElement!)
+	return `${list}/${row.getAttribute("data-ermine-key")}${name}`
+}
+
+Deno.test("a row's names are written from it, a row in a row's too, and a page works each out whole", () => {
+	const ermine = createErmine({})
+	const into = createRoot()
+	const started = ermine.start(function shelves() {
+		;["top", "low"].forEach((s) => {
+			ensureNode(`shelves/${s}`, s)
+			;["jam", "honey"].forEach((j) => ensureNode(`shelves/${s}/${j}`, j))
+		})
+		render(
+			into,
+			h(
+				"ul",
+				null,
+				under("shelves", (shelf) =>
+					h(
+						"li",
+						{ class: bind(shelf.at, (v: string) => `shelf-${v}`) },
+						bind(shelf.at),
+						h("ol", null, under(shelf.at, (jar) => h("li", null, bind(jar.at)))),
+					)),
+			),
+			{ name: "/shelves", call: () => undefined },
+		)
+	}, "/shelves")
+	if ("refused" in started) throw new Error(started.refused)
+	const page = html(into)
+	assert(page.includes(`<li data-ermine-key="top" data-ermine-bind:class="shelves/top"`))
+	assert(page.includes(`data-ermine-binding=":0" class="shelf-top" data-ermine-in="view/0">`))
+	// a row in a row: its list (view/0/top:2) said from the outer row
+	assert(page.includes(
+		`<li data-ermine-key="jam" data-ermine-binding=":0" data-ermine-bind:text="shelves/top/jam" ` +
+			`data-ermine-in=":2">`,
+	))
+	const { document } = parseHTML(`<html><body>${page}</body></html>`) as unknown as {
+		document: { body: { firstElementChild: Found } }
+	}
+	// each element as the page has it, beside the one it was written from
+	const pairs = (a: Element, b: Found): [Element, Found][] => [
+		[a, b],
+		...a.kids.filter((k): k is Element => "tag" in k).flatMap((k, i) => pairs(k, b.children[i])),
+	]
+	// the root is written too (<main>)
+	const named = pairs(into, document.body.firstElementChild)
+		.filter(([a]) => a.attrs.has("data-ermine-binding"))
+	// the list, each shelf's row, text and jars, and each jar
+	assertEquals(named.length, 1 + 2 * 3 + 2 * 2)
+	for (const [a, b] of named) {
+		const said = b.getAttribute("data-ermine-binding")!.split(" ")
+		assertEquals(
+			said.map((n) => whole(n, b)).join(" "),
+			a.attrs.get("data-ermine-binding"),
+		)
+	}
+	ermine.close()
+})
+
+Deno.test("another attrPrefix: the page and take's html say it, the elements keep data-ermine-", async () => {
+	const { ermine, into, call } = visitor({ attrPrefix: "e-" })
+	const page = html(into)
+	assert(page.startsWith(`<main><div e-process="/visitors/a" e-base="/visitors/a">`))
+	assert(!page.includes("data-ermine-"))
+	call("on/add", "apple")
+	await settled()
+	const [[, , kids]] = take(into)
+	assert(
+		String(kids).includes(
+			`<li e-key="apple" e-in="view/3"><span e-binding=":0" e-bind:text="items/apple">`,
+		),
+	)
+	assertEquals((into.kids[0] as Element).attrs.has("data-ermine-process"), true)
 	ermine.close()
 })

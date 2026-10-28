@@ -494,7 +494,7 @@ Deno.test("a page: the html from a template is the html from h, and so are its u
 	const b = visitor(written.h)
 	const page = write(a.into)
 	assertEquals(page, write(b.into))
-	assert(page.includes(`data-ermine-bind:text="/p/count"`))
+	assert(page.includes(`data-ermine-bind:text="count"`))
 	assert(page.includes(`<input type="text"`))
 	assert(page.includes(`>apple<`))
 	for (const v of [a, b]) {

@@ -3,8 +3,10 @@
 // reusing what an earlier render put there (@ermine/render: the engine); hydrate(into, view,
 // options) takes what into holds already (a server's html, @ermine/render/html's) as that. a prop is a property when
 // the element has one (value, checked, className…), else an attribute; a style object is merged
-// into style. says: data-ermine-<name> attributes (process, key, source, bind:<prop|text|children>,
-// on:<event>, waiting). tells: bubbling events ("ermine:change", "ermine:call", "ermine:called")
+// into style. says: data-ermine-<name> attributes (process, base, key, source, bind:<prop|text|
+// children>, on:<event>, waiting), or another start than data-ermine- (createDOM({ attrPrefix
+// }): a renderer of its own, for createRenderer). tells: bubbling events ("ermine:change",
+// "ermine:call", "ermine:called")
 import { createRenderer, type Renderer } from "./render.ts"
 
 // a prop: an attribute, or a property when the element has one (value, checked, className…)
@@ -33,7 +35,8 @@ function unset(el: Element, what: string) {
 	} catch { /* a read-only property: left as it is */ }
 }
 
-export const dom: Renderer<Node, Element> = {
+// the DOM's renderer; attrPrefix: what the attributes it says start with
+export const createDOM = ({ attrPrefix = "data-ermine-" } = {}): Renderer<Node, Element> => ({
 	element: (tag) => document.createElement(tag),
 	text: (s) => document.createTextNode(s),
 	setText: (t, s) => {
@@ -50,28 +53,27 @@ export const dom: Renderer<Node, Element> = {
 	isNode: (x): x is Node => typeof x === "object" && x !== null && "nodeType" in x,
 	nameOf: (n) => (n as Element).localName ?? "node",
 	say: (el, name, value) => {
-		const attr = `data-ermine-${name}`
+		const attr = attrPrefix + name
 		if (value === undefined) el.removeAttribute(attr)
 		else if (el.getAttribute(attr) !== value) el.setAttribute(attr, value)
 	},
 	tell: (el, name, detail) =>
 		void el.dispatchEvent(new CustomEvent(name, { bubbles: true, detail })),
 	kidsOf: (el) => [...el.childNodes],
-	kindOf,
-}
+	kindOf: (n) => kindOf(n, attrPrefix),
+})
+export const dom = createDOM()
 
 // what a node is matched as when a page's html is hydrated: an element its tag, and its key when it
 // says one; a span saying only what binds it, a binding among other kids; text. anything else (a
 // comment) is left as it is
-function kindOf(n: Node): string | undefined {
+function kindOf(n: Node, prefix: string): string | undefined {
 	if (n.nodeType === Node.TEXT_NODE) return "#text"
 	if (n.nodeType !== Node.ELEMENT_NODE) return undefined
-	const el = n as Element, tag = el.localName, key = el.getAttribute("data-ermine-key")
+	const el = n as Element, tag = el.localName, key = el.getAttribute(prefix + "key")
 	const names = el.getAttributeNames()
-	const said = names.every((a) => a.startsWith("data-ermine-"))
-	if (tag === "span" && said && names.some((a) => a.startsWith("data-ermine-bind:"))) {
-		return "#bind"
-	}
+	const said = names.every((a) => a.startsWith(prefix))
+	if (tag === "span" && said && names.some((a) => a.startsWith(prefix + "bind:"))) return "#bind"
 	return key === null ? tag : `${tag}#${key}`
 }
 

@@ -4,6 +4,25 @@
 // applied in order; each update as live.js does, told "ermine:change"
 const root = document.querySelector("[data-ermine-process]")
 const p = root.getAttribute("data-ermine-process")
+// an update's element, by its binding's name. a name in a list's row is written from the row
+// (":0": the row's data-ermine-in, its data-ermine-key, then ":0"), so each element's names are
+// worked out whole, and found again when one isn't (the page's elements changed)
+const whole = (name, el) => {
+	const row = name[0] == ":" ? el.closest("[data-ermine-in]") : null
+	if (!row) return name
+	const list = whole(row.getAttribute("data-ermine-in"), row.parentElement)
+	return `${list}/${row.getAttribute("data-ermine-key")}${name}`
+}
+let found = new Map()
+function find(b) {
+	if (found.get(b)?.isConnected) return found.get(b)
+	found = new Map()
+	for (const el of document.querySelectorAll("[data-ermine-binding]")) {
+		for (const n of el.getAttribute("data-ermine-binding").split(" ")) found.set(whole(n, el), el)
+	}
+	return found.get(b)
+}
+
 let next = 1
 const early = new Map()
 const take = (answer) => {
@@ -15,10 +34,10 @@ const take = (answer) => {
 }
 function apply(updates) {
 	for (const [b, k, v] of updates) {
-		const el = document.querySelector(`[data-ermine-binding~="${b}"]`)
+		const el = find(b)
 		if (!el) continue
 		if (k == "text") el.textContent = v
-		else if (k == "children") el.innerHTML = v
+		else if (k == "children") el.innerHTML = v, found = new Map()
 		else if (k in el) el[k] = v ?? ""
 		else if (v == null || v === false) el.removeAttribute(k)
 		else el.setAttribute(k, v === true ? "" : v)

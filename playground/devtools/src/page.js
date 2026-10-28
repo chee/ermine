@@ -1423,9 +1423,10 @@
 	// ermine-h says on an element what drew it: data-ermine-process (a process's name, on its root),
 	// data-ermine-bind:<prop|text|children> (what it shows), data-ermine-on:<event> (its handler),
 	// data-ermine-key, data-ermine-source (file:line), data-ermine-waiting. a bind or a handler says
-	// a path from the root ("/page/join/text"), "<path>#<id>" for an entry, or a name as its program
-	// wrote it ("modes", "./n", "[node]"): a name inside a process's node, whose path the page does
-	// not say, so it is shown as said and never guessed at. the outlines are the agent's own layer
+	// a path from the root ("/page/join/text"), "<path>#<id>" for an entry, a word in brackets
+	// ("[node]", "[track]": no path), or one from the nearest data-ermine-base above it, the
+	// process's node, as @ermine/render writes it ("items/a"; "./n" from the process's folder).
+	// with no base above it (an older page), such a name is shown as said and never guessed at. the outlines are the agent's own layer
 	// over the page (a closed shadow root at the document's end, the pointer passing through it),
 	// the page's same-origin frames included; they go when the panel stops asking (it was closed)
 
@@ -1476,14 +1477,35 @@
 			else if (a.name === ATTR + "process") out.root = a.value;
 		}
 		out.process = el.closest(`[${ATTR}process]`)?.getAttribute(ATTR + "process") ?? undefined;
+		out.base = baseOf(el);
 		return out;
+	}
+	/** what an element's paths are said from: the nearest data-ermine-base, it or above */
+	const baseOf = (el) => el.closest(`[${ATTR}base]`)?.getAttribute(ATTR + "base") ?? undefined;
+	/** a path an element says, from the root: one from its base by the processes rule ("x" under
+	 * the base, "./x" from the base's folder); one from the root, a word, or none with no base, as
+	 * it is */
+	function resolved(at, base) {
+		if (at.startsWith("/") || at.startsWith("[") || base === undefined) return at;
+		const out = base.split("/").filter(Boolean);
+		const steps = at.split("/");
+		if (steps[0] === "." || steps[0] === "..") out.pop();
+		for (const step of steps) {
+			if (step === "..") out.pop();
+			else if (step !== "" && step !== ".") out.push(step);
+		}
+		return "/" + out.join("/");
 	}
 
 	/** the node an attribute says, in this graph: found, or why not, plainly */
-	function reach(g, said) {
-		const [at, id] = split(said);
+	function reach(g, said, base) {
+		const [from, id] = split(said);
+		const at = resolved(from, base);
 		if (at.includes("[node]")) {
 			return { note: "a node handed over, not named: the page doesn't say which" };
+		}
+		if (at.startsWith("[")) {
+			return { note: "worked out by a function, not read from one node" };
 		}
 		if (at.startsWith("./")) {
 			return {
@@ -1529,9 +1551,9 @@
 			...s.binds.map(([what, said]) => ({
 				what: what === "text" || what === "children" ? what : `prop ${what}`,
 				said,
-				...reach(g, said),
+				...reach(g, said, s.base),
 			})),
-			...s.ons.map(([event, said]) => ({ what: `on ${event}`, said, ...reach(g, said) })),
+			...s.ons.map(([event, said]) => ({ what: `on ${event}`, said, ...reach(g, said, s.base) })),
 		];
 		const at = lines.find((l) => l.node)?.node;
 		return {
@@ -1552,9 +1574,11 @@
 	 * under it), "bare" (only names the page gives no path for), or not at all */
 	function shows(el, lit) {
 		let best;
+		const base = baseOf(el);
 		for (const a of el.attributes) {
 			if (!a.name.startsWith(ATTR + "bind:") && !a.name.startsWith(ATTR + "on:")) continue;
-			const [at, id] = split(a.value);
+			const [from, id] = split(a.value);
+			const at = resolved(from, base);
 			if (id !== undefined && id === lit.id) return "here";
 			if (!at.startsWith("/")) {
 				best ??= "bare";

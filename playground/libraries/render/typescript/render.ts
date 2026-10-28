@@ -20,9 +20,11 @@
 //             run makes no more is let go
 //   handler   onClick={handler("on/press", [args])}: the action there, called through
 //             options.call (an event has nothing open: the host says who calls)
-//   says      renderer.say(el, name, value): process, key, source (file:line), bind:<prop|text|
-//             children> and on:<event> (the path, from the root), waiting (""); undefined takes it
-//             back
+//   says      renderer.say(el, name, value): process and base (the process's path, on each
+//             element the view made at the top), key, source (file:line), bind:<prop|text|children>
+//             and on:<event> (a path: from base when it is under the process's node, "items/apple",
+//             else from the root, "/shared/x"; a word in brackets, "[track]", "[node]", is not
+//             one), waiting (""); undefined takes it back
 //   tells     renderer.tell(el, name, detail): "ermine:change" on a bound node, "ermine:call" and
 //             "ermine:called" around a handler; onErmineChange={…} listens
 import {
@@ -199,8 +201,10 @@ export function createRenderer<N extends object, E extends N>(
 		readonly given?: (el: E) => void
 		// what it was made as, to know it when made again
 		readonly spec: Spec
-		// its target's path, as said on the element
+		// its target's path from the root (what ermine:change tells), and as said on the element
+		// (from the base, when under it)
 		readonly path: string
+		readonly said: string
 		// its node's name
 		readonly name: string
 	}
@@ -306,6 +310,12 @@ export function createRenderer<N extends object, E extends N>(
 		// a root the view made says whose it is
 		const k = root === undefined ? undefined : kind.get(root)
 		if (k !== undefined && k !== "#text") r.say?.(root as E, "process", options.name)
+		// what the paths said under each element the view made at the top are from
+		const base = rooted(options.name, "")
+		for (const n of base === "/" ? [] : placed.get(into) ?? []) {
+			const k = kind.get(n)
+			if (k !== undefined && k !== "#text") r.say?.(n as E, "base", base)
+		}
 		return root
 	}
 
@@ -381,7 +391,7 @@ export function createRenderer<N extends object, E extends N>(
 				listen(el, eventOf(name), made.on.get(eventOf(name)), was, now)
 			} else if (isBound(value)) {
 				const k = made.bound.get(name)!
-				say(`bind:${name}`, k.path)
+				say(`bind:${name}`, k.said)
 				now.set("bound:" + name, true)
 				attach(k, el)
 			} else now.set(r.set(el, name, value), true)
@@ -424,6 +434,7 @@ export function createRenderer<N extends object, E extends N>(
 		| {
 			readonly h: Handler
 			readonly at: string
+			readonly said: string
 			readonly node: Node
 			readonly call: Options["call"]
 		}
@@ -433,7 +444,7 @@ export function createRenderer<N extends object, E extends N>(
 		const h = isHandler(value) ? value : handler(value as Node)
 		const at = said(h.target, here!.options.name)
 		const node = typeof h.target === "string" ? getNode(h.target) : h.target
-		return { h, at, node, call: here!.options.call }
+		return { h, at, said: written(at, here!.options.name), node, call: here!.options.call }
 	}
 	// onClick: "click". onErmineChange: the engine's own "ermine:change" (jsx has no colon in a name)
 	const eventOf = (name: string) =>
@@ -456,7 +467,7 @@ export function createRenderer<N extends object, E extends N>(
 		if ("fn" in l) listener = l.fn
 		else {
 			const { h, at, node, call } = l
-			r.say?.(el, `on:${type}`, at)
+			r.say?.(el, `on:${type}`, l.said)
 			now.set(`say:on:${type}`, true)
 			// a block, never cond && …: a listener returning false would cancel the event
 			listener = (e) => {
@@ -498,7 +509,7 @@ export function createRenderer<N extends object, E extends N>(
 	// row of a list (keyed) makes what it makes under its key
 	function bindKids(b: Bound): Socket {
 		return keyed(b.key, () => {
-			const path = saidOf(b, here!.options.name)
+			const path = written(saidOf(b, here!.options.name), here!.options.name)
 			const listed = b.read === "each" || b.read === "under"
 			let last: unknown = watch, on: E | undefined
 			return watch(
@@ -626,7 +637,8 @@ export function createRenderer<N extends object, E extends N>(
 				return [name, k]
 			}
 		}
-		const k: Socket = { given, spec, path: saidOf(spec, now.options.name), name }
+		const path = saidOf(spec, now.options.name)
+		const k: Socket = { given, spec, path, said: written(path, now.options.name), name }
 		all.set(name, k)
 		now.made?.add(name)
 		return [name, k]
@@ -672,7 +684,14 @@ function said(target: Target, process: string): string {
 }
 // what's said of a binding: its target, or track's word for what it reads (no path)
 function saidOf(b: { readonly read: Bound["read"]; readonly target: Target }, process: string) {
-	return b.read === "track" ? String(b.target) : said(b.target, process)
+	return b.read === "track" ? `[${String(b.target)}]` : said(b.target, process)
+}
+// what an element says of a path: from its root's data-ermine-base (the process's node) when it is
+// under it ("items/apple"), else from the root ("/shared/x"); a word ("[track]") as it is
+function written(path: string, process: string): string {
+	const base = rooted(process, "")
+	if (!path.startsWith("/") || base === "/") return path
+	return path.startsWith(base + "/") ? path.slice(base.length + 1) : path
 }
 // a path from the root, by the processes rule: "/x" from the root, "./x" (and "../x") from the
 // process's folder, a bare "x" under the process's node

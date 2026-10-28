@@ -51,17 +51,22 @@ function start(r: (into: never, view: Child, options: Options) => unknown, into:
 	return ermine
 }
 
-Deno.test("hydrate takes the server's html over, making nothing", async () => {
-	const root = createRoot()
+// the server's html, taken over by a page: what the attributes said start with, the default or
+// another (the same on both sides)
+async function hydrates(attrPrefix?: string) {
+	const root = createRoot({ attrPrefix })
 	start(r(await import("./html.ts")), root)
 	const page = html(root)
+	const said = attrPrefix ?? "data-ermine-"
+	assertEquals(page.includes("data-ermine-"), said === "data-ermine-")
 
 	const { document, window } = parseHTML(`<html><body>${page}</body></html>`)
 	const g = globalThis as Record<string, unknown>
 	for (const k of ["document", "Node", "Text", "CustomEvent", "Event"]) {
 		g[k] = k === "document" ? document : (window as unknown as Record<string, unknown>)[k]
 	}
-	const { dom } = await import("./dom.ts")
+	const { createDOM } = await import("./dom.ts")
+	const dom = createDOM({ attrPrefix })
 	let made = 0
 	const counted = createRenderer({
 		...dom,
@@ -74,7 +79,10 @@ Deno.test("hydrate takes the server's html over, making nothing", async () => {
 
 	assertEquals(made, 0)
 	assertStrictEquals(main.querySelector("li"), li)
-	assertEquals(main.innerHTML.replace(/ data-ermine-handler:click="[^"]*"/, ""), inner(page))
+	assertEquals(
+		main.innerHTML.replace(new RegExp(` ${said}handler:click="[^"]*"`), ""),
+		inner(page),
+	)
 	// the button calls the page's own action, and the same p shows it
 	const p = main.querySelectorAll("p")[1]!
 	main.querySelector("button")!.dispatchEvent(new window.Event("click"))
@@ -84,7 +92,10 @@ Deno.test("hydrate takes the server's html over, making nothing", async () => {
 	ermine.within(() => patch("/p/mode", [{ path: [], value: "b" }]))
 	ermine.within(() => pulse())
 	assertEquals(main.querySelector("div")?.className, "mode-b")
-})
+}
+
+Deno.test("hydrate takes the server's html over, making nothing", () => hydrates())
+Deno.test("with another attrPrefix, said the same on both sides", () => hydrates("e-"))
 
 const r = (m: { render: unknown }) => m.render as (into: never, view: Child, o: Options) => unknown
 // a root's html, inside its tag

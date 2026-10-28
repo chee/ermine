@@ -21,6 +21,21 @@ export type Said = {
 	// [event, path]: data-ermine-on:<event>
 	ons: [string, string][]
 }
+// a path an element says, from the root: @ermine/render says one under the process's node from
+// the nearest data-ermine-base ("items/a"), "./x" from the base's folder; one from the root, a word
+// ("[track]") or one with no base, as it is
+function resolved(at: string, base: string | undefined): string {
+	if (at.startsWith("/") || at.startsWith("[") || base === undefined) return at
+	const [path, id] = at.split("#")
+	const out = base.split("/").filter(Boolean)
+	const steps = path.split("/")
+	if (steps[0] === "." || steps[0] === "..") out.pop()
+	for (const step of steps) {
+		if (step === "..") out.pop()
+		else if (step !== "" && step !== ".") out.push(step)
+	}
+	return "/" + out.join("/") + (id === undefined ? "" : "#" + id)
+}
 
 export function says(el: Element): Said {
 	const out: Said = {
@@ -30,9 +45,11 @@ export function says(el: Element): Said {
 		ons: [],
 		waiting: el.hasAttribute("data-ermine-waiting"),
 	}
+	const base = el.closest("[data-ermine-base]")?.getAttribute("data-ermine-base") ?? undefined
 	for (const a of el.attributes) {
-		if (a.name.startsWith("data-ermine-bind:")) out.binds.push([a.name.slice(17), a.value])
-		else if (a.name.startsWith("data-ermine-on:")) out.ons.push([a.name.slice(15), a.value])
+		const path = resolved(a.value, base)
+		if (a.name.startsWith("data-ermine-bind:")) out.binds.push([a.name.slice(17), path])
+		else if (a.name.startsWith("data-ermine-on:")) out.ons.push([a.name.slice(15), path])
 		else if (a.name === "data-ermine-source") out.source = a.value
 		else if (a.name === "data-ermine-key") out.key = a.value
 	}
