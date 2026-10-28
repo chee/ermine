@@ -1,4 +1,4 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 // the explorer, on @ermine/system: a graph as a finder (src/graph.ts says what a graph answers;
 // graphs.ts is the host's side, answering for "page", this page's own graph, and handing "mac"
 // asks to the relay). places down the side, a list, columns or a map in the middle, the one picked
@@ -17,7 +17,7 @@
 // (/host/graphs/<graph>/inbox/<name>); an effect here reads it, writes what it says, and tells the
 // host it took them. a place: a path from the root, or "#<id>" for a node by its id (one not
 // reachable from the root, as a process's own node: the trace and the attributes lead there)
-import { bind, type Child, handler } from "ermine-h"
+import { bind, type Child, handler } from "@ermine/render/h"
 import {
 	createAction,
 	createEffect,
@@ -1272,7 +1272,7 @@ export function Explorer(
 		</div>
 	)
 	// ---- the map: cards and lines, laid out by place, by who made what, or by what reads what.
-	// drawn as one svg (ermine-h makes html only): a click on a card goes there ----
+	// drawn as one svg (@ermine/render/dom makes html only): a click on a card goes there ----
 	const BY: [string, string][] = [["place", "place"], ["owner", "ownership"], ["reads", "reads"]]
 	const mapView = () => (
 		<div class="g-map">

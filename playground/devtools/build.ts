@@ -52,7 +52,8 @@ const solidPlugin: esbuild.Plugin = {
 	name: "solid",
 	setup(build) {
 		build.onLoad({ filter: /\.tsx$/ }, async (args) => {
-			// the finder is ermine-h's jsx, not Solid's: esbuild's own, by its @jsxImportSource
+			// the finder is @ermine's jsx (@ermine/jsx-runtime), not Solid's: esbuild's own, by its
+			// @jsxImportSource
 			if (args.path.startsWith(`${here}src/finder/`)) return undefined;
 			const source = await Deno.readTextFile(args.path);
 			const result = await transformAsync(source, {
@@ -67,8 +68,8 @@ const solidPlugin: esbuild.Plugin = {
 };
 
 // the finder (src/finder, copied from ermine-mac) is on @ermine/system, from the process-api worktree
-// as ermine-mac's build-next.ts takes it (ERMINE=<repo> to say another); ermine-h is
-// src/finder/h.ts. its page side leaves places.ts out (its install writes to storage)
+// as ermine-mac's build-next.ts takes it (ERMINE=<repo> to say another), and drawn with
+// @ermine/render from there too. its page side leaves places.ts out (its install writes to storage)
 const repo = Deno.env.get("ERMINE") ??
 	Deno.env.get("HOME") + "/soft/chee/ermine-worktrees/process-api/";
 const ermineImports: Record<string, string> = {};
@@ -89,12 +90,10 @@ const ermineImports: Record<string, string> = {};
 		}
 	}
 }
-const ermineH = `${here}src/finder/h.ts`;
 const erminePlugin = (pageSide: boolean): esbuild.Plugin => ({
 	name: "ermine",
 	setup(build) {
-		build.onResolve({ filter: /^(@ermine\/|ermine-h)/ }, (args) => {
-			if (args.path.startsWith("ermine-h")) return { path: ermineH };
+		build.onResolve({ filter: /^@ermine\// }, (args) => {
 			const file = ermineImports[args.path];
 			return file ? { path: file } : undefined;
 		});
@@ -150,7 +149,7 @@ await esbuild.build({
 	banner: { js: "var __ermineFinderURL = document.currentScript?.src ?? location.href;" },
 	define: { "import.meta.url": "__ermineFinderURL" },
 	jsx: "automatic",
-	jsxImportSource: "ermine-h",
+	jsxImportSource: "@ermine",
 	keepNames: true,
 	plugins: [solidPlugin, erminePlugin(false)],
 });

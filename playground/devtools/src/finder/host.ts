@@ -9,7 +9,7 @@
 // loaded into the panel as finder.js, beside panel.js; the panel finds it at
 // globalThis.ermineFinder (the panel's own window, not the page's)
 import { createErmine, type Ermine } from "@ermine/system";
-import { render } from "ermine-h";
+import { render } from "@ermine/render/dom";
 import { Explorer } from "./finder.tsx";
 import { graphAt, type GraphName, inboxOf, NOW, TICK } from "./graphs.ts";
 import { BROWSER, den, DENS, page, SHOWING, shows } from "./places.ts";
