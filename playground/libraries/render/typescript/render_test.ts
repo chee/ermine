@@ -373,7 +373,7 @@ Deno.test("a component's key is its view's: one put before it, its bindings stay
 	assertEquals(failing(), [])
 })
 
-Deno.test("says: a binding's and a handler's paths from the root, by the processes rule", () => {
+Deno.test("says: a path under the process's node from its base, else from the root; a word in brackets", () => {
 	const { into } = start(() => {
 		ensureNode("n", 1)
 		createAction("on/go", () => {})
@@ -385,11 +385,12 @@ Deno.test("says: a binding's and a handler's paths from the root, by the process
 			h("b", null, track(() => read("n"), String, "n, tracked")),
 		))
 	const p = (into as O).kids[0], [i, b] = p.kids
+	assertEquals([p.says.process, p.says.base], ["p", "/p"])
 	assertEquals(
 		[p.says["bind:title"], p.says["on:click"], i.says["bind:title"], i.says["bind:text"]],
-		["/n", "/p/on/go", "/p/n", "/p/n"],
+		["/n", "on/go", "n", "n"],
 	)
-	assertEquals(b.says["bind:text"], "n, tracked")
+	assertEquals(b.says["bind:text"], "[n, tracked]")
 })
 
 Deno.test("a row keeps its node when another comes; its handler calls its action", () => {
@@ -413,7 +414,7 @@ Deno.test("a row keeps its node when another comes; its handler calls its action
 	assertEquals(pear.props.class, "row-pear")
 	assertEquals(pear.says["on:click"], undefined)
 	const button = pear.kids.find((k) => k.tag === "button")!
-	assertEquals(button.says["on:click"], "/p/on/remove")
+	assertEquals(button.says["on:click"], "on/remove")
 	fire(button, "click")
 	assertEquals(button.told, ["ermine:call", "ermine:called"])
 	flush()
@@ -454,7 +455,7 @@ Deno.test("a change after the first is told; the same text again is not", () => 
 	act("/p/on/inc")
 	assertEquals(shown(p), "<p>many</p>")
 	assertEquals(p.told, ["ermine:change"])
-	assertEquals(p.says["bind:text"], "/p/count")
+	assertEquals(p.says["bind:text"], "count")
 })
 
 // ---- the DOM's ----
@@ -492,8 +493,9 @@ Deno.test("on the DOM: rows, a derived view, says and tells, an input kept", asy
 	main.addEventListener("ermine:change", () => changes++)
 	act("/p/on/flip")
 	assertEquals(main.querySelector("li")?.textContent, "apple")
-	assertEquals(main.querySelector("ul")?.getAttribute("data-ermine-bind:children"), "/p/items")
+	assertEquals(main.querySelector("ul")?.getAttribute("data-ermine-bind:children"), "items")
 	assertEquals(main.firstElementChild?.getAttribute("data-ermine-process"), "p")
+	assertEquals(main.firstElementChild?.getAttribute("data-ermine-base"), "/p")
 	assertStrictEquals(main.querySelector("input"), input)
 	assertEquals(input.value, "hello")
 	assertEquals(main.querySelector("form")?.textContent, " mode b")

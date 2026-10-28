@@ -2,12 +2,18 @@
 // render(into, view, options) makes the view real inside it as plain elements (@ermine/render:
 // the engine, reusing what an earlier render put there); html(el) writes one out. a page kept live
 // is told what changed since it was sent (take), and its events come back by id (fire)
-//   says      data-ermine-<name> attributes, as /dom's (process, key, source, bind:<prop|text|
-//             children>, on:<event>, waiting), and data-ermine-binding: the element's bindings'
-//             nodes, as made (view/0: under the process's node), space-separated: what a page finds
-//             an update's element by. a name there has no 's (a binding made again different has
-//             one more: the same state always gives a page the same names, whatever came before),
-//             and a space, a quote or a backslash in it is %20, %22, %5C
+//   says      data-ermine-<name> attributes, as /dom's (process, base, key, source, bind:<prop|
+//             text|children>, on:<event>, waiting), and data-ermine-binding: the element's
+//             bindings' nodes, as made (view/0: under the process's node), space-separated: what a
+//             page finds an update's element by. a name there has no 's (a binding made again
+//             different has one more: the same state always gives a page the same names, whatever
+//             came before), and a space, a quote or a backslash in it is %20, %22, %5C
+//   prefix    createRoot({ attrPrefix: "e-" }): what's written says e-<name> for data-ermine-<name>
+//             (its elements keep data-ermine-*)
+//   rows      a list's row (keyed, in an element whose kids a binding shows) says its list's
+//             binding in data-ermine-in; a name in it under its key is written from it (":0" for
+//             view/3/apple:0, data-ermine-in="view/3" and data-ermine-key="apple"), and so is a
+//             row's data-ermine-in inside another row. updates say names whole
 //   handlers  data-ermine-handler:<event>: an id fire(into, id, event) calls the listener by. by
 //             count (the default): its element's own, kept while the element is, never used again;
 //             or by place: its element's place under the root and the event ("0.3.1:click"), the
@@ -41,6 +47,9 @@ export type RootOptions = {
 	readonly ids?: "count" | "place"
 	// a change the page hasn't been told, the first since the last take
 	readonly changed?: () => void
+	// what the attributes it says start with (data-ermine-, the default): its elements keep
+	// data-ermine-* as they are, and what is written out (html, inner) and take's attributes say it
+	readonly attrPrefix?: string
 }
 
 // what changed in an element the page has: its kids, and its props (the page's names: the binding
@@ -57,6 +66,7 @@ type Root = {
 	readonly render: (into: Element, view: Child, options: Options) => Kid | undefined
 	readonly ids: "count" | "place"
 	readonly changed?: () => void
+	readonly attrPrefix: string
 	readonly changes: Map<Element, Change>
 	// the elements the page has, each with its bindings as the page has them, by what they bind
 	readonly sent: WeakMap<Element, Map<string, string>>
@@ -85,6 +95,7 @@ export function createRoot(options: RootOptions = {}): Element {
 		render: undefined!,
 		ids: options.ids ?? "count",
 		changed: options.changed,
+		attrPrefix: options.attrPrefix ?? SAID,
 		changes: new Map(),
 		sent: new WeakMap(),
 		byId: new Map(),
@@ -334,7 +345,7 @@ export function take(into: Element): Update[] {
 		n.parent !== undefined && [...wholes].some((w) => inside(n.parent!, w))
 	const out: Update[] = []
 	for (const [el, role, prop, value] of props) {
-		if (!covered(el)) out.push([nameOf(el, role)!, prop, value])
+		if (!covered(el)) out.push([nameOf(el, role)!, prefixed(prop, root.attrPrefix), value])
 	}
 	for (const w of wholes) {
 		if (covered(w)) continue
@@ -376,18 +387,50 @@ const escaped = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").re
 export const quoted = (s: string): string =>
 	s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;")
 
+// what the attributes an element says start with, as it keeps them; its root's attrPrefix in
+// their place when written out (and in take's)
+const SAID = "data-ermine-"
+const prefixed = (attr: string, prefix: string) =>
+	prefix !== SAID && attr.startsWith(SAID) ? prefix + attr.slice(SAID.length) : attr
+// the attrPrefix of the root kid is under (none: data-ermine-)
+function prefixOf(kid: Kid): string {
+	let top: Kid = kid
+	while (top.parent !== undefined) top = top.parent
+	return "tag" in top ? roots.get(top)?.attrPrefix ?? SAID : SAID
+}
+
 // an element (or text) as html
-export function html(kid: Kid): string {
+export const html = (kid: Kid): string => write(kid, prefixOf(kid))
+function write(kid: Kid, prefix: string): string {
 	if ("text" in kid) return escaped(kid.text)
 	let s = "<" + kid.tag
-	for (const [k, v] of kid.attrs) s += v === "" ? ` ${k}` : ` ${k}="${quoted(v)}"`
-	return VOID.has(kid.tag) ? s + ">" : `${s}>${inner(kid)}</${kid.tag}>`
+	for (const [k, v] of kid.attrs) {
+		const w = k === "data-ermine-binding" ? v.split(" ").map((n) => fromRow(kid, n)).join(" ") : v
+		s += w === "" ? ` ${prefixed(k, prefix)}` : ` ${prefixed(k, prefix)}="${quoted(w)}"`
+	}
+	const list = listOf(kid)
+	if (list !== undefined) s += ` ${prefix}in="${quoted(fromRow(kid.parent, list))}"`
+	return VOID.has(kid.tag) ? s + ">" : `${s}>${kidsOf(kid, prefix)}</${kid.tag}>`
+}
+// a row's list: the binding showing its parent's kids, when it is keyed
+const listOf = (el: Element) =>
+	el.attrs.has("data-ermine-key") && el.parent ? bindings.get(el.parent)?.get("kids") : undefined
+// a name as el writes it: from the nearest row, el or above, when it is under that row's key
+function fromRow(el: Element | undefined, name: string): string {
+	for (let r = el; r !== undefined; r = r.parent) {
+		const list = listOf(r)
+		if (list === undefined) continue
+		const start = `${list}/${r.attrs.get("data-ermine-key")}:`
+		return name.startsWith(start) ? name.slice(start.length - 1) : name
+	}
+	return name
 }
 // an element's kids as html, two texts side by side kept apart (<!---->): a page parsing it has
 // each text a render made, for hydrate (@ermine/render/dom) to take over one for one
-export const inner = (el: Element): string =>
+export const inner = (el: Element): string => kidsOf(el, prefixOf(el))
+const kidsOf = (el: Element, prefix: string): string =>
 	el.kids.map((k, i) => {
 		const before = el.kids[i - 1]
 		const apart = "text" in k && k.text && before !== undefined && "text" in before && before.text
-		return (apart ? "<!---->" : "") + html(k)
+		return (apart ? "<!---->" : "") + write(k, prefix)
 	}).join("")

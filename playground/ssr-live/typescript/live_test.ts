@@ -9,9 +9,9 @@ const URL = "http://here"
 async function visitor(live: ReturnType<typeof createLive>) {
 	const page = await (await live.fetch(new Request(`${URL}/?poll`))).text()
 	const p = page.split('data-ermine-process="')[1].split('"')[0]
-	// the handler for the action at (under the visitor's process)
+	// the handler for the action at (under the visitor's process: said from its base)
 	const handler = (at: string) =>
-		page.slice(page.indexOf(`="${p}/${at}" data-ermine-handler:`)).split('"')[3]
+		page.slice(page.indexOf(`data-ermine-on:click="${at}" data-ermine-handler:`)).split('"')[3]
 	const post = (h: string) =>
 		live.fetch(
 			new Request(`${URL}/event`, {
