@@ -3,10 +3,7 @@
 	"version": "0.0.0",
 	"license": "AGPL-3.0-or-later",
 	"exports": {
-		".": "./typescript/h.ts",
-		"./jsx-runtime": "./typescript/h.ts",
-		"./jsx-dev-runtime": "./typescript/h.ts",
-		"./live": "./typescript/live.ts"
+		".": "./typescript/live.ts"
 	},
 	"tasks": {
 		"start": "deno run --allow-net --allow-read --allow-env typescript/server.ts",

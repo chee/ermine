@@ -1,8 +1,9 @@
-/** @jsxImportSource @ermine/ssr-live */
+/** @jsxImportSource @ermine */
 // the demo, one visitor's: a counter, a list to add to and take from, and every visitor's clicks
 // (/shared/clicks: one node every visitor's page binds). LLM generated: a prototype
 import { createAction, createNode, ensureNode, patch, peep, read, remove } from "@ermine/system"
-import { bind, type Child, handler, render, under } from "@ermine/ssr-live"
+import { bind, type Child, handler, under } from "@ermine/render/h"
+import { render } from "@ermine/render/html"
 import type { Page } from "./live.ts"
 
 const add = (path: string, n: number) =>
