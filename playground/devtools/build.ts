@@ -67,11 +67,11 @@ const solidPlugin: esbuild.Plugin = {
 	},
 };
 
-// the finder (src/finder, copied from ermine-mac) is on @ermine/system, from the process-api worktree
+// the finder (src/finder, copied from ermine-mac) is on @ermine/system, from the ermine checkout
 // as ermine-mac's build-next.ts takes it (ERMINE=<repo> to say another), and drawn with
 // @ermine/render from there too. its page side leaves places.ts out (its install writes to storage)
 const repo = Deno.env.get("ERMINE") ??
-	Deno.env.get("HOME") + "/soft/chee/ermine-worktrees/process-api/";
+	Deno.env.get("HOME") + "/soft/chee/ermine/";
 const ermineImports: Record<string, string> = {};
 {
 	const root = JSON.parse(await Deno.readTextFile(repo + "deno.json")) as { workspace: string[] };
@@ -98,9 +98,13 @@ const erminePlugin = (pageSide: boolean): esbuild.Plugin => ({
 			return file ? { path: file } : undefined;
 		});
 		if (pageSide) {
+			// the finder's own places.ts (core's places.ts is @ermine/system's, kept)
 			build.onResolve(
 				{ filter: /\/places\.ts$/ },
-				() => ({ path: "places", namespace: "none" }),
+				(args) =>
+					args.importer.startsWith(`${here}src/finder/`)
+						? { path: "places", namespace: "none" }
+						: undefined,
 			);
 			build.onLoad({ filter: /.*/, namespace: "none" }, () => ({
 				contents: "export const SHOWING = []; export const shows = () => false;",
