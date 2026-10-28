@@ -3,7 +3,7 @@
 // nodes under /shared that every visitor's page binds, written by the visitors' actions (each a
 // process of its own); the clocks are processes of their own, writing on a timer. ideas from the
 // slaygrounds: piece-cursors (who's here), toy-paint and desk (the wall, who drew this pixel?),
-// lab-life, toy-drums, toy-stickers, toy-pet, friends-card, lab-pig
+// lab-life, toy-drums, toy-stickers, toy-pet, friends-card, lab-pig, toy-fortune
 //   /shared/names/<id>   { animal, emoji, colour }: a visitor's, kept after they go
 //   /shared/here/<id>    { animal, emoji, colour, away }: a visitor here now (the host's hooks)
 //   /shared/wall/<i>     a colour, or null: 16 × 16
@@ -14,9 +14,12 @@
 //   /shared/stickers/*   { s, x, y, by }; /shared/card/* { name, flower, by }
 //   /shared/pet/*        hunger (fed by the visitors, raised by /clocks/pet), fed, pats, patted
 //   /shared/pens/a|b/*   { name, shame, shamedBy }: carried between pens by rename
+//   /shared/fortune      { q, n, at, by }: the question the ball was asked last. its answer is
+//                        each visitor's async compute (./answer), pending till the time it is due
 import {
 	addTeardown,
 	createAction,
+	createMemo,
 	createNode,
 	createWriter,
 	ensureNode,
@@ -77,6 +80,22 @@ const FEWEST = 6
 // life's rule: born with three neighbours, stays with two or three
 const BORN = 3
 const STAYS = 2
+// the fortune ball's answers, and how long it thinks: at least THINK_MS, up to THINK_SPREAD more
+const ANSWERS = [
+	"yes, obviously",
+	"ask me after snacks",
+	"the stars say maybe",
+	"no, but sweetly",
+	"definitely, go go go",
+	"not today, friend",
+	"signs point to yes",
+	"my sources are dogs: no",
+]
+const THINK_MS = 800
+const THINK_SPREAD = 1600
+const QUESTION_LONGEST = 80
+// a string hash's multiplier (java's)
+const HASH = 31
 
 // a fraction as a css percentage, to a tenth
 const percent = (f: number) => `${Math.round(f * 1000) / 10}%`
@@ -87,6 +106,10 @@ const now = <T,>(path: string) => peep(() => read(path)) as T
 
 type Name = { animal: string; emoji: string; colour: number }
 type Here = Name & { away: boolean }
+type Asked = { q: string; n: number; at: number; by: string }
+// a question's hash, the same on every ermine: which answer, and how long the ball thinks
+const hash = ({ q, n }: Asked) =>
+	[...q].reduce((h, c) => (h * HASH + c.codePointAt(0)!) >>> 0, n >>> 0)
 // a visitor's name, by id; gone: undefined
 const nameOf = (id: string | undefined): Name | undefined =>
 	id && hasNode(`/shared/names/${id}`) ? read(`/shared/names/${id}`) as Name : undefined
@@ -114,6 +137,7 @@ export function setupShared() {
 	ensureNode("/shared/pet/fed", null)
 	ensureNode("/shared/pet/pats", 0)
 	ensureNode("/shared/pet/patted", null)
+	ensureNode("/shared/fortune", null)
 	createNode("/shared/pens/a", { name: "pip", shame: 0, shamedBy: null })
 }
 
@@ -255,6 +279,30 @@ export const party = <E,>({ into, options, render }: Page<E>) =>
 			set(at, id, ["shamedBy"])
 		})
 		createAction("on/bin", (pen: string, pig: string) => remove(`/shared/pens/${pen}/${pig}`))
+		createAction("on/ask", (q: string) => {
+			const asked = String(q ?? "").trim().slice(0, QUESTION_LONGEST)
+			if (!asked) return
+			const last = now<Asked | null>("/shared/fortune")
+			set("/shared/fortune", { q: asked, n: (last?.n ?? 0) + 1, at: Date.now(), by: id })
+		})
+		// the ball's answer: async, pending till it is due (when it was asked and how long its hash
+		// says it thinks), so every ermine (a visitor's here, a page's own, the edge's for a request)
+		// answers the same, at the same time
+		createMemo("answer", () => {
+			const asked = read("/shared/fortune") as Asked | null
+			if (!asked) return null
+			const h = hash(asked)
+			const answer = ANSWERS[h % ANSWERS.length]
+			const left = asked.at + THINK_MS + h % THINK_SPREAD - Date.now()
+			if (left <= 0) return answer
+			// its timer let go when it runs again, or its visitor goes
+			let timer: ReturnType<typeof setTimeout> | undefined
+			const thought = new Promise<string>((
+				done,
+			) => (timer = setTimeout(() => done(answer), left)))
+			addTeardown(() => clearTimeout(timer))
+			return thought
+		})
 
 		render(into, view(id), options)
 	}
@@ -288,6 +336,7 @@ function view(id: string): Child {
 			{beat()}
 			{stickers()}
 			{pet()}
+			{fortune()}
 			{card()}
 			{pigs()}
 		</div>
@@ -485,6 +534,36 @@ function pet(): Child {
 					].filter(Boolean).join(" · ")
 				})}
 			</p>
+		</section>
+	)
+}
+
+// the fortune ball: its window binds the visitor's answer, an async compute; while it is pending
+// the window's binding says data-ermine-waiting, and the ball shakes
+function fortune(): Child {
+	return (
+		<section>
+			<h2>the fortune ball</h2>
+			<p class="ball">
+				<span class="window">
+					{bind("answer", (a: string | null) => a ?? "ask me something")}
+				</span>
+			</p>
+			<p class="muted">
+				{track(() => {
+					const asked = read("/shared/fortune") as Asked | null
+					return asked ? `${said(nameOf(asked.by))} asked: ${asked.q}` : "nobody has asked yet"
+				})}
+			</p>
+			<form class="row" onSubmit={handler("on/ask", (e: Ev) => [e.target.elements?.q?.value])}>
+				<input
+					name="q"
+					autocomplete="off"
+					maxLength={QUESTION_LONGEST}
+					placeholder="a yes or no question"
+				/>{" "}
+				<button type="submit">shake</button>
+			</form>
 		</section>
 	)
 }

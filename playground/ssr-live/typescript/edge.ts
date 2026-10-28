@@ -10,7 +10,8 @@
 //          head           { v }: a hint; the truth is the entries there are
 //          here/<id>      { at }: when a visitor's page last asked (who's here: not a version)
 //   time   no clocks: the playhead and the pet's hunger are worked out from the time; life is
-//          stepped when a request comes, the steps due (at most STEPS)
+//          stepped when a request comes, the steps due (at most STEPS); the ball's answer is
+//          pending till it is due, and always sent (as the page had it, it is taken as waiting)
 //   ids    handler ids by place (@ermine/render/html): a click is found in the page as it was
 //          when clicked, then done once the page has caught up
 //   pages  GET  /?v=poll (the default)   a page, GET and POST: client/live-edge.js
@@ -92,6 +93,9 @@ const BEAT_MS = 250
 const PET_MS = 6000
 const STEPS_IN_BEAT = 8
 const HUNGRY = 10
+// the fortune ball's question; as a page had it, asked this long from now, so its answer pending
+const FORTUNE = "/shared/fortune"
+const LATER = 86_400_000
 // a visitor's own nodes that are kept
 const OWN = ["tool", "asked", "sticker"]
 // worked out each request, never kept
@@ -250,10 +254,14 @@ async function turn(store: Kept, id: string, seen: number, asked?: Said, again =
 			call = go
 		},
 	}
-	// what time works out, unknown as the page was: so always sent
+	// what time works out, unknown as the page was: so always sent. the ball's answer works out from
+	// the time too (an async compute, pending till it is due): as the page had it, it is taken as
+	// waiting (a question asked a day from now), so whatever it is now is sent
+	const fortune = e.within(() => now_<unknown>(FORTUNE))
 	e.within(() => {
 		set("/shared/beat-step", -1)
 		set("/shared/pet/hunger", -1)
+		set(FORTUNE, { q: "", n: 0, at: now + LATER, by: "" })
 	})
 	const started = e.start(party({ into, options, render }), path)
 	if ("refused" in started) throw new Error(`refused: ${started.refused}`)
@@ -262,8 +270,10 @@ async function turn(store: Kept, id: string, seen: number, asked?: Said, again =
 		restore(only(atSeen, (p) => kept(p, id) && !shared(p)))
 		pulse()
 	})
-	// what setup made (a new visitor's name, its own nodes), kept with this turn's change
-	const made = diff(only(atSeen, (p) => kept(p, id)), e.within(() => dump(id)))
+	// what setup made (a new visitor's name, its own nodes), kept with this turn's change; the
+	// ball's stand-in is not
+	const setupMade = (p: string) => kept(p, id) && p !== FORTUNE
+	const made = diff(only(atSeen, setupMade), only(e.within(() => dump(id)), setupMade))
 	// the page as it was at seen: what changes from here, it is told; the click found in it, its
 	// args made now
 	sent(into)
@@ -271,6 +281,7 @@ async function turn(store: Kept, id: string, seen: number, asked?: Said, again =
 	if (asked) fire(into, asked.h, standIn(asked))
 	asking = false
 	e.within(() => {
+		set(FORTUNE, fortune ?? null)
 		for (const entry of after.slice(from - base.v)) replay(entry, (p) => kept(p, id))
 		pulse()
 	})
@@ -353,8 +364,13 @@ export function createEdge(options: EdgeOptions) {
 		`<title>${title}</title>${options.head ?? ""}<style>${style}${more}${PICKER}</style></head>`
 	const idOf = (p: string | null) =>
 		p?.startsWith("/visitors/") ? p.slice("/visitors/".length) : undefined
-	const json = (t: Turn, seen: number) =>
-		Response.json({ from: seen, to: t.to, updates: take(t.into) })
+	// what the page missed, taken before the turn's ermine closes (closing lets its bindings go:
+	// a pending one would say it waits no more)
+	const json = (t: Turn, seen: number) => {
+		const updates = take(t.into)
+		t.close()
+		return Response.json({ from: seen, to: t.to, updates })
+	}
 
 	async function page(store: Kept, id: string): Promise<Response> {
 		const t = await turn(store, id, Number.MAX_SAFE_INTEGER)
@@ -443,8 +459,9 @@ export function createEdge(options: EdgeOptions) {
 		// a form (no script) says no version: the click is found in the page as it is now
 		const seen = (e as { seen?: number }).seen ?? Number.MAX_SAFE_INTEGER
 		const t = await turn(store, id, seen, e)
+		if (!form) return json(t, seen)
 		t.close()
-		return form ? new Response(null, { status: DONE }) : json(t, seen)
+		return new Response(null, { status: DONE })
 	}
 
 	async function missed(store: Kept, id: string, seen: number): Promise<Response> {
@@ -452,9 +469,7 @@ export function createEdge(options: EdgeOptions) {
 		while (Date.now() < end && (await latest(store)) <= seen) {
 			await new Promise((r) => setTimeout(r, LOOK))
 		}
-		const t = await turn(store, id, seen)
-		t.close()
-		return json(t, seen)
+		return json(await turn(store, id, seen), seen)
 	}
 
 	return {
