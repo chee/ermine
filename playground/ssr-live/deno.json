@@ -1,0 +1,16 @@
+{
+	"name": "@ermine/ssr-live",
+	"version": "0.0.0",
+	"license": "AGPL-3.0-or-later",
+	"exports": {
+		".": "./typescript/h.ts",
+		"./jsx-runtime": "./typescript/h.ts",
+		"./jsx-dev-runtime": "./typescript/h.ts",
+		"./live": "./typescript/live.ts"
+	},
+	"tasks": {
+		"start": "deno run --allow-net --allow-read --allow-env typescript/server.ts",
+		"measure": "deno run --allow-net --allow-read --allow-env --allow-run --allow-write typescript/measure.ts",
+		"party": "deno run --allow-net --allow-read --allow-env typescript/party-server.ts"
+	}
+}
