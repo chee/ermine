@@ -808,7 +808,7 @@
 				"ermine.programs.takes": [
 					"public.c-source"
 				],
-				"ermine.programs.gives": "public.wasm-executable"
+				"ermine.programs.gives": "public.wasm"
 			},
 			"expect": {}
 		},
@@ -824,7 +824,7 @@
 				"ermine.programs.takes": [
 					"public.c-source"
 				],
-				"ermine.programs.gives": "public.wasm-executable"
+				"ermine.programs.gives": "public.wasm"
 			},
 			"expect": {}
 		},
@@ -838,7 +838,7 @@
 			"id": "WASMRUN",
 			"value": {
 				"ermine.programs.takes": [
-					"public.wasm-executable"
+					"public.wasm"
 				]
 			},
 			"expect": {}
@@ -853,7 +853,7 @@
 			"id": "WASM2",
 			"value": {
 				"ermine.programs.takes": [
-					"public.wasm-executable"
+					"public.wasm"
 				]
 			},
 			"expect": {}
@@ -969,7 +969,7 @@
 							"cc"
 						],
 						"for": "FACE",
-						"type": "public.wasm-executable",
+						"type": "public.wasm",
 						"why": "wrong-type"
 					},
 					{
@@ -991,7 +991,7 @@
 							"cint"
 						],
 						"for": "FACE",
-						"type": "public.wasm-executable",
+						"type": "public.wasm",
 						"why": "wrong-type"
 					}
 				]
@@ -1059,7 +1059,7 @@
 							"cc"
 						],
 						"for": "DIAL",
-						"type": "public.wasm-executable",
+						"type": "public.wasm",
 						"why": "wrong-type"
 					},
 					{
@@ -1081,7 +1081,7 @@
 							"cint"
 						],
 						"for": "DIAL",
-						"type": "public.wasm-executable",
+						"type": "public.wasm",
 						"why": "wrong-type"
 					}
 				]

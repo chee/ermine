@@ -29,7 +29,7 @@ import { PENDING } from "@ermine/core/scheduler"
 import { answer } from "../../devtools.ts"
 
 const $ = <T extends Element = HTMLElement>(q: string) => document.querySelector(q) as T
-const C = "public.c-source", H = "public.c-header", WASM = "public.wasm-executable"
+const C = "public.c-source", H = "public.c-header", WASM = "public.wasm"
 // what satisfy looks up, from where in his box; where he runs in it
 const PROGRAM = "catclock.c", FROM = ["src"], AT = ["clock"]
 const TYPES = ["ermine", "types"]
@@ -52,16 +52,16 @@ const at = (path: string[]) => world.peek(() => world.id(path))!
 // the types this graph's nodes are, and what each conforms to, as the well-known list says them
 // (all 151 would fill the files window). public.c-header is Apple's: the list lacks it
 const KINDS: Known[] = [
-	{ name: "public.item" },
-	{ name: "public.content" },
-	{ name: "public.data", conformsTo: "public.item" },
-	{ name: "public.text", conformsTo: ["public.data", "public.content"] },
-	{ name: "public.plain-text", conformsTo: "public.text", fileNameExtension: [".txt", ".text"] },
-	{ name: "public.source-code", conformsTo: "public.plain-text" },
-	{ name: C, conformsTo: "public.source-code", fileNameExtension: ".c" },
-	{ name: H, conformsTo: "public.source-code", fileNameExtension: ".h" },
-	{ name: "public.executable", conformsTo: "public.item" },
-	{ name: WASM, conformsTo: "public.executable", fileNameExtension: ".wasm" },
+	{ identifier: "public.item" },
+	{ identifier: "public.content" },
+	{ identifier: "public.data", conformsTo: "public.item" },
+	{ identifier: "public.text", conformsTo: ["public.data", "public.content"] },
+	{ identifier: "public.plain-text", conformsTo: "public.text", filenameExtension: ["txt", "text"] },
+	{ identifier: "public.source-code", conformsTo: "public.plain-text" },
+	{ identifier: C, conformsTo: "public.source-code", filenameExtension: "c" },
+	{ identifier: H, conformsTo: "public.source-code", filenameExtension: "h" },
+	{ identifier: "public.executable", conformsTo: "public.item" },
+	{ identifier: WASM, conformsTo: "public.executable", filenameExtension: "wasm" },
 ]
 world.writing(() =>
 	world.commit(installTypes(world.table, "root", createChangeHeader(world.s), KINDS))
@@ -366,7 +366,7 @@ function restart() {
 	told()
 }
 
-// run an old build: a node in the cache, typed wasm-executable. satisfy on it finds the runner
+// run an old build: a node in the cache, typed public.wasm. satisfy on it finds the runner
 // (one step, no compile); the one running is stopped and the runner started on it. Nothing is
 // logged: the cache's order is when each build was last made or saved to, never when it was
 // clicked. The editor is left as it is

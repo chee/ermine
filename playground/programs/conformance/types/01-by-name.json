@@ -1,5 +1,5 @@
 {
-	"title": "a node's type: its ermine.type, else the type claiming the extension of the name it is placed under (case does not matter; the longest extension wins, .tar.gz before .gz; two types claiming .tar: the first in the folder's order, public.tar-archive); an explicit type wins over the name (b.c is plain text), one that is no string is passed over (w.c); no extension, an unknown one, or a name that is only an extension (.c): none; no name (a node at no place): none",
+	"title": "a node's type, by a list of its own (not the gathered one, which changes): its ermine.type, else the type claiming the extension of the name it is placed under (case does not matter; the longest extension wins, .tar.gz before .gz; two types claiming .tar: the first in the folder's order, public.tar-archive); an explicit type wins over the name (b.c is plain text), one that is no string is passed over (w.c); no extension, an unknown one, or a name that is only an extension (.c): none; no name (a node at no place): none",
 	"steps": [
 		{
 			"op": "kids",
@@ -11,6 +11,23 @@
 		},
 		{
 			"op": "types",
+			"list": [
+				{ "identifier": "public.plain-text", "filenameExtension": ["txt", "text"] },
+				{
+					"identifier": "public.c-source",
+					"conformsTo": "public.plain-text",
+					"filenameExtension": "c"
+				},
+				{
+					"identifier": "public.json",
+					"conformsTo": "public.plain-text",
+					"filenameExtension": "json"
+				},
+				{ "identifier": "org.gnu.gnu-tar-archive", "filenameExtension": "tar" },
+				{ "identifier": "public.tar-archive", "filenameExtension": "tar" },
+				{ "identifier": "org.gnu.gnu-zip-archive", "filenameExtension": ["gz", "gzip"] },
+				{ "identifier": "org.gnu.gnu-zip-tar-archive", "filenameExtension": ["tar.gz", "tgz"] }
+			],
 			"expect": {}
 		},
 		{

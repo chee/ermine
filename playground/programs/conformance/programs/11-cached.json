@@ -1,5 +1,5 @@
 {
-	"title": "a cached build output (a node in the cache folder, typed with its compiler's gives: public.wasm-executable) is run directly: one step, the wasm runner, itself run by the page. no compiler between",
+	"title": "a cached build output (a node in the cache folder, typed with its compiler's gives: public.wasm) is run directly: one step, the wasm runner, itself run by the page. no compiler between",
 	"steps": [
 		{
 			"op": "kids",
@@ -42,7 +42,7 @@
 			"op": "attrs",
 			"id": "OUT",
 			"value": {
-				"ermine.type": "public.wasm-executable"
+				"ermine.type": "public.wasm"
 			},
 			"expect": {}
 		},
@@ -50,11 +50,11 @@
 			"op": "attrs",
 			"id": "WCLANG",
 			"value": {
-				"ermine.type": "public.wasm-executable",
+				"ermine.type": "public.wasm",
 				"ermine.programs.takes": [
 					"public.c-source"
 				],
-				"ermine.programs.gives": "public.wasm-executable",
+				"ermine.programs.gives": "public.wasm",
 				"ermine.programs.needs": [
 					"wasm32"
 				]
@@ -67,7 +67,7 @@
 			"value": {
 				"ermine.type": "com.netscape.javascript-source",
 				"ermine.programs.takes": [
-					"public.wasm-executable"
+					"public.wasm"
 				],
 				"ermine.programs.provides": [
 					"wasm32"
@@ -183,7 +183,7 @@
 							"page"
 						],
 						"for": "OUT",
-						"type": "public.wasm-executable",
+						"type": "public.wasm",
 						"why": "wrong-type"
 					},
 					{
@@ -193,7 +193,7 @@
 							"clang"
 						],
 						"for": "OUT",
-						"type": "public.wasm-executable",
+						"type": "public.wasm",
 						"why": "wrong-type"
 					}
 				]

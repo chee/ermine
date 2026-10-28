@@ -1,5 +1,5 @@
 {
-	"title": "a computer asking the types of a folder reruns when a name changes (a.txt renamed a.c: c-source), a type's fileNameExtension is written (.zz claimed: plain text) or an attribute is (json wins over the name), and not when a type's mimeType is written",
+	"title": "a computer asking the types of a folder reruns when a name changes (a.txt renamed a.c: c-source), a type's filenameExtension is written (zz claimed: plain text) or an attribute is (json wins over the name), and not when a type's mimeType is written",
 	"steps": [
 		{
 			"op": "kids",
@@ -123,11 +123,11 @@
 			"part": "value",
 			"id": "ermine/types/public.plain-text",
 			"path": [
-				"fileNameExtension"
+				"filenameExtension"
 			],
 			"value": [
-				".txt",
-				".zz"
+				"txt",
+				"zz"
 			],
 			"expect": {}
 		},

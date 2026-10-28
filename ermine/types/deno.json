@@ -6,6 +6,12 @@
 		".": "./typescript/types.ts"
 	},
 	"fmt": {
-		"exclude": ["typescript/utis.json"]
+		"exclude": [
+			"typescript/utis.json",
+			"typescript/constants.json",
+			"mac/everything.json",
+			"mac/not-on-a-mac.json",
+			"mac/wanted.json"
+		]
 	}
 }

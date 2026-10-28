@@ -6,9 +6,11 @@
 //   conformance(places, types, "public.c-source")
 //   // { known: true, all: ["public.c-source", "public.source-code", "public.plain-text", ...] }
 //   typeOf(places, { id: CAT, at: ["clocks", "catclock.c"] })           // "public.c-source"
+//   createTypes(places, types).get("public.jpeg").preferredMIMEType      // swift's UTType: uttype.ts
 //
-// a type: a node named by its UTI in TYPES, its value { conformsTo, fileNameExtension, mimeType },
-// each a list. conformance: itself, then what its conformsTo names, and theirs, each once
+// a type: a node named by its UTI in TYPES, its value { conformsTo, filenameExtension, mimeType },
+// each a list, and referenceURL and version where it has them. an extension has no "." ("jpeg"), as
+// swift's UTType gives it. conformance: itself, then what its conformsTo names, and theirs, each once
 // the folder: TYPES looked up nearest first (lib's lookup), so a box carries its own. the nearest
 // only: a type not in it is unknown
 // typeOf(places, { id, at }): its ermine.type if a string, else by the extension of the name it is
@@ -19,8 +21,8 @@
 // open: the folder's name (/ermine.types or /ermine/types); looking farther up than the nearest
 // folder; keeping the install order
 //
-// utis.json: the well-known UTIs, Markus Felten's (arlac77) uti library (npm uti@8.11.3), with
-// thanks; 0BSD (utis.LICENSE). EXTRA adds what it lacks
+// utis.json: the well-known UTIs, gathered from what macs declare by ../mac/gather.ts (it says
+// which). EXTRA adds ermine's own
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/core/node/entry"
 import update from "@ermine/core/changeable/update"
 import { asId, type Id, level, type Path, type Places } from "@ermine/core/places"
@@ -36,33 +38,37 @@ export const TYPES: Path = ["ermine", "types"]
 // the attribute a node's own type is in: the one place its name is said
 export const ATTRIBUTE = "ermine.type"
 
-// a type as the well-known list gives it (arlac77/uti): each field a string or a list
+// a type as a list gives it: each field a string or a list; a declaration's UTTypeIdentifier,
+// UTTypeConformsTo, UTTypeTagSpecification's public.filename-extension and public.mime-type,
+// UTTypeReferenceURL, UTTypeVersion
 export type Known = {
-	readonly name: string
+	readonly identifier: string
 	readonly conformsTo?: string | readonly string[]
-	readonly fileNameExtension?: string | readonly string[]
+	readonly filenameExtension?: string | readonly string[]
 	readonly mimeType?: string | readonly string[]
+	readonly referenceURL?: string
+	readonly version?: number
 }
 
 // what a type's node holds
 export type TypeValue = {
 	conformsTo: string[]
-	fileNameExtension: string[]
+	filenameExtension: string[]
 	mimeType: string[]
+	referenceURL?: string
+	version?: number
 }
 
 // the well-known list (utis.json)
 export const KNOWN: readonly Known[] = list
 
-// the types the well-known list lacks, that the scenarios need. public.c-source as Apple's
-// (conforms to public.source-code, extension .c); an arm64 executable is mine (open)
+// the types the well-known list lacks, that the scenarios need: an arm64 executable (open)
 export const EXTRA: readonly Known[] = [
-	{ name: "public.c-source", conformsTo: "public.source-code", fileNameExtension: ".c" },
-	{ name: "party.chee.ermine.arm64-executable", conformsTo: "public.unix-executable" },
+	{ identifier: "party.chee.ermine.arm64-executable", conformsTo: "public.unix-executable" },
 ]
 
 // a string or a list as a list of its strings
-const strings = (v: unknown): string[] =>
+export const strings = (v: unknown): string[] =>
 	typeof v === "string" ? [v] : Array.isArray(v) ? v.filter((s) => typeof s === "string") : []
 
 const isMap = (v: unknown): v is Record<string, unknown> =>
@@ -70,8 +76,10 @@ const isMap = (v: unknown): v is Record<string, unknown> =>
 
 export const typeValue = (t: Known): TypeValue => ({
 	conformsTo: strings(t.conformsTo),
-	fileNameExtension: strings(t.fileNameExtension),
+	filenameExtension: strings(t.filenameExtension),
 	mimeType: strings(t.mimeType),
+	...typeof t.referenceURL === "string" ? { referenceURL: t.referenceURL } : {},
+	...typeof t.version === "number" ? { version: t.version } : {},
 })
 
 // the id at name in a children entry, read untracked (a write's own look); none: undefined
@@ -118,18 +126,18 @@ export function installTypes(
 		folder = id
 	}
 	const last = new Map<string, Known>()
-	for (const t of list) last.set(t.name, t)
+	for (const t of list) last.set(t.identifier, t)
 	const named: Record<string, Id> = {}
 	const patches: Patch[] = []
 	const kids = table.get("children", folder)?.value
 	for (const t of last.values()) {
-		const id = childOf(table, folder, t.name) ?? ids([...TYPES, t.name])
+		const id = childOf(table, folder, t.identifier) ?? ids([...TYPES, t.identifier])
 		const v = typeValue(t)
 		const same = JSON.stringify(table.get("value", id)?.value) === JSON.stringify(v)
 		put("value", id, same ? [] : [{ path: [], value: v }], v)
-		if (childOf(table, folder, t.name) === undefined) {
-			named[t.name] = id
-			if (isMap(kids)) patches.push({ path: [t.name], value: id })
+		if (childOf(table, folder, t.identifier) === undefined) {
+			named[t.identifier] = id
+			if (isMap(kids)) patches.push({ path: [t.identifier], value: id })
 		}
 	}
 	if (Object.keys(named).length) {
@@ -153,7 +161,7 @@ export function typesAt(places: Reads, from: Path): Folder | undefined {
 }
 
 // a type's node in the folder; none: undefined
-function nodeOf(places: Reads, folder: Folder, uti: string): Id | undefined {
+export function nodeOf(places: Reads, folder: Folder, uti: string): Id | undefined {
 	for (const m of places.walk([uti], folder)) return m.id === level ? undefined : m.id
 }
 
@@ -182,12 +190,12 @@ export function conformance(
 export type Placed = { readonly id: Id; readonly at: Path }
 
 // a string with its ASCII capitals lowered (the same in C: names are compared this way)
-const lowered = (s: string) => s.replace(/[A-Z]/g, (c) => c.toLowerCase())
+export const lowered = (s: string) => s.replace(/[A-Z]/g, (c) => c.toLowerCase())
 
-// each extension claimed (lowercase, with its "."), and the type that claims it
+// each extension claimed (lowercase, no "."), and the type that claims it
 export type Extensions = ReadonlyMap<string, string>
 
-// the extensions the types in a folder claim: each type's fileNameExtension read (its value's
+// the extensions the types in a folder claim: each type's filenameExtension read (its value's
 // field alone), the types in the folder's order (names' canonical key order), the first to claim
 // an extension keeping it. no folder: none
 export function extensionsOf(places: Reads, folder: Folder | undefined): Extensions {
@@ -196,7 +204,7 @@ export function extensionsOf(places: Reads, folder: Folder | undefined): Extensi
 	const here = members(places, folder.path).filter((m) => m.id !== level)
 	here.sort((a, b) => keyorder(a.name, b.name))
 	for (const m of here) {
-		for (const x of strings(places.readValue("value", m.id, ["fileNameExtension"]))) {
+		for (const x of strings(places.readValue("value", m.id, ["filenameExtension"]))) {
 			const e = lowered(x)
 			if (!by.has(e)) by.set(e, m.name)
 		}
@@ -204,12 +212,12 @@ export function extensionsOf(places: Reads, folder: Folder | undefined): Extensi
 	return by
 }
 
-// the type a name's extension gives: the longest end from a "." that is claimed, with a name
-// before it, compared in lowercase; none: undefined
+// the type a name's extension gives: the longest end after a "." that is claimed, with a name
+// before the ".", compared in lowercase; none: undefined
 export function typeByName(extensions: Extensions, name: string): string | undefined {
 	const lower = lowered(name)
 	for (let i = lower.indexOf(".", 1); i !== -1; i = lower.indexOf(".", i + 1)) {
-		const uti = extensions.get(lower.slice(i))
+		const uti = extensions.get(lower.slice(i + 1))
 		if (uti !== undefined) return uti
 	}
 }
@@ -224,3 +232,5 @@ export function typeOf(places: Reads, at: Placed, extensions?: Extensions): stri
 	if (name === undefined) return
 	return typeByName(extensions ?? extensionsOf(places, typesAt(places, at.at.slice(0, -1))), name)
 }
+
+export { type Constant, createTypes, type Types, UTType } from "./uttype.ts"

@@ -13,8 +13,8 @@
 // { op: "host", id }                        → {}   the value entry: a live host runner, never saved
 // { op: "upsert", part, id, path, value }   → {}   upsert (libraries/upsert) at path: a patch,
 //    telling only the reads it touches
-// { op: "types", list? }                    → {}   installTypes at R, the list given ([{ name,
-//    conformsTo?, fileNameExtension?, mimeType? }]; none: the excerpt and EXTRA); a new node's id
+// { op: "types", list? }                    → {}   installTypes at R, the list given ([{ identifier,
+//    conformsTo?, filenameExtension?, mimeType? }]; none: the excerpt and EXTRA); a new node's id
 //    its path joined by "/" ("ermine/types/public.text")
 // { op: "create", name, folder?, at? }      → {}   createBox at the folder id, or at the address
 //    at from R (made if missing)

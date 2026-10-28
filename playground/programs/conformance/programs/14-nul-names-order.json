@@ -47,7 +47,7 @@
 			"id": "A",
 			"value": {
 				"ermine.programs.takes": [
-					"public.wasm-executable"
+					"public.wasm"
 				],
 				"ermine.programs.gives": "com.netscape.javascript-source"
 			},
@@ -63,7 +63,7 @@
 			"id": "Z",
 			"value": {
 				"ermine.programs.takes": [
-					"public.wasm-executable"
+					"public.wasm"
 				],
 				"ermine.programs.gives": "com.netscape.javascript-source"
 			},

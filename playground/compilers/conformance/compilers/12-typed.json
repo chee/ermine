@@ -7,7 +7,7 @@
 		{
 			"op": "attrs",
 			"id": "UP",
-			"value": { "ermine.programs.gives": "public.wasm-executable" },
+			"value": { "ermine.programs.gives": "public.wasm" },
 			"expect": {}
 		},
 		{ "op": "compiler", "id": "UP", "compiler": "upper", "expect": {} },
@@ -30,7 +30,7 @@
 			"op": "kinds",
 			"expect": {
 				"types": {
-					"23722319b76c942d5964e47e121277db9ea377fefb66cecf7efd7f36b1364e23": "public.wasm-executable",
+					"23722319b76c942d5964e47e121277db9ea377fefb66cecf7efd7f36b1364e23": "public.wasm",
 					"62e4674594290e16906ce638182ecc042f1c22b3c659d2544c6cb35646b49e12": null
 				}
 			}

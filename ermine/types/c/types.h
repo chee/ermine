@@ -5,10 +5,11 @@
 //   ty_folder f;  ty_at(p, from, n, &f);                       // the nearest ermine/types
 //   ty_conformance c = ty_conform(p, &f, "public.c-source");   // { known, all: [itself, ...] }
 //   char *t = ty_type_of(p, id, at, n, NULL);                  // the type of a node at a place
+//   ty_conforms_to(p, &f, TY_JPEG, TY_IMAGE)                   // swift's UTType, below
 //
-// the well-known list: Markus Felten's (arlac77) uti library (npm uti@8.11.3), with thanks, 0BSD
-// (typescript/utis.LICENSE). utis.c is generated from typescript/utis.json and types.ts' EXTRA by
-// utis.ts; never edit it by hand.
+// the well-known list: typescript/utis.json, gathered from what macs declare (mac/gather.ts). utis.c
+// and constants.h are generated from it, types.ts' EXTRA and typescript/constants.json by utis.ts;
+// never edit them by hand.
 // memory: what a read gives is the caller's (ty_folder_free, ty_conformance_free). out of memory
 // aborts.
 #ifndef TYPES_H
@@ -18,13 +19,18 @@
 #include <stddef.h>
 
 #include "../../../core/places/c/places.h"
+#include "constants.h"
 
-// a type as the lists give it: each field a NULL-terminated list of strings, or NULL: none
+// a type as the lists give it: each list NULL-terminated, or NULL: none. its node's value: {
+// conformsTo, filenameExtension (no "."), mimeType, referenceURL, version }
 typedef struct {
-	const char *name;
+	const char *identifier;
 	const char *const *conforms;
 	const char *const *extensions;
 	const char *const *mimes;
+	// NULL: none
+	const char *reference_url;
+	const long long *version;
 } ty_known;
 
 // the well-known list, and the types it lacks that the scenarios need (types.ts' EXTRA)
@@ -87,7 +93,7 @@ typedef struct {
 ty_conformance ty_conform(pl *p, const ty_folder *folder, const char *uti);
 void ty_conformance_free(ty_conformance *c);
 
-// the extensions the types in a folder claim: each lowercase with its ".", and the type claiming it,
+// the extensions the types in a folder claim: each lowercase, no ".", and the type claiming it,
 // in the folder's order, the first claim kept
 typedef struct {
 	char *ext;
@@ -97,11 +103,11 @@ typedef struct {
 	ty_claim *items;
 	size_t n, cap;
 } ty_extensions;
-// folder NULL: none. Reads each type's fileNameExtension, the folder's members
+// folder NULL: none. Reads each type's filenameExtension, the folder's members
 ty_extensions ty_extensions_of(pl *p, const ty_folder *folder);
 void ty_extensions_free(ty_extensions *e);
 
-// the type a name's extension gives: the longest end from a ".", with a name before it, that is
+// the type a name's extension gives: the longest end after a ".", with a name before the ".", that is
 // claimed; borrowed from e. NULL: none
 const char *ty_by_name(const ty_extensions *e, const char *name);
 
@@ -112,5 +118,42 @@ const char *ty_by_name(const ty_extensions *e, const char *name);
 // its name's, with the extensions given (e: as a search holds them) or those of the nearest
 // ermine/types from the placement's folder (e NULL). A copy, the caller's to free. NULL: none
 char *ty_type_of(pl *p, const char *id, const char *const *at, size_t n, const ty_extensions *e);
+
+// swift's UTType, each read through places from a types folder (ty_at; NULL: nothing declared), so a
+// computer asking reruns when what it asked changes. a type is its identifier. what a char * gives
+// is a copy, the caller's to free; NULL: none
+//
+//   ty_preferred_mime_type(p, &f, TY_JPEG)                       "image/jpeg"
+//   ty_from_filename_extension(p, &f, "jpg", NULL)               "public.jpeg"
+//   ty_conforms_to(p, &f, TY_JPEG, TY_IMAGE)                     true
+
+// isDeclared: the type has a node in the folder. isDynamic: its identifier starts "dyn.";
+// isPublic: "public."
+bool ty_is_declared(pl *p, const ty_folder *folder, const char *type);
+bool ty_is_dynamic(const char *type);
+bool ty_is_public(const char *type);
+
+// the first of its filenameExtension and its mimeType; its referenceURL
+char *ty_preferred_filename_extension(pl *p, const ty_folder *folder, const char *type);
+char *ty_preferred_mime_type(pl *p, const ty_folder *folder, const char *type);
+char *ty_reference_url(pl *p, const ty_folder *folder, const char *type);
+// its version: 1 and *out, or 0: none
+int ty_version(pl *p, const ty_folder *folder, const char *type, long long *out);
+
+// every type it conforms to, not itself, in the order met (ty_conform's, less the first); known
+// as ty_conform's. ty_conformance_free
+ty_conformance ty_supertypes(pl *p, const ty_folder *folder, const char *type);
+// conforms(to:): it is to, or to is one of its supertypes
+bool ty_conforms_to(pl *p, const ty_folder *folder, const char *type, const char *to);
+// isSubtype(of:): conforms, and is not it. isSupertype(of:): of is a subtype of it
+bool ty_is_subtype_of(pl *p, const ty_folder *folder, const char *type, const char *of);
+bool ty_is_supertype_of(pl *p, const ty_folder *folder, const char *type, const char *of);
+
+// UTType(filenameExtension:conformingTo:), UTType(mimeType:conformingTo:): the first type in the
+// folder's order claiming the tag (any case; an extension with no ".") that conforms to
+// conforming_to (NULL: TY_DATA, as swift's). NULL: none (where swift would make a dynamic type)
+char *ty_from_filename_extension(pl *p, const ty_folder *folder, const char *extension,
+	const char *conforming_to);
+char *ty_from_mime_type(pl *p, const ty_folder *folder, const char *mime_type, const char *conforming_to);
 
 #endif

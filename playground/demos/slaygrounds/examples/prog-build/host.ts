@@ -50,7 +50,7 @@ import { createWorld } from "@ermine/slaygrounds/world"
 import { render } from "ermine-h"
 
 const JS = "com.netscape.javascript-source"
-const WASM = "public.wasm-executable"
+const WASM = "public.wasm"
 const C = "public.c-source"
 
 // ---- small things ----

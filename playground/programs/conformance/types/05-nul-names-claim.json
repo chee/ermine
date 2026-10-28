@@ -12,8 +12,8 @@
 		{
 			"op": "types",
 			"list": [
-				{ "name": "abc", "fileNameExtension": ".qq" },
-				{ "name": "\u0000\u0000", "fileNameExtension": ".qq" }
+				{ "identifier": "abc", "filenameExtension": "qq" },
+				{ "identifier": "\u0000\u0000", "filenameExtension": "qq" }
 			],
 			"expect": {}
 		},
