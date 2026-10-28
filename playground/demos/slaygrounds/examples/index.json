@@ -210,5 +210,13 @@
 	{
 		"name": "piece-lens",
 		"title": "piece-lens: a file or folder from your computer, a patchwork doc, inner nodes; splices between, through lenses with complements (jsx)"
+	},
+	{
+		"name": "hedgehog-notebook",
+		"title": "hedgehog-notebook: a reactive notebook on the process api alone, memos only inside their maker (jsx)"
+	},
+	{
+		"name": "hedgehog2-notebook",
+		"title": "hedgehog2-notebook: a reactive notebook, cells made by a reconciling memo, cached, with arrows from what each run read (jsx)"
 	}
 ]
