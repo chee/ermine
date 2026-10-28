@@ -432,6 +432,27 @@ typedef struct closure {
 static closure **closures;
 static size_t nclosures, capclosures;
 
+// a promise named name (owned), then evaluated after it: replacing one of that name
+static waiting *make_wait(char *name, const op_value *then, const ctx *c) {
+	waiting *w = allocate(sizeof *w);
+	w->name = name;
+	w->p = sc_promise_new(sch);
+	if (then) {
+		w->then = then;
+		w->c = *c;
+		if (w->c.run) sc_run_ref(w->c.run);
+	}
+	waiting *was = wait_for(name);
+	if (was) {
+		PUSH(old, nold, capold, was);
+		for (size_t i = 0; i < nwaits; i++)
+			if (waits[i] == was) waits[i] = w;
+	} else {
+		PUSH(waits, nwaits, capwaits, w);
+	}
+	return w;
+}
+
 static val evaluate(const op_value *e, const ctx *c);
 // the effect form
 static val made_in(const char *form, const op_value *a0, const op_value *a1, const op_value *a2,
@@ -694,23 +715,7 @@ static val evaluate(const op_value *e, const ctx *c) {
 		val r = string_of(a0, c, &name);
 		if (r.k != V_OK) return r;
 		if (name == NULL) return thrown(copyString("wait on a non-string"));
-		waiting *w = allocate(sizeof *w);
-		w->name = name;
-		w->p = sc_promise_new(sch);
-		if (a1) {
-			w->then = a1;
-			w->c = *c;
-			if (w->c.run) sc_run_ref(w->c.run);
-		}
-		waiting *was = wait_for(name);
-		if (was) {
-			PUSH(old, nold, capold, was);
-			for (size_t i = 0; i < nwaits; i++)
-				if (waits[i] == was) waits[i] = w;
-		} else {
-			PUSH(waits, nwaits, capwaits, w);
-		}
-		return (val){V_PROMISE, NULL, NULL, w->p};
+		return (val){V_PROMISE, NULL, NULL, make_wait(name, a1, c)->p};
 	}
 	if (strcmp(form, "await") == 0) {
 		char *name;
@@ -810,16 +815,91 @@ static size_t nprogs, capprogs;
 // itself: an early effect runs and acts before it is given back, the scope open then
 static sc_scope *self_of(prog *p) { return p->self ? p->self : sc_get_current_scope(sch); }
 
-static sc_out program_f(void *previous, void *data) {
-	prog *p = data;
-	ctx c = {sc_get_run(sch), self_of(p), NULL, previous};
-	val v = evaluate(p->f, &c);
+static sc_out out_of(val v) {
 	switch (v.k) {
 	case V_OK: return (sc_out){.kind = SC_VALUE, .value = v.j};
 	case V_PROMISE: return (sc_out){.kind = SC_AWAIT, .promise = v.p};
 	case V_THROW: return (sc_out){.kind = SC_FAILED, .error = v.err};
 	default: return (sc_out){.kind = SC_PENDING};
 	}
+}
+
+// {"steps":[e..]}: a generator compute's body. each in order; {"yield":p} pauses the run on a
+// promise named p (made as wait makes it), and what it settles with is taken; the last one's value
+// is the result
+typedef struct stepper {
+	const op_value *list;
+	size_t i;
+	prog *p;
+	ctx c;
+	// held
+	op_value *last;
+} stepper;
+
+static void stepper_free(stepper *t) {
+	op_free(t->last);
+	free(t);
+}
+static void stepper_quit(void *data) { stepper_free(data); }
+static sc_out stepper_next(void *data, bool settled, void *value, char *error);
+
+static sc_out stepper_go(stepper *t) {
+	t->c.run = sc_get_run(sch);
+	t->c.self = self_of(t->p);
+	while (t->i < t->list->count) {
+		const op_value *x = t->list->items[t->i++];
+		if (is(x, OP_MAP) && x->count > 0 && strcmp(x->keys[0], "yield") == 0) {
+			char *name;
+			val r = string_of(x->items[0], &t->c, &name);
+			if (r.k != V_OK) {
+				stepper_free(t);
+				return out_of(r);
+			}
+			if (name == NULL) {
+				stepper_free(t);
+				return (sc_out){.kind = SC_FAILED, .error = copyString("yield of a non-string")};
+			}
+			sc_promise *p = make_wait(name, NULL, &t->c)->p;
+			return (sc_out){.kind = SC_PAUSE, .promise = p, .step = {stepper_next, stepper_quit, t}};
+		}
+		val v = evaluate(x, &t->c);
+		if (v.k != V_OK) {
+			stepper_free(t);
+			return out_of(v);
+		}
+		op_free(t->last);
+		t->last = v.j ? v.j : op_null();
+	}
+	op_value *last = t->last;
+	t->last = NULL;
+	stepper_free(t);
+	return (sc_out){.kind = SC_VALUE, .value = last ? last : op_null()};
+}
+
+static sc_out stepper_next(void *data, bool settled, void *value, char *error) {
+	stepper *t = data;
+	if (!settled) {
+		stepper_free(t);
+		return (sc_out){.kind = SC_FAILED, .error = error};
+	}
+	op_free(t->last);
+	t->last = value;
+	return stepper_go(t);
+}
+
+static sc_out program_f(void *previous, void *data) {
+	prog *p = data;
+	ctx c = {sc_get_run(sch), self_of(p), NULL, previous};
+	if (is(p->f, OP_MAP) && p->f->count > 0 && strcmp(p->f->keys[0], "steps") == 0 &&
+		is(p->f->items[0], OP_LIST)) {
+		stepper *t = allocate(sizeof *t);
+		t->list = p->f->items[0];
+		t->p = p;
+		t->c = c;
+		t->last = NULL;
+		return stepper_go(t);
+	}
+	return out_of(evaluate(p->f, &c));
 }
 
 static char *program_set(void *value, void *data) {

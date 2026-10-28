@@ -18,17 +18,17 @@
 // unread are let go by pl_forget; one read outside a run is never let go.
 // contributors (contributors.org): children (pl_children) plus any given, asked in order per step:
 // first answer is pl_get, all are pl_gets, names merged once each (pl_list, pl_members). a
-// contributor reads only through pl_read, pl_keys, pl_track. caches: pl_record, pl_keep (cache.h);
+// contributor reads only through pl_read, pl_read_here, pl_keys, pl_track. caches: pl_record, pl_keep (cache.h);
 // commit right after update.
 // pruning: PL_NONE at a step means nothing there or under it; the walk asks no more there, and that
 // read is the one tracked.
 // pl_view: the same places from another root with its own contributors, everything else shared.
 // pl_spot: names a held spot as a place; anything else none.
-// change base: levels, innermost first: extra (if any), the scope open, its parents (sc_scope_parent) to
-// the root. values are op_values, except a scope's "run" and "mark" (uint64_t, given as numbers).
+// change base: levels, innermost first: extra (if any), the frame open, the frames under it (sc_frame_parent) to
+// the top. values are op_values, except a scope's own frame's "run" and "mark" (uint64_t, given as numbers).
 // actor: the first "actor" over all levels; reader: the first string "reader". metadata: the
-// levels merged into one map, inner keys over outer, up to and with the first scope whose own pairs
-// hold PL_NODE; none: every level. no scope open: unscoped.
+// levels merged into one map, inner keys over outer, up to and with the first frame whose own pairs
+// hold PL_NODE; none: every level. no frame open: unscoped.
 // memory: a header (pl_header) refers to a pl_made block; its node holds it until its next update
 // (pl_hold, pl_hold_also). read values and listed names are borrowed from the table. out of memory
 // aborts.
@@ -229,6 +229,12 @@ const op_value *pl_at(const op_value *v, const op_key *path, size_t n, op_value 
 // paths. NULL: nothing there. Borrowed: good until the node changes, or, for a typed array's
 // element (places' one scratch number), until the next pl_read on this places
 const op_value *pl_read(pl *l, tb_key part, tb_key id, const op_key *path, size_t n);
+// what is at a path in the value under (part, id) itself: a map as pl_a_map() (nothing of what
+// is in it), anything else as pl_read gives it. Told as a read of that alone: a change deeper in a
+// map tells it nothing (paths' PT_HERE)
+const op_value *pl_read_here(pl *l, tb_key part, tb_key id, const op_key *path, size_t n);
+// what pl_read_here gives for a map: a map is there (compared by pointer, never read)
+const op_value *pl_a_map(void);
 // the change of the node under (part, id), the read told at its change spot: any write to the node
 // reruns it. NULL: none there. Borrowed
 const ch_header *pl_change(pl *l, tb_key part, tb_key id);

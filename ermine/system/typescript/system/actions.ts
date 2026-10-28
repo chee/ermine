@@ -1,7 +1,7 @@
 import type { Id, Path } from "@ermine/core/places"
 import { get } from "@ermine/core/places/lib"
 import { NODE } from "@ermine/core/places/header"
-import { PENDING, type Scope } from "@ermine/core/scheduler"
+import { type Frame, PENDING, type Scope } from "@ermine/core/scheduler"
 import { isPromise } from "@ermine/core/scheduler/helpers"
 import type { Going } from "../calls.ts"
 import { enterScheduler, leaveScheduler } from "../registry.ts"
@@ -11,7 +11,7 @@ import { go } from "../acting.ts"
 import { marked } from "../site.ts"
 import { aimed, handle, idOf, nodeOf, seen } from "./addressing.ts"
 import { keepAction } from "./made.ts"
-import { actorHere, callAbove, marks, notInAct, owner } from "./scopes.ts"
+import { actorHere, callAbove, notInAct, owner } from "./scopes.ts"
 import { here } from "./setting.ts"
 import { type Caller, SendError, type System } from "./shapes.ts"
 import { build } from "./tree.ts"
@@ -61,7 +61,7 @@ export function createActionAs(
 
 // a generator action (a function*; an async function* is refused by createAction: a catch round
 // a rejected yield in one runs with nothing open) is stepped by the system [Solid 2.0's action]:
-// each step runs with the call's mark, so a write after a `yield` carries it and is allowed; `yield
+// each step runs with the call's frame, so a write after a `yield` carries it and is allowed; `yield
 // promise` waits for the promise (a throw comes back in at the yield). the call gives a promise of
 // the generator's return
 type Steps = Iterator<unknown, unknown, unknown>
@@ -69,20 +69,30 @@ const isGenerator = (fn: unknown) =>
 	Object.prototype.toString.call(fn) === "[object GeneratorFunction]"
 // the parent going while it waits at a yield: the generator is returned (its finally blocks run,
 // with nothing open: a write there fails as it does after any end), and the promise rejects: gone.
-// each step is the call's (open as the record's) till the generator finishes
-function stepped(inner: Inner, call: Scope, g: Going, make: () => Steps): Promise<unknown> {
+// each step is the call's (open as the record's) till the generator finishes: run in under (what
+// it makes is under's) with the call's frame. its life: a scope of its own under under, gone as it
+// finishes, so its teardown doesn't pile up on under
+function stepped(
+	inner: Inner,
+	under: Scope,
+	call: Frame,
+	g: Going,
+	make: () => Steps,
+): Promise<unknown> {
 	const { s, calls } = here(inner)
+	const life = s.createScope({ stepping: g.n }, under)
 	return new Promise((resolve, reject) => {
 		let it: Steps | undefined
 		let finished = false
 		const done = <A extends unknown[]>(f: (...a: A) => void) => (...a: A) => {
 			if (finished) return
 			finished = true
+			s.teardown(life)
 			f(...a)
 		}
 		const ok = done(resolve)
 		const fail = done(reject)
-		s.registerTeardown(call, () => {
+		s.registerTeardown(life, () => {
 			if (finished) return
 			finished = true
 			const gone = new ErmineError("gone", "gone: what this action ran in has ended")
@@ -99,9 +109,9 @@ function stepped(inner: Inner, call: Scope, g: Going, make: () => Steps): Promis
 			let r: IteratorResult<unknown>
 			enterScheduler(s)
 			try {
-				// the first step makes the iterator (in the call's scope too)
+				// the first step makes the iterator (with the call's frame too)
 				r = calls.during(g, () =>
-					s.runWithScope(call, () => {
+					s.runWith(under, call, () => {
 						it ??= make()
 						return thrown ? it.throw!(v) : it.next(v)
 					}))
@@ -147,55 +157,42 @@ export function executeActionAs(inner: Inner, p: Target, ...args: unknown[]): un
 	// the placement's scope while the node still holds what was placed; else (its owner gone, or
 	// a function written there by edit) the sender's, as any function value
 	const placed = methods.get(id!)
-	// the call's mark: the caller on the call's changes, its own field: its node, and the actor its
-	// writes carry (the handler's writes are the handler's: their actor its own). it owns nothing
-	// [marks-2026-10-27]: what the action makes belongs to the scope above it
-	const call = base.sited.createScope(
+	// the call's frame: the caller on the call's changes, its own field: its node, and the actor its
+	// writes carry (the handler's writes are the handler's: their actor its own). a frame owns
+	// nothing [marks-2026-10-27; scope and frame, 10-28]: what the action makes belongs to under,
+	// the scope it runs in
+	const under = placed !== undefined && placed.fn === fn ? placed.scope : scope
+	const call = s.createFrame(
 		{ caller: { node: inner.node, actor: actorHere(inner) }, handler: id, call: k },
-		placed !== undefined && placed.fn === fn ? placed.scope : scope,
+		under.frame,
 	)
-	marks.add(call)
-	try {
-		s.runWithScope(call, () => ask("execute", aimed(id!, n.path, "value")))
-	} catch (e) {
-		s.teardown(call)
-		throw e
-	}
+	s.runWith(under, call, () => ask("execute", aimed(id!, n.path, "value")))
 	const g = calls.begin(k, call, {
 		caller: inner.node,
 		context,
 		handler: { id: id!, change: table.get("value", id!)?.change },
 		args,
 	})
-	// the mark lasts as the record does: a promise's till it settles (the record ended first), else
-	// till the handler returns or throws. a pulse is asked for as it returns (go), and here as it
-	// throws and as a promise settles
+	// a pulse is asked for as it returns (go), and here as it throws and as a promise settles
 	let out: unknown
 	try {
 		out = isGenerator(fn)
-			? stepped(inner, call, g, () => s.runWithScope(call, () => fn(...args) as Steps))
-			: s.runWithScope(call, () => fn(...args))
+			? stepped(inner, under, call, g, () => s.runWith(under, call, () => fn(...args) as Steps))
+			: s.runWith(under, call, () => fn(...args))
 		calls.end(g, { returned: out })
 	} catch (e) {
 		calls.end(g, e === PENDING ? { pending: true } : { error: e })
-		s.teardown(call)
 		queuePulse()
 		throw e
 	}
-	if (isPromise(out)) {
-		const ended = () => {
-			s.teardown(call)
-			queuePulse()
-		}
-		out.then(ended, ended)
-	} else s.teardown(call)
+	if (isPromise(out)) out.then(queuePulse, queuePulse)
 	return out
 }
 
-// the call open now: its scope's info names its caller (send's call scope)
+// the call open now: its frame's info names its caller (the call's frame, made alone)
 export function getCallerAs(inner: Inner): Caller | undefined {
 	const { s, scope } = here(inner)
-	const o = callAbove(s.getCurrentScope() ?? scope)
+	const o = callAbove(s.getCurrentFrame() ?? scope.frame)
 	if (o === undefined) return undefined
 	const c = o.info.caller as { node?: Id; actor?: unknown } | undefined
 	const p = c?.node === undefined ? undefined : seen(inner, c.node)

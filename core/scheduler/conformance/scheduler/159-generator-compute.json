@@ -1,0 +1,201 @@
+{
+	"title": "a generator compute [chee 10-28: \"do the generator computes too\"]: f gives a generator; the scheduler steps it, and a yielded promise pauses the run (it ends pending); as the promise lands the same run goes on (no starts: the same run's number), and a read after the yield is that run's: its end's reads have both, and a change to it makes the compute due. due again while paused (a read before the yield changed): that run is let go, and the next starts it again",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": {
+				"actor": "test"
+			},
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"a": 1,
+				"b": 10
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "compute",
+			"name": "G",
+			"scope": "o",
+			"to": "G",
+			"f": {
+				"steps": [
+					{
+						"log": {
+							"read": "a"
+						}
+					},
+					{
+						"yield": "p"
+					},
+					{
+						"sum": [
+							{
+								"read": "a"
+							},
+							{
+								"read": "b"
+							}
+						]
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"reads": true,
+			"expect": {
+				"moments": [
+					{
+						"due": "G",
+						"tick": 2
+					},
+					{
+						"starts": "G",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "G",
+						"run": 1,
+						"ended": "pending",
+						"reads": [
+							"a"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "resolve",
+			"promise": "p",
+			"value": null,
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"key": "G",
+			"expect": {
+				"value": 11
+			}
+		},
+		{
+			"op": "moments",
+			"reads": true,
+			"expect": {
+				"moments": [
+					{
+						"ends": "G",
+						"run": 1,
+						"ended": "done",
+						"equal": false,
+						"reads": [
+							"a",
+							"a",
+							"b"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"b": 20
+			},
+			"expect": {
+				"tick": 4
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "resolve",
+			"promise": "p",
+			"value": null,
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"key": "G",
+			"expect": {
+				"value": 21
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"b": 30
+			},
+			"expect": {
+				"tick": 6
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"a": 2
+			},
+			"expect": {
+				"tick": 7
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "resolve",
+			"promise": "p",
+			"value": null,
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"key": "G",
+			"expect": {
+				"value": 32
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					1,
+					1,
+					1,
+					2
+				]
+			}
+		}
+	]
+}

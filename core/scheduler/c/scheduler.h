@@ -3,10 +3,14 @@
 // compute whose value is acted on after the round's last run. a setup runs once, untracked. the
 // scopes tree holds them: tearing a scope down takes everything under it.
 //
-// a scope is two things: an owner (what is made in it is put under it; the tree is
-// sc_scope_parent) and the info of the changes made in it: an object as key/value pairs, keys
-// unique (the caller's to keep: never checked), their order no meaning, opaque, nothing added. a
-// write's info: the info of the scope open (sc_get_info). sc_create_scope makes one under a
+// a scope owns (what is made in it is put under it; the tree is sc_scope_parent). a frame is what
+// a change made now is made as: info, as key/value pairs (keys unique, the caller's to keep: never
+// checked; their order no meaning; opaque; nothing added), and the frame it is under (a logical call
+// stack, apart from what owns what). a frame owns nothing. each scope has a frame of its own: its
+// info under its parent scope's frame. one can also be made alone (sc_create_frame: a call, a
+// writer's run); the maker frees it (sc_free_frame) once nothing is open in it and no frame is under
+// it. what is open is a pair, the scope and the frame (sc_run_with). a write's info: the info of the
+// frame open (sc_get_info). sc_create_scope makes one under a
 // parent, else under the one open; sc_create_root_scope one with no parent. no pairs given: it
 // fails (empty). a scope is open only while sc_run_with_scope or the scheduler runs code in it: a
 // computer's runs, sets and acts open it, written by itself. its info: one block, made as it is
@@ -106,6 +110,8 @@ typedef struct sc_scheduler sc_scheduler;
 typedef struct sc_scope sc_scope;
 // a computer is a scope too
 typedef struct sc_scope sc_computer;
+// what a change is made as: info, under a parent frame; a scope's own, or one made alone
+typedef struct sc_frame sc_frame;
 // one time a computer ran (its computer, sc_run_computer, and its number, sc_run_n): the run open
 // while it runs (sc_get_run), held with sc_run_ref past its end
 typedef struct sc_run sc_run;
@@ -138,13 +144,30 @@ typedef enum {
 	SC_FAILED,
 	// promise: the run ends pending; its settling is the result
 	SC_AWAIT,
+	// promise and step: the run ends pending; as the promise settles the same run goes on, in step
+	SC_PAUSE,
 } sc_out_kind;
+
+// what goes on a run when its promise has settled (SC_PAUSE). next: given what the promise
+// settled with (ok: its value, owned by next, maybe NULL; else its error, malloc'd, next's to
+// free), it gives what the run comes to next, any kind (SC_PAUSE again too). the run's tracking is
+// open again as it was (its tick and cursor), the run open, and a frame of its own, info
+// { step: n } (n a const uint64_t *, see sc_frame_step), under the computer's. quit: the step let go instead, once,
+// with nothing open: the computer run again or due again, torn down, the promise never settled
+// before the scheduler goes, or settled to pending. exactly one of next and quit is called, once
+typedef struct sc_step {
+	struct sc_out (*next)(void *data, bool ok, void *value, char *error);
+	void (*quit)(void *data);
+	void *data;
+} sc_step;
 
 typedef struct sc_out {
 	sc_out_kind kind;
 	void *value;
 	char *error;
 	sc_promise *promise;
+	// SC_PAUSE's
+	sc_step step;
 } sc_out;
 
 // what a computer is made of
@@ -267,9 +290,26 @@ const sc_info *sc_scope_info(const sc_scope *o);
 
 // the scope open (NULL: none)
 sc_scope *sc_get_current_scope(const sc_scheduler *s);
+// the frame open (NULL: none): the scope open's own, or one run with it
+sc_frame *sc_get_current_frame(const sc_scheduler *s);
+// a scope's own frame
+sc_frame *sc_scope_frame(sc_scope *o);
+// a frame's parent (NULL: the top), its info (live, as sc_scope_info), and the scope whose own it
+// is (NULL: made alone)
+sc_frame *sc_frame_parent(const sc_frame *f);
+const sc_info *sc_frame_info(const sc_frame *f);
+sc_scope *sc_frame_scope(const sc_frame *f);
+// whether f was made by the scheduler for a paused step: its one pair, "step", a const uint64_t * (the
+// step's number), not a host's value
+bool sc_frame_step(const sc_frame *f);
+// a frame alone: n pairs (borrowed as a scope's are: the caller keeps them alive as long as the
+// frame), under up, else under the frame open. NULL when n is 0. the caller's to free
+sc_frame *sc_create_frame(sc_scheduler *s, const sc_pair *info, size_t n, sc_frame *up);
+// a frame made alone, let go; NULL and a scope's own are ignored
+void sc_free_frame(sc_frame *f);
 // the run open (NULL: from outside)
 sc_run *sc_get_run(const sc_scheduler *s);
-// the info of a write made now: the info of the scope open (NULL: none), live, not copied: read it
+// the info of a write made now: the info of the frame open (NULL: none), live, not copied: read it
 // now, do not keep it (a computer's changes as its runs start)
 const sc_info *sc_get_info(const sc_scheduler *s);
 
@@ -283,6 +323,9 @@ char *sc_teardown(sc_scope *o);
 // run open). false: not old (made or
 // claimed in this run already, or no run of its owner since), gone, or a plain scope
 bool sc_claim(sc_computer *c);
+// sc_claim, but not made due: made again the same (a name's nominal match, as Adapton's), it runs
+// when what it read changes, not because its owner ran
+bool sc_claim_same(sc_computer *c);
 // sc_claim, and c takes def whole (its key not read) and that kind (effect: an effect, else a
 // compute; a compute made again as an effect, or the reverse). a new kind: its last result is let
 // go (its next is set or acted on, equal or not); become an effect, it is the writer of nothing;
@@ -294,6 +337,9 @@ bool sc_claim_as(sc_computer *c, bool effect, sc_def def);
 // f once, untracked, with o open, the run open the same: a setup, a host's write, a call.
 // SC_DISPOSED (and f not called) when o is gone, else 0
 const char *sc_run_with_scope(sc_scope *o, void (*f)(void *data), void *data);
+// sc_run_with_scope with frame open, not o's own: what is made is o's, a change made is frame's. NULL
+// frame: o's own
+const char *sc_run_with(sc_scope *o, sc_frame *frame, void (*f)(void *data), void *data);
 
 // tracked, under the scope open; first runs at the next pulse (early: now). info: its own n pairs
 // (keys unique, none "run" or "mark"), before its run's, copied (not their keys or values: kept alive as long as it); NULL: n 0. NULL:

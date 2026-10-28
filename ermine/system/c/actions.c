@@ -1,10 +1,10 @@
-// actions (system/actions.ts' createAction, executeAction; system/explaining.ts' explain …; calls.ts), in C: actions, the call scope,
+// actions (system/actions.ts' createAction, executeAction; system/explaining.ts' explain …; calls.ts), in C: actions, the call frame,
 // call records, getCaller, explain and its views, teardowns, promises. C's job, function by function
 // (ermine.h says each):
 //   state: es_actions_new, es_actions_free, es_is_action (each action placed, by its node: the
 //     function and the scope open when it was placed)
 //   actions: es_create_action_at (the function a stand-in in the node's value), es_execute_action_at
-//     (the call scope, waits, PENDING, the record held as the handler's latest, a promise's call lasts
+//     (the call frame, waits, PENDING, the record held as the handler's latest, a promise's call lasts
 //     till it settles), es_get_caller, es_add_teardown (the why)
 //   explain: es_explain, es_explain_attributes, es_explain_children, es_explain_view, es_explained_free;
 //     the views: es_change_view_of, es_view_change, es_run_view_of, es_call_view_of, es_run_view_free,
@@ -16,7 +16,7 @@
 //     es_promise_reject, es_promise_then (held by the maker and each then; settled and let go: freed)
 //
 // a call going (es_going) is held by its scope: the scope's own teardown, the last it runs, lets it go,
-// and a promise out holds it till it settles. a call scope's info is { caller: { node, actor }, handler,
+// and a promise out holds it till it settles. a call frame's info is { caller: { node, actor }, handler,
 // call }, op_values the calls state keeps till the scope is freed (a scope borrows its info). a
 // record holds its caller's context (its scope's hold), so the context lasts as the record does.
 // a track the scheduler answers SC_STOP to, in latest and waits, is let go: the TypeScript's track
@@ -37,11 +37,11 @@ static const op_value *value_of(const sc_scope *o, const char *key, op_type type
 	return v != NULL && v->type == type ? v : NULL;
 }
 
-// the actor a write made now would carry: the first the open scope (none: the context's) or one above
+// the actor a write made now would carry: the first the frame open (none: the context's) or one under
 // it gives
 static const op_value *actor_here(es_context *c) {
-	for (sc_scope *o = es_open(c); o != NULL; o = sc_scope_parent(o)) {
-		const op_value *a = es_pair_of(o, "actor");
+	for (sc_frame *o = es_open_frame(c); o != NULL; o = sc_frame_parent(o)) {
+		const op_value *a = es_frame_pair_of(o, "actor");
 		if (a != NULL) return a;
 	}
 	return NULL;
@@ -165,7 +165,7 @@ typedef struct {
 
 typedef struct writer_rec writer_rec;
 // a writer: where it was made (its parent: what it makes and asks as belongs to it), and the
-// mark it was made under (an action's call: its caller, handler and call), held. it is freed as its
+// mark it was made under (an action's call frame: its caller, handler and call), held. it is freed as its
 // parent goes, or when the program lets it go (es_drop_writer); a stand-in of one freed is gone (the
 // serial tells it from a later one at its address). a parent has one teardown for all it made
 typedef struct writer_owner writer_owner;
@@ -816,7 +816,10 @@ typedef struct {
 struct es_going {
 	struct es_calls *x;
 	unsigned n;
-	sc_scope *scope;
+	// its call's frame, made alone and its (the calls' map has it till the call ends), with the
+	// values its info borrows: both freed with the record
+	sc_frame *frame;
+	struct call_info *info;
 	// the run open as it began (a send from a memo or effect): what is done in it is the call's
 	int has_run;
 	sc_computer *computer;
@@ -836,7 +839,7 @@ struct es_going {
 	size_t nwrites, capwrites;
 	es_made *made;
 	size_t nmade, capmade;
-	// the scope's teardown holds one, a promise out one more
+	// the call's end holds one, a promise out one more
 	size_t refs;
 	// its handler gone while it went: told onRecord as it ends, never held
 	int gone;
@@ -850,8 +853,8 @@ struct es_calls {
 	// the calls going, innermost last
 	es_going **stack;
 	size_t nstack, capstack;
-	// scope → going, and every going alive
-	pm scopes, live;
+	// call frame → going, and every going alive
+	pm frames, live;
 	// handler → held
 	es_map records;
 	waiter **waiting;
@@ -860,16 +863,12 @@ struct es_calls {
 	char list;
 	// the (scope, caller, run) with a teardown registered to take a caller's waits out
 	es_map armed;
-	// each call scope's info values (call_info), by the scope: let go as it is freed
-	pm infos;
-	// the scopes that are marks: a call's, a writer's. out as the scope is freed
-	pm marks;
 	pl_watch *watch;
-	sc_listener *ended, *freed;
+	sc_listener *ended;
 };
 
-// a call scope's info: { caller, handler, call }, borrowed by the scope, held here till it is freed
-typedef struct {
+// a call frame's info: { caller, handler, call }, borrowed by the frame, held here till it is freed
+typedef struct call_info {
 	op_value *values[4];
 	size_t n;
 } call_info;
@@ -983,7 +982,10 @@ static void going_free(es_going *g) {
 			}
 		}
 		pm_delete(&x->live, g);
+		pm_delete(&x->frames, g->frame);
 	}
+	sc_free_frame(g->frame);
+	call_info_free(g->info);
 	free(g->caller);
 	free(g->handler);
 	op_free(g->handler_change);
@@ -1017,32 +1019,20 @@ static void landed(const pl_fact *fact, void *ctx);
 static void run_ended(sc_computer *c, unsigned n, sc_ended ended, const void *const *reads,
 	size_t nreads, const sc_more *more, void *data);
 
-// a call scope freed: its info's values go
-static void scope_freed(sc_scope *o, void *data) {
-	struct es_calls *x = data;
-	pm_delete(&x->marks, o);
-	call_info *k = pm_get(&x->infos, o);
-	if (k == NULL) return;
-	pm_delete(&x->infos, o);
-	call_info_free(k);
-}
-
 struct es_calls *es_calls_new(es_ermine *e, int keep) {
 	struct es_calls *x = es_alloc(sizeof *x);
 	x->e = e;
 	x->keep = keep;
 	x->watch = pl_watch_all(e->places, landed, x);
 	x->ended = sc_on_run_end(e->scheduler, run_ended, x);
-	x->freed = sc_on_free(e->scheduler, scope_freed, x);
 	return x;
 }
 
 static void calls_stop(struct es_calls *x) {
 	if (x->watch != NULL) pl_stop(x->watch);
 	if (x->ended != NULL) sc_remove_listener(x->ended);
-	if (x->freed != NULL) sc_remove_listener(x->freed);
 	x->watch = NULL;
-	x->ended = x->freed = NULL;
+	x->ended = NULL;
 }
 
 void es_calls_stop(es_ermine *e) {
@@ -1057,7 +1047,7 @@ void es_calls_free(struct es_calls *x) {
 		if (x->live.keys[i] != NULL) going_free(x->live.vals[i]);
 	}
 	pm_clear(&x->live);
-	pm_clear(&x->scopes);
+	pm_clear(&x->frames);
 	for (size_t i = 0; i < x->records.n; i++) {
 		held *h = x->records.vals[i];
 		call_free(h->call);
@@ -1067,20 +1057,11 @@ void es_calls_free(struct es_calls *x) {
 	for (size_t i = 0; i < x->nwaiting; i++) waiter_free(x->waiting[i]);
 	free(x->waiting);
 	es_map_free(&x->armed);
-	for (size_t i = 0; i < x->infos.cap; i++)
-		if (x->infos.keys[i] != NULL) call_info_free(x->infos.vals[i]);
-	pm_clear(&x->infos);
-	pm_clear(&x->marks);
 	free(x->stack);
 	free(x);
 }
 
 unsigned es_calls_next(es_ermine *e) { return ++e->calls->n; }
-
-void es_mark(es_ermine *e, sc_scope *scope) { pm_set(&e->calls->marks, scope, scope); }
-int es_is_mark(es_ermine *e, sc_scope *scope) {
-	return e->calls != NULL && pm_has(&e->calls->marks, scope);
-}
 
 // the innermost call, when what runs now is its: no run begun inside it since
 static es_going *open_call(struct es_calls *x) {
@@ -1154,20 +1135,20 @@ static void run_ended(sc_computer *c, unsigned n, sc_ended ended, const void *co
 	if (gone) mark_list(x);
 }
 
-// the call scope's own teardown, the last it runs
-static char *going_gone(void *data) {
-	es_going *g = data;
-	pm_delete(&g->x->scopes, g->scope);
+// a call over: its frame is no longer looked up, and the hold its beginning took is let go
+static void call_over(es_going *g) {
+	pm_delete(&g->x->frames, g->frame);
 	going_release(g);
-	return NULL;
 }
 
-es_going *es_calls_begin(es_ermine *e, unsigned n, sc_scope *scope, const es_calling_view *base) {
+es_going *es_calls_begin(es_ermine *e, unsigned n, sc_frame *frame, struct call_info *info,
+	const es_calling_view *base) {
 	struct es_calls *x = e->calls;
 	es_going *g = es_alloc(sizeof *g);
 	g->x = x;
 	g->n = n;
-	g->scope = scope;
+	g->frame = frame;
+	g->info = info;
 	g->refs = 1;
 	sc_run *r = sc_get_run(e->scheduler);
 	if (r != NULL) {
@@ -1184,15 +1165,14 @@ es_going *es_calls_begin(es_ermine *e, unsigned n, sc_scope *scope, const es_cal
 	for (size_t i = 0; i < base->nargs; i++) g->args[g->nargs++] = op_ref((op_value *)base->args[i]);
 	g->started = now();
 	ES_PUSH(x->stack, x->nstack, x->capstack, g);
-	pm_set(&x->scopes, scope, g);
+	pm_set(&x->frames, frame, g);
 	pm_set(&x->live, g, g);
-	free(sc_register_teardown(e->scheduler, scope, going_gone, g));
 	return g;
 }
 
-int es_calls_calling(es_ermine *e, sc_scope *scope, es_calling_view *out) {
-	for (sc_scope *o = scope; o != NULL; o = sc_scope_parent(o)) {
-		es_going *g = pm_get(&e->calls->scopes, o);
+int es_calls_calling(es_ermine *e, sc_frame *frame, es_calling_view *out) {
+	for (sc_frame *o = frame; o != NULL; o = sc_frame_parent(o)) {
+		es_going *g = pm_get(&e->calls->frames, o);
 		if (g == NULL) continue;
 		out->n = g->n;
 		out->caller = g->caller;
@@ -1701,7 +1681,7 @@ int es_create_action_at(es_context *c, es_at p, es_action fn, void *ctx, es_hand
 	return code;
 }
 
-// the execute ask, run in the call scope
+// the execute ask, run in the call frame
 typedef struct {
 	es_context *c;
 	const char *id;
@@ -1716,7 +1696,7 @@ static void do_ask(void *ctx) {
 	a->code = es_context_ask(a->c, "execute", &target, 1);
 }
 
-// the action's function, run in the call scope
+// the action's function, run in the call's frame
 typedef struct {
 	es_context *c;
 	es_function *f;
@@ -1730,21 +1710,10 @@ static void do_run(void *ctx) {
 	r->out = r->f->fn(r->c, r->f->ctx, r->args, r->nargs);
 }
 
-// a call scope torn down: the first error, as a code (what a hook threw keeps its class)
-static int tear(sc_scope *call) {
-	char *err = sc_teardown(call);
-	if (err == NULL) return 0;
-	const es_error *t = es_thrown();
-	int code = t->code != 0 && t->message != NULL && strcmp(t->message, err) == 0 ? t->code
-		: es_fail_text(err);
-	free(err);
-	return code;
-}
-
-// a call whose promise settled ends: its scope goes
+// a call over, its frame let go: the record's end (a promise's when it settles)
 typedef struct {
 	es_ermine *e;
-	sc_scope *call;
+	es_going *g;
 } ending;
 
 static void call_ended(void *ctx, int ok, const op_value *value, const char *error) {
@@ -1752,48 +1721,30 @@ static void call_ended(void *ctx, int ok, const op_value *value, const char *err
 	(void)value;
 	(void)error;
 	ending *g = ctx;
-	free(sc_teardown(g->call));
-	sc_release(g->call);
+	call_over(g->g);
 	es_queue_pulse(g->e);
 	free(g);
 }
 
-// a call ended: its scope torn down, the maker's hold let go
-static void call_gone(sc_scope *call) {
-	free(sc_teardown(call));
-	sc_release(call);
-}
-
-// the call scope: its info { caller: { node, actor }, handler, call }, the values held by the calls
-// state till the scope is freed (a scope borrows its info). the maker's hold is call_action's: let go
-// as the call ends (gone), so the scope is freed once nothing else holds it
-static sc_scope *call_scope(es_context *c, const char *id, unsigned k, sc_scope *parent,
-	const ch_site *site) {
+// the call's frame: its info { caller: { node, actor }, handler, call }, the values held by the
+// record till it is freed (a frame borrows its info), made alone under the scope the call runs in
+// (under's own frame). the record frees it (call_over lets go the hold its beginning took)
+static sc_frame *call_frame(es_context *c, const char *id, unsigned k, sc_scope *under,
+	call_info **held) {
 	es_ermine *e = c->ermine;
-	struct es_calls *x = e->calls;
 	op_value *caller = op_map();
 	op_set(caller, "node", op_str(c->node));
 	const op_value *actor = actor_here(c);
 	if (actor != NULL) op_set(caller, "actor", op_ref((op_value *)actor));
 	op_value *handler = op_str(id), *call = op_num((double)k);
 	sc_pair pairs[3] = {{"caller", caller}, {"handler", handler}, {"call", call}};
-	sc_scope *scope = sc_create_scope(e->scheduler, pairs, 3, parent);
 	call_info *info = es_alloc(sizeof *info);
 	*info = (call_info){{caller, handler, call}, 3};
-	if (scope == NULL) {
-		call_info_free(info);
-		return NULL;
-	}
-	pm_set(&x->infos, scope, info);
-	es_mark(e, scope);
-	if (e->sites != NULL) {
-		if (site != NULL) st_note(e->sites, scope, site->file, (int)site->line, site->function);
-		else st_note(e->sites, scope, __FILE__, __LINE__, __func__);
-	}
-	return scope;
+	*held = info;
+	return sc_create_frame(e->scheduler, pairs, 3, sc_scope_frame(under));
 }
 
-// the action f found at n (id): asked "execute" in a call scope, run there, its record held
+// the action f found at n (id): asked "execute" in a call frame, run there, its record held
 static int call_action(es_context *c, const es_node_data *n, const char *id,
 	es_function *f, const op_value *const *args, size_t nargs, op_value **out, const ch_site *site) {
 	es_ermine *e = c->ermine;
@@ -1802,23 +1753,27 @@ static int call_action(es_context *c, const es_node_data *n, const char *id,
 	placed *p = es_map_get(&e->actions->methods, id);
 	int mine = p != NULL && p->fn == f && p->gen == ((fnslot *)f)->gen;
 	unsigned k = es_calls_next(e);
-	sc_scope *call = call_scope(c, id, k, mine ? p->scope : c->scope, site);
-	if (call == NULL) return es_fail_text(SC_DISPOSED);
+	(void)site;
+	// what the action makes is under's; what a change it makes is made as is the call's
+	sc_scope *under = mine ? p->scope : c->scope;
+	call_info *held;
+	sc_frame *call = call_frame(c, id, k, under, &held);
 	asking a = {c, id, n, 0};
-	const char *bad = sc_run_with_scope(call, do_ask, &a);
+	const char *bad = sc_run_with(under, call, do_ask, &a);
 	int code = bad != NULL ? es_fail_text(bad) : a.code;
 	if (code) {
-		call_gone(call);
+		sc_free_frame(call);
+		call_info_free(held);
 		return code;
 	}
 	op_value *called = change_at(e, "value", id);
 	es_calling_view base = {k, c->node, c, id, called, args, nargs, 0};
-	es_going *g = es_calls_begin(e, k, call, &base);
+	es_going *g = es_calls_begin(e, k, call, held, &base);
 	op_free(called);
-	// the call scope lasts as the record does: a promise's till it settles (the record ended first),
-	// else till the handler returns or throws
+	// the call's frame lasts as the record does: a promise's till it settles (the record ended
+	// first), else till the handler returns or throws
 	running r = {mine ? p->context : c, f, args, nargs, es_out_of(NULL)};
-	bad = sc_run_with_scope(call, do_run, &r);
+	bad = sc_run_with(under, call, do_run, &r);
 	if (bad != NULL) r.out = es_out_failed(es_dup(bad));
 	if (r.out.kind == ES_OUT_FAILED) {
 		// what was thrown, if it still is (a Refusal keeps its class through the call)
@@ -1826,7 +1781,7 @@ static int call_action(es_context *c, const es_node_data *n, const char *id,
 		int thrown_code = thrown->code != 0 && thrown->message != NULL && r.out.error != NULL &&
 			strcmp(thrown->message, r.out.error) == 0 ? thrown->code : 0;
 		end_call(e, g, &r.out);
-		call_gone(call);
+		call_over(g);
 		es_queue_pulse(e);
 		if (thrown_code != 0) {
 			thrown = es_thrown();
@@ -1843,13 +1798,13 @@ static int call_action(es_context *c, const es_node_data *n, const char *id,
 	}
 	if (r.out.kind == ES_OUT_PENDING) {
 		end_call(e, g, &r.out);
-		call_gone(call);
+		call_over(g);
 		es_queue_pulse(e);
 		return ES_PENDING;
 	}
 	code = end_call(e, g, &r.out);
 	if (code) {
-		call_gone(call);
+		call_over(g);
 		es_queue_pulse(e);
 		op_free(r.out.value);
 		return code;
@@ -1858,16 +1813,10 @@ static int call_action(es_context *c, const es_node_data *n, const char *id,
 	if (promise != NULL) {
 		ending *done = es_alloc(sizeof *done);
 		done->e = e;
-		done->call = call;
+		done->g = g;
 		es_promise_then(promise, call_ended, done);
 	} else {
-		code = tear(call);
-		sc_release(call);
-		if (code) {
-			es_queue_pulse(e);
-			op_free(r.out.value);
-			return code;
-		}
+		call_over(g);
 	}
 	es_queue_pulse(e);
 	*out = r.out.value;
@@ -1924,13 +1873,19 @@ int es_execute_action_at(es_context *c, es_target x, const op_value *const *args
 	return code;
 }
 
-// the call open now: its scope's info names its caller (execute's call scope)
+// a pair of a frame's info that is an op_value of this type
+static const op_value *frame_value_of(const sc_frame *o, const char *key, op_type type) {
+	const op_value *v = es_frame_pair_of(o, key);
+	return v != NULL && v->type == type ? v : NULL;
+}
+
+// the call open now: its frame's info names its caller (execute's call frame)
 int es_get_caller(es_context *c, es_caller *out) {
 	es_ermine *e = c->ermine;
 	*out = (es_caller){0};
-	for (sc_scope *o = es_open(c); o != NULL; o = sc_scope_parent(o)) {
-		if (es_pair_of(o, "call") == NULL || es_pair_of(o, "handler") == NULL) continue;
-		const op_value *caller = value_of(o, "caller", OP_MAP);
+	for (sc_frame *o = es_open_frame(c); o != NULL; o = sc_frame_parent(o)) {
+		if (es_frame_pair_of(o, "call") == NULL || es_frame_pair_of(o, "handler") == NULL) continue;
+		const op_value *caller = frame_value_of(o, "caller", OP_MAP);
 		const op_value *node = caller == NULL ? NULL : op_get(caller, "node");
 		out->actor = caller == NULL ? NULL : op_get(caller, "actor");
 		if (node != NULL && node->type == OP_STR && es_seen_in(e, c, node->str, &out->process)) {
@@ -1944,9 +1899,9 @@ int es_get_caller(es_context *c, es_caller *out) {
 int es_caller_place(void *ctx, const char *const **from, size_t *nfrom, tb_key *box) {
 	es_context *c = ctx;
 	es_ermine *e = c->ermine;
-	for (sc_scope *o = sc_get_current_scope(e->scheduler); o != NULL; o = sc_scope_parent(o)) {
-		if (es_pair_of(o, "call") == NULL || es_pair_of(o, "handler") == NULL) continue;
-		const op_value *caller = value_of(o, "caller", OP_MAP);
+	for (sc_frame *o = sc_get_current_frame(e->scheduler); o != NULL; o = sc_frame_parent(o)) {
+		if (es_frame_pair_of(o, "call") == NULL || es_frame_pair_of(o, "handler") == NULL) continue;
+		const op_value *caller = frame_value_of(o, "caller", OP_MAP);
 		const op_value *node = caller == NULL ? NULL : op_get(caller, "node");
 		*from = NULL;
 		*nfrom = 0;
@@ -2017,9 +1972,10 @@ int es_add_teardown(es_context *c, es_teardown fn, void *ctx) {
 	sc_scope *own = es_owner(c);
 	code = es_not_in_act(e, own, "addTeardown");
 	if (code) return code;
-	// in an action: a call's mark is open between the scope open and own
-	for (sc_scope *o = sc_get_current_scope(e->scheduler); o != NULL && o != own; o = sc_scope_parent(o)) {
-		if (es_is_mark(e, o) && es_pair_of(o, "call") != NULL) {
+	// in an action: a call's frame is open between the frame open and own's
+	sc_frame *ours = sc_scope_frame(own);
+	for (sc_frame *o = sc_get_current_frame(e->scheduler); o != NULL && o != ours; o = sc_frame_parent(o)) {
+		if (es_frame_pair_of(o, "call") != NULL) {
 			return es_fail_ermine(ES_NOT_HERE,
 				"addTeardown in an action: add it in setup, or keep what the call started and stop it from setup's teardown");
 		}
@@ -2081,14 +2037,13 @@ int es_create_writer(es_context *c, op_value **writer) {
 	b->c = c;
 	b->parent = own;
 	b->serial = ++x->serials;
-	// the mark it is made under: the nearest call's, if the scope open is under one
-	for (sc_scope *o = sc_get_current_scope(e->scheduler); o != NULL && o != own; o = sc_scope_parent(o)) {
-		if (!es_is_mark(e, o)) continue;
+	// the mark it is made under: the frame open when it is not own's (a call's, a writer's run's)
+	sc_frame *at = sc_get_current_frame(e->scheduler);
+	if (at != NULL && at != sc_scope_frame(own)) {
 		for (size_t i = 0; i < 3; i++) {
-			const op_value *v = es_pair_of(o, MARK_KEYS[i]);
+			const op_value *v = es_frame_pair_of(at, MARK_KEYS[i]);
 			if (v != NULL) b->mark[b->nmark++] = op_ref((op_value *)v);
 		}
-		break;
 	}
 	writer_owner *o = pm_get(&x->owners, own);
 	if (o == NULL) {
@@ -2167,12 +2122,13 @@ int es_with_writer(es_ermine *e, const op_value *writer, es_thunk f, void *ctx) 
 	}
 	int during = e->user_activated != NULL && e->user_activated(e->user_activated_ctx);
 	sc_scope *at = b->parent;
+	sc_frame *frame = NULL;
+	call_info *info = NULL;
 	// f may free b (it lets its writer go, or stops what it was created in): nothing of b is read after it
 	int own_mark = b->nmark > 0 || during;
 	if (own_mark) {
-		// a mark of its own for this run: the writer's info, and userActivated
-		struct es_calls *y = e->calls;
-		call_info *info = es_alloc(sizeof *info);
+		// a frame of its own for this run: the writer's info, and userActivated
+		info = es_alloc(sizeof *info);
 		sc_pair pairs[4];
 		size_t n = 0;
 		for (size_t i = 0; i < b->nmark; i++) {
@@ -2183,19 +2139,13 @@ int es_with_writer(es_ermine *e, const op_value *writer, es_thunk f, void *ctx) 
 			info->values[info->n++] = op_bool(1);
 			pairs[n++] = (sc_pair){"userActivated", info->values[info->n - 1]};
 		}
-		at = sc_create_scope(e->scheduler, pairs, n, b->parent);
-		if (at == NULL) {
-			call_info_free(info);
-			return es_fail_text(SC_DISPOSED);
-		}
-		pm_set(&y->infos, at, info);
-		es_mark(e, at);
+		frame = sc_create_frame(e->scheduler, pairs, n, sc_scope_frame(b->parent));
 	}
 	later_call l = {f, ctx, 0};
-	const char *bad = sc_run_with_scope(at, later_run, &l);
+	const char *bad = sc_run_with(at, frame, later_run, &l);
 	if (own_mark) {
-		free(sc_teardown(at));
-		sc_release(at);
+		sc_free_frame(frame);
+		call_info_free(info);
 		es_queue_pulse(e);
 	}
 	if (bad != NULL) return es_fail_text(bad);

@@ -29,6 +29,7 @@ import {
 	asId,
 	type Contributor,
 	type Id,
+	map,
 	none,
 	type Path,
 	PlacesError,
@@ -44,13 +45,6 @@ export const PROCESS = "process" as string as Key
 
 // the key a level holds the id of a process at the level's own path under
 const SELF = ""
-
-// a map with a name in it: a level of a trie (one emptied is taken out, but the top)
-function filled(v: unknown): boolean {
-	if (!isPojo(v)) return false
-	for (const _ in v) return true
-	return false
-}
 
 const bad = (name: string) => name === "" || name === "." || name === ".." || name === "/"
 
@@ -89,8 +83,9 @@ export function idsUnder(rows: unknown, path: Path): [string, Id][] {
 //
 // a process at here's path + the name, with processes under it too: its id (the walk goes on
 // through it by the path). pruning (places.ts): no level at here's path + the name (no leaf, nothing, or under a leaf):
-// none, so the walk asks it nothing more under there. the read that said so is of all under that
-// path, so a start anywhere under it marks the walk, and one elsewhere does not. no names under
+// none, so the walk asks it nothing more under there. the read that said so is of what is at that
+// path itself (places' here): a start making something there marks the walk, a start or a stop
+// deeper under a level, or elsewhere, does not. no names under
 // here's path: none too. a walk from an id alone: none at once (it never has a path)
 export const processes = (root: Id): Contributor => trie(PROCESS, root, "process")
 
@@ -99,12 +94,16 @@ export const processes = (root: Id): Contributor => trie(PROCESS, root, "process
 export function trie(part: Key, root: Id, from: string): Contributor {
 	return {
 		from,
+		// each step reads only what it needs: what is at path + name itself, and a level's own id, so
+		// a start or a stop elsewhere under a level tells a walk through it nothing (the hedgehog's
+		// wall 2, 10-28: a sibling started reran every reader of a cell)
 		step: ({ path }, name, r) => {
 			// "" is the key a level holds its own process under, never a name
 			if (path === undefined || name === SELF) return none
-			const v = r.read(part, root, [...path, name])
-			if (isPojo(v) && Object.hasOwn(v, SELF)) return asId(v[SELF]) ?? none
-			return asId(v) ?? (filled(v) ? undefined : none)
+			const at = [...path, name]
+			const v = r.here(part, root, at)
+			if (v === map) return asId(r.read(part, root, [...at, SELF])) ?? undefined
+			return asId(v) ?? none
 		},
 		names: ({ path }, r) => {
 			if (path === undefined) return none
@@ -113,7 +112,7 @@ export function trie(part: Key, root: Id, from: string): Contributor {
 		},
 		// a level of the trie (leaves deeper, no id of its own): a walk goes on through it
 		level: ({ path }, name, r) =>
-			path !== undefined && name !== SELF && isPojo(r.read(part, root, [...path, name])),
+			path !== undefined && name !== SELF && r.here(part, root, [...path, name]) === map,
 	}
 }
 

@@ -7,7 +7,7 @@ import { go } from "../acting.ts"
 import { marked } from "../site.ts"
 import { handle } from "./addressing.ts"
 import { again, type Code, computerNode, ran, same } from "./made.ts"
-import { acting, notInAct, owner, teardown } from "./scopes.ts"
+import { acting, insideOnly, notInAct, owner, teardown } from "./scopes.ts"
 import { here } from "./setting.ts"
 import type { System } from "./shapes.ts"
 
@@ -65,6 +65,7 @@ function makeComputer<T>(
 	const own = owner(inner)
 	notInAct(own, act === undefined ? "createMemo" : "createEffect")
 	const path = resolve(name)
+	insideOnly(inner, path, act === undefined ? "createMemo" : "createEffect")
 	const n: NodeData = { path, part: "value" }
 	const code: Code = { f, ...act !== undefined && { act }, equal: options.equal }
 	if (again(inner, own, path, code)) return handle(inner, n)

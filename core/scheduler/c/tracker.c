@@ -73,6 +73,12 @@ void tg_end(tg_node *f) {
 // the run ends, no link dropped: the ones it did not reach stay after the cursor, old
 void tg_leave(tg_node *f) { f->open = false; }
 
+int tg_resume(tg_node *f) {
+	if (f->open) return -2;
+	f->open = true;
+	return 0;
+}
+
 bool tg_old(const tg_link *l) { return !l->from->open && l->gen != l->from->gen; }
 
 // outside a run: the links after the cursor (all, with no cursor) are dropped

@@ -1,4 +1,5 @@
-// what a review of marks (writers, started children, cleanup) proved in C and the harness cannot show:
+// what a review of marks (writers, started children, cleanup; marks are frames since 10-28) proved in
+// C and the harness cannot show:
 // memory used after it was freed, under AddressSanitizer. each case is a probe the reviewer ran, kept.
 // make test-marks-system, test-check-marks-system (the sanitizers)
 #include "ermine.h"

@@ -76,6 +76,7 @@ static void put_spot(FILE *out, const pt_spot *s) {
 		return;
 	}
 	if (s->keys) fputs("{\"keys\":", out);
+	else if (s->here) fputs("{\"here\":", out);
 	putc('[', out);
 	for (size_t i = 0; i < s->length; i++) {
 		const op_key *k = &s->path[i];
@@ -84,7 +85,7 @@ static void put_spot(FILE *out, const pt_spot *s) {
 		else op_json_string(out, k->s);
 	}
 	putc(']', out);
-	if (s->keys) putc('}', out);
+	if (s->keys || s->here) putc('}', out);
 }
 static void put_spots(FILE *out, pt_spot *const *spots, size_t n) {
 	fputs("{\"spots\":[", out);
@@ -116,7 +117,7 @@ void hh_answer(const op_value *r, FILE *out) {
 		if (!patch_ok(p)) { hh_error(out, "bad patch"); return; }
 		op_patch patch;
 		hh_patch(p, &patch);
-		int keys = flag(r, "keys");
+		int keys = flag(r, "here") ? PT_HERE : flag(r, "keys") ? PT_KEYS : PT_ALL;
 		int *marks = hh_take((ps->count + 1) * sizeof *marks);
 		for (size_t i = 0; i < ps->count; i++) {
 			size_t n;
@@ -156,7 +157,7 @@ void hh_answer(const op_value *r, FILE *out) {
 		put_spots(out, spots, n);
 		return;
 	}
-	int keys = flag(r, "keys");
+	int keys = flag(r, "here") ? PT_HERE : flag(r, "keys") ? PT_KEYS : PT_ALL;
 	const op_value *pj = op_get(r, "path");
 	op_key *path = pj == NULL ? NULL : path_of(pj, &n);
 	if (pj != NULL && path == NULL) { hh_error(out, "bad path"); return; }

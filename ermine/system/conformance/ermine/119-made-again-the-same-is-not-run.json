@@ -1,0 +1,164 @@
+{
+	"title": "a memo made again by its owner's run with the same source is not run again [chee 10-28: \"memos of ids still there are left alone ... this should be true of all subcomps, like, that's one of the benefits of giving things names we get to do nominal adapton\"]: claimed, it runs when what it read changes, not because its owner ran; its own reads still rerun it. what it closes over that it doesn't read can go stale [chee: \"we expect staleness when we use values that are not reactive\"]",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/k",
+				0
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/x",
+				1
+			]
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"createMemo",
+						"outer",
+						{},
+						[
+							"all",
+							[
+								"log",
+								"outer",
+								[
+									"read",
+									"/k"
+								]
+							],
+							[
+								"createMemo",
+								"inner",
+								{},
+								[
+									"log",
+									"inner",
+									[
+										"read",
+										"/x"
+									]
+								]
+							]
+						]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "log",
+			"name": "outer",
+			"expect": {
+				"values": [
+					0
+				]
+			}
+		},
+		{
+			"op": "log",
+			"name": "inner",
+			"expect": {
+				"values": [
+					1
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/k",
+				[
+					{
+						"path": [],
+						"value": 5
+					}
+				]
+			]
+		},
+		{
+			"op": "log",
+			"name": "outer",
+			"expect": {
+				"values": [
+					0,
+					5
+				]
+			}
+		},
+		{
+			"op": "log",
+			"name": "inner",
+			"expect": {
+				"values": [
+					1
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/x",
+				[
+					{
+						"path": [],
+						"value": 2
+					}
+				]
+			]
+		},
+		{
+			"op": "log",
+			"name": "outer",
+			"expect": {
+				"values": [
+					0,
+					5
+				]
+			}
+		},
+		{
+			"op": "log",
+			"name": "inner",
+			"expect": {
+				"values": [
+					1,
+					2
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/code/p/inner"
+			],
+			"expect": {
+				"value": 2
+			}
+		}
+	]
+}

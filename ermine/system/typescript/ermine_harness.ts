@@ -70,7 +70,9 @@
 // program: steps { do: [fn, ...args], as? }; "$x" in an arg is name x (results, an action's args
 // $0…). fn: one of @ermine/system's functions, called as it is, or one of these forms:
 //   ["createMemo", name, options, expr]       createMemo(name, () => expr); options.equal "json":
-//                                             compared as JSON
+//                                             compared as JSON; options.gen: steps, a generator
+//                                             compute ({do:["yield", expr]} yields, "as" what comes
+//                                             back), expr its value after them
 //   ["createEffect", name, expr, log, "throws"?, options?]   createEffect(name, () => expr, (v) =>
 //                                             log v; throws: then throws "act <v>"; options:
 //                                             { early })
@@ -81,7 +83,8 @@
 //                                             comes back)
 //   ["caught", log, steps]                    steps run; an error they throw logged as its code
 //   ["addTeardown", log, tag?]                addTeardown((why) => log why, or "<tag>:<why>")
-//   ["getStatus", target]                     getStatus(target), shown
+//   ["getStatus", target, key?]               getStatus(target), shown; key: that field alone (an
+//                                             error as its message)
 //   ["explain", target, key?]                 explain(target, key), shown
 //   ["peep", expr]                            peep(() => expr): read untracked
 //   ["ref", path, value]                      ref(path, () => value)
@@ -146,6 +149,7 @@ import type { System } from "./system/shapes.ts"
 import { isHandle } from "./handles.ts"
 import { bare, hints } from "./hints.ts"
 import type { Run } from "@ermine/processes/runs"
+import type { Status } from "./system/shapes.ts"
 import type { Places } from "@ermine/core/places"
 import { testFeature } from "./features_fixture.ts"
 
@@ -427,8 +431,12 @@ function call(api: Sys, env: Env, [fn, ...raw]: [string, ...unknown[]]): unknown
 		}
 		case "ref":
 			return api.ref(raw[0] as string, () => raw[1])
-		case "getStatus":
-			return status(api.getStatus(arg(env, raw[0]) as never))
+		case "getStatus": {
+			if (raw.length < 2) return status(api.getStatus(arg(env, raw[0]) as never))
+			const key = arg(env, raw[1]) as string
+			const v = api.getStatus(arg(env, raw[0]) as never, key as never)
+			return key === "error" && v !== undefined ? message(v) : v
+		}
 		case "explain":
 			return explained(api.explain(arg(env, raw[0]) as never, arg(env, raw[1]) as never))
 		case "explainfrom": {
@@ -587,6 +595,25 @@ function define(api: Sys, env: Env, fn: string, raw: unknown[]): unknown {
 	if (fn === "createMemo") {
 		const [name, options, e] = raw as [string, Record<string, unknown>, unknown]
 		const equal = options?.equal === "json" ? json : undefined
+		// options.gen: a generator compute, its steps run in order ({ do: ["yield", expr] } yields
+		// expr's value, "as" what comes back), then e its value
+		if (Array.isArray(options?.gen)) {
+			const steps = options.gen as Step[]
+			const { gen: _, ...rest } = options
+			return api.createMemo(name, function* () {
+				const inner: Env = new Map(env)
+				for (const step of steps) {
+					if (step.do[0] === "yield") {
+						const v: unknown = yield expr(api, inner, step.do[1])
+						if (step.as !== undefined) inner.set(step.as, v)
+					} else {
+						const v = call(api, inner, step.do)
+						if (step.as !== undefined) inner.set(step.as, v)
+					}
+				}
+				return expr(api, inner, e)
+			}, { ...rest, equal } as never)
+		}
 		return api.createMemo(name, () => expr(api, env, e), { ...options, equal } as never)
 	}
 	// createEffect's fifth: its options: early; act: steps run in the act, an error they throw
@@ -640,7 +667,7 @@ function plain(v: unknown): unknown {
 	}
 	return v
 }
-function status(st: ReturnType<System["getStatus"]>) {
+function status(st: Status | undefined) {
 	if (st === undefined) return undefined
 	const { hint: _, ...bareStatus } = st
 	return plain({

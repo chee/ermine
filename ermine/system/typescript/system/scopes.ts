@@ -1,6 +1,6 @@
-import type { Id } from "@ermine/core/places"
+import type { Id, Path } from "@ermine/core/places"
 import { NODE } from "@ermine/core/places/header"
-import type { Scope } from "@ermine/core/scheduler"
+import type { Frame, Scope } from "@ermine/core/scheduler"
 import { enterScheduler, leaveScheduler } from "../registry.ts"
 import { ErmineError } from "../features.ts"
 import type { Inner, Why } from "../context.ts"
@@ -9,17 +9,14 @@ import { computerAt } from "./made.ts"
 import { here } from "./setting.ts"
 import { USER_ACTIVATED } from "./shapes.ts"
 
-// the scopes that are marks (a call's: executeAction): they own nothing, so what is made while
-// one is open belongs to the scope above it; their info still rides on the writes made in them
-export const marks = new WeakSet<Scope>()
 // the computers' scopes whose act is running now: an act makes nothing [marks-2026-10-27]
 export const acting = new Set<Scope>()
 
-// what a scope is looked for by: the NODE key in its info; an actor in it; a call's info (caller,
-// handler and call); a mark; not a mark; a mark an action's call made
-type By = "node" | "actor" | "call" | "mark" | "plain" | "action"
-// the first scope from o up, short of end, that is by; none: undefined
-function above(o: Scope | undefined, end: Scope | undefined, by: By) {
+// what a frame is looked for by: the NODE key in its info; an actor in it; a call's info (caller,
+// handler and call)
+type By = "node" | "actor" | "call"
+// the first frame from o up, short of end, that is by; none: undefined
+function above(o: Frame | undefined, end: Frame | undefined, by: By) {
 	for (; o !== undefined && o !== end; o = o.parent) {
 		switch (by) {
 			case "node":
@@ -30,24 +27,15 @@ function above(o: Scope | undefined, end: Scope | undefined, by: By) {
 				break
 			case "call":
 				if (o.info.call !== undefined && o.info.handler !== undefined) return o
-				break
-			case "mark":
-				if (marks.has(o)) return o
-				break
-			case "plain":
-				if (!marks.has(o)) return o
-				break
-			case "action":
-				if (marks.has(o) && "call" in o.info) return o
 		}
 	}
 }
 
-// the NODE key's id of o or the nearest scope above it with one; none: undefined
+// the NODE key's id of o's frame or the nearest frame above it with one; none: undefined
 export const nodeAbove = (o: Scope | undefined) =>
-	above(o, undefined, "node")?.info[NODE] as Id | undefined
-// the scope of the call open from o up: its info names the caller, the handler and the call
-export const callAbove = (o: Scope | undefined) => above(o, undefined, "call")
+	above(o?.frame, undefined, "node")?.info[NODE] as Id | undefined
+// the frame of the call open from o up: its info names the caller, the handler and the call
+export const callAbove = (o: Frame | undefined) => above(o, undefined, "call")
 
 // refused in an act: what it would make would be the effect's, and go at its next act, where
 // nobody can see it. fn names the function called
@@ -60,27 +48,39 @@ export function notInAct(own: Scope, fn: string) {
 			: `${fn} in an effect's act: an act makes nothing`,
 	)
 }
-// refused in an action: its teardown would pile onto the scope above the call, one closure a call,
-// till the process ends. a call's mark (an action's, or a writer made in one) is open between the
-// scope open and own
+// a memo, effect or pipe is made inside its maker's node (a process's, by a bare name; the host's
+// is the root): never beside it or above it, where it would outlive its maker with no context of
+// its own to run as [chee 10-28: "maybe subcomputations can't live alone but subprocesses can?"].
+// path: where it would be; fn names the function called
+export function insideOnly(inner: Inner, path: Path, fn: string) {
+	const at = inner.context.at
+	if (path.length > at.length && at.every((name, i) => path[i] === name)) return
+	throw new ErmineError(
+		"outside",
+		`${fn}("/${path.join("/")}"): made outside its maker, it would outlive it`,
+	)
+}
+// refused in an action: its teardown would pile onto the scope the call runs in, one closure a
+// call, till the process ends. a call's frame (an action's, or a writer made in one) is open
+// between the frame open and own's
 export function notInAction(inner: Inner, own: Scope) {
-	if (above(here(inner).s.getCurrentScope(), own, "action") !== undefined) {
+	if (above(here(inner).s.getCurrentFrame(), own.frame, "call") !== undefined) {
 		throw new ErmineError(
 			"not-here",
 			"addTeardown in an action: add it in setup, or keep what the call started and stop it from setup's teardown",
 		)
 	}
 }
-// the scope what is made now belongs to: the scope open, past any marks; none open: the context's
+// the scope what is made now belongs to: the scope open; none open: the context's
 export const owner = (inner: Inner) => {
 	const { s, scope } = here(inner)
-	return above(s.getCurrentScope(), undefined, "plain") ?? scope
+	return s.getCurrentScope() ?? scope
 }
-// the actor a write made now would carry: the first the open scope (none: the context's) or one
+// the actor a write made now would carry: the first the frame open (none: the context's) or one
 // above it gives
 export const actorHere = (inner: Inner) => {
 	const { s, scope } = here(inner)
-	return above(s.getCurrentScope() ?? scope, undefined, "actor")?.info.actor
+	return above(s.getCurrentFrame() ?? scope.frame, undefined, "actor")?.info.actor
 }
 
 // fn(why) as scope goes, through onTeardown
@@ -102,10 +102,12 @@ export function notHere(base: Base, own: Scope, message: string) {
 	}
 }
 
-// the mark a scope open under own gives what is made now: the nearest call's info, without the
-// user-activated flag (only a run that happens during an event has it)
+// the mark the frame open over own's gives what is made now: the nearest frame made alone (a
+// call's, a writer's run's) between them, its info without the user-activated flag (only a run
+// that happens during an event has it)
 export function markOf(inner: Inner, own: Scope): Scope["info"] | undefined {
-	const o = above(here(inner).s.getCurrentScope(), own, "mark")
+	const at = here(inner).s.getCurrentFrame()
+	const o = at === undefined || at === own.frame ? undefined : at
 	if (o === undefined) return undefined
 	const { [USER_ACTIVATED]: _, ...rest } = o.info
 	return Object.keys(rest).length === 0 ? undefined : rest
@@ -122,13 +124,11 @@ export function runAs<T>(
 ): T {
 	const { s } = here(inner)
 	const info = during ? { ...mark, [USER_ACTIVATED]: true } : mark
-	const at = info === undefined ? parent : s.createScope(info, parent)
-	if (at !== parent) marks.add(at)
+	const frame = info === undefined ? parent.frame : s.createFrame(info, parent.frame)
 	enterScheduler(s)
 	try {
-		return s.runWithScope(at, f)
+		return s.runWith(parent, frame, f)
 	} finally {
 		leaveScheduler()
-		if (at !== parent) s.teardown(at)
 	}
 }

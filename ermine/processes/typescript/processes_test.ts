@@ -349,11 +349,13 @@ Deno.test("cache: pruning, the rows asked once on a path they have nothing on; a
 	w.start(["apps", "y"], "Y")
 	w.s.pulse()
 	assertEquals([deep.runs, top.runs, w.asked()], [1, 1, 0])
-	// one on the path: each entry down to it asks again, as its gone changes; its reader reruns
+	// one on the path: each entry from where the rows changed down to it asks again, as its gone
+	// changes (not /work's: what is there is a level still, and the step reads only that, the
+	// hedgehog's wall 2, 10-28); its reader reruns
 	w.start(["work", "clock", "on", "reset"], "P")
 	w.s.pulse()
 	assertEquals([deep.runs, deep.value, top.runs], [2, "P", 1])
-	assertEquals(w.asked(), 4)
+	assertEquals(w.asked(), 3)
 	// the same through plain places: a walk asks down to where the rows part from its path
 	w.stop(["work", "clock", "on", "reset"])
 	w.asked()

@@ -121,6 +121,7 @@ const char *es_code_name(int code) {
 	case ES_NOT_HERE: return "not-here";
 	case ES_GONE: return "gone";
 	case ES_ALREADY_INSIDE: return "already-inside";
+	case ES_OUTSIDE: return "outside";
 	default: return "failed";
 	}
 }
@@ -2121,12 +2122,19 @@ static int ask_starting(es_context *c, const char *const *path, size_t n) {
 	return 0;
 }
 
-const void *es_pair_of(const sc_scope *o, const char *key) {
-	const sc_info *info = sc_scope_info(o);
+static const void *pair_in(const sc_info *info, const char *key) {
 	for (size_t i = 0; info != NULL && i < info->n; i++) {
 		if (strcmp(info->pairs[i].key, key) == 0) return info->pairs[i].value;
 	}
 	return NULL;
+}
+
+const void *es_pair_of(const sc_scope *o, const char *key) {
+	return pair_in(sc_scope_info(o), key);
+}
+
+const void *es_frame_pair_of(const sc_frame *f, const char *key) {
+	return pair_in(sc_frame_info(f), key);
 }
 
 int es_start_in(es_context *c, es_program fn, void *ctx, es_at at, const es_start_options *o,
@@ -2458,5 +2466,5 @@ es_wait *es_records_waits(es_ermine *e, size_t *n) {
 int es_calling(es_ermine *e, es_calling_view *out) {
 	if (es_alive(e)) return 0;
 	es_clear_thrown();
-	return es_calls_calling(e, sc_get_current_scope(e->scheduler), out);
+	return es_calls_calling(e, sc_get_current_frame(e->scheduler), out);
 }

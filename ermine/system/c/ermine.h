@@ -43,10 +43,10 @@
 //     status and runs: es_get_status es_status_free es_latest_run: the base's status, then
 //       features' (onStatus)
 //
-//   C actions.c  actions, the call scope, call records, getCaller, explain, teardowns, promises
+//   C actions.c  actions, the call frame, call records, getCaller, explain, teardowns, promises
 //     state: es_actions_new es_actions_free es_is_action
 //     actions: es_create_action_at es_execute_action_at es_get_caller es_caller_free
-//       es_add_teardown: the call scope, waits, PENDING, the record, a promise's call lasting
+//       es_add_teardown: the call frame, waits, PENDING, the record, a promise's call lasting
 //     explain and its views: es_explain es_explain_attributes es_explain_children es_explain_view
 //       es_explained_free es_change_view_of es_view_change es_run_view_of es_call_view_of
 //       es_run_view_free es_call_view_free es_show: the writer, the run view, the call view with
@@ -54,7 +54,7 @@
 //     call records (calls.ts): es_calls_new es_calls_free es_calls_next es_calls_begin es_calls_end
 //       es_calls_calling es_calls_open es_calls_read es_calls_made es_calls_latest
 //       es_calls_drop es_calls_wait es_calls_answered es_calls_waits es_waits_free es_calls_stop
-//     marks and writers (system/scopes.ts marks, system/process.ts createWriter): es_mark es_is_mark es_create_writer es_with_writer es_drop_writer es_cleanup
+//     writers (system/process.ts createWriter): es_create_writer es_with_writer es_drop_writer es_cleanup
 //     promises: es_promise_new es_promise_release es_promise_value es_promise_resolve
 //       es_promise_reject es_promise_then
 //
@@ -181,6 +181,8 @@ typedef enum {
 	ES_GONE,
 	// a writer called while a scope or run is open
 	ES_ALREADY_INSIDE,
+	// a memo, effect or pipe made outside its maker's own node (es_inside_only)
+	ES_OUTSIDE,
 } es_code;
 
 // what was thrown last, by the function that last returned a code (one slot, single threaded).
@@ -376,15 +378,29 @@ typedef struct {
 // what a program's function gives back, as sc_out does: a value (the receiver's to op_free, NULL for
 // none), PENDING, a failure (error: its message, malloc'd, the receiver's), or a promise, which is
 // a value (es_promise_value)
-typedef enum { ES_OUT_VALUE, ES_OUT_PENDING, ES_OUT_FAILED } es_out_kind;
-typedef struct {
+//
+// a compute's function may also give ES_OUT_PAUSE (a generator that yielded a promise): value is the
+// promise, step what goes on with it. next: given how the promise settled (ok: value, the step's to
+// op_free; else error, malloc'd, its to free), it gives what the run comes to, any kind (PAUSE again
+// too). quit: let go instead, once, when the computer ran again, is gone, or the ermine closes.
+// exactly one of next and quit is called, once. computes only: the run goes on, the same run
+struct es_out;
+struct es_context;
+typedef struct es_step {
+	struct es_out (*next)(struct es_context *c, void *ctx, int ok, op_value *value, char *error);
+	void (*quit)(void *ctx);
+	void *ctx;
+} es_step;
+typedef enum { ES_OUT_VALUE, ES_OUT_PENDING, ES_OUT_FAILED, ES_OUT_PAUSE } es_out_kind;
+typedef struct es_out {
 	es_out_kind kind;
 	op_value *value;
 	char *error;
+	es_step step;
 } es_out;
-static inline es_out es_out_of(op_value *v) { return (es_out){ES_OUT_VALUE, v, NULL}; }
-static inline es_out es_out_pending(void) { return (es_out){ES_OUT_PENDING, NULL, NULL}; }
-static inline es_out es_out_failed(char *message) { return (es_out){ES_OUT_FAILED, NULL, message}; }
+static inline es_out es_out_of(op_value *v) { return (es_out){.kind = ES_OUT_VALUE, .value = v}; }
+static inline es_out es_out_pending(void) { return (es_out){.kind = ES_OUT_PENDING}; }
+static inline es_out es_out_failed(char *message) { return (es_out){.kind = ES_OUT_FAILED, .error = message}; }
 
 typedef struct es_ermine es_ermine;
 typedef struct es_context es_context;
@@ -397,8 +413,8 @@ typedef es_out (*es_compute)(es_context *c, void *ctx, const op_value *previous)
 typedef int (*es_act)(es_context *c, void *ctx, const op_value *value, const op_value *before);
 // two results the same (NULL: identical, by pointer)
 typedef int (*es_equal)(void *ctx, const op_value *a, const op_value *b);
-// an action's function, the args borrowed for the call. c: the context its call scope is in (the
-// one that placed it, not the caller's: the call scope is under the placer's)
+// an action's function, the args borrowed for the call. c: the context its call frame is under (the
+// one that placed it, not the caller's: the call frame is made alone, under the placer's)
 typedef es_out (*es_action)(es_context *c, void *ctx, const op_value *const *args, size_t nargs);
 // ref's maker: a new value, the receiver's
 typedef op_value *(*es_make)(void *ctx);
@@ -1031,11 +1047,11 @@ int es_within(es_context *c, es_thunk f, void *ctx);
 // f with a scope open: the one open, else the fallen scope (a process's: ES_NOTHING_OPEN; the host's:
 // its own scope)
 int es_inside(es_context *c, es_thunk f, void *ctx);
-// the scope what is made now belongs to: the scope open, past any marks (a call's, a writer's:
-// they own nothing); else the context's
+// the scope what is made now belongs to: the scope open; else the context's
 sc_scope *es_owner(es_context *c);
-// the scope open now, marks too, else the context's: the info a write carries is found from it
-sc_scope *es_open(es_context *c);
+// the frame open now (a call's, a writer's run's, or the scope open's own), else the context's
+// scope's own: the info a write carries is found from it
+sc_frame *es_open_frame(es_context *c);
 // asked as c "place" on the slot of the name last in path (npath names), in the folder parent
 int es_ask_slot(es_context *c, const char *parent, const char *const *path, size_t npath);
 // one write at a node (its id, and the path it was reached by), asked "edit" on it, through onWrite,
@@ -1197,6 +1213,11 @@ int es_create_effect_at(es_context *c, es_at name, es_compute f, es_act act, voi
 // an effect's act makes nothing: ES_IN_ACT when own is the scope an act is running in. fn names what was
 // called (createMemo, createEffect, createAction, addTeardown)
 int es_not_in_act(es_ermine *e, sc_scope *own, const char *fn);
+// a memo, effect or pipe is made inside its maker's node (a process's, by a bare name; the host's is
+// the root), never beside or above it, where it would outlive its maker with no context of its own
+// to run as [chee 10-28: "maybe subcomputations can't live alone but subprocesses can?"]:
+// ES_OUTSIDE otherwise. path: where it would be; fn names what was called
+int es_inside_only(es_context *c, const es_names *path, const char *fn);
 // the scope an effect's act is running in now; NULL: none
 sc_scope *es_acting(es_ermine *e);
 // what is known of a node: a memo or effect's; a memo's (a read of one pending with no value is ES_PENDING);
@@ -1207,6 +1228,10 @@ es_context *es_computer_context(es_ermine *e, const char *id);
 int es_awaiting(es_ermine *e, const char *id);
 // status: the base's, then what features show (onStatus). x not there: 0 and *out has no state (NULL)
 int es_get_status(es_context *c, es_target x, es_status *out);
+// es_get_status, key the field wanted ("state", "error", "phase", "waiting", "n"; NULL: all): the
+// base reads only what that field takes, so a reader of it is told only when it may change. *out
+// holds that field, state with it
+int es_get_status_of(es_context *c, es_target x, const char *key, es_status *out);
 void es_status_free(es_status *s);
 // a computer's latest run (tracked); 1 and *out, 0: none. borrowed from runs.h
 int es_latest_run(es_ermine *e, const char *id, const crn_run **out);
@@ -1222,11 +1247,11 @@ int es_is_action(es_ermine *e, const char *id);
 void *es_action_held(es_ermine *e, const op_value *was);
 void es_action_let_go(es_ermine *e, void *held, const op_value *now);
 
-// fn as the value of the node at p, run by es_execute_action in a call scope under the owner's (the
+// fn as the value of the node at p, run by es_execute_action in a call frame under the owner's (the
 // one open). placed again by the same owner: the node as it is, the new fn. gone with the owner
 int es_create_action_at(es_context *c, es_at p, es_action fn, void *ctx, es_handle **out,
 	const ch_site *site);
-// the action at x called with args, in a call scope { caller: { node, actor }, handler, call }. its
+// the action at x called with args, in a call frame { caller: { node, actor }, handler, call }. its
 // return in *out (a promise is a value: the call lasts till it settles), the caller's to op_free
 // (NULL: none). nothing
 // there: a wait recorded, ES_PENDING (a memo or effect running it reruns when the action comes). a
@@ -1238,7 +1263,7 @@ int es_execute_action_at(es_context *c, es_target x, const op_value *const *args
 // in an action: who called it. 1 and *out, 0: not in one
 int es_get_caller(es_context *c, es_caller *out);
 // where the open call's caller is placed, as guard's caller hook has it (ctx: the context asking): the
-// nearest call scope's caller node, a process's at, the host's none. 1 and *from, *nfrom
+// nearest call frame's caller node, a process's at, the host's none. 1 and *from, *nfrom
 // (*from NULL: the host); 0: no call open. *box is core's hook's, never set here. the path is
 // the caller's context's own
 int es_caller_place(void *ctx, const char *const **from, size_t *nfrom, tb_key *box);
@@ -1249,11 +1274,6 @@ int es_add_teardown(es_context *c, es_teardown fn, void *ctx);
 // in an effect's act: fn(why) as the effect goes, and before its next act (the TypeScript's act returns
 // its cleanup; C's calls this). ES_NOT_HERE out of an act
 int es_cleanup(es_context *c, es_teardown fn, void *ctx);
-
-// marks: scopes that own nothing (a call's, a writer's call): what is made while one is open
-// belongs to the scope above it, and their info still rides on the writes made in them
-void es_mark(es_ermine *e, sc_scope *scope);
-int es_is_mark(es_ermine *e, sc_scope *scope);
 
 // createWriter: in setup or an action (not a memo, an effect or an act: ES_NOT_HERE), a writer for code that
 // runs with nothing open (a timer, a listener, a promise settling). *writer is a stand-in (a value,
@@ -1308,12 +1328,15 @@ void es_promise_then(es_promise *p,
 struct es_calls *es_calls_new(es_ermine *e, int keep);
 void es_calls_free(struct es_calls *x);
 unsigned es_calls_next(es_ermine *e);
-// call n begins in scope (its info { caller, handler, call: n }); the run open is the one it began in
-es_going *es_calls_begin(es_ermine *e, unsigned n, sc_scope *scope, const es_calling_view *base);
+// call n begins in frame (made alone, its info { caller, handler, call: n }, borrowing the values of
+// info): the record is theirs, and frees both; the run open is the one it began in
+struct call_info;
+es_going *es_calls_begin(es_ermine *e, unsigned n, sc_frame *frame, struct call_info *info,
+	const es_calling_view *base);
 // it returned (a promise: pending till it settles), threw, or threw PENDING
 void es_calls_end(es_ermine *e, es_going *g, const es_out *out);
-// the call being answered at scope (or the nearest above), its record so far; NULL: none
-int es_calls_calling(es_ermine *e, sc_scope *scope, es_calling_view *out);
+// the call being answered at frame (or the nearest under it), its record so far; NULL: none
+int es_calls_calling(es_ermine *e, sc_frame *frame, es_calling_view *out);
 // the call open now: the innermost, no run begun inside it
 es_going *es_calls_open(es_ermine *e);
 // a read function called: the open call's read (recorded once each)
@@ -1499,6 +1522,8 @@ char *es_path_key(const char *const *path, size_t n);
 op_value *es_error_value(const char *message);
 // a pair of a scope's info; NULL: none
 const void *es_pair_of(const sc_scope *o, const char *key);
+// a pair of a frame's info; NULL: none
+const void *es_frame_pair_of(const sc_frame *f, const char *key);
 // the id (and path of n, if it has one) as the policy is asked of it
 gd_thing es_thing_of(const char *id, const es_node_data *n);
 

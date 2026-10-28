@@ -1,0 +1,173 @@
+{
+	"title": "a read after a yield counts toward the order: the resumed run's read of X (a writer, not due) is a run value order learns from, so when s changes and both are due, X runs at rank 0 and G, which reads X, after it at rank 1",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": {
+				"actor": "test"
+			},
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"s": 1
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "compute",
+			"name": "X",
+			"scope": "o",
+			"to": "X",
+			"f": {
+				"sum": [
+					{
+						"read": "s"
+					},
+					{
+						"read": "s"
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "G",
+			"scope": "o",
+			"to": "G",
+			"f": {
+				"steps": [
+					{
+						"yield": "p"
+					},
+					{
+						"read": "X"
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "X",
+						"tick": 2
+					},
+					{
+						"due": "G",
+						"tick": 3
+					},
+					{
+						"starts": "X",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "X",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "G",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "G",
+						"run": 1,
+						"ended": "pending"
+					}
+				]
+			}
+		},
+		{
+			"op": "resolve",
+			"promise": "p",
+			"value": null,
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"reads": true,
+			"expect": {
+				"moments": [
+					{
+						"ends": "G",
+						"run": 1,
+						"ended": "done",
+						"equal": false,
+						"reads": [
+							"X"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"s": 5
+			},
+			"expect": {
+				"tick": 6
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "X",
+						"tick": 6
+					},
+					{
+						"starts": "X",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"due": "G",
+						"tick": 7,
+						"writer": "X"
+					},
+					{
+						"ends": "X",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "G",
+						"run": 2,
+						"rank": 1
+					},
+					{
+						"ends": "G",
+						"run": 2,
+						"ended": "pending"
+					}
+				]
+			}
+		}
+	]
+}

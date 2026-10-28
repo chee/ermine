@@ -50,6 +50,9 @@ int tg_track(tg_node *f, tg_node *t);
 void tg_end(tg_node *f);
 // in a run: it ends, no link dropped, the ones it did not reach after the cursor, old
 void tg_leave(tg_node *f);
+// outside a run: the run left goes on (a paused step's next): open again, its tick and cursor as
+// tg_leave left them, so its reads go on after the ones it made before. returns 0, or -2 in a run
+int tg_resume(tg_node *f);
 // a link from an earlier run that the latest run did not read: old (its run over). the next run
 // reading it takes it back; tg_trim lets the old ones go when a run is done
 bool tg_old(const tg_link *l);

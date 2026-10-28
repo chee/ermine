@@ -106,6 +106,8 @@ struct pt_step {
 	pt_spot *spot;
 	// the keys spot at this path
 	pt_spot *keys;
+	// the here spot at this path
+	pt_spot *here;
 };
 struct pt_root {
 	link link;
@@ -197,9 +199,10 @@ static pt_step *make_kid(pt_paths *p, pt_step *up, const op_key *k) {
 	return s;
 }
 
-static pt_spot *made(pt_paths *p, pt_root *r, pt_step *at, size_t length, int keys) {
+static pt_spot *made(pt_paths *p, pt_root *r, pt_step *at, size_t length, int keys, int here) {
 	pt_spot *s = grab(sizeof *s);
-	*s = (pt_spot){.source = r->source, .id = r->id, .length = length, .keys = keys, .step = at, .root = r};
+	*s = (pt_spot){.source = r->source, .id = r->id, .length = length, .keys = keys, .here = here,
+		.step = at, .root = r};
 	// the keys, the steps' own: they outlive the spot
 	op_key *path = grab(length * sizeof *path);
 	for (pt_step *x = at; x != NULL && x->up != NULL; x = x->up) path[--length] = x->key;
@@ -216,15 +219,15 @@ pt_spot *pt_spot_of(pt_paths *p, pt_key source, pt_key id, const op_key *path, s
 		pt_step *next = kid(p, at, &path[i]);
 		at = next != NULL ? next : make_kid(p, at, &path[i]);
 	}
-	pt_spot **here = keys ? &at->keys : &at->spot;
-	if (*here == NULL) *here = made(p, r, at, length, keys != 0);
-	return *here;
+	pt_spot **slot = keys == PT_HERE ? &at->here : keys ? &at->keys : &at->spot;
+	if (*slot == NULL) *slot = made(p, r, at, length, keys == PT_KEYS, keys == PT_HERE);
+	return *slot;
 }
 
 pt_spot *pt_change_of(pt_paths *p, pt_key source, pt_key id) {
 	pt_root *r = root(p, source, id, 1);
 	if (r->change == NULL) {
-		r->change = made(p, r, NULL, 0, 0);
+		r->change = made(p, r, NULL, 0, 0, 0);
 		r->change->change = 1;
 	}
 	return r->change;
@@ -286,11 +289,23 @@ static int keyed(const place *q, const op_key *path, size_t length) {
 	return 1;
 }
 
+// whether a place reaches a here read of path: at it or above it, or under it into a list
+static int placed(const place *q, const op_key *path, size_t length) {
+	if (q->length <= length) return hit(q, path, length);
+	if (q->path[length].type != OP_NUM_KEY) return 0;
+	for (size_t i = 0; i < length; i++)
+		if (!same(&path[i], &q->path[i])) return 0;
+	return 1;
+}
+
 int pt_marks(const op_patch *patch, const op_key *path, size_t length, int keys) {
 	place q[2];
 	size_t n = places(patch, q);
-	for (size_t i = 0; i < n; i++)
-		if (keys ? keyed(&q[i], path, length) : hit(&q[i], path, length)) return 1;
+	for (size_t i = 0; i < n; i++) {
+		const place *x = &q[i];
+		if (keys == PT_HERE ? placed(x, path, length) : keys ? keyed(x, path, length) : hit(x, path, length))
+			return 1;
+	}
 	return 0;
 }
 
@@ -307,6 +322,7 @@ static void give(pt_paths *p, pt_spot *s) {
 static void all(pt_paths *p, const pt_step *at) {
 	give(p, at->spot);
 	give(p, at->keys);
+	give(p, at->here);
 	for (pt_step *k = at->first; k != NULL; k = k->next) all(p, k);
 }
 // at's number kids from a on, up to b
@@ -320,6 +336,8 @@ static void mark_place(pt_paths *p, pt_root *r, const place *q) {
 	const pt_step *at = &r->top;
 	for (size_t i = 0; i < q->length; i++) {
 		give(p, at->spot);
+		// a here read of a list the place goes into
+		if (q->path[i].type == OP_NUM_KEY) give(p, at->here);
 		// a keys read one step above an unranged place
 		if (i == q->length - 1 && !q->ranged) give(p, at->keys);
 		if (i == q->length - 1 && shifts(q)) span(p, at, q->path[i].n + 1, 0, 1);
@@ -333,6 +351,7 @@ static void mark_place(pt_paths *p, pt_root *r, const place *q) {
 	}
 	give(p, at->spot);
 	give(p, at->keys);
+	give(p, at->here);
 	span(p, at, q->a, q->b, q->n != q->b - q->a);
 }
 
@@ -378,8 +397,10 @@ void pt_release(pt_paths *p, pt_spot *s) {
 	else {
 		pt_step *at = s->step;
 		if (s->keys) at->keys = NULL;
+		else if (s->here) at->here = NULL;
 		else at->spot = NULL;
-		while (at->up != NULL && at->spot == NULL && at->keys == NULL && at->first == NULL) {
+		while (at->up != NULL && at->spot == NULL && at->keys == NULL && at->here == NULL &&
+			at->first == NULL) {
 			pt_step *up = at->up;
 			if (at->prev != NULL) at->prev->next = at->next;
 			else up->first = at->next;
@@ -402,7 +423,8 @@ void pt_release(pt_paths *p, pt_spot *s) {
 		}
 	}
 	free_spot(p, s);
-	if (r->change != NULL || r->top.spot != NULL || r->top.keys != NULL || r->top.first != NULL)
+	if (r->change != NULL || r->top.spot != NULL || r->top.keys != NULL || r->top.here != NULL ||
+		r->top.first != NULL)
 		return;
 	del(&p->roots, &r->link);
 	free_root(p, r);
@@ -419,6 +441,7 @@ static void free_steps(pt_paths *p, pt_step *at) {
 		free(k);
 	}
 	if (at->spot != NULL) free_spot(p, at->spot);
+	if (at->here != NULL) free_spot(p, at->here);
 	if (at->keys != NULL) free_spot(p, at->keys);
 }
 void pt_free(pt_paths *p) {

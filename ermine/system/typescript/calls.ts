@@ -33,7 +33,7 @@ import type { Key as Step } from "@ermine/core/changeable/apply"
 import type { Fact, Id, Path, Places } from "@ermine/core/places"
 import type { Read, Write } from "@ermine/processes/runs"
 import { NODE } from "@ermine/core/places/header"
-import type { Scheduler, Scope } from "@ermine/core/scheduler"
+import type { Frame, Scheduler, Scope } from "@ermine/core/scheduler"
 import { isPromise } from "@ermine/core/scheduler/helpers"
 import type { Key, Table } from "@ermine/core/table"
 import type { ProcessContext } from "./context.ts"
@@ -95,15 +95,15 @@ export type Going = {
 export type Calls = {
 	// the next call's number, for its scope's info
 	next: () => number
-	// call n begins, scope its call scope (its info { caller, handler, call: n })
-	begin: (n: number, scope: Scope, base: Omit<Going["base"], "n" | "started">) => Going
+	// call n begins, frame its call's frame (its info { caller, handler, call: n })
+	begin: (n: number, frame: Frame, base: Omit<Going["base"], "n" | "started">) => Going
 	// it returned (a thenable: pending till it settles), threw, or threw PENDING
 	end: (g: Going, out: { returned: unknown } | { error: unknown } | { pending: true }) => void
 	// f run as call g's: it is the open call while f runs (a generator action's steps after the first
 	// are not inside the call that began it); a call already ended pending is held again after
 	during: <T>(g: Going, f: () => T) => T
-	// the call scope at or nearest above scope: the call being answered there, its record so far
-	calling: (scope: Scope | undefined) => Going["base"] | undefined
+	// the call's frame at or nearest above frame: the call being answered there, its record so far
+	calling: (frame: Frame | undefined) => Going["base"] | undefined
 	// the call open now: the innermost, no run begun inside it
 	open: () => Going | undefined
 	// a read function called: the open call's read
@@ -127,7 +127,7 @@ export function createCalls(setup: Setup): Calls {
 	const { scheduler: s, places, table } = setup
 	let n = 0
 	const stack: Going[] = []
-	const scopes = new WeakMap<Scope, Going>()
+	const frames = new WeakMap<Frame, Going>()
 	// the calls begun and not ended yet (a promise's till it settles)
 	const live = new Set<Going>()
 	// the calls ended pending (a promise out): their record is held again as their steps write
@@ -214,7 +214,7 @@ export function createCalls(setup: Setup): Calls {
 
 	return {
 		next: () => ++n,
-		begin(k, scope, base) {
+		begin(k, frame, base) {
 			const r = s.getRun()
 			const g: Going = {
 				n: k,
@@ -226,7 +226,7 @@ export function createCalls(setup: Setup): Calls {
 				made: [],
 			}
 			stack.push(g)
-			scopes.set(scope, g)
+			frames.set(frame, g)
 			live.add(g)
 			return g
 		},
@@ -254,9 +254,9 @@ export function createCalls(setup: Setup): Calls {
 				if (pending.has(g) && live.has(g)) record(g, "pending", {})
 			}
 		},
-		calling(scope) {
-			for (let o = scope; o !== undefined; o = o.parent) {
-				const g = scopes.get(o)
+		calling(frame) {
+			for (let o = frame; o !== undefined; o = o.parent) {
+				const g = frames.get(o)
 				if (g !== undefined) return g.base
 			}
 			return undefined

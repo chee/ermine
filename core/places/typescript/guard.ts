@@ -45,7 +45,7 @@ export class Refusal extends Error {
 
 export type Setup = {
 	places: Pick<Places, "readValue">
-	scheduler: Pick<Scheduler, "getCurrentScope">
+	scheduler: Pick<Scheduler, "getCurrentFrame">
 	table: Pick<Table, "get">
 	// none: everything is allowed
 	may?: Policy

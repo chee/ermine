@@ -217,6 +217,11 @@
 //                       throw there rejects it, PENDING lands pending. after an await nothing is
 //                       open: a scope, a cleanup on the scope open, an effect or a within there is
 //                       unscoped
+//   {"steps":[e..]}     a generator compute's body (chee 10-28): each in order; {"yield":p} in it
+//                       yields the promise named p (made as wait makes it) and takes what it
+//                       settles with; the last one's value is its result. the run pauses at a
+//                       yield (ends pending) and the same run goes on as p lands: reads after it are
+//                       that run's. due again while paused: the paused run is let go
 //   {"await":p}         the promise a {"wait":[p]} made, settled or not, as it is: awaited again,
 //                       by this run too. none: "no promise p"
 //   {"run":e}           e in run(the computation): untracked
@@ -522,6 +527,25 @@ function evaluate(e: Json, ctx: Ctx): unknown {
 			const promise = new Promise((resolve, reject) => promises.set(p, { resolve, reject }))
 			made.set(p, promise)
 			return a.length > 1 ? promise.then(() => evaluate(a[1], ctx)) : promise
+		}
+		// a generator: each in order, {"yield":p} yielding the promise named p (made as wait makes
+		// one) and taking what it settles with; the last's value is its return
+		case "steps": {
+			const list = a
+			return (function* () {
+				let last: unknown = null
+				for (const x of list) {
+					if (x !== null && typeof x === "object" && !Array.isArray(x) && "yield" in x) {
+						const p = evaluate((x as { yield: Json }).yield, ctx) as string
+						const promise = new Promise((resolve, reject) =>
+							promises.set(p, { resolve, reject })
+						)
+						made.set(p, promise)
+						last = yield promise
+					} else last = evaluate(x, ctx)
+				}
+				return last
+			})()
 		}
 		case "await": {
 			const p = evaluate(arg, ctx) as string

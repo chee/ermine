@@ -1,7 +1,9 @@
 // tracked paths: which reads a patch reaches (core/scheduler/fine-grained.md, the rule).
 // a spot is (source, id, path): a read of path in the value at that key, deep (the reader was
 // handed all under path). a keys spot is a read of which keys there are at path, not what is
-// under them (see keyed). spots are held by address, so a read of something not made yet has
+// under them (see keyed). a here spot is a read of what is at path itself, not under it: told by
+// a change at path or above it (or under it into a list, which changes the list), never by one
+// deeper in a map (see placed). spots are held by address, so a read of something not made yet has
 // one, and shared by everyone who reads the same path. each key has a trie of path steps; a
 // patch walks its own path, then marks what lies under it: O(|path| + marked).
 //
@@ -24,6 +26,8 @@ export type Spot<O> = {
 	path: readonly Key[] | null
 	// a read of the keys at path only
 	keys: boolean
+	// a read of what is at path only (a map as a map, not what is in it)
+	here: boolean
 	owner: O | undefined
 	// the mark call that last gave it, so a call gives it once
 	seen: number
@@ -42,6 +46,8 @@ type Step<O> = {
 	spot: Spot<O> | null
 	// the keys spot at this path
 	keys: Spot<O> | null
+	// the here spot at this path
+	here: Spot<O> | null
 }
 
 type Root<O> = { source: unknown; id: unknown; top: Step<O>; change: Spot<O> | null }
@@ -101,9 +107,18 @@ export function keyed(q: Place, path: readonly Key[]): boolean {
 	return Q.length === path.length + 1 && !q.range && path.every((k, i) => Q[i] === k)
 }
 
-// whether the patch marks a read of path (a keys read when keys): the rule, as a function
-export function marks(patch: Patch, path: readonly Key[], keys = false): boolean {
-	return places(patch).some((q) => keys ? keyed(q, path) : hit(q, path))
+// whether a place reaches a here read of path: the place at it or above it, or under it into a
+// list (a number step just past path)
+export function placed(q: Place, path: readonly Key[]): boolean {
+	const Q = q.path
+	if (Q.length <= path.length) return hit(q, path)
+	return typeof Q[path.length] === "number" && path.every((k, i) => Q[i] === k)
+}
+
+// whether the patch marks a read of path (a keys read when keys, a here read when here): the
+// rule, as a function
+export function marks(patch: Patch, path: readonly Key[], keys = false, here = false): boolean {
+	return places(patch).some((q) => keys ? keyed(q, path) : here ? placed(q, path) : hit(q, path))
 }
 
 // the first of the ordered nums with key >= a
@@ -118,7 +133,13 @@ function from<O>(nums: Step<O>[], a: number): number {
 }
 
 export function createPaths<O>(): {
-	spot: (source: unknown, id: unknown, path: readonly Key[], keys?: boolean) => Spot<O>
+	spot: (
+		source: unknown,
+		id: unknown,
+		path: readonly Key[],
+		keys?: boolean,
+		here?: boolean,
+	) => Spot<O>
 	change: (source: unknown, id: unknown) => Spot<O>
 	mark: (source: unknown, id: unknown, patches: Iterable<Patch>) => Spot<O>[]
 	event: (source: unknown, id: unknown) => Spot<O>[]
@@ -136,7 +157,7 @@ export function createPaths<O>(): {
 
 	const step = (key: Key | null, up: T | null): T => {
 		counts.steps++
-		return { key, up, kids: null, nums: null, spot: null, keys: null }
+		return { key, up, kids: null, nums: null, spot: null, keys: null, here: null }
 	}
 	function root(source: unknown, id: unknown, make: boolean): R | undefined {
 		let ids = roots.get(source)
@@ -147,13 +168,14 @@ export function createPaths<O>(): {
 		counts.keys++
 		return r
 	}
-	function made(r: R, path: readonly Key[] | null, at: T | null, keys = false): S {
+	function made(r: R, path: readonly Key[] | null, at: T | null, keys = false, here = false): S {
 		counts.spots++
 		return {
 			source: r.source,
 			id: r.id,
 			path,
 			keys,
+			here,
 			owner: undefined,
 			seen: 0,
 			step: at,
@@ -162,7 +184,13 @@ export function createPaths<O>(): {
 	}
 
 	// the spot of a read of path at (source, id): made or found
-	function spot(source: unknown, id: unknown, path: readonly Key[], keys = false): S {
+	function spot(
+		source: unknown,
+		id: unknown,
+		path: readonly Key[],
+		keys = false,
+		here = false,
+	): S {
 		const r = root(source, id, true)!
 		let at = r.top
 		for (const k of path) {
@@ -180,6 +208,7 @@ export function createPaths<O>(): {
 			at = next
 		}
 		if (keys) return at.keys ??= made(r, path, at, true)
+		if (here) return at.here ??= made(r, path, at, false, true)
 		return at.spot ??= made(r, path, at)
 	}
 
@@ -200,6 +229,7 @@ export function createPaths<O>(): {
 	function all(at: T) {
 		give(at.spot)
 		give(at.keys)
+		give(at.here)
 		if (at.kids !== null) { for (const kid of at.kids.values()) all(kid) }
 	}
 	// the kids of at, ordered, from a on, up to b when given
@@ -216,6 +246,8 @@ export function createPaths<O>(): {
 		let at: T = r.top
 		for (let i = 0; i < Q.length; i++) {
 			give(at.spot)
+			// a here read of a list a place goes into
+			if (typeof Q[i] === "number") give(at.here)
 			// a keys read one step above an unranged place
 			if (i === Q.length - 1 && !q.range) give(at.keys)
 			if (i === Q.length - 1 && shifts(q)) span(at, (Q[i] as number) + 1)
@@ -226,6 +258,7 @@ export function createPaths<O>(): {
 		if (!q.range) return all(at)
 		give(at.spot)
 		give(at.keys)
+		give(at.here)
 		const [a, b] = q.range
 		span(at, a, q.n === b - a ? b : Infinity)
 	}
@@ -258,10 +291,14 @@ export function createPaths<O>(): {
 			r.change = null
 		} else {
 			let at = s.step!
-			if ((s.keys ? at.keys : at.spot) !== s) return
+			if ((s.keys ? at.keys : s.here ? at.here : at.spot) !== s) return
 			if (s.keys) at.keys = null
+			else if (s.here) at.here = null
 			else at.spot = null
-			while (at.up !== null && at.spot === null && at.keys === null && at.kids === null) {
+			while (
+				at.up !== null && at.spot === null && at.keys === null && at.here === null &&
+				at.kids === null
+			) {
 				const up: T = at.up
 				up.kids!.delete(at.key!)
 				if (up.kids!.size === 0) up.kids = null
@@ -275,7 +312,10 @@ export function createPaths<O>(): {
 		}
 		counts.spots--
 		const top = r.top
-		if (r.change !== null || top.spot !== null || top.keys !== null || top.kids !== null) return
+		if (
+			r.change !== null || top.spot !== null || top.keys !== null || top.here !== null ||
+			top.kids !== null
+		) return
 		const ids = roots.get(r.source)!
 		ids.delete(r.id)
 		if (ids.size === 0) roots.delete(r.source)

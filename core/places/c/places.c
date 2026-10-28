@@ -538,6 +538,16 @@ const op_value *pl_read(pl *l, tb_key part, tb_key id, const op_key *path, size_
 	return node != NULL ? pl_at(node->value, path, n, &l->s->scratch) : NULL;
 }
 
+static const op_value a_map = {.type = OP_MAP};
+const op_value *pl_a_map(void) { return &a_map; }
+
+const op_value *pl_read_here(pl *l, tb_key part, tb_key id, const op_key *path, size_t n) {
+	if (!l->s->peeping) tell(l, pt_spot_of(l->s->paths, pair_key(l, part), paths_key(id), path, n, PT_HERE));
+	const nd_entry *node = tb_get(l->s->table, part, id);
+	const op_value *v = node != NULL ? pl_at(node->value, path, n, &l->s->scratch) : NULL;
+	return v != NULL && v->type == OP_MAP ? &a_map : v;
+}
+
 const ch_header *pl_change(pl *l, tb_key part, tb_key id) {
 	if (!l->s->peeping) tell(l, pt_change_of(l->s->paths, pair_key(l, part), paths_key(id)));
 	const nd_entry *node = tb_get(l->s->table, part, id);
@@ -1492,9 +1502,11 @@ void pl_sweep(pl *l) {
 
 // who ------------------------------------------------------------------------------------------
 
-// the scheduler's own pairs, run and mark: numbers it keeps as uint64_t
-static int scheduler_own(const sc_pair *p) {
-	return strcmp(p->key, "run") == 0 || strcmp(p->key, "mark") == 0;
+// the scheduler's own pairs: a scope's frame's run and mark, a step's frame's step; numbers it keeps as
+// uint64_t
+static int scheduler_own(const sc_pair *p, int kind) {
+	if (kind == 2) return strcmp(p->key, "step") == 0;
+	return kind == 1 && (strcmp(p->key, "run") == 0 || strcmp(p->key, "mark") == 0);
 }
 
 // who a write is, as levels are seen: the metadata so far (a map), the actor and reader found
@@ -1505,13 +1517,14 @@ typedef struct {
 	bool shown;
 } seeing;
 
-// one level's pairs. a scope's (scoped): its run and mark as numbers. a key already in the
+// one level's pairs. kind: 1 a scope's own frame (its run and mark are numbers), 2 a paused step's (its
+// step is), else 0. a key already in the
 // metadata is an inner level's: it stays. whether they hold PL_NODE
-static bool see(seeing *w, const sc_pair *pairs, size_t n, bool scoped) {
+static bool see(seeing *w, const sc_pair *pairs, size_t n, int kind) {
 	bool node = false;
 	for (size_t i = 0; i < n; i++) {
 		const sc_pair *p = &pairs[i];
-		op_value *v = scoped && scheduler_own(p) ? op_num((double)*(const uint64_t *)p->value)
+		op_value *v = scheduler_own(p, kind) ? op_num((double)*(const uint64_t *)p->value)
 		                                         : op_ref((op_value *)p->value);
 		if (w->actor == NULL && strcmp(p->key, "actor") == 0) w->actor = op_ref(v);
 		if (w->reader == NULL && strcmp(p->key, "reader") == 0 && v->type == OP_STR)
@@ -1523,17 +1536,17 @@ static bool see(seeing *w, const sc_pair *pairs, size_t n, bool scoped) {
 	return node;
 }
 
-// levels, innermost first: extra, the scope open, its parents to the root. metadata: one map, inner
-// keys over outer, up to and with the first scope whose own pairs hold PL_NODE. 0: no scope open,
+// levels, innermost first: extra, the frame open, the frames under it to the top. metadata: one map, inner
+// keys over outer, up to and with the first frame whose own pairs hold PL_NODE. 0: no frame open,
 // nothing made
 static bool who_of(pl *l, const sc_pair *extra, size_t n, seeing *w) {
-	sc_scope *o = sc_get_current_scope(l->s->scheduler);
+	sc_frame *o = sc_get_current_frame(l->s->scheduler);
 	if (o == NULL) return false;
 	*w = (seeing){.metadata = op_map(), .shown = true};
-	see(w, extra, n, false);
-	for (; o != NULL; o = sc_scope_parent(o)) {
-		const sc_info *info = sc_scope_info(o);
-		if (info != NULL && see(w, info->pairs, info->n, true)) w->shown = false;
+	see(w, extra, n, 0);
+	for (; o != NULL; o = sc_frame_parent(o)) {
+		const sc_info *info = sc_frame_info(o);
+		if (info != NULL && see(w, info->pairs, info->n, sc_frame_scope(o) != NULL ? 1 : sc_frame_step(o) ? 2 : 0)) w->shown = false;
 	}
 	return true;
 }

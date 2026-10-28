@@ -10,6 +10,7 @@ import {
 	patch,
 	peep,
 	PENDING,
+	place,
 	read,
 	readAttributes,
 	ref,
@@ -113,6 +114,8 @@ export default function program() {
 	const order = ensureNode("./order", [])
 	ensureNode("./cells", {})
 	ensureNode("./values", {})
+	// the computed cells' memos, inside this process's own node (placed at ./values/<name> too)
+	ensureNode("values", {})
 	const flow = ensureNode("./flow", {})
 	ensureNode("./cache", {})
 	const builds = makeBuilds(["cache"])
@@ -255,11 +258,9 @@ export default function program() {
 			if (n.reads) reads = n.reads.filter((r) => r !== name)
 			else if (c?.outcome === "hit" || c?.outcome === "miss") {
 				const entry = `./cache/${c.key}/${c.entry}`
-				const trace = (hasNode(entry)
-					? peep(() => readAttributes(entry, [TRACE]))
-					: undefined) as
-						| [string, unknown, (string | number)[], string | null][]
-						| undefined
+				const trace = (hasNode(entry) ? peep(() => readAttributes(entry, [TRACE])) : undefined) as
+					| [string, unknown, (string | number)[], string | null][]
+					| undefined
 				reads = []
 				for (const [part, id, path] of trace ?? []) {
 					const r = String(path[0])
@@ -336,7 +337,10 @@ export default function program() {
 		const made: string[] = []
 		for (const [id, name, kind] of read(running) as [string, string, string][]) {
 			if (COMPUTED.has(kind)) {
-				createMemo(`/values/${name}`, () => evaluate(id, kind), { equal: sameBytes })
+				// made inside the process's own node (a memo lives inside what made it), and placed at
+				// /values/<name> too, where cell() reads every cell's value
+				const m = createMemo(`values/${name}`, () => evaluate(id, kind), { equal: sameBytes })
+				if (!peep(() => hasNode(`/values/${name}`))) place(`/values/${name}`, m)
 			}
 			made.push(name)
 		}
@@ -390,7 +394,7 @@ export default function program() {
 	createAction("on/remove", (id: string) => {
 		const name = peep(() => nameOf(id))
 		uncache(name)
-		if (!COMPUTED.has(get<string>(at(id), ["kind"]))) unplace(`/values/${name}`)
+		unplace(`/values/${name}`)
 		lastOut.delete(id)
 		missed.delete(id)
 		put(order, get<string[]>(order).filter((x) => x !== id))
@@ -429,6 +433,8 @@ export default function program() {
 		if (!computed && peep(() => list("/values")).includes(old)) {
 			rename(`/values/${old}`, `/values/${name}`)
 		}
+		// a computed cell's memo is made again at its new name; its old name here goes
+		if (computed) unplace(`/values/${old}`)
 		patch(at(id), [{ path: ["name"], value: name }])
 		patch(flow, [{ path: [old] }])
 	})
@@ -858,9 +864,7 @@ function markdown(text: string) {
 		if (h && lines.length === 1) out.push(`<h${h[1].length}>${inline(h[2])}</h${h[1].length}>`)
 		else if (lines.every((l) => /^\s*[-*]\s/.test(l))) {
 			out.push(
-				`<ul>${
-					lines.map((l) => `<li>${inline(l.replace(/^\s*[-*]\s/, ""))}</li>`).join("")
-				}</ul>`,
+				`<ul>${lines.map((l) => `<li>${inline(l.replace(/^\s*[-*]\s/, ""))}</li>`).join("")}</ul>`,
 			)
 		} else if (lines.every((l) => l.startsWith(">"))) {
 			out.push(`<blockquote>${inline(lines.map((l) => l.slice(1)).join(" "))}</blockquote>`)

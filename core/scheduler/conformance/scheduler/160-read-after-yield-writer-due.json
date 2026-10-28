@@ -1,0 +1,169 @@
+{
+	"title": "a read after a yield whose writer is due [chee 10-28: the TypeScript is right]: the resumed run stops there (ends stopped, waiting on the writer, not done with the old value), the writer runs, and the computer runs again from the generator's start, after it",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": {
+				"actor": "test"
+			},
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"s": 1
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "compute",
+			"name": "X",
+			"scope": "o",
+			"to": "X",
+			"f": {
+				"sum": [
+					{
+						"read": "s"
+					},
+					{
+						"read": "s"
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "G",
+			"scope": "o",
+			"to": "G",
+			"f": {
+				"steps": [
+					{
+						"yield": "p"
+					},
+					{
+						"read": "X"
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "X",
+						"tick": 2
+					},
+					{
+						"due": "G",
+						"tick": 3
+					},
+					{
+						"starts": "X",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "X",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "G",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "G",
+						"run": 1,
+						"ended": "pending"
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"s": 5
+			},
+			"expect": {
+				"tick": 5
+			}
+		},
+		{
+			"op": "resolve",
+			"promise": "p",
+			"value": null,
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"reads": true,
+			"expect": {
+				"moments": [
+					{
+						"due": "X",
+						"tick": 5
+					},
+					{
+						"ends": "G",
+						"run": 1,
+						"ended": "stopped",
+						"waits": "X",
+						"reads": [
+							"X"
+						]
+					},
+					{
+						"starts": "X",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "X",
+						"run": 2,
+						"ended": "done",
+						"equal": false,
+						"reads": [
+							"s",
+							"s"
+						]
+					},
+					{
+						"starts": "G",
+						"run": 2,
+						"rank": 1
+					},
+					{
+						"ends": "G",
+						"run": 2,
+						"ended": "pending",
+						"reads": []
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"key": "G",
+			"expect": {
+				"value": null
+			}
+		}
+	]
+}

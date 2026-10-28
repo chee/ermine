@@ -1,5 +1,5 @@
 {
-	"title": "a call's mark lasts as its record does [marks 10-27], but owns nothing: a handler returning a promise keeps its record pending till it settles; the memo it made belongs to the scope that placed the action, so it is still there when the promise settles and the call ends, and goes when that scope does. a handler returning at once: nothing goes at the call's end either. a second call that makes the same memo again: already-there (it is the scope's, made once). (a teardown added in an action throws: scenario 95)",
+	"title": "a call's mark lasts as its record does [marks 10-27], but owns nothing: a handler returning a promise keeps its record pending till it settles; the memo it made (inside the process, by a bare name: inside-only 10-28) belongs to the scope that placed the action, so it is still there when the promise settles and the call ends, and goes when that scope does. a handler returning at once: nothing goes at the call's end either. a second call that makes the same memo again: already-there (it is the scope's, made once). (a teardown added in an action throws: scenario 95)",
 	"steps": [
 		{
 			"op": "ermine",
@@ -17,7 +17,7 @@
 							{
 								"do": [
 									"createMemo",
-									"/made",
+									"made",
 									{},
 									42
 								]
@@ -83,7 +83,7 @@
 					"writes": [
 						[
 							"children",
-							"R"
+							"proc:svc"
 						],
 						[
 							"attributes",
@@ -103,7 +103,7 @@
 			"op": "host",
 			"call": [
 				"read",
-				"/made"
+				"/code/svc/made"
 			],
 			"expect": {
 				"value": 42
@@ -131,7 +131,7 @@
 					"writes": [
 						[
 							"children",
-							"R"
+							"proc:svc"
 						],
 						[
 							"attributes",
@@ -151,7 +151,7 @@
 			"op": "host",
 			"call": [
 				"hasNode",
-				"/made"
+				"/code/svc/made"
 			],
 			"expect": {
 				"value": true
@@ -184,7 +184,7 @@
 			"op": "host",
 			"call": [
 				"read",
-				"/made"
+				"/code/svc/made"
 			],
 			"expect": {
 				"value": 42
@@ -200,7 +200,7 @@
 			"op": "host",
 			"call": [
 				"hasNode",
-				"/made"
+				"/code/svc/made"
 			],
 			"expect": {
 				"value": false

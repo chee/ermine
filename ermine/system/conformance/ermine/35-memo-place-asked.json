@@ -1,5 +1,5 @@
 {
-	"title": "a memo's or effect's node is placed as open places one: the slot asked \"place\" (a policy refusing places under /secret refuses memo(\"/secret/new\") as it refuses open(\"/secret/b\")); its own writes after, as ever, not asked (tippi's probe, 10-25)",
+	"title": "a memo or effect is made inside its maker [inside-only, 10-28: chee \"maybe subcomputations can't live alone but subprocesses can?\"]: a process's memo(\"/secret/new\") is refused outside before its slot is asked (the policy refusing places under /secret never reached); a bare name lands in its own node, as ever not asked",
 	"steps": [
 		{
 			"op": "ermine",
@@ -57,7 +57,7 @@
 			"expect": {
 				"status": {
 					"state": "failed",
-					"error": "place refused: denied"
+					"error": "outside: createMemo(\"/secret/new\"): made outside its maker, it would outlive it"
 				}
 			}
 		},

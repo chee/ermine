@@ -41,6 +41,8 @@ typedef struct {
 	int change;
 	// a read of the keys at path only
 	int keys;
+	// a read of what is at path itself only (a map as a map, not what is in it)
+	int here;
 	void *owner;
 	// the mark call that last gave it, so a call gives it once
 	uint64_t seen;
@@ -53,8 +55,14 @@ pt_paths *pt_new(void);
 // frees it and every spot
 void pt_free(pt_paths *p);
 
+// what a spot reads (pt_spot_of's and pt_marks' keys): all under path, the keys at path, or what
+// is at path itself: told by a place at path or above it, or under it into a list (a number step
+// just past path), never by one deeper in a map
+enum { PT_ALL = 0, PT_KEYS = 1, PT_HERE = 2 };
+
 // the spot of a read of path at (source, id): made or found. path: number and string keys only.
-// keys: the spot of a read of the keys at path (a separate spot from the plain one)
+// keys: PT_KEYS, the spot of a read of the keys at path; PT_HERE, of what is at path itself (each
+// a separate spot from the plain one)
 pt_spot *pt_spot_of(pt_paths *p, pt_key source, pt_key id, const op_key *path, size_t length,
 	int keys);
 // the change spot at (source, id): made or found
@@ -75,7 +83,8 @@ void pt_release(pt_paths *p, pt_spot *s);
 // whether the patch marks a read of path: the rule, as a function. keys: a keys read of path,
 // reached where a read of path would be (a place at it or above it), and below it only by a place
 // exactly one step down and unranged (a key set, removed, taken or landed); deeper, or ranged into
-// a key's value, it is not
+// a key's value, it is not. PT_HERE: a here read of path, reached where a read of path would be,
+// and below it only by a place going into a list (its step just past path a number)
 int pt_marks(const op_patch *patch, const op_key *path, size_t length, int keys);
 
 // what is held: keys with a spot, spots, trie steps (a held key's [] and every other prefix of a

@@ -140,10 +140,23 @@ export type Info = {
 // it; older and newer, the one made before and after it under the same scope), and its teardowns;
 // its info: the object given (never change it); the tree is parent. a computer's: its own, run
 // and mark set in it as each run starts
+// a frame: what a change made now is made as (its info: a process, a run, a call, a step), and
+// the frame it is under: a logical call stack, apart from what owns what [chee 10-28: "we have
+// ownershipScope and provenanceScope, and i think a new ownerScope always creates a new
+// provenanceScope but provenanceCopes can also be created on their own"; named: "let's just go
+// with scope and frame for now"]. it owns nothing: a scope has one of its own, and one can be made
+// alone (an action's call, a writer's run, a step)
+export type Frame = {
+	readonly info: Info
+	readonly parent: Frame | undefined
+}
+
 export type Scope = {
 	readonly n: number
 	readonly parent: Scope | undefined
 	readonly info: Info
+	// its own frame: its info, under its parent's frame
+	readonly frame: Frame
 	newest: Scope | undefined
 	older: Scope | undefined
 	newer: Scope | undefined
@@ -269,12 +282,42 @@ type Ran = {
 	stopped?: Computer
 	loop?: Computer[]
 	cut?: boolean
+	// a generator compute's generator, while it is paused at a promise
+	paused?: Gen
 }
 // an act, at its place in its queue (at)
 type Act = { r: Ran; value: unknown; at: number }
 // acts in the order queued, from head; one taken out leaves a hole (live: how many are not holes)
 type Queue = { items: (Act | undefined)[]; head: number; live: number }
 type Out = { value: unknown } | { error: unknown }
+
+// a generator compute (f a function*) [chee 10-28: "do the generator computes too"]: its run steps
+// the generator; a yielded promise pauses the run (pending), and as it settles the same run goes
+// on: its reads tracked for that run, each step in a frame of its own under the computer's. a
+// plain value yielded comes straight back. run again (or gone) while paused: the generator is let
+// go then, its promise settled or not (returned, nothing open), and the next run starts it again
+type Gen = Generator<unknown, unknown, unknown>
+const isGen = (v: unknown): v is Gen => Object.prototype.toString.call(v) === "[object Generator]"
+// a generator paused at a promise
+class Paused {
+	constructor(readonly gen: Gen, readonly p: PromiseLike<unknown>) {}
+}
+// gen stepped from input (thrown: into it) till it ends or yields a promise
+function advance(gen: Gen, input: unknown, threw: boolean): unknown {
+	for (;;) {
+		const step = threw ? gen.throw(input) : gen.next(input)
+		if (step.done) return step.value
+		if (isPromise(step.value)) return new Paused(gen, step.value)
+		input = step.value
+		threw = false
+	}
+}
+// a generator let go: its finally blocks run, with nothing open; what they throw is dropped
+function quit(gen: Gen) {
+	try {
+		gen.return(undefined)
+	} catch { /* let go */ }
+}
 
 // listeners, each told in the order added; adding gives back the remove
 function told<A extends unknown[]>() {
@@ -348,7 +391,9 @@ export function createScheduler(): Scheduler {
 	const acts: Queue = { items: [], head: 0, live: 0 }
 	const earlies: Queue = { items: [], head: 0, live: 0 }
 	// settled promises from landedHead on; one landed leaves a hole
-	const landed: ({ r: Ran; out: Out } | undefined)[] = []
+	const landed: ({ r: Ran; out: Out; gen?: Gen } | undefined)[] = []
+	// the steps of generator computes, each a frame's number
+	let steps = 0
 	let landedHead = 0
 	// the computers with cleanups queued, for once the round's runs are done (runQueuedCleanups)
 	const queued: Computer[] = []
@@ -364,8 +409,9 @@ export function createScheduler(): Scheduler {
 	// made then carries its cause)
 	let reading: Ran | undefined
 	let running: Ran | undefined
-	// what is open: the scope, and who a change made now is by; none: undefined
-	let open: { scope: Scope; by?: By } | undefined
+	// what is open: the scope (what is made now is under it), the frame (what a change made now is
+	// made as: the scope's own, or one made alone), and who a change made now is by; none: undefined
+	let open: { scope: Scope; frame: Frame; by?: By } | undefined
 	// the first error a listener, or a cleanup after a run, threw: held while what was going on
 	// finishes, then it comes out ("finish, then rethrow"); each of those a bracket of its own
 	let thrown: { error: unknown } | undefined
@@ -409,6 +455,7 @@ export function createScheduler(): Scheduler {
 			n: ++made,
 			parent: up,
 			info,
+			frame: { info, parent: up?.frame },
 			newest: undefined,
 			older: undefined,
 			newer: undefined,
@@ -466,10 +513,17 @@ export function createScheduler(): Scheduler {
 		return grow(up, info)
 	}
 
-	// the info of a write made now: the scope open's own, live (a computer's changes as its runs
+	// the info of a write made now: the frame open's own, live (a computer's changes as its runs
 	// start): read it now, do not keep it; nothing open: undefined
 	function getInfo(): Info | undefined {
-		return open?.scope.info
+		return open?.frame.info
+	}
+
+	// a frame of its own, under up (none given: the frame open; nothing open: at the top). no keys:
+	// empty
+	function createFrame(info: Info, up?: Frame): Frame {
+		if (blank(info)) throw empty()
+		return { info, parent: up ?? open?.frame }
 	}
 
 	// the run a change made now is by: in a run, that run; in a computer's set, act or teardown,
@@ -482,6 +536,7 @@ export function createScheduler(): Scheduler {
 	// a teardown opens its scope: a computer's by it, any other's by the run open
 	const opens = (o: Scope) => ({
 		scope: o,
+		frame: o.frame,
 		by: "kind" in o ? o as Computer : open?.by,
 	})
 
@@ -549,12 +604,14 @@ export function createScheduler(): Scheduler {
 	}
 
 	// an old child of the run open's computer, claimed: back under it, the newest, and due (a
-	// tick, told as a mark with no keys, by the run open). not old: false
-	function claim(c: Computer, as?: As): boolean {
+	// tick, told as a mark with no keys, by the run open) unless told not (made again the same: a
+	// name's nominal match, as Adapton's). not old: false
+	function claim(c: Computer, as?: As, again = true): boolean {
 		if (!c.old || c.state !== "alive") return false
 		if (as !== undefined) become(c, as)
 		unlink(c)
 		link(c.parent!, c)
+		if (!again) return true
 		// as a computer made: in a run known to loop, the loop is cut there
 		if (running?.loop) running.cut = true
 		const t = ++tick
@@ -680,7 +737,8 @@ export function createScheduler(): Scheduler {
 		o.teardowns = []
 		const failed = down(o, cut(o), fs)
 		o.state = "gone"
-		// gone: as the run of a change it names none
+		// gone: as the run of a change it names none; a paused run of it let go
+		if (c?.ran?.paused !== undefined) letGo(c.ran)
 		if (c) c.ran = undefined
 		unlink(o)
 		return failed
@@ -750,6 +808,7 @@ export function createScheduler(): Scheduler {
 			n: ++made,
 			parent: o,
 			info: undefined,
+			frame: undefined,
 			newest: undefined,
 			older: undefined,
 			newer: undefined,
@@ -794,7 +853,8 @@ export function createScheduler(): Scheduler {
 		if (running?.loop) running.cut = true
 		// its info, the one object it keeps: what was given, and the tick that made it due (its making)
 		const t = ++tick
-		;(c as { info: Info }).info = { ...info, mark: t }
+		;(c as { info: Info }).info = { ...info, mark: t } // its frame: that same info object, under its owner's frame
+		;(c as { frame: Frame }).frame = { info: c.info, parent: o.frame }
 		const now = due(c, t, running) ? [c] : []
 		const outer = thrown
 		thrown = undefined
@@ -982,6 +1042,8 @@ export function createScheduler(): Scheduler {
 			loop: c.loop,
 		}
 		c.loop = undefined
+		// its last run paused at a promise: let go, run again before the promise settles
+		if (c.ran?.paused !== undefined) letGo(c.ran)
 		c.ran = r
 		// an effect acts on its latest run's value only
 		if (c.acting) unact(c)
@@ -1008,9 +1070,10 @@ export function createScheduler(): Scheduler {
 		tracker.begin(c.node)
 		// enter's bracket, written out: no closure per run
 		const wasOpen = open
-		open = { scope: c, by: own }
+		open = { scope: c, frame: c.frame, by: own }
 		try {
 			value = c.f(c.last?.value)
+			if (isGen(value)) value = advance(value, undefined, false)
 		} catch (e) {
 			if (e === PENDING) value = PENDING
 			else failed = { error: e }
@@ -1021,12 +1084,95 @@ export function createScheduler(): Scheduler {
 			// what it did not reach stays, old, till it ends: trimmed if done (finish), else held
 			tracker.leave(c.node)
 		}
-		if (c.state !== "alive") return
+		ended(r, value, failed)
+	}
+
+	// r's paused generator let go, as nothing is open (its finally blocks: no run, no scope)
+	function letGo(r: Ran) {
+		const gen = r.paused
+		if (gen === undefined) return
+		r.paused = undefined
+		const wasOpen = open
+		const was = reading
+		const wasRunning = running
+		open = undefined
+		reading = running = undefined
+		try {
+			quit(gen)
+		} finally {
+			open = wasOpen
+			reading = was
+			running = wasRunning
+		}
+	}
+
+	// what a run's body (or a generator's step) came to
+	function ended(r: Ran, value: unknown, failed: { error: unknown } | undefined) {
+		const c = r.c
+		if (c.state !== "alive") return value instanceof Paused ? quit(value.gen) : undefined
 		if (r.stopped) return stop(r)
 		if (failed) return finish(r, "failed", failed)
 		if (value === PENDING) return finish(r, "pending")
+		if (value instanceof Paused) return paused(r, value)
 		if (isPromise(value)) return awaiting(r, value)
 		result(r, value)
+	}
+
+	// a generator paused at a promise: the run ends pending; as the promise settles, unless run
+	// again or gone since, its next step goes at the next pulse
+	function paused(r: Ran, w: Paused) {
+		r.paused = w.gen
+		finish(r, "pending")
+		const settle = (out: Out) => {
+			// let go already (run again, or gone): nothing more
+			if (r.paused !== w.gen) return
+			if (r.c.state !== "alive" || r.c.runs !== r.n) return letGo(r)
+			landed.push({ r, out, gen: w.gen })
+			escaped ??= settles.tell()
+		}
+		Promise.resolve(w.p).then(
+			(value) => settle({ value }),
+			(error) => settle({ error }),
+		)
+	}
+
+	// the same run goes on: the generator's next step, given what its promise settled with, its
+	// reads tracked for r, in a frame of its own under the computer's. run again or gone since:
+	// let go
+	function resume(r: Ran, gen: Gen, out: Out) {
+		const c = r.c
+		if (r.paused !== gen) return
+		if (c.state !== "alive" || c.runs !== r.n || order.has(c)) return letGo(r)
+		r.paused = undefined
+		// the reads it made before go on, joined by this step's, in a list of its own: the order
+		// learns from a list it has not seen (order.sees), so a read after a yield counts toward ranks
+		r.values = r.values.slice()
+		const outer = thrown
+		thrown = undefined
+		try {
+			let value: unknown
+			let failed: { error: unknown } | undefined
+			const was = reading
+			const wasRunning = running
+			reading = running = r
+			tracker.resume(c.node)
+			const wasOpen = open
+			open = { scope: c, frame: { info: { step: ++steps }, parent: c.frame }, by: r.own }
+			try {
+				value = "error" in out ? advance(gen, out.error, true) : advance(gen, out.value, false)
+			} catch (e) {
+				if (e === PENDING) value = PENDING
+				else failed = { error: e }
+			} finally {
+				open = wasOpen
+				reading = was
+				running = wasRunning
+				tracker.leave(c.node)
+			}
+			ended(r, value, failed)
+		} finally {
+			rethrow(outer)
+		}
 	}
 
 	function stop(r: Ran) {
@@ -1075,7 +1221,7 @@ export function createScheduler(): Scheduler {
 		const wasOpen = open
 		reading = undefined
 		running = r
-		open = { scope: c, by: c }
+		open = { scope: c, frame: c.frame, by: c }
 		try {
 			;(c.set as (value: unknown) => void)(v)
 		} catch (e) {
@@ -1246,7 +1392,7 @@ export function createScheduler(): Scheduler {
 		c.cleaned = false
 		c.doing = true
 		const wasOpen = open
-		open = { scope: c, by: c }
+		open = { scope: c, frame: c.frame, by: c }
 		try {
 			const effect = c.effect as (value: unknown, previous: unknown) => void
 			effect(a.value, c.last?.value)
@@ -1276,9 +1422,10 @@ export function createScheduler(): Scheduler {
 			for (;;) {
 				// by a head, each taken out as it lands (shift is linear: many settled at once)
 				while (landedHead < landed.length) {
-					const { r, out } = landed[landedHead]!
+					const { r, out, gen } = landed[landedHead]!
 					landed[landedHead++] = undefined
-					land(r, out)
+					if (gen !== undefined) resume(r, gen, out)
+					else land(r, out)
 				}
 				landed.length = landedHead = 0
 				if (!order.size() && !earlies.live && !acts.live) break
@@ -1323,14 +1470,28 @@ export function createScheduler(): Scheduler {
 		swept = nodes.size
 	}
 
-	// once, untracked, with o open, the run open the same: a setup, a host's write, a call. its
-	// throw is the caller's
+	// once, untracked, with o open and its own frame, the run open the same: a setup, a host's
+	// write. its throw is the caller's
 	function runWithScope<T>(o: Scope, f: () => T): T {
+		// runWith's, written out: no frame more on the stack (sites look a few up for the caller)
 		if (o.state !== "alive") throw disposed()
 		const was = reading
 		reading = undefined
 		try {
-			return enter({ scope: o, by: open?.by }, f)
+			return enter({ scope: o, frame: o.frame, by: open?.by }, f)
+		} finally {
+			reading = was
+		}
+	}
+
+	// runWithScope with frame open, not o's own: a call, a writer's run, a step. what is made is
+	// o's; what a change is made as, frame's
+	function runWith<T>(o: Scope, frame: Frame, f: () => T): T {
+		if (o.state !== "alive") throw disposed()
+		const was = reading
+		reading = undefined
+		try {
+			return enter({ scope: o, frame, by: open?.by }, f)
 		} finally {
 			reading = was
 		}
@@ -1340,7 +1501,10 @@ export function createScheduler(): Scheduler {
 		createRootScope: (info: Info) => grow(undefined, info),
 		createScope,
 		runWithScope,
+		runWith,
+		createFrame,
 		getCurrentScope: () => open?.scope,
+		getCurrentFrame: () => open?.frame,
 		getInfo,
 		getRun,
 		registerTeardown,
@@ -1400,8 +1564,14 @@ export type Scheduler = {
 	createRootScope: (info: Info) => Scope
 	createScope: (info: Info, parent?: Scope) => Scope
 	runWithScope: <T>(o: Scope, f: () => T) => T
+	// f with o open and frame open (not o's own): what is made is o's, a change made is frame's
+	runWith: <T>(o: Scope, frame: Frame, f: () => T) => T
+	// a frame alone (an action's call, a writer's run, a step), under up (none: the frame open)
+	createFrame: (info: Info, up?: Frame) => Frame
 	// the scope open now; none: undefined
 	getCurrentScope: () => Scope | undefined
+	// the frame open now (the scope open's own, or one run with it); none: undefined
+	getCurrentFrame: () => Frame | undefined
 	// the info open, live: read it now, do not keep it
 	getInfo: () => Info | undefined
 	getRun: () => Run | undefined
@@ -1411,7 +1581,8 @@ export type Scheduler = {
 	// owner and due. not old (made or claimed in this run already, or no run of its owner since):
 	// false. as: it takes that code and kind (a compute made again as an effect, or the reverse;
 	// become, above)
-	claim: (c: Computer, as?: As) => boolean
+	// again false: claimed, not made due (it runs when what it read changes)
+	claim: (c: Computer, as?: As, again?: boolean) => boolean
 	createComputer: <T>(
 		f: (previous: T | undefined) => T | PromiseLike<T> | typeof PENDING,
 		set: (value: T) => void,

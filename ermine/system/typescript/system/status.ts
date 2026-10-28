@@ -6,6 +6,7 @@ import {
 	TABLE as STATUS_TABLE,
 } from "@ermine/core/places/status"
 import { PENDING } from "@ermine/core/scheduler"
+import type { Field, Run } from "@ermine/processes/runs"
 import type { Inner, NodeData, Patch, Target } from "../context.ts"
 import { go } from "../acting.ts"
 import { marked } from "../site.ts"
@@ -17,20 +18,25 @@ import { type Status, type System, WAITING, type Waiting } from "./shapes.ts"
 
 // public (mod.ts exports them): each runs its implementation below, named with As, as the
 // context it finds (acting.ts' go)
-export const getStatus: System["getStatus"] = /* @__PURE__ */ marked((x) =>
-	go("getStatus", false, getStatusAs, x)
-)
+export const getStatus = /* @__PURE__ */ marked((x: Target, key?: string) =>
+	go("getStatus", false, getStatusAs, x, key)
+) as System["getStatus"]
 
-// the base's, then what features show (onStatus)
-export function getStatusAs(inner: Inner, x: Target): Status | undefined {
+// the base's, then what features show (onStatus). key: that field alone, the base reading only
+// what it takes [the hedgehog2's wall 3, 10-28: a reader of state reran at every run, n moving;
+// chee: "yeah do that"]
+export function getStatusAs(inner: Inner, x: Target): Status | undefined
+export function getStatusAs(inner: Inner, x: Target, key: string | undefined): unknown
+export function getStatusAs(inner: Inner, x: Target, key?: string): unknown {
 	const { base } = here(inner)
 	const n = nodeOf(inner, x)
 	const id = idOf(inner, n)
 	if (id === undefined) return undefined
-	return base.statused(
+	const status = base.statused(
 		{ node: n, id, computer: computerAt(base.made, id) !== undefined },
-		ownStatus(inner, n, id),
+		ownStatus(inner, n, id, key),
 	)
+	return key === undefined ? status : status?.[key]
 }
 
 // a path the waiter at owner recorded, as inner sees it: the path itself when both look from one
@@ -79,8 +85,10 @@ export const setKey = (key: string, value?: unknown): Patch =>
 // the key a status is read by
 const STATUS_KEY = [STATUS]
 
-// asked, read and told as inner sees it
-function ownStatus(inner: Inner, n: NodeData, id: Id): Status {
+// asked, read and told as inner sees it. key: the field wanted (none: all); a computer's run record
+// is read field by field, only those it takes: n for n, end for state and phase, act for phase,
+// reads for waiting
+function ownStatus(inner: Inner, n: NodeData, id: Id, key?: string): Status {
 	const { base, calls, runs, places } = here(inner)
 	mayRead(inner, id, n.path, STATUS_TABLE, STATUS_KEY)
 	const st = statusOf(places, id)
@@ -97,16 +105,22 @@ function ownStatus(inner: Inner, n: NodeData, id: Id): Status {
 			: live
 		return { state: "pending", waiting: waiting.length ? waiting : ["PENDING"], ...held }
 	}
-	const r = runs.read(id)
-	const nOf = r === undefined ? { ...held } : { n: r.n, ...held }
+	const wants = (k: string) => key === undefined || key === k
+	const field = <F extends Field>(f: F) => runs.read(id, f) as Run[F] | undefined
+	const runN = wants("n") || wants("waiting") ? field("n") : undefined
+	const nOf = runN === undefined ? { ...held } : { n: runN, ...held }
 	if (st === undefined) return { state: "done", ...nOf }
 	if (st !== PENDING) {
-		if (r?.end === "looping") return { state: "looping", error: st, ...nOf }
-		const phase = r?.end !== "failed" && r?.act?.end === "failed" ? "act" : "run"
+		if (!wants("state") && !wants("phase")) return { state: "failed", error: st, ...nOf }
+		const end = field("end")
+		if (end === "looping") return { state: "looping", error: st, ...nOf }
+		if (!wants("phase")) return { state: "failed", error: st, ...nOf }
+		const phase = end !== "failed" && field("act")?.end === "failed" ? "act" : "run"
 		return { state: "failed", error: st, phase, ...nOf }
 	}
+	if (!wants("waiting")) return { state: "pending", ...nOf }
 	const waiting: Waiting[] = []
-	for (const w of r?.reads ?? []) {
+	for (const w of field("reads") ?? []) {
 		if (!("part" in w) || w.part !== STATUS_TABLE || w.id === id) continue
 		if (w.path?.length !== 1 || w.path[0] !== STATUS) continue
 		if (places.peep(() => isPending(places, w.id))) {
@@ -115,7 +129,7 @@ function ownStatus(inner: Inner, n: NodeData, id: Id): Status {
 	}
 	for (const w of calls.waits(id)) waiting.push(waitOf(inner, id, w))
 	const m = base.missing.get(id)
-	if (m !== undefined && r !== undefined && m.n === r.n) {
+	if (m !== undefined && runN !== undefined && m.n === runN) {
 		for (const p of m.paths) waiting.push({ node: recordedBy(inner, id, p) })
 	}
 	if (computer.awaiting) waiting.push("a promise")

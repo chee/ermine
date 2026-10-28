@@ -28,22 +28,34 @@ static op_key *keys_of(const char *const *path, size_t n, const char *extra) {
 	return keys;
 }
 
-// a leaf: 1 and *out; a level (a map with a name in it): 0; nothing, or under a leaf: PL_NONE, so
-// the walk asks it nothing more under there (a walk from an id alone: at once, it has no path)
+// a leaf: 1 and *out; a level (a map): its own id, else 0 (a walk goes on); nothing, or under a
+// leaf: PL_NONE, so the walk asks it nothing more under there (a walk from an id alone: at once, it
+// has no path). it reads only what it steps on: what is at the path + name itself, and a level's
+// own id, so a start or a stop elsewhere under a level tells a walk through it nothing (the
+// hedgehog's wall 2, 10-28: a sibling started reran every reader of a cell)
 static int step(void *ctx, const pl_here *here, const char *name, pl *l, tb_key *out) {
 	const pr_processes *p = ctx;
 	// "" is the key a level holds its own process under, never a name
 	if (!here->has_path || strcmp(name, SELF) == 0) return PL_NONE;
-	op_key *keys = keys_of(here->path, here->length, name);
-	const op_value *v = pl_read(l, tb_string(p->part), p->root, keys, here->length + 1);
+	// the path, the name, and room for SELF after it
+	op_key *keys = xalloc((here->length + 2) * sizeof *keys);
+	for (size_t i = 0; i < here->length; i++) keys[i] = (op_key){.type = OP_STR_KEY, .s = here->path[i]};
+	keys[here->length] = (op_key){.type = OP_STR_KEY, .s = name};
+	const op_value *v = pl_read_here(l, tb_string(p->part), p->root, keys, here->length + 1);
+	if (v == pl_a_map()) {
+		keys[here->length + 1] = (op_key){.type = OP_STR_KEY, .s = SELF};
+		v = pl_read(l, tb_string(p->part), p->root, keys, here->length + 2);
+		free(keys);
+		if (v == NULL || v->type != OP_STR) return 0;
+		*out = tb_string(v->str);
+		return 1;
+	}
 	free(keys);
-	if (is_map(v) && op_get(v, SELF) != NULL) v = op_get(v, SELF);
-	else if (is_map(v) && v->count > 0) return 0;
 	if (v != NULL && v->type == OP_STR) {
 		*out = tb_string(v->str);
 		return 1;
 	}
-	return is_map(v) && v->count > 0 ? 0 : PL_NONE;
+	return PL_NONE;
 }
 
 // no names under here's path: none
@@ -68,9 +80,9 @@ static int level(void *ctx, const pl_here *here, const char *name, pl *l) {
 	const pr_processes *p = ctx;
 	if (!here->has_path || strcmp(name, SELF) == 0) return 0;
 	op_key *keys = keys_of(here->path, here->length, name);
-	const op_value *v = pl_read(l, tb_string(p->part), p->root, keys, here->length + 1);
+	const op_value *v = pl_read_here(l, tb_string(p->part), p->root, keys, here->length + 1);
 	free(keys);
-	return is_map(v);
+	return v == pl_a_map();
 }
 
 void pr_trie_init(pr_processes *p, const char *part, tb_key root, const char *from) {
