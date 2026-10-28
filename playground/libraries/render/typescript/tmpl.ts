@@ -13,8 +13,8 @@
 //   text      <!-- comments --> are dropped. &#60; &#x3c; &amp; &lt; &gt; &quot; &apos; &nbsp; are
 //             decoded in text and in props written out (a value is never), other &names; stay
 //   roots     one: that view. several: an array. only text or a value: that
-//   deno fmt  rewrites a template tagged html (or svg), whitespace and all: import it by another
-//             name, or put // deno-fmt-ignore above
+//   deno fmt  rewrites a template tagged html: its indents are what kids' rule drops, but it drops a
+//             text of only spaces too: a space alone is ${" "}
 import { type Child, type Component, h, isBound, isHandler, isView, VOID } from "./h.ts"
 
 const PREFIX = "@ermine/render/tmpl: "
