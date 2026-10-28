@@ -6,9 +6,12 @@
 //   GET  /live?p=…   its updates, as server-sent events: data: [[binding, prop, value], …]
 //   POST /event      { p, h, t, value?, checked?, key?, form?, tv?, at? }: the handler h, called
 //   GET  /live.js    the page's script (client/live.js), and /<name> for each of options.scripts
+// or with GET and POST only (GET /?poll: client/live-poll.js): a post's answer is what the page
+// missed, its own change and anyone's since its last answer: { n, updates }, numbered so the page
+// applies them in order; GET /missed?p=… is held till there is something, or HOLD ms
 // a visitor whose stream is gone for linger ms is stopped; a page it had is told 410 and reloads.
 // options.away, back and gone are told as a visitor's stream drops, comes back, and it is stopped
-import { type Ermine, executeAction } from "@ermine/system"
+import { type Ermine, executeAction, pulse } from "@ermine/system"
 import { type Element, element, fire, html, inner, type Options, render, type Update } from "./h.ts"
 
 export { render }
@@ -26,6 +29,14 @@ type Visitor = {
 	// the stream open now (none: what is told waits for the next)
 	stream?: ReadableStreamDefaultController<Uint8Array>
 	leaving?: ReturnType<typeof setTimeout>
+	// with GET and POST only: answers given so far, the GETs held, posts not yet answered, and
+	// whether the page is away (no GET held for QUIET ms)
+	readonly poll: boolean
+	answered: number
+	held: (() => void)[]
+	posting: number
+	quiet?: ReturnType<typeof setTimeout>
+	away: boolean
 }
 
 // what a page posts: its process, the handler, the event's type, and what the element says
@@ -44,8 +55,9 @@ type Said = {
 }
 
 export type LiveOptions = {
-	// the page's script
+	// the page's script, and its GET and POST version
 	readonly client: string
+	readonly pollClient?: string
 	readonly folder?: string
 	readonly title?: string
 	readonly style?: string
@@ -74,6 +86,9 @@ const DONE = 204
 const MISSING = 404
 const GONE = 410
 const BROKE = 500
+// a GET /missed is held this long at most; a page with none held this long is away
+const HOLD = 25_000
+const QUIET = 2_000
 
 export function createLive(ermine: Ermine, program: Program, options: LiveOptions): Live {
 	const { client, folder = "/visitors", title = "ermine live", style = "", linger = LINGER } =
@@ -81,7 +96,7 @@ export function createLive(ermine: Ermine, program: Program, options: LiveOption
 	const scripts = options.scripts ?? {}
 	const visitors = new Map<string, Visitor>()
 
-	function visit(): Visitor | Response {
+	function visit(poll: boolean): Visitor | Response {
 		const path = `${folder}/${crypto.randomUUID()}`
 		const into = element("main")
 		// nothing is told till the page is out: the first render is in its html
@@ -105,20 +120,54 @@ export function createLive(ermine: Ermine, program: Program, options: LiveOption
 			return new Response(String(status.error), { status: BROKE })
 		}
 		context = ermine.getProcessContext(started.process)
-		v = { path, into, stop: () => started.stop(), told: [], asked: false }
+		// the pulse setup asked for, now: what it acts is in the html, not told after
+		ermine.within(() => pulse())
+		v = {
+			path,
+			into,
+			stop: () => started.stop(),
+			told: [],
+			asked: false,
+			poll,
+			answered: 0,
+			held: [],
+			posting: 0,
+			away: true,
+		}
 		visitors.set(path, v)
-		away(v)
+		leave(v)
 		return v
 	}
 
-	// the visitor goes once no stream is open for linger
-	function away(v: Visitor) {
+	// the visitor goes once nothing has been open for linger
+	function leave(v: Visitor) {
 		clearTimeout(v.leaving)
 		v.leaving = setTimeout(() => {
 			visitors.delete(v.path)
+			v.held.forEach((answer) => answer())
 			v.stop()
 			options.gone?.(v.path)
 		}, linger)
+	}
+
+	// the page is here (a stream opened, a GET held, a post): back, if it was away
+	function arrive(v: Visitor) {
+		clearTimeout(v.leaving)
+		clearTimeout(v.quiet)
+		if (!v.away) return
+		v.away = false
+		options.back?.(v.path)
+	}
+	// the page let go (its stream dropped; its GET answered): away now, or after QUIET when it
+	// is expected back; gone after linger
+	function depart(v: Visitor, wait = 0) {
+		leave(v)
+		clearTimeout(v.quiet)
+		v.quiet = setTimeout(() => {
+			if (v.away || v.stream || v.held.length) return
+			v.away = true
+			options.away?.(v.path)
+		}, wait)
 	}
 
 	function tell(v: Visitor, update: Update) {
@@ -131,6 +180,8 @@ export function createLive(ermine: Ermine, program: Program, options: LiveOption
 
 	function flush(v: Visitor) {
 		v.asked = false
+		// with GET and POST: a post being answered takes it; else a GET held does
+		if (v.poll) return void (v.posting === 0 && v.told.length && v.held[0]?.())
 		if (v.stream === undefined || v.told.length === 0) return
 		const sent = said(v.told)
 		v.told = []
@@ -138,9 +189,8 @@ export function createLive(ermine: Ermine, program: Program, options: LiveOption
 	}
 
 	function stream(v: Visitor): Response {
-		clearTimeout(v.leaving)
-		if (v.stream) v.stream.close()
-		else options.back?.(v.path)
+		v.stream?.close()
+		arrive(v)
 		let mine: ReadableStreamDefaultController<Uint8Array>
 		const body = new ReadableStream<Uint8Array>({
 			start(c) {
@@ -152,8 +202,7 @@ export function createLive(ermine: Ermine, program: Program, options: LiveOption
 			cancel() {
 				if (v.stream !== mine) return
 				v.stream = undefined
-				away(v)
-				options.away?.(v.path)
+				depart(v)
 			},
 		})
 		return new Response(body, {
@@ -165,19 +214,68 @@ export function createLive(ermine: Ermine, program: Program, options: LiveOption
 		const e = await request.json() as Said
 		const v = visitors.get(e.p)
 		if (v === undefined) return new Response(null, { status: GONE })
+		if (!v.poll) {
+			try {
+				// no such handler: an id from before a re-render, told nothing
+				return new Response(null, { status: fire(v.into, e.h, standIn(e)) ? DONE : MISSING })
+			} catch (error) {
+				return new Response(String(error), { status: BROKE })
+			}
+		}
+		// with GET and POST: the answer is what the page missed, once the pulse has acted
+		arrive(v)
+		v.posting++
 		try {
-			// no such handler: an id from before a re-render, told nothing
-			return new Response(null, { status: fire(v.into, e.h, standIn(e)) ? DONE : MISSING })
+			const fired = fire(v.into, e.h, standIn(e))
+			// the pulse the action asked for, now: every act told before the answer
+			ermine.within(() => pulse())
+			return fired ? answer(v) : new Response(null, { status: MISSING })
 		} catch (error) {
 			return new Response(String(error), { status: BROKE })
+		} finally {
+			v.posting--
+			depart(v, QUIET)
 		}
+	}
+
+	// what the page missed, numbered; nothing: 204
+	function answer(v: Visitor): Response {
+		if (v.told.length === 0) return new Response(null, { status: DONE })
+		const updates = said(v.told)
+		v.told = []
+		return Response.json({ n: ++v.answered, updates })
+	}
+
+	// GET /missed: answered at once if there is something, else held till there is (a flush), the
+	// page goes, or HOLD
+	function missed(v: Visitor, request: Request): Response | Promise<Response> {
+		arrive(v)
+		if (v.told.length) {
+			depart(v, QUIET)
+			return answer(v)
+		}
+		return new Promise((done) => {
+			// once: its timer and its abort both come; a second answer would take updates nobody reads
+			let given = false
+			const give = () => {
+				if (given) return
+				given = true
+				clearTimeout(timer)
+				v.held = v.held.filter((g) => g !== give)
+				depart(v, QUIET)
+				done(answer(v))
+			}
+			const timer = setTimeout(give, HOLD)
+			request.signal.addEventListener("abort", give)
+			v.held.push(give)
+		})
 	}
 
 	const document = (v: Visitor) =>
 		`<!doctype html><html lang="en"><head><meta charset="utf-8">` +
 		`<meta name="viewport" content="width=device-width,initial-scale=1">` +
 		`<title>${title}</title>${options.head ?? ""}<style>${style}</style></head>` +
-		`<body>${html(v.into)}<script src="/live.js" defer></script>` +
+		`<body>${html(v.into)}<script src="/${v.poll ? "live-poll" : "live"}.js" defer></script>` +
 		Object.keys(scripts).map((name) => `<script src="/${name}" defer></script>`).join("") +
 		`</body></html>`
 
@@ -186,7 +284,7 @@ export function createLive(ermine: Ermine, program: Program, options: LiveOption
 			const url = new URL(request.url)
 			const get = request.method === "GET"
 			if (get && url.pathname === "/") {
-				const v = visit()
+				const v = visit(url.searchParams.has("poll") && options.pollClient !== undefined)
 				if (v instanceof Response) return v
 				return new Response(document(v), {
 					headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" },
@@ -196,9 +294,18 @@ export function createLive(ermine: Ermine, program: Program, options: LiveOption
 				const v = visitors.get(url.searchParams.get("p") ?? "")
 				return v ? stream(v) : new Response(null, { status: GONE })
 			}
+			if (get && url.pathname === "/missed") {
+				const v = visitors.get(url.searchParams.get("p") ?? "")
+				return v?.poll ? missed(v, request) : new Response(null, { status: GONE })
+			}
 			if (request.method === "POST" && url.pathname === "/event") return event(request)
 			if (get && url.pathname === "/live.js") {
 				return new Response(client, { headers: { "content-type": "text/javascript" } })
+			}
+			if (get && url.pathname === "/live-poll.js" && options.pollClient !== undefined) {
+				return new Response(options.pollClient, {
+					headers: { "content-type": "text/javascript" },
+				})
 			}
 			const script = get ? scripts[url.pathname.slice(1)] : undefined
 			if (script !== undefined) {
@@ -210,6 +317,8 @@ export function createLive(ermine: Ermine, program: Program, options: LiveOption
 		close() {
 			for (const v of visitors.values()) {
 				clearTimeout(v.leaving)
+				clearTimeout(v.quiet)
+				v.held.forEach((give) => give())
 				v.stream?.close()
 				v.stop()
 			}

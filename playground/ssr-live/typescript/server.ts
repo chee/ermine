@@ -20,6 +20,10 @@ li button { min-width: 32px; min-height: 32px; background: #ffe0f0 }
 `
 
 export const client = await Deno.readTextFile(new URL("../client/live.js", import.meta.url))
+// the GET and POST version's (GET /?poll)
+export const pollClient = await Deno.readTextFile(
+	new URL("../client/live-poll.js", import.meta.url),
+)
 
 export function serve(port: number) {
 	const ermine = createErmine({
@@ -30,7 +34,7 @@ export function serve(port: number) {
 			},
 		},
 	})
-	const live = createLive(ermine, demo, { client, style })
+	const live = createLive(ermine, demo, { client, pollClient, style })
 	const server = Deno.serve({ port, onListen: () => {} }, live.fetch)
 	return { ermine, live, server }
 }
@@ -41,5 +45,5 @@ const PORT = 8787
 if (import.meta.main) {
 	const port = Number(Deno.env.get("PORT") ?? PORT)
 	serve(port)
-	console.log(`ermine live: http://localhost:${port}/`)
+	console.log(`ermine live: http://localhost:${port}/ (GET and POST only: /?poll)`)
 }
