@@ -52,7 +52,7 @@ button:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
 .dot { justify-self: center; width: 10px; height: 10px; border-radius: 50%; background: var(--line); }
 .dot.now { background: var(--ink); }
 .pick { font-size: 1.2rem; padding: 2px 6px; }
-.board { position: relative; height: 220px; background: var(--lychee); border: 1px solid var(--line);
+.board { position: relative; width: 640px; max-width: 100%; height: 220px; background: var(--lychee); border: 1px solid var(--line);
 	border-radius: 4px; overflow: hidden; cursor: crosshair; }
 .sticker { position: absolute; transform: translate(-50%, -50%); font-size: 1.8rem; line-height: 1;
 	pointer-events: none; }
@@ -111,5 +111,7 @@ const PORT = 8788
 if (import.meta.main) {
 	const port = Number(Deno.env.get("PORT") ?? PORT)
 	serveParty(port)
-	console.log(`ermine party: http://localhost:${port}/ (GET and POST only: /?poll)`)
+	console.log(
+		`ermine party: http://localhost:${port}/ (GET and POST only: /?poll, no script: /?plain)`,
+	)
 }
