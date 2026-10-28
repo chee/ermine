@@ -152,3 +152,37 @@ Deno.test("writes made while unlinked go once linked again", async () => {
 	await until(() => look(server, "/shared/count") === offline)
 	s.stop(), p.stop(), server.close(), page.close()
 })
+
+Deno.test("an ephemeral path's writes go both ways and are never steps; a page linking gets them as they are", async () => {
+	const cells = 3
+	const server = createErmine({
+		host: {
+			setup: () => {
+				ensureNode("/shared")
+				ensureNode("/shared/life")
+				Array.from({ length: cells }, (_, i) => ensureNode(`/shared/life/${i}`, false))
+			},
+		},
+	})
+	const ephemeral = ["/shared/life"]
+	const s = await createTie(server, { at: "/shared", ephemeral })
+	server.within(() => patch("/shared/life/0", [{ path: [], value: true }]))
+	const page = createErmine({})
+	const p = await createTie(page, { at: "/shared", id: s.root, ephemeral })
+	const [a, b] = pair()
+	s.link(a)
+	p.link(b)
+	const steps = (t: typeof s) => Object.values(t.log.have()).reduce((x, y) => x + y, 0)
+	await p.started
+	await until(() => steps(p) === steps(s))
+	assertEquals(look(page, "/shared/life/0"), true)
+	const held = steps(s)
+	server.within(() => patch("/shared/life/1", [{ path: [], value: true }]))
+	await until(() => look(page, "/shared/life/1") === true)
+	page.within(() => patch("/shared/life/2", [{ path: [], value: true }]))
+	await until(() => look(server, "/shared/life/2") === true)
+	await tick()
+	assertEquals([steps(s), steps(p)], [held, held])
+	assertEquals(look(page, "/shared/life/2"), true)
+	s.stop(), p.stop(), server.close(), page.close()
+})
