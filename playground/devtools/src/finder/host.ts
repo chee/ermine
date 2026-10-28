@@ -60,7 +60,8 @@ export function mountFinder(into: Element, asker: Asker) {
 		ermine.within(() => executeAction(action, ...args));
 	const running = ermine.start(function finder() {
 		render(box, Explorer({ name: NAME, label: "graph", graph: "page" }), {
-			name: "finder",
+			// the process's path: what its bindings' paths are said from
+			name: CODE,
 			call,
 		});
 	}, CODE);
