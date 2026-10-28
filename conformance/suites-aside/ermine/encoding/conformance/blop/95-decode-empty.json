@@ -1,7 +1,0 @@
-{
-	"title": "no bytes",
-	"bytes": "",
-	"expect": {
-		"code": "not-a-blop"
-	}
-}

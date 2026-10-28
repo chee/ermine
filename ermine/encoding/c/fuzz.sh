@@ -2,7 +2,7 @@
 # coverage-guided fuzzing of the encoding with libFuzzer (Homebrew LLVM: Apple's clang has no
 # libFuzzer), under the address and undefined-behaviour sanitizers.
 #   fuzz.sh <target> [libFuzzer arguments]   targets: cbor cbor-model
-# (hash, commit, blop, pack, deflate: playground/encoding/c/fuzz.sh)
+# (hash, commit, pack, deflate: playground/encoding/c/fuzz.sh)
 # runs for FUZZ_SECONDS (default 60; not SECONDS, which the shell counts up itself); finds land in crash-* here; the corpus is kept in <target>-corpus/.
 # leaks are checked (macOS leaves that off by default). -fork=1 -ignore_crashes=1: keep going past
 # a crash

@@ -1,4 +1,4 @@
-// what the encoding's fuzz tests share (cbor_fuzz_test.ts; @ermine/formats' commit, blop and hash
+// what the encoding's fuzz tests share (cbor_fuzz_test.ts; @ermine/formats' commit and hash
 // fuzz tests): seeded numbers, values of every kind, value equality, non-canonical rewrites of an
 // encoding and bytes near one. seeded and deterministic: a seed is a run
 // the rules (cbor.ts): whole numbers are integers (bignums past 64 bits), -0 is 0, other numbers
