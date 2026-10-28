@@ -484,7 +484,8 @@ const es_change_view *es_change_view_of(es_ermine *e, const op_value *change) {
 	v->user_activated = during != NULL && during->type == OP_BOOL && during->bool_;
 	const op_value *external = op_get(change, "external");
 	if (external != NULL && external->type == OP_LIST && external->count > 0) {
-		const op_value *s = external->items[0];
+		// of its sites, the last: the nearest
+		const op_value *s = external->items[external->count - 1];
 		const op_value *file = op_get(s, "file"), *line = op_get(s, "line");
 		const op_value *column = op_get(s, "column"), *function = op_get(s, "function");
 		double n;

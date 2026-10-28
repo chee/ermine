@@ -34,11 +34,15 @@ Deno.test("site: a call given a build site keeps it, nothing captured; a call in
 	e.start(() => {
 		at(S, ensureNode)("/x", (ensureNode("/y", 1), 1))
 	}, "/p")
-	assertEquals(changeAt(e, "x").external, [{ file: "file:///program.ts", line: 12, column: 3 }])
+	assertEquals(changeAt(e, "x").external?.at(-1), {
+		file: "file:///program.ts",
+		line: 12,
+		column: 3,
+	})
 	assertEquals(traceOf(changeAt(e, "x")), undefined)
 	// the call in the arguments has none given: in setup, the process's
-	assertEquals(changeAt(e, "y").external?.[0]?.file, here)
-	assertEquals(changeAt(e, "y").external?.[0]?.function, "setup")
+	assertEquals(changeAt(e, "y").external?.at(-1)?.file, here)
+	assertEquals(changeAt(e, "y").external?.at(-1)?.function, "setup")
 	e.close()
 })
 
@@ -50,8 +54,8 @@ Deno.test("site: a token not minted, or a function not @ermine/system's, gives n
 	e.start(() => {
 		at({} as never, ensureNode)("/x", 1)
 	}, "/p")
-	assertEquals(changeAt(e, "x").external?.[0]?.file, here)
-	assertEquals(changeAt(e, "x").external?.[0]?.function, "setup")
+	assertEquals(changeAt(e, "x").external?.at(-1)?.file, here)
+	assertEquals(changeAt(e, "x").external?.at(-1)?.function, "setup")
 	e.close()
 })
 
@@ -61,8 +65,8 @@ Deno.test("site: what the function runs never gets it (taken as it starts)", () 
 	e.start(() => {
 		at(S, peep)(() => ensureNode("/z", 1))
 	}, "/p")
-	assertEquals(changeAt(e, "z").external?.[0]?.file, here)
-	assertEquals(changeAt(e, "z").external?.[0]?.function, "setup")
+	assertEquals(changeAt(e, "z").external?.at(-1)?.file, here)
+	assertEquals(changeAt(e, "z").external?.at(-1)?.function, "setup")
 	e.close()
 })
 
@@ -70,7 +74,11 @@ Deno.test("site: trace always keeps the text beside a build site", () => {
 	const e = createErmine({ features: [manual, traceAlways] })
 	const S = site("file:///program.ts", 5, 1)
 	e.start(() => void at(S, ensureNode)("/x", 1), "/p")
-	assertEquals(changeAt(e, "x").external, [{ file: "file:///program.ts", line: 5, column: 1 }])
+	assertEquals(changeAt(e, "x").external?.at(-1), {
+		file: "file:///program.ts",
+		line: 5,
+		column: 1,
+	})
 	assert(traceOf(changeAt(e, "x"))?.includes(here))
 	e.close()
 })
@@ -85,13 +93,17 @@ Deno.test("site: a computer made through a call given a build site has that site
 	}, "/p")
 	e.within(() => pulse())
 	assertEquals(e.within(() => read("/m")), 1)
-	assertEquals(changeAt(e, "m").external, [{ file: "file:///program.ts", line: 8, column: 2 }])
+	assertEquals(changeAt(e, "m").external?.at(-1), {
+		file: "file:///program.ts",
+		line: 8,
+		column: 2,
+	})
 	e.close()
 })
 
 // the line after the one calling this
 const nextLine = () => frames(new Error().stack!)[1].line + 1
-const siteOf = (e: E, name: string) => changeAt(e, name).external?.[0]
+const siteOf = (e: E, name: string) => changeAt(e, name).external?.at(-1)
 
 Deno.test("site: a write or make in a setup has the process's site: its first call's line, function setup, the same for all", () => {
 	const e = createErmine({ features: [manual] })
@@ -111,7 +123,7 @@ Deno.test("site: a write or make in a setup has the process's site: its first ca
 		changeAt(e, "b"),
 		e.table.get("value", get(e.places, ["p", "m"])!)!.change as ChangeHeader,
 		e.table.get("value", get(e.places, ["p", "fx"])!)!.change as ChangeHeader,
-	].map((c) => c.external![0])
+	].map((c) => c.external!.at(-1)!)
 	for (const at of sites) {
 		assertEquals([at.file, at.line, at.function], [here, first, "setup"])
 		assertEquals(at, sites[0])
@@ -191,7 +203,11 @@ Deno.test("site: a write's own build site comes first, in a run too [chee 10-28]
 		createEffect("copy", () => read("/n"), (n) => at(S, patch)("/m", [{ path: [], value: n }]))
 	}, "/p")
 	e.within(() => pulse())
-	assertEquals(changeAt(e, "m").external, [{ file: "file:///program.ts", line: 4, column: 2 }])
+	assertEquals(changeAt(e, "m").external?.at(-1), {
+		file: "file:///program.ts",
+		line: 4,
+		column: 2,
+	})
 	e.close()
 })
 
@@ -204,5 +220,23 @@ Deno.test("site: the trace feature asks for the text, so each call in a setup is
 	assertEquals(siteOf(e, "a")!.function, undefined)
 	assertNotEquals(siteOf(e, "a")!.line, siteOf(e, "b")!.line)
 	assert(traceOf(changeAt(e, "a")) !== undefined)
+	e.close()
+})
+
+Deno.test("site: with the trace, a write's own line goes last, its frames' sites before it [chee 10-28: \"yes\"]", () => {
+	const e = createErmine({ features: [manual, trace] })
+	let line = 0
+	e.start(() => {
+		ensureNode("/b", 0)
+		createAction("on/put", (v: number) => {
+			line = nextLine()
+			patch("/b", [{ path: [], value: v }])
+		})
+	}, "/p")
+	e.within(() => executeAction("/p/on/put", 5))
+	const all = changeAt(e, "b").external!
+	assertEquals([all.at(-1)!.line, all.at(-1)!.function], [line, undefined])
+	assertEquals(all.at(-2)?.function, "setup")
+	assert(traceOf(changeAt(e, "b")) !== undefined)
 	e.close()
 })

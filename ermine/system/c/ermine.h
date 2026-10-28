@@ -105,8 +105,9 @@
 // one of this ermine's.
 //
 // SITES. a writing call is a macro over its _at, which takes the caller's line (CH_HERE); a write's
-// site is the nearest a frame open has, walked up (es_site_up: a memo's, a handler's, a writer's, a
-// setup's, a process's), else that line. the _at calls set it for their duration (es_enter).
+// sites (external, oldest first) are each frame's walking up from the one open (a process's: where
+// it was started; its setup's; a handler's, a writer's, a memo's), else that line; its site, the
+// last. the _at calls set it for their duration (es_enter).
 //
 // MEMORY. values given are borrowed for the call, and held (op_ref) by a callee that holds on to
 // them. values given back are borrowed from the table, good until the node changes, unless the
@@ -1404,8 +1405,10 @@ es_context *es_host_context(es_ermine *e);
 // open. its folder: the one it is in. setup giving PENDING: the process pending, what it waits on in
 // ES_WAITING; failing: its error in the status, the process still there; a promise: pending till it
 // settles. refused (taken, or a name code): ES_TAKEN, and *refused says which
-int es_start(es_ermine *e, es_program fn, void *ctx, es_at at, const es_start_options *o,
-	es_started **out, es_refused *refused);
+// site: where it is started, its frame's (es_start: the caller's line)
+int es_start_at(es_ermine *e, es_program fn, void *ctx, es_at at, const es_start_options *o,
+	es_started **out, es_refused *refused, const ch_site *site);
+#define es_start(...) es_start_at(__VA_ARGS__, CH_HERE)
 void es_refused_free(es_refused *r);
 // a process started by a program (system/process.ts' start): asked as c "place", belonging to the scope that
 // started it (c's owner: setup's, the scope that placed an action, a writer's parent). it stops as
@@ -1415,8 +1418,9 @@ typedef struct {
 	char *id;
 	es_names at, folder;
 } es_child;
-int es_start_in(es_context *c, es_program fn, void *ctx, es_at at, const es_start_options *o,
-	es_child *out, es_refused *refused);
+int es_start_in_at(es_context *c, es_program fn, void *ctx, es_at at, const es_start_options *o,
+	es_child *out, es_refused *refused, const ch_site *site);
+#define es_start_in(...) es_start_in_at(__VA_ARGS__, CH_HERE)
 void es_child_free(es_child *k);
 // the child's stop(why), asked as c (the starter); none running there: nothing. its status as c reads it
 int es_child_stop(es_context *c, const char *id, const char *why);
@@ -1482,8 +1486,8 @@ int es_held_at(es_ermine *e, const char *part, const char *id, es_held *out);
 int es_held_status(es_ermine *e, const char *id, es_held *out);
 int es_held_row(es_ermine *e, const char *id, es_held *out);
 void es_held_drop(es_ermine *e, const char *id);
-// a write's header now: the open scope's; its site found up the frame open (es_site_here), else the
-// call's (es_enter). *made: its block, for pl_hold on the entry written
+// a write's header now: the open scope's; its sites each frame's up from the frame open, oldest
+// first, else the call's (es_enter). *made: its block, for pl_hold on the entry written
 int es_header(es_ermine *e, ch_header *out, pl_made **made);
 // the site of the call in progress, set; gives the one before, to put back
 const ch_site *es_enter(es_ermine *e, const ch_site *site);

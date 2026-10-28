@@ -289,6 +289,9 @@ typedef struct proc_rec {
 	int child;
 	const es_context *starter;
 	size_t at;
+	// the frame its value and status are written in after its setup, under its scope's own, its site
+	// the setup's (NULL: its setup found none, so its scope's own frame: where it was started)
+	sc_frame *own;
 } proc_rec;
 
 struct es_hosting {
@@ -533,12 +536,45 @@ const ch_site *es_site_here(es_ermine *e, const ch_site *given, ch_site *buf) {
 	return es_site_up(e, sc_get_current_frame(e->scheduler), given, buf);
 }
 
-// a write's header now: the open scope's. its site found up the frame open, else the call's
+// one place: the same file, line and column (a setup's site is its first call's, renamed)
+static int same_site(const ch_site *a, const ch_site *b) {
+	return a->line == b->line && a->column == b->column &&
+		(a->file == b->file || (a->file != NULL && b->file != NULL && strcmp(a->file, b->file) == 0));
+}
+
+// every site up from f, oldest first, one seen twice in a row once, into out (the nearest cap, as
+// ermine.ts' SITES): how many. a running setup's not found yet: given, as es_site_up
+static size_t sites_up(es_ermine *e, sc_frame *f, const ch_site *given, ch_site *out, size_t cap) {
+	size_t n = 0;
+	for (; f != NULL && n < cap; f = sc_frame_parent(f)) {
+		ch_site buf;
+		const ch_site *own = NULL;
+		const st_site *st = e->sites != NULL ? st_site_of(e->sites, f) : NULL;
+		if (st != NULL) {
+			buf = (ch_site){st->file, st->line, 0, st->func, 0};
+			own = &buf;
+		} else {
+			// a setup's, found now from given if not yet (es_site_up stops at it then)
+			const struct es_setup *su = setup_of(e, f);
+			if (su != NULL && (su->has_site || given != NULL)) own = es_site_up(e, f, given, &buf);
+		}
+		if (own != NULL && (n == 0 || !same_site(&out[n - 1], own))) out[n++] = *own;
+	}
+	for (size_t i = 0; i < n / 2; i++) {
+		ch_site x = out[i];
+		out[i] = out[n - 1 - i], out[n - 1 - i] = x;
+	}
+	return n;
+}
+
+// a write's header now: the open scope's. its sites: each frame's up from the frame open, oldest
+// first; none: the call's
 int es_header(es_ermine *e, ch_header *out, pl_made **made) {
 	pl_made *block = NULL;
-	ch_site buf;
-	const ch_site *site = es_site_here(e, e->site, &buf);
-	char *bad = pl_header(e->places, NULL, 0, site, out, &block);
+	ch_site sites[16];
+	size_t n = sites_up(e, sc_get_current_frame(e->scheduler), e->site, sites, 16);
+	if (n == 0 && e->site != NULL) sites[n++] = *e->site;
+	char *bad = pl_header_sites(e->places, NULL, 0, sites, n, out, &block);
 	if (bad != NULL) {
 		int code = strcmp(bad, SC_UNSCOPED) == 0
 			? es_fail_ermine(ES_NOTHING_OPEN, "a write needs a scope open")
@@ -1874,7 +1910,8 @@ static void settle_call_run(void *data) {
 static void settle_with_scope(proc_rec *rec, int kind, const op_value *value, const char *error) {
 	settle_call s = {rec, value, error, kind};
 	sc_scope *scope = pr_scope(rec->started.process);
-	sc_run_with_scope(scope, settle_call_run, &s);
+	if (rec->own != NULL) sc_run_with(scope, rec->own, settle_call_run, &s);
+	else sc_run_with_scope(scope, settle_call_run, &s);
 }
 
 static void process_done(proc_rec *rec, const op_value *value) {
@@ -1930,9 +1967,11 @@ static void run_setup(proc_rec *rec) {
 	if (at != NULL) e->setup = &frame;
 	int stopped = at == NULL || sc_run_with_scope(at, setup_thunk, &c) != NULL;
 	if (at != NULL) e->setup = frame.up;
-	// the process's own site from now: its setup's if one was found, else its start's (noted then)
+	// its value and status from now are written in a frame with the setup's site, under its scope's
+	// (whose own site stays where it was started)
 	if (frame.has_site && e->sites != NULL && sc_scope_alive(pr_scope(rec->started.process))) {
-		st_note(e->sites, pr_scope(rec->started.process), frame.site.file, (int)frame.site.line, "setup");
+		rec->own = sc_create_frame(e->scheduler, NULL, 0, sc_scope_frame(pr_scope(rec->started.process)));
+		st_note_frame(e->sites, rec->own, frame.site.file, (int)frame.site.line, "setup");
 	}
 	if (at != NULL) sc_release(at);
 	op_value *waits = NULL;
@@ -2033,7 +2072,7 @@ static const char *const *steps_of(es_at at, size_t *n, char ***owned) {
 // and is freed with its own. taken (or a name code): ES_TAKEN, and *refused says which
 static int start_under(es_ermine *e, es_program fn, void *ctx, const char *const *steps, size_t nsteps,
 	const es_start_options *o, sc_scope *under, const es_context *starter, es_child *kid,
-	es_started **out, es_refused *refused) {
+	es_started **out, es_refused *refused, const ch_site *site) {
 	int child = starter != NULL;
 	hosting *h = host_of(e);
 	proc_rec *rec = es_alloc(sizeof *rec);
@@ -2056,7 +2095,10 @@ static int start_under(es_ermine *e, es_program fn, void *ctx, const char *const
 	pr_refusal no;
 	// a child lives where its starter does; the host's start may name the places
 	pl *where = starter != NULL ? starter->places : o != NULL && o->places != NULL ? o->places : e->places;
-	pr_process *made = pr_start(e->processes, where, steps, nsteps, &po, &no);
+	// its frame's site: where it is started
+	pr_process *made = site != NULL
+		? pr_start_at(e->processes, where, steps, nsteps, &po, &no, site->file, (int)site->line, site->function)
+		: pr_start(e->processes, where, steps, nsteps, &po, &no);
 	if (made == NULL) {
 		// refused: no process, its record out of procs
 		rec_free(rec);
@@ -2112,8 +2154,8 @@ static int start_under(es_ermine *e, es_program fn, void *ctx, const char *const
 	return 0;
 }
 
-int es_start(es_ermine *e, es_program fn, void *ctx, es_at at, const es_start_options *o,
-	es_started **out, es_refused *refused) {
+int es_start_at(es_ermine *e, es_program fn, void *ctx, es_at at, const es_start_options *o,
+	es_started **out, es_refused *refused, const ch_site *site) {
 	TRY(es_alive(e));
 	if (refused != NULL) *refused = (es_refused){0};
 	if (fn == NULL) {
@@ -2122,7 +2164,7 @@ int es_start(es_ermine *e, es_program fn, void *ctx, es_at at, const es_start_op
 	char **owned;
 	size_t nsteps;
 	const char *const *steps = steps_of(at, &nsteps, &owned);
-	int code = start_under(e, fn, ctx, steps, nsteps, o, NULL, NULL, NULL, out, refused);
+	int code = start_under(e, fn, ctx, steps, nsteps, o, NULL, NULL, NULL, out, refused, site);
 	pr_names_free(owned, owned != NULL ? nsteps : 0);
 	return code;
 }
@@ -2154,8 +2196,8 @@ const void *es_frame_pair_of(const sc_frame *f, const char *key) {
 	return pair_in(sc_frame_info(f), key);
 }
 
-int es_start_in(es_context *c, es_program fn, void *ctx, es_at at, const es_start_options *o,
-	es_child *out, es_refused *refused) {
+int es_start_in_at(es_context *c, es_program fn, void *ctx, es_at at, const es_start_options *o,
+	es_child *out, es_refused *refused, const ch_site *site) {
 	es_ermine *e = c->ermine;
 	*out = (es_child){0};
 	if (refused != NULL) *refused = (es_refused){0};
@@ -2174,7 +2216,7 @@ int es_start_in(es_context *c, es_program fn, void *ctx, es_at at, const es_star
 	TRY(es_resolve(c, at, &path));
 	int code = ask_starting(c, CP(path.names), path.n);
 	if (!code) {
-		code = start_under(e, fn, ctx, CP(path.names), path.n, o, own, c, out, NULL, refused);
+		code = start_under(e, fn, ctx, CP(path.names), path.n, o, own, c, out, NULL, refused, site);
 		es_queue_pulse(e);
 	}
 	es_names_free(&path);
@@ -2356,6 +2398,10 @@ static void rec_free(proc_rec *rec) {
 	last->at = rec->at;
 	if (!rec->child && !e->closed && e->processes != NULL && rec->started.process != NULL) {
 		free(pr_drop(e->processes, rec->started.process));
+	}
+	if (rec->own != NULL) {
+		if (e->sites != NULL) st_forget_frame(e->sites, rec->own);
+		sc_free_frame(rec->own);
 	}
 	free(rec->id);
 	op_free(rec->at_value);

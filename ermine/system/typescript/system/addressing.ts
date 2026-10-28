@@ -13,7 +13,7 @@ import { type ChangeView, USER_ACTIVATED } from "./shapes.ts"
 export function viewOf(base: Base, h: ChangeHeader): ChangeView {
 	let v = base.views.get(h)
 	if (v === undefined) {
-		const site = h.external?.[0]
+		const site = h.external?.at(-1)
 		v = Object.freeze({
 			time: h.time,
 			actor: h.actor,

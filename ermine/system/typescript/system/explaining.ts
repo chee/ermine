@@ -154,7 +154,7 @@ function writerOf(inner: Inner, change: ChangeHeader): Explained & { change: Cha
 			writer: { kind: "feature", feature: m.feature, ...pathOf(inner, m[NODE] as Id) },
 		}
 	}
-	const site = change.external?.[0]
+	const site = change.external?.at(-1)
 	return {
 		change: view,
 		writer: {

@@ -227,6 +227,9 @@ export type Ermine = {
 	}
 }
 
+// the most frames' sites a write carries, the nearest
+const SITES = 16
+
 // ermine's own files: a site is the first frame outside them (and the features')
 const OURS = /* @__PURE__ */ [
 	"ermine.ts",
@@ -236,6 +239,7 @@ const OURS = /* @__PURE__ */ [
 	"registry.ts",
 	"handles.ts",
 	"acting.ts",
+	"site.ts",
 ].map((f) => new URL(`./${f}`, import.meta.url).href)
 
 // a uuidv7 (rfc 9562): 48 bits of ms, then a 12-bit count within the ms (started random), then
@@ -403,26 +407,41 @@ export function createErmine(options: Options = {}): Ermine {
 	}
 	const offSettle = s.onSettle(queuePulse)
 
-	// a write's site (the rule is index.ts'): its build site (built); else the open frame's, walked
-	// up (siteUp); else the caller of the public function called innermost (entry), found in the
-	// nearest 10 frames. what onTrace gives: the whole trace text kept beside it too (text),
-	// captured at each call outside a run whatever else is known
+	// a write's sites (the rule is index.ts'): each frame's walking up from the one open (sitesUp),
+	// oldest first, then its own line when one is known: its build site (built); the trace's, when
+	// onTrace asks for the whole trace text (text: kept beside it, captured at each call outside a
+	// run); or, no frame having one, the caller of the public function called innermost (entry),
+	// found in the nearest 10 frames. its site: the last
 	let entry: unknown
 	const header = (): ChangeHeader => {
-		if (s.getRun() !== undefined) {
-			return createChangeHeader(s, undefined, undefined, undefined, siteNow())
-		}
+		const up = sitesUp(s.getCurrentFrame())
 		const b = builtNow()
-		const t = traced({ text: false, ...b !== undefined && { built: b } })
-		if (t.built !== undefined && !t.text) {
-			return createChangeHeader(s, undefined, undefined, undefined, t.built)
+		const run = s.getRun() !== undefined
+		const t = run
+			? { text: false, built: b }
+			: traced({ text: false, ...b !== undefined && { built: b } })
+		let own = t.built
+		let h: ChangeHeader
+		if (t.text) {
+			h = createChangeHeader(s, undefined, ours, entry, undefined, true)
+			own ??= h.external?.[0]
+		} else if (own !== undefined || up.length > 0 || run) {
+			h = createChangeHeader(s, undefined, undefined, undefined, own ?? up[up.length - 1])
+		} else {
+			h = createChangeHeader(s, undefined, ours, entry)
+			own = h.external?.[0]
 		}
-		const own = t.text ? undefined : siteUp(s.getCurrentFrame())
-		if (own !== undefined) return createChangeHeader(s, undefined, undefined, undefined, own)
-		const h = createChangeHeader(s, undefined, ours, entry, undefined, t.text)
-		if (t.built !== undefined) h.external = [t.built]
+		// its own line in place of a frame's at the same place (a setup's first call)
+		const all = own === undefined
+			? up
+			: [...same(up[up.length - 1], own) ? up.slice(0, -1) : up, own]
+		if (all.length > 0) h.external = all
+		else delete h.external
 		return h
 	}
+	// one place: the same file, line and column (a setup's site is its first call's, renamed)
+	const same = (a: FileLocation | undefined, b: FileLocation) =>
+		a !== undefined && a.file === b.file && a.line === b.line && a.column === b.column
 	// the site known now without reading the stack: a build's, the open frame's walked up; none:
 	// undefined
 	const siteNow = (): FileLocation | undefined => builtNow() ?? siteUp(s.getCurrentFrame())
@@ -439,22 +458,37 @@ export function createErmine(options: Options = {}): Ermine {
 			return found ?? undefined
 		}
 	}
-	// the nearest site up from f: each frame's own (sites.ts'), or a setup's (see index.ts: the line
-	// of its first call, found once, marked with the function "setup"); none: undefined
+	// f's own site: sites.ts', or a setup's (see index.ts: the line of its first call, found once,
+	// marked with the function "setup"); none: undefined
+	function siteOfFrame(f: Frame): FileLocation | undefined {
+		const own = sites.siteOf(f)
+		if (own !== undefined) return own
+		const m = setups.get(f)
+		if (m === undefined) return undefined
+		if (m.site === undefined) {
+			// its first call's: a build's, else captured
+			const at = builtNow() ?? capture(ours, entry)
+			m.site = at === undefined ? null : { ...at, function: "setup" }
+			if (at !== undefined) sites.note(f, m.site!)
+		}
+		return m.site ?? undefined
+	}
+	// the nearest site up from f; none: undefined
 	function siteUp(f: Frame | undefined): FileLocation | undefined {
 		for (; f !== undefined; f = f.parent) {
-			const own = sites.siteOf(f)
+			const own = siteOfFrame(f)
 			if (own !== undefined) return own
-			const m = setups.get(f)
-			if (m === undefined) continue
-			if (m.site === undefined) {
-				const at = capture(ours, entry)
-				m.site = at === undefined ? null : { ...at, function: "setup" }
-				if (at !== undefined) sites.note(f, m.site!)
-			}
-			if (m.site !== null) return m.site
 		}
 		return undefined
+	}
+	// every site up from f, oldest first, one seen twice in a row once: the nearest SITES (C's too)
+	function sitesUp(f: Frame | undefined): FileLocation[] {
+		const out: FileLocation[] = []
+		for (; f !== undefined && out.length < SITES; f = f.parent) {
+			const own = siteOfFrame(f)
+			if (own !== undefined && !same(out[out.length - 1], own)) out.push(own)
+		}
+		return out.reverse()
 	}
 	// f(inner, ...a) with enter as the entry: a write's site is found from enter's caller on, or is
 	// site, a build's
@@ -871,12 +905,14 @@ export function createErmine(options: Options = {}): Ermine {
 						s.registerTeardown(inside.scope, () => {
 							contexts.delete(pid)
 						})
+						// the frame of its setup, once made: the base's own writes for the process are made in it
+						let setupFrame = inside.scope.frame
 						// the process's status and value, written as it settles (its status in the status table)
 						const done = (v: unknown) => {
 							if (inside.scope.state !== "alive") return
 							// the base's own writes for the process: its scope opened (a promise settles with
-							// nothing open), so they take its frame's site
-							s.runWithScope(inside.scope, () => {
+							// nothing open) with its setup's frame, so they take the setup's sites
+							s.runWith(inside.scope, setupFrame, () => {
 								if (v !== undefined) {
 									inner.put({ part: "value", id: pid, patches: whole(v) })
 								}
@@ -887,8 +923,9 @@ export function createErmine(options: Options = {}): Ermine {
 						const failed = (e: unknown) => {
 							if (inside.scope.state !== "alive") return
 							const error = e === undefined ? new Error("undefined") : e
-							s.runWithScope(
+							s.runWith(
 								inside.scope,
+								setupFrame,
 								() => putStatus(inner, pid, [setKey(STATUS, error), setKey(WAITING)]),
 							)
 							queuePulse()
@@ -902,16 +939,13 @@ export function createErmine(options: Options = {}): Ermine {
 							// its info the process's own key again (a scope's info has keys): a write's metadata
 							// the same as from the process's scope
 							const at = s.createScope({ process: inside.at }, inside.scope)
+							setupFrame = at.frame
 							let out: unknown
 							// the nodes it reads that aren't there, kept while it runs (system/reading.ts waitFor)
 							base.setting.add(pid)
 							// its writes with no build site take the process's (siteUp: found at the first call)
 							setups.set(at.frame, {})
 							const missed = () => {
-								// the process's site from now: its setup's once found, else its start's (its scope's,
-								// made at the start)
-								const own = setups.get(at.frame)?.site
-								if (own) sites.note(inside.scope, own)
 								base.setting.delete(pid)
 								setups.delete(at.frame)
 								const paths = base.missing.get(pid)?.paths ?? []

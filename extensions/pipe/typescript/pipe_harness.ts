@@ -60,7 +60,7 @@ libraries.set("pipe", (env, raw, { expr, run }) => {
 
 ops.set("pipesite", (r, e) => {
 	const id = r.id ?? get(e.places, r.path)
-	const at = e.table.get(r.part as Key, id)?.change?.external?.[0]
+	const at = e.table.get(r.part as Key, id)?.change?.external?.at(-1)
 	if (at === undefined) return { site: "none" }
 	if (at.function === "setup") return { site: "setup" }
 	if (at.file === import.meta.url) return { site: "pipe" }

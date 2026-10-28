@@ -113,7 +113,9 @@ static const char spots;
 
 struct pl_made {
 	size_t refs;
-	ch_site site;
+	// its sites, oldest first (one: in site; more: sites, its own)
+	ch_site site, *sites;
+	size_t nsites;
 	// the metadata, a map, and the actor and reader (holds; NULL: none): the header refers into them
 	op_value *pairs, *actor, *reader;
 	ch_entry *entries;
@@ -1564,14 +1566,20 @@ op_value *pl_change_base(pl *l, const sc_pair *extra, size_t n) {
 
 char *pl_header(pl *l, const sc_pair *extra, size_t n, const ch_site *site, ch_header *out,
 	pl_made **made) {
+	return pl_header_sites(l, extra, n, site, site != NULL ? 1 : 0, out, made);
+}
+
+char *pl_header_sites(pl *l, const sc_pair *extra, size_t n, const ch_site *site, size_t nsites,
+	ch_header *out, pl_made **made) {
+	if (site == NULL) nsites = 0;
 	seeing w;
 	if (!who_of(l, extra, n, &w)) return xdup(SC_UNSCOPED);
 	// no site: a recent block saying the same (same keys in order, the same values, actor and
 	// reader) again, not a new one
 	int tries = 0;
-	for (pl_made *last = l->s->mades; site == NULL && last != NULL && tries < 16;
+	for (pl_made *last = l->s->mades; nsites == 0 && last != NULL && tries < 16;
 		last = last->next, tries++) {
-		if (last->site.file != NULL || last->actor != w.actor || last->reader != w.reader ||
+		if (last->nsites != 0 || last->actor != w.actor || last->reader != w.reader ||
 			last->pairs->count != w.metadata->count)
 			continue;
 		size_t i = 0;
@@ -1601,10 +1609,16 @@ char *pl_header(pl *l, const sc_pair *extra, size_t n, const ch_site *site, ch_h
 	h.actor = w.actor;
 	if (w.reader != NULL) h.reader = w.reader->str;
 	h.metadata = m->entries, h.metadata_length = pairs->count;
-	if (site != NULL) {
+	if (nsites == 1) {
 		m->site = *site;
-		h.external = &m->site, h.external_length = 1;
+		h.external = &m->site;
+	} else if (nsites > 1) {
+		m->sites = xalloc(nsites * sizeof *m->sites);
+		memcpy(m->sites, site, nsites * sizeof *m->sites);
+		h.external = m->sites;
 	}
+	m->nsites = nsites;
+	h.external_length = nsites;
 	m->s = l->s;
 	m->next = l->s->mades;
 	if (m->next != NULL) m->next->before = m;
@@ -1631,7 +1645,7 @@ void pl_made_free(void *block) {
 	}
 	op_free(m->change);
 	op_free(m->pairs), op_free(m->actor), op_free(m->reader);
-	free(m->entries), free(m);
+	free(m->entries), free(m->sites), free(m);
 }
 
 // a header's pieces as a map: time, actor, reader, external, metadata (the block's own map)
