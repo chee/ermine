@@ -5,6 +5,7 @@
 		".": "./typescript/render.ts",
 		"./h": "./typescript/h.ts",
 		"./dom": "./typescript/dom.ts",
-		"./html": "./typescript/html.ts"
+		"./html": "./typescript/html.ts",
+		"./tmpl": "./typescript/tmpl.ts"
 	}
 }

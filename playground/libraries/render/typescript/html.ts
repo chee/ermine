@@ -19,7 +19,7 @@
 //             the nearest element that has one
 //   not here  tells ("ermine:change", "ermine:call"): a page hears what take gives
 import { createRenderer, type Listener, type Options, type Renderer } from "./render.ts"
-import type { Child } from "./h.ts"
+import { type Child, VOID } from "./h.ts"
 
 export type Element = {
 	readonly tag: string
@@ -370,25 +370,10 @@ export function fire(into: Element, id: string, event: unknown): boolean {
 }
 
 // ---- html ----
-export const VOID = new Set([
-	"area",
-	"base",
-	"br",
-	"col",
-	"embed",
-	"hr",
-	"img",
-	"input",
-	"link",
-	"meta",
-	"source",
-	"track",
-	"wbr",
-])
 // & < > in text, & " < in a quoted attribute, as entities: "a<b" is "a&lt;b"; "ab" stays (each
 // pattern one character: "&" matches /&/g, "a" doesn't)
 const escaped = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-export const quoted = (s: string) =>
+export const quoted = (s: string): string =>
 	s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;")
 
 // an element (or text) as html
