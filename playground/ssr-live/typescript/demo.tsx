@@ -3,13 +3,12 @@
 // (/shared/clicks: one node every visitor's page binds). LLM generated: a prototype
 import { createAction, createNode, ensureNode, patch, peep, read, remove } from "@ermine/system"
 import { bind, type Child, handler, under } from "@ermine/render/h"
-import { render } from "@ermine/render/html"
 import type { Page } from "./live.ts"
 
 const add = (path: string, n: number) =>
 	patch(path, [{ path: [], value: (peep(() => read(path)) as number) + n }])
 
-export const demo = ({ into, options }: Page) =>
+export const demo = <E,>({ into, options, render }: Page<E>) =>
 	function visitor() {
 		ensureNode("count", 0)
 		ensureNode("items")

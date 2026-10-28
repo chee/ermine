@@ -8,7 +8,9 @@
 //   /shared/here/<id>    { animal, emoji, colour, away }: a visitor here now (the host's hooks)
 //   /shared/wall/<i>     a colour, or null: 16 × 16
 //   /shared/life/<i>     alive or not: 20 × 12, stepped by /clocks/life; life-gen, life-on
-//   /shared/beat/<r>-<s> on or not: 4 sounds × 8 steps; beat-step, moved by /clocks/beat
+//   /shared/beat/<r>-<s> on or not: 4 sounds × 8 steps; beat-step, moved by /clocks/beat from
+//                        the time, so every ermine that runs it is on the same step (LOCAL: each
+//                        writes its own, synced with nobody)
 //   /shared/stickers/*   { s, x, y, by }; /shared/card/* { name, flower, by }
 //   /shared/pet/*        hunger (fed by the visitors, raised by /clocks/pet), fed, pats, patted
 //   /shared/pens/a|b/*   { name, shame, shamedBy }: carried between pens by rename
@@ -28,7 +30,6 @@ import {
 	rename,
 } from "@ermine/system"
 import { bind, type Child, handler, track, under } from "@ermine/render/h"
-import { render } from "@ermine/render/html"
 import type { Page } from "./live.ts"
 
 const ANIMALS = [
@@ -147,15 +148,22 @@ export function stepLife() {
 	set("/shared/life-gen", now<number>("/shared/life-gen") + 1)
 }
 
+// someone is here, and not away
+const anyoneHere = () =>
+	peep(() => list("/shared/here")).some((id) => !now<Here>(`/shared/here/${id}`)?.away)
+
+// the beat's step, from the time
+export const beatClock = every(
+	BEAT_MS,
+	() => set("/shared/beat-step", Math.floor(Date.now() / BEAT_MS) % STEPS),
+)
+// the paths each ermine writes for itself (tippet's version: never synced)
+export const LOCAL = ["/shared/beat-step"]
+
 export const clocks: readonly (readonly [string, () => void])[] = [
-	["/clocks/life", every(LIFE_MS, stepLife)],
-	[
-		"/clocks/beat",
-		every(
-			BEAT_MS,
-			() => set("/shared/beat-step", (now<number>("/shared/beat-step") + 1) % STEPS),
-		),
-	],
+	// life steps only while someone watches it
+	["/clocks/life", every(LIFE_MS, () => anyoneHere() && stepLife())],
+	["/clocks/beat", beatClock],
 	[
 		"/clocks/pet",
 		every(
@@ -175,7 +183,7 @@ type Ev = {
 // the number a clicked cell says (its value), or nothing: a click between cells
 const cell = (e: Ev) => e.target.value ? [Number(e.target.value)] : undefined
 
-export const party = ({ into, options }: Page) =>
+export const party = <E,>({ into, options, render }: Page<E>) =>
 	function visitor() {
 		const id = options.name.split("/").pop()!
 		// a name and a colour, the first time: kept, so a visitor rebuilt per request (the edge) keeps them
@@ -281,14 +289,22 @@ function view(id: string): Child {
 }
 
 // "who drew?": the pixel asked about, and its writer, by explain: the action that wrote it is at
-// /visitors/<id>/on/paint, so its path's second name is the visitor
+// /visitors/<id>/on/paint, so its path's second name is the visitor. a write that came from
+// another ermine (the tippet version: a step) has no writer here, its change's actor saying the
+// process that wrote it ("/visitors/<id>")
 function whoDrew(): string {
 	const i = read("asked") as number | null
 	if (i === null) return "pick “who drew?”, then a pixel"
 	const at = `pixel ${i % WALL},${Math.floor(i / WALL)}`
 	if (read(`/shared/wall/${i}`) === null) return `${at}: nobody yet`
-	const writer = (explain(`/shared/wall/${i}`) as { writer?: { path?: string[] | null } })?.writer
-	return `${at}: ${said(nameOf(writer?.path?.[1]))}`
+	const seen = explain(`/shared/wall/${i}`) as {
+		writer?: { path?: string[] | null }
+		change?: { actor?: unknown }
+	}
+	const actor = seen?.change?.actor
+	const by = seen?.writer?.path?.[1] ??
+		(typeof actor === "string" ? actor.split("/")[2] : undefined)
+	return `${at}: ${said(nameOf(by))}`
 }
 
 function wall(): Child {

@@ -8,11 +8,13 @@
 	"tasks": {
 		"start": "deno run --allow-net --allow-read --allow-env typescript/server.ts",
 		"measure": "deno run --allow-net --allow-read --allow-env --allow-run --allow-write typescript/measure.ts",
-		"party": "deno run --allow-net --allow-read --allow-env typescript/party-server.ts",
+		"party": "deno task tippet-build && deno run --allow-net --allow-read --allow-env typescript/party-server.ts",
+		"tippet-build": "deno run --allow-read --allow-write --allow-run --allow-env typescript/tippet-build.ts",
 		"edge": "deno run --allow-net --allow-read --allow-env typescript/edge-local.ts",
 		"edge-build": "deno run --allow-read --allow-write --allow-run --allow-env typescript/edge-build.ts"
 	},
 	"exclude": [
-		"edge/netlify/edge-functions/live.js"
+		"edge/netlify/edge-functions/live.js",
+		"client/tippet.js"
 	]
 }
