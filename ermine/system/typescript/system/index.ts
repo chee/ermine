@@ -96,7 +96,9 @@
 //   start(fn, at, o?)    a process, asked as the starter ("place"), belonging to the scope that
 //                        started it; setup, an action, a writer (not a compute or
 //                        an act). its stop() is asked as the starter too. taken: { refused: "taken", at }
-//   getStatus(x)         tracked: { state, error?, phase?, waiting?, n? }; not there: undefined.
+//   getStatus(x, key?)   tracked: { state, error?, phase?, waiting?, n? }; not there: undefined.
+//                        key: that field alone, read and told alone (a reader of state isn't run
+//                        again when only n moves).
 //                        waiting names nodes by path as this process sees them (null: outside)
 //   explain(x, key?)     tracked: a change and its writer, one step. x a change's view: that one;
 //                        a node: its entry's, and a write held there. the writer and its record

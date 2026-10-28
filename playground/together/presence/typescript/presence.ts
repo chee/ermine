@@ -31,7 +31,7 @@ export const PART = "presence"
 export type World = {
 	table: Table
 	places: Pick<Places, "commit" | "readValue">
-	scheduler: Pick<Scheduler, "getCurrentScope" | "getRun" | "runWithScope" | "pulse">
+	scheduler: Pick<Scheduler, "getCurrentScope" | "getCurrentFrame" | "getRun" | "runWithScope" | "pulse">
 	// the scope the presence writes are made in (their header's actor)
 	scope: Scope
 	// ms; default Date.now

@@ -134,12 +134,14 @@ export class SendError extends Error {
 // its own line
 export type WriterAs = {
 	readonly inner: Inner
-	// what f's makings and asks belong to: the scope createWriter was called in (past any mark)
+	// what f's makings and asks belong to: the scope createWriter was called in
 	readonly parent: Scope
+	// the info of the frame it was made under (an action's call), when not that scope's own: its
+	// runs are made in a frame of that info under the scope's
 	readonly mark: Scope["info"] | undefined
 }
 // a writer: withWriter(f) runs f as the parent createWriter was called in, its writes carrying the
-// mark it was made under, each at its own line [marks-2026-10-27]
+// frame it was made under, each at its own line [marks-2026-10-27; scope and frame, 10-28]
 export type WithWriter = <T>(f: () => T) => T
 
 // what start gives a program: where the process is, its stop and its status; or taken
@@ -187,7 +189,11 @@ export type System = {
 	createAction: (path: string | Path, fn: (...args: any[]) => unknown) => Node
 	executeAction: (path: Target, ...args: unknown[]) => unknown
 	getCaller: () => Caller | undefined
-	getStatus: (x: Target) => Status | undefined
+	// key: that field alone, read and told alone (a reader of state isn't run again when only n moves)
+	getStatus: {
+		(x: Target): Status | undefined
+		<K extends keyof Status & string>(x: Target, key: K): Status[K] | undefined
+	}
 	addTeardown: (fn: (why: Why) => unknown) => void
 	getArgs: () => readonly string[]
 	createWriter: () => WithWriter

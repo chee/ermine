@@ -67,7 +67,7 @@ export type Here = Beat & { readonly session: string }
 export type World = {
 	table: Table
 	places: Pick<Places, "commit" | "readValue">
-	scheduler: Pick<Scheduler, "getCurrentScope" | "getRun" | "runWithScope">
+	scheduler: Pick<Scheduler, "getCurrentScope" | "getCurrentFrame" | "getRun" | "runWithScope">
 	// the scope beats are written in (their header's actor)
 	scope: Scope
 }

@@ -153,13 +153,29 @@ Deno.test(`paths fuzz: ${SEEDS} seeds × ${CASES} batches of nested lists: what 
 			const id = `case ${c}`
 			const spots = new Map<Spot<never>, Key[]>()
 			for (const p of ps) spots.set(paths.spot("v", id, p.slice()), p)
+			// here reads: what is at p itself (a map as a map)
+			const heres = new Map<Spot<never>, Key[]>()
+			for (const p of ps) heres.set(paths.spot("v", id, p.slice(), false, true), p)
 			const change = paths.change("v", id)
 			const at = `seed ${seed}, ${id}: ${show({ before, batch })}`
 			const got = paths.mark("v", id, batch)
 			const once = new Set(got)
 			assertEquals(once.size, got.length, `${at}: a spot given twice`)
 			assert(once.has(change), `${at}: the change spot`)
-			for (const s of got) assert(s === change || spots.has(s), `${at}: a spot not made here`)
+			for (const s of got) {
+				assert(s === change || spots.has(s) || heres.has(s), `${at}: a spot not made here`)
+			}
+			const itself = (v: unknown) => isMap(v) ? "a map" : JSON.stringify(v)
+			for (const [s, p] of heres) {
+				assertEquals(
+					once.has(s),
+					batch.some((x) => marks(x, p, false, true)),
+					`${at}: here ${show(p)}`,
+				)
+				if (itself(get(before, p)) !== itself(get(after, p))) {
+					assert(once.has(s), `${at}: here ${show(p)} changed, not marked`)
+				}
+			}
 			// mark is the rule, patch by patch
 			for (const [s, p] of spots) {
 				assertEquals(once.has(s), batch.some((x) => marks(x, p)), `${at}: ${show(p)}`)
@@ -170,12 +186,13 @@ Deno.test(`paths fuzz: ${SEEDS} seeds × ${CASES} batches of nested lists: what 
 				if (once.has(s)) marked++
 			}
 			// released spots are no longer given; the rest are, as before
+			for (const s of heres.keys()) paths.release(s)
 			const gone = new Set([...spots.keys()].filter(() => r.pick(2) === 0))
 			for (const s of gone) paths.release(s)
 			const again = paths.mark("v", id, batch)
 			assertEquals(
 				new Set(again),
-				new Set(got.filter((s) => !gone.has(s))),
+				new Set(got.filter((s) => !gone.has(s) && !heres.has(s))),
 				`${at}: after release`,
 			)
 			// an event: every spot still held

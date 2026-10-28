@@ -706,12 +706,73 @@ typedef struct {
 	const op_value *act, *returns;
 	const char *caught, *cleanup;
 	int has_returns;
+	// a generator memo's steps (options.gen): run in order, a {do: ["yield", expr]} pausing on the
+	// promise expr gives, "as" what it settles with; then expr is its value
+	const op_value *gen;
 } comp_t;
+
+// a generator memo's run, from the step at
+typedef struct {
+	comp_t *k;
+	env_t *inner;
+	size_t at;
+	const char *as;
+} memo_gen;
+
+static es_out memo_gen_next(es_context *c, void *ctx, int ok, op_value *value, char *error);
+static void memo_gen_quit(void *ctx) { free(ctx); }
+
+static es_out memo_gen_go(memo_gen *g) {
+	comp_t *k = g->k;
+	while (g->at < k->gen->count) {
+		const op_value *step = k->gen->items[g->at++];
+		const op_value *form = field(step, "do");
+		const char *as = text(step, "as");
+		op_value *v = NULL;
+		int code;
+		int yields = form != NULL && form->type == OP_LIST && form->count > 1 && is_str(form->items[0]) &&
+			strcmp(form->items[0]->str, "yield") == 0;
+		code = yields ? expr(k->sys, g->inner, form->items[1], &v) : call_form(k->sys, g->inner, form, &v);
+		if (code != 0) {
+			free(g);
+			return es_out_code(code);
+		}
+		if (yields && v != NULL && es_promise_of(W->e, v) != NULL) {
+			g->as = as;
+			return (es_out){.kind = ES_OUT_PAUSE, .value = v, .step = {memo_gen_next, memo_gen_quit, g}};
+		}
+		if (as != NULL) env_set(g->inner, as, v);
+		else op_free(v);
+	}
+	op_value *v = NULL;
+	int code = expr(k->sys, g->inner, k->expr, &v);
+	free(g);
+	if (code != 0) return es_out_code(code);
+	return es_out_of(v);
+}
+
+static es_out memo_gen_next(es_context *c, void *ctx, int ok, op_value *value, char *error) {
+	(void)c;
+	memo_gen *g = ctx;
+	if (!ok) {
+		free(g);
+		return es_out_failed(error);
+	}
+	if (g->as != NULL) env_set(g->inner, g->as, value);
+	else op_free(value);
+	return memo_gen_go(g);
+}
 
 static es_out comp_compute(es_context *c, void *ctx, const op_value *previous) {
 	(void)c;
 	(void)previous;
 	comp_t *k = ctx;
+	if (k->gen != NULL) {
+		memo_gen *g = es_alloc(sizeof *g);
+		g->k = k;
+		g->inner = env_new(k->env);
+		return memo_gen_go(g);
+	}
 	op_value *v = NULL;
 	int code = expr(k->sys, k->env, k->expr, &v);
 	if (code != 0) return es_out_code(code);
@@ -806,6 +867,8 @@ static int define(sys_t sys, env_t *env, const char *fn, const op_value *const *
 	if (strcmp(fn, "createMemo") == 0) {
 		const op_value *options = n > 1 ? raw[1] : NULL;
 		k->expr = n > 2 ? raw[2] : NULL;
+		k->gen = field(options, "gen");
+		if (k->gen != NULL && k->gen->type != OP_LIST) k->gen = NULL;
 		int json = strcmp(str_or(options, "equal"), "json") == 0;
 		es_computed_options o = {.equal = json ? comp_equal : NULL, .equal_ctx = k};
 		TRY(es_create_memo(c, name, comp_compute, k, &o, &h));
@@ -997,14 +1060,14 @@ static es_out gen_run(es_context *c, void *ctx, const op_value *const *args, siz
 	return es_out_of(p);
 }
 
-// "share": one function per name, giving the node of the nearest scope above the one open
+// "share": one function per name, giving the node of the nearest frame under the one open
 static es_out share_run(es_context *c, void *ctx, const op_value *const *args, size_t nargs) {
 	(void)c;
 	(void)ctx;
 	(void)args;
 	(void)nargs;
-	for (sc_scope *o = sc_get_current_scope(W->e->scheduler); o != NULL; o = sc_scope_parent(o)) {
-		const sc_info *info = sc_scope_info(o);
+	for (sc_frame *o = sc_get_current_frame(W->e->scheduler); o != NULL; o = sc_frame_parent(o)) {
+		const sc_info *info = sc_frame_info(o);
 		for (size_t i = 0; i < info->n; i++) {
 			if (strcmp(info->pairs[i].key, PL_NODE) == 0) {
 				return es_out_of(op_ref((op_value *)info->pairs[i].value));
@@ -1460,11 +1523,26 @@ static int form_status(sys_t sys, env_t *env, const op_value *const *raw, size_t
 	es_target x;
 	es_status st;
 	op_value *t = arg(env, nraw > 0 ? raw[0] : NULL);
+	// a key: that field alone (getStatus(x, key))
+	op_value *k = nraw > 1 ? arg(env, raw[1]) : NULL;
+	const char *key = k != NULL && k->type == OP_STR ? k->str : NULL;
 	int code = target_of(t, &x);
-	if (code == 0) code = es_get_status(c, x, &st);
+	if (code == 0) code = es_get_status_of(c, x, key, &st);
 	op_free(t);
-	if (code != 0) return code;
-	if (st.state != NULL) *out = status_value(&st);
+	if (code != 0) {
+		op_free(k);
+		return code;
+	}
+	if (st.state != NULL) {
+		op_value *m = status_value(&st);
+		if (key == NULL) *out = m;
+		else {
+			op_value *f = op_get(m, key);
+			*out = f != NULL ? op_ref(f) : NULL;
+			op_free(m);
+		}
+	}
+	op_free(k);
 	es_status_free(&st);
 	return 0;
 }

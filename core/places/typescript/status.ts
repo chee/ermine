@@ -35,7 +35,7 @@ export type Setup = {
 	table: Pick<Table, "get" | "add">
 	scheduler: Pick<
 		Scheduler,
-		"runWithScope" | "getCurrentScope" | "getRun" | "onRunEnd" | "onEffect"
+		"runWithScope" | "getCurrentScope" | "getCurrentFrame" | "getRun" | "onRunEnd" | "onEffect"
 	>
 }
 

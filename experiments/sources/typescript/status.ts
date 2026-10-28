@@ -77,7 +77,7 @@ export const SKIPPED = "ermine.sources.skipped"
 
 // a graph things are shown in: where a record is written
 export type Graph = {
-	scheduler: Pick<Scheduler, "runWithScope" | "getCurrentScope" | "getRun">
+	scheduler: Pick<Scheduler, "runWithScope" | "getCurrentScope" | "getCurrentFrame" | "getRun">
 	table: Pick<Table, "get" | "add">
 	places: Pick<Places, "commit">
 }

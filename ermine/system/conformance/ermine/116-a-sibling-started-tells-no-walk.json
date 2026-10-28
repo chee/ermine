@@ -1,0 +1,174 @@
+{
+	"title": "a walk through a folder of processes reads only what it steps on [the hedgehog's wall 2, 10-28: chee \"we need a fine grained way of looking at the thing we care about, and only change if it changes\"]: a memo reading /nb/a/v, a's memo, is not run again when another process starts or stops in /nb, nor when a plain node is made there; a's memo changing runs it",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/nb",
+				{}
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/x",
+				1
+			]
+		},
+		{
+			"op": "code",
+			"at": "/code/cell",
+			"program": [
+				{
+					"do": [
+						"createMemo",
+						"v",
+						{},
+						[
+							"read",
+							"/x"
+						]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/reader",
+			"program": [
+				{
+					"do": [
+						"createMemo",
+						"v",
+						{},
+						[
+							"log",
+							"reader",
+							[
+								"read",
+								"/nb/a/v"
+							]
+						]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "a",
+			"at": "/nb/a",
+			"program": "/code/cell",
+			"expect": {
+				"id": "proc:a"
+			}
+		},
+		{
+			"op": "start",
+			"name": "r",
+			"at": "/nb/r",
+			"program": "/code/reader",
+			"expect": {
+				"id": "proc:r"
+			}
+		},
+		{
+			"op": "log",
+			"name": "reader",
+			"expect": {
+				"values": [
+					1
+				]
+			}
+		},
+		{
+			"op": "start",
+			"name": "z",
+			"at": "/nb/z",
+			"program": "/code/cell",
+			"expect": {
+				"id": "proc:z"
+			}
+		},
+		{
+			"op": "log",
+			"name": "reader",
+			"expect": {
+				"values": [
+					1
+				]
+			}
+		},
+		{
+			"op": "stop",
+			"name": "z",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "reader",
+			"expect": {
+				"values": [
+					1
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/nb/plain",
+				3
+			]
+		},
+		{
+			"op": "log",
+			"name": "reader",
+			"expect": {
+				"values": [
+					1
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/x",
+				[
+					{
+						"path": [],
+						"value": 2
+					}
+				]
+			]
+		},
+		{
+			"op": "log",
+			"name": "reader",
+			"expect": {
+				"values": [
+					1,
+					2
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/nb/r/v"
+			],
+			"expect": {
+				"value": 2
+			}
+		}
+	]
+}

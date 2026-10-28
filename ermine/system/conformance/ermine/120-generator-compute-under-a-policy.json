@@ -1,0 +1,143 @@
+{
+	"title": "a generator compute under a deny policy [sanitizer: the guard builds a change base while a step is open, and the step's frame holds the scheduler's own number]: the memo reads before and after its yield and settles as it does with no policy",
+	"steps": [
+		{
+			"op": "ermine",
+			"deny": [
+				{
+					"op": "write",
+					"path": "/nothing"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/a",
+				1
+			],
+			"expect": {
+				"value": {
+					"path": [
+						"a"
+					],
+					"part": "value"
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/b",
+				10
+			],
+			"expect": {
+				"value": {
+					"path": [
+						"b"
+					],
+					"part": "value"
+				}
+			}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"createMemo",
+						"m",
+						{
+							"gen": [
+								{
+									"do": [
+										"log",
+										"m",
+										"start"
+									]
+								},
+								{
+									"do": [
+										"read",
+										"/a"
+									],
+									"as": "x"
+								},
+								{
+									"do": [
+										"yield",
+										[
+											"later",
+											5
+										]
+									],
+									"as": "y"
+								},
+								{
+									"do": [
+										"read",
+										"/b"
+									],
+									"as": "z"
+								}
+							]
+						},
+						[
+							"all",
+							"$x",
+							"$y",
+							"$z"
+						]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"getStatus",
+				"/code/p/m"
+			],
+			"expect": {
+				"value": {
+					"state": "pending",
+					"waiting": [
+						"a promise"
+					],
+					"n": 1
+				}
+			}
+		},
+		{
+			"op": "settle",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/code/p/m"
+			],
+			"expect": {
+				"value": [
+					1,
+					5,
+					10
+				]
+			}
+		}
+	]
+}

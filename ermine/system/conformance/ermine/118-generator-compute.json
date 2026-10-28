@@ -1,0 +1,49 @@
+{
+	"title": "a generator compute [chee 10-28: \"do the generator computes too\"]: createMemo(name, function* …): a yielded promise pauses its run (pending, waiting on a promise); as it settles the same run goes on, and a read after the yield is that run's, so a change to it runs the memo again; a change to a read before the yield, while it waits, lets the paused run go and starts it again",
+	"steps": [
+		{ "op": "ermine", "expect": {} },
+		{ "op": "host", "call": ["ensureNode", "/a", 1] },
+		{ "op": "host", "call": ["ensureNode", "/b", 10] },
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"createMemo",
+						"m",
+						{
+							"gen": [
+								{ "do": ["log", "m", "start"] },
+								{ "do": ["read", "/a"], "as": "x" },
+								{ "do": ["yield", ["later", 5]], "as": "y" },
+								{ "do": ["read", "/b"], "as": "z" }
+							]
+						},
+						["all", "$x", "$y", "$z"]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{ "op": "start", "name": "p", "at": "/code/p", "expect": { "id": "proc:p" } },
+		{
+			"op": "host",
+			"call": ["getStatus", "/code/p/m"],
+			"expect": { "value": { "state": "pending", "waiting": ["a promise"], "n": 1 } }
+		},
+		{ "op": "settle", "expect": {} },
+		{ "op": "host", "call": ["read", "/code/p/m"], "expect": { "value": [1, 5, 10] } },
+		{ "op": "log", "name": "m", "expect": { "values": ["start"] } },
+		{ "op": "host", "call": ["patch", "/b", [{ "path": [], "value": 20 }]] },
+		{ "op": "log", "name": "m", "expect": { "values": ["start", "start"] } },
+		{ "op": "settle", "expect": {} },
+		{ "op": "host", "call": ["read", "/code/p/m"], "expect": { "value": [1, 5, 20] } },
+		{ "op": "host", "call": ["patch", "/b", [{ "path": [], "value": 30 }]] },
+		{ "op": "host", "call": ["patch", "/a", [{ "path": [], "value": 2 }]] },
+		{ "op": "log", "name": "m", "expect": { "values": ["start", "start", "start", "start"] } },
+		{ "op": "settle", "expect": {} },
+		{ "op": "host", "call": ["read", "/code/p/m"], "expect": { "value": [2, 5, 30] } },
+		{ "op": "host", "call": ["getStatus", "/code/p/m", "state"], "expect": { "value": "done" } }
+	]
+}

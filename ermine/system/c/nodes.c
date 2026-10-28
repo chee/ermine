@@ -395,14 +395,13 @@ int es_inside(es_context *c, es_thunk f, void *ctx) {
 	return es_within(c, f, ctx);
 }
 
-sc_scope *es_open(es_context *c) {
-	sc_scope *o = sc_get_current_scope(c->ermine->scheduler);
-	return o != NULL ? o : c->scope;
+sc_frame *es_open_frame(es_context *c) {
+	sc_frame *f = sc_get_current_frame(c->ermine->scheduler);
+	return f != NULL ? f : sc_scope_frame(c->scope);
 }
 
 sc_scope *es_owner(es_context *c) {
 	sc_scope *o = sc_get_current_scope(c->ermine->scheduler);
-	while (o != NULL && es_is_mark(c->ermine, o)) o = sc_scope_parent(o);
 	return o != NULL ? o : c->scope;
 }
 

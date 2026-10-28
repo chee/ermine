@@ -90,6 +90,7 @@ export type Code =
 	| "closed"
 	// something made, or a teardown added, in an effect's act (an act makes nothing)
 	| "in-act"
+	| "outside"
 	// an act returned something that is no function (its cleanup)
 	| "bad-cleanup"
 	// createWriter or start called where a process can't (a compute, an act)

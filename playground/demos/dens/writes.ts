@@ -41,7 +41,7 @@ export function createWrites(o: {
 	const hosted = <T>(f: () => T) => s.runWithScope(scope, f)
 	// a write's header, from the host's scope as if open, made before the scope is opened so no
 	// scheduler frame is under it: its site the first frame outside this file
-	const as = { getCurrentScope: () => scope, getRun: () => s.getRun() }
+	const as = { getCurrentFrame: () => scope.frame, getRun: () => s.getRun() }
 	const header = () => createChangeHeader(as, undefined, skip)
 	const commit = (changed: readonly Entry<unknown>[]) =>
 		changed.length > 0 && places.commit(changed)

@@ -1,4 +1,5 @@
-// marks (marks-2026-10-27): what the conformance scenarios can't say on the line protocol: the
+// marks (marks-2026-10-27; marks are frames since 10-28: scope and frame): what the conformance
+// scenarios can't say on the line protocol: the
 // stand-in for navigator.userActivation is defined before @ermine/system loads (event_fixture.ts)
 import { userActivation } from "./event_fixture.ts"
 import { assert, assertEquals, assertThrows } from "@std/assert"

@@ -60,6 +60,8 @@ struct made {
 	ch_site site;
 	unsigned holds;
 	int gone, given, awaiting;
+	// awaiting is a generator's, paused at a promise
+	int pausing;
 	// the bridge of the latest promise it gave: an earlier one settling late leaves awaiting alone
 	void *awaiting_for;
 	// in its owner's bin (a hold of its own)
@@ -324,8 +326,65 @@ static void settled(void *ctx, int ok, const op_value *value, const char *error)
 
 // m's code run: what it gave as the scheduler has it. a promise marks its node awaiting till it
 // settles; PENDING and a failure leave that as it was (the reference throws them)
+static sc_out ran(made *m, es_out r);
+
+// a paused generator's step: the awaiting flag is its while it waits
+typedef struct {
+	made *m;
+	bridge *b;
+	es_step step;
+} paused;
+
+// let go: its computer may be gone already, so nothing of it is touched (computer_f clears the flag)
+static void paused_quit(void *data) {
+	paused *k = data;
+	k->step.quit(k->step.ctx);
+	free(k);
+}
+
+static sc_out paused_next(void *data, bool ok, void *value, char *error) {
+	paused *k = data;
+	made *m = k->m;
+	if (m->awaiting_for == k->b) {
+		m->awaiting = 0;
+		m->pausing = 0;
+	}
+	es_step step = k->step;
+	free(k);
+	if (m->cx == NULL) {
+		step.quit(step.ctx);
+		op_free(value);
+		free(error);
+		return (sc_out){.kind = SC_FAILED, .error = es_dup("closed")};
+	}
+	return ran(m, step.next(m->cx, step.ctx, ok, value, error));
+}
+
 static sc_out ran(made *m, es_out r) {
 	if (r.kind == ES_OUT_PENDING) return (sc_out){.kind = SC_PENDING};
+	if (r.kind == ES_OUT_PAUSE) {
+		es_promise *p = es_promise_of(m->x->e, r.value);
+		if (p == NULL) {
+			// no promise of ours to wait for: the generator gets its value back at once
+			return ran(m, r.step.next(m->cx, r.step.ctx, 1, r.value, NULL));
+		}
+		op_free(r.value);
+		struct es_computers *x = m->x;
+		bridge *b = es_alloc(sizeof *b);
+		b->x = x;
+		b->id = es_dup(m->id);
+		b->sp = sc_promise_new(x->e->scheduler);
+		ES_PUSH(x->bridges, x->nbridges, x->capbridges, b);
+		m->awaiting = 1;
+		m->awaiting_for = b;
+		m->pausing = 1;
+		paused *k = es_alloc(sizeof *k);
+		k->m = m;
+		k->b = b;
+		k->step = r.step;
+		es_promise_then(p, settled, b);
+		return (sc_out){.kind = SC_PAUSE, .promise = b->sp, .step = {paused_next, paused_quit, k}};
+	}
 	if (r.kind == ES_OUT_FAILED) {
 		return (sc_out){.kind = SC_FAILED, .error = r.error != NULL ? r.error : es_dup("error")};
 	}
@@ -333,6 +392,7 @@ static sc_out ran(made *m, es_out r) {
 	if (p == NULL) {
 		m->awaiting = 0;
 		m->awaiting_for = NULL;
+		m->pausing = 0;
 		return (sc_out){.kind = SC_VALUE, .value = r.value};
 	}
 	op_free(r.value);
@@ -352,6 +412,8 @@ static sc_out computer_f(void *previous, void *data) {
 	made *m = data;
 	es_ermine *e = m->x->e;
 	if (m->cx == NULL) return (sc_out){.kind = SC_FAILED, .error = es_dup("closed")};
+	// a paused generator of an earlier run was let go: no longer awaiting
+	if (m->pausing) m->awaiting = m->pausing = 0;
 	// an early effect's first run is inside its making: its status and run record are given from here
 	if (m->early && !m->given) {
 		m->given = 1;
@@ -397,6 +459,16 @@ static char *computer_act(void *value, void *previous, void *data) {
 	int code = m->act(m->cx, m->ctx, value, previous);
 	x->acting = was;
 	return code ? failure(code) : NULL;
+}
+
+int es_inside_only(es_context *c, const es_names *path, const char *fn) {
+	int inside = path->n > c->nat;
+	for (size_t i = 0; inside && i < c->nat; i++) inside = strcmp(path->names[i], c->at[i]) == 0;
+	if (inside) return 0;
+	char *at = es_join(CP(path->names), path->n);
+	int code = es_fail_ermine(ES_OUTSIDE, "%s(\"/%s\"): made outside its maker, it would outlive it", fn, at);
+	free(at);
+	return code;
 }
 
 sc_scope *es_acting(es_ermine *e) { return e->computers == NULL ? NULL : e->computers->acting; }
@@ -546,10 +618,10 @@ static void hold(made *m) {
 
 // making one --------------------------------------------------------------------------------------------------
 
-// the PL_NODE key's id of o or the nearest scope above it with one; NULL: none
-static const op_value *node_above(const sc_scope *o) {
-	for (; o != NULL; o = sc_scope_parent(o)) {
-		const sc_info *info = sc_scope_info(o);
+// the PL_NODE key's id of frame o or the nearest frame under it with one; NULL: none
+static const op_value *node_above(const sc_frame *o) {
+	for (; o != NULL; o = sc_frame_parent(o)) {
+		const sc_info *info = sc_frame_info(o);
 		for (size_t i = 0; info != NULL && i < info->n; i++) {
 			if (strcmp(info->pairs[i].key, PL_NODE) != 0) continue;
 			const op_value *v = info->pairs[i].value;
@@ -618,6 +690,13 @@ static void set_code(made *m, es_compute f, es_act act, void *ctx, const es_comp
 	m->equal_ctx = o != NULL ? o->equal_ctx : NULL;
 }
 
+// made again the same: the same functions (C's code has no text; what ctx holds is what a closure
+// holds, and not read), so its claim is not due [chee 10-28: nominal Adapton; "we expect staleness
+// when we use values that are not reactive"]
+static int same_code(const made *m, es_compute f, es_act act, const es_computed_options *o) {
+	return m->f == f && m->act == act && m->equal == (o != NULL ? o->equal : NULL);
+}
+
 // a new one: its node placed, its computer made and given its status and run record
 static int create(es_context *c, int memo, es_names *path, char **key, es_compute f, es_act act,
 	void *ctx, const es_computed_options *o, es_node_data *nd, es_handle **out, const ch_site *site) {
@@ -627,7 +706,7 @@ static int create(es_context *c, int memo, es_names *path, char **key, es_comput
 	// made in a process's setup: its site is the process's (es_setup_site)
 	site = es_setup_site(e, site);
 	char *id = es_new_id(e);
-	placing p = {c, path->names, path->n, id, node_above(own)};
+	placing p = {c, path->names, path->n, id, node_above(sc_scope_frame(own))};
 	int code = es_inside(c, place_node, &p);
 	if (code) {
 		free(id);
@@ -692,12 +771,17 @@ static int make(es_context *c, int memo, es_at name, es_compute f, es_act act, v
 	es_names path = {0};
 	code = es_resolve(c, name, &path);
 	if (code) return code;
+	code = es_inside_only(c, &path, memo ? "createMemo" : "createEffect");
+	if (code) {
+		es_names_free(&path);
+		return code;
+	}
 	char *key = es_path_key(CP(path.names), path.n);
 	es_node_data nd = {.has_path = 1, .path = path.names, .npath = path.n, .part = (char *)"value"};
 	made *m = made_at(c, key, own);
 	if (m == NULL) {
 		code = create(c, memo, &path, &key, f, act, ctx, o, &nd, out, site);
-	} else if (!sc_claim(m->c)) {
+	} else if (!(same_code(m, f, act, o) ? sc_claim_same(m->c) : sc_claim(m->c))) {
 		// made at this path under own before: claimed, given the new code (a parent's rerun does not
 		// destroy its children). as own's run starts, what its earlier runs made is old (the
 		// scheduler's); one not old was made in this run, or own has had no run since: already-there
@@ -916,17 +1000,28 @@ static int plain_status(es_context *c, const char *id, const op_value *v, es_sta
 }
 
 // a memo's or effect's status, from its latest run
-static int computer_status(es_context *c, const char *id, const op_value *v,
+// whether key wants field k (key NULL: every field)
+static int wants(const char *key, const char *k) { return key == NULL || strcmp(key, k) == 0; }
+
+// the computer's latest run, one field of it read and told; CRN_STOP: the run must end
+static int run_field(es_ermine *e, const char *id, crn_field field, const crn_run **r) {
+	if (e->runs == NULL) return 0;
+	return crn_read(e->runs, NULL, NULL, tb_string(id), field, r, NULL, NULL);
+}
+
+// key: the field wanted (NULL: all); the run record is read field by field, only those it takes: n
+// for n, end for state and phase, act for phase, reads for waiting [the hedgehog2's wall 3, 10-28:
+// a reader of state reran at every run, n moving; chee: "yeah do that"]
+static int computer_status(es_context *c, const char *id, const op_value *v, const char *key,
 	es_status *st) {
 	es_ermine *e = c->ermine;
 	const crn_run *r = NULL;
-	if (e->runs != NULL &&
-		crn_read(e->runs, NULL, NULL, tb_string(id), CRN_ALL, &r, NULL, NULL) == CRN_STOP) {
-		return ES_STOP;
-	}
-	if (r != NULL) {
-		st->has_n = 1;
-		st->n = r->n;
+	if (wants(key, "n") || wants(key, "waiting")) {
+		if (run_field(e, id, CRN_N, &r) == CRN_STOP) return ES_STOP;
+		if (r != NULL) {
+			st->has_n = 1;
+			st->n = r->n;
+		}
 	}
 	if (v == NULL) {
 		st->state = "done";
@@ -934,15 +1029,21 @@ static int computer_status(es_context *c, const char *id, const op_value *v,
 	}
 	if (!cst_is_pending(v)) {
 		st->error = error_text(v);
+		st->state = "failed";
+		if (!wants(key, "state") && !wants(key, "phase")) return 0;
+		if (run_field(e, id, CRN_END, &r) == CRN_STOP) return ES_STOP;
 		if (r != NULL && strcmp(r->end, "looping") == 0) {
 			st->state = "looping";
 			return 0;
 		}
-		st->state = "failed";
+		if (!wants(key, "phase")) return 0;
+		if (run_field(e, id, CRN_ACT, &r) == CRN_STOP) return ES_STOP;
 		st->phase = r != NULL && strcmp(r->end, "failed") != 0 && r->act == CRN_ACT_FAILED ? "act" : "run";
 		return 0;
 	}
 	st->state = "pending";
+	if (!wants(key, "waiting")) return 0;
+	if (run_field(e, id, CRN_READS, &r) == CRN_STOP) return ES_STOP;
 	es_waiting *waiting = NULL;
 	size_t nwaiting = 0, cap = 0;
 	// the pending memos it read
@@ -995,7 +1096,7 @@ static int computer_status(es_context *c, const char *id, const op_value *v,
 }
 
 // the base's status, read and asked as c
-static int own_status(es_context *c, const es_node_data *n, const char *id,
+static int own_status(es_context *c, const es_node_data *n, const char *id, const char *key,
 	es_status *st) {
 	es_ermine *e = c->ermine;
 	int code = ask_status(c, id, n);
@@ -1009,11 +1110,13 @@ static int own_status(es_context *c, const es_node_data *n, const char *id,
 		st->held_write = h.write;
 	}
 	if (!es_is_computer(e, id)) return plain_status(c, id, v, st);
-	return computer_status(c, id, v, st);
+	return computer_status(c, id, v, key, st);
 }
 
 // the base's, then what features show (onStatus)
-int es_get_status(es_context *c, es_target x, es_status *out) {
+int es_get_status(es_context *c, es_target x, es_status *out) { return es_get_status_of(c, x, NULL, out); }
+
+int es_get_status_of(es_context *c, es_target x, const char *key, es_status *out) {
 	*out = (es_status){0};
 	es_node_data n = {0};
 	int code = es_node_of(c, x, &n);
@@ -1025,7 +1128,7 @@ int es_get_status(es_context *c, es_target x, es_status *out) {
 	}
 	char *id = es_dup(at);
 	es_status st = {0};
-	code = own_status(c, &n, id, &st);
+	code = own_status(c, &n, id, key, &st);
 	if (code == 0) {
 		es_asked asked = {&n, id};
 		es_status shown = {0};

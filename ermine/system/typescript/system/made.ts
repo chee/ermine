@@ -104,12 +104,29 @@ function fate(m: Computed | Placed, alive: boolean): "keep" | "taken" | "gone" {
 // its children; two of a name in one run are refused). as own's run starts, what its earlier
 // runs made is old (the scheduler's): one old is claimed; one not old was made in this run (or
 // own has had no run since): already-there. none: a new one is to be made
+// two codes with the same source: their functions' text (f, act, equal), not their closures
+// a bound or native function's text says nothing of it ("function () { [native code] }"): such a
+// function is itself, the same only as itself
+const text = (f: unknown) => {
+	if (typeof f !== "function") return f
+	const t = f.toString()
+	return t.endsWith("{ [native code] }") ? f : t
+}
+export const sameSource = (a: Code, b: Code) =>
+	text(a.f) === text(b.f) && text(a.act) === text(b.act) && text(a.equal) === text(b.equal)
+
 export function again(inner: Inner, own: Scope, path: Path, code: Code): Computed | undefined {
 	const { s } = here(inner)
 	const bin = bins.get(own)
 	for (const m of bin?.at.get(keyOf(path)) ?? []) {
 		if (m.c === undefined || m.c.state !== "alive") continue
-		if (!s.claim(m.c)) throw new PlacesError("already-there", path.join("/"))
+		// nominal [chee 10-28: "that's one of the benefits of giving things names we get to do
+		// nominal adapton"]: made again with the same source, it is due only when what it read
+		// changes; a closure over values it doesn't read can go stale ("we expect staleness when we
+		// use values that are not reactive")
+		if (!s.claim(m.c, undefined, !sameSource(m.code, code))) {
+			throw new PlacesError("already-there", path.join("/"))
+		}
 		m.code = code
 		hold(inner, bin!, m)
 		return m
@@ -226,9 +243,47 @@ export function stopMade(inner: Inner, below: readonly Id[], always?: Id) {
 export const same = (m: Computed) => (a: unknown, b: unknown) =>
 	m.code.equal ? m.code.equal(a, b) : Object.is(a, b)
 
-// m's code run: a promise given marks its node awaiting till it settles
+// a generator compute's generator, watched: awaiting while it waits at a promise it yielded (the
+// scheduler steps it, giving back what the promise settled with). mine: whether it is still the
+// latest run's, so an earlier one let go late leaves the latest's awaiting as it is
+function* watched(m: Computed, gen: Generator<unknown, unknown, unknown>, mine: () => boolean) {
+	let input: unknown
+	let threw = false
+	try {
+		for (;;) {
+			const step = threw ? gen.throw(input) : gen.next(input)
+			if (step.done) return step.value
+			if (!isPromise(step.value)) {
+				input = step.value
+				threw = false
+				continue
+			}
+			if (mine()) m.awaiting = true
+			try {
+				input = yield step.value
+				threw = false
+			} catch (e) {
+				input = e
+				threw = true
+			} finally {
+				if (mine()) m.awaiting = false
+			}
+		}
+	} finally {
+		gen.return(undefined)
+	}
+}
+const isGen = (v: unknown): v is Generator<unknown, unknown, unknown> =>
+	Object.prototype.toString.call(v) === "[object Generator]"
+
+// m's code run: a promise given marks its node awaiting till it settles; a generator, while it
+// waits at one it yielded
 export const ran = (m: Computed, previous: unknown) => {
-	const r = m.code.f(previous)
+	let r = m.code.f(previous)
+	if (isGen(r)) {
+		const w: Generator<unknown, unknown, unknown> = watched(m, r, () => m.gave === w)
+		r = w
+	}
 	m.gave = r
 	if (isPromise(r)) {
 		m.awaiting = true

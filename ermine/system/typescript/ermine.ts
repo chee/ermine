@@ -195,7 +195,7 @@ export type StartOptions = {
 export type Started = {
 	readonly process: Process
 	stop: (why?: Why) => void
-	status: () => ReturnType<System["getStatus"]>
+	status: () => Status | undefined
 }
 
 export type Ermine = {
@@ -551,10 +551,10 @@ export function createErmine(options: Options = {}): Ermine {
 			return [o2 as ProcessContext, tagged, land]
 		},
 	)
-	// the open call's caller (the nearest call scope's), as a place: a process's at, a computer's its
+	// the open call's caller (the nearest call frame's), as a place: a process's at, a computer's its
 	// process's, the host none; no call open: undefined [chee 10-25: "so it should run as both"]
 	const caller = (): { from?: Path; box?: Id } | undefined => {
-		const o = callAbove(s.getCurrentScope())
+		const o = callAbove(s.getCurrentFrame())
 		if (o === undefined) return undefined
 		const by = (o.info.caller as { node?: Id } | undefined)?.node
 		if (by === undefined || by === node) return {}
@@ -1050,7 +1050,7 @@ export function createErmine(options: Options = {}): Ermine {
 			},
 			calling: () => {
 				alive()
-				return calls.calling(s.getCurrentScope())
+				return calls.calling(s.getCurrentFrame())
 			},
 			// pipe-extension: core gap
 			viewOf: (change) => (alive(), viewOf(base, change)),

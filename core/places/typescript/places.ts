@@ -41,13 +41,16 @@ export type Setup = {
 	// del, when given: a removal's site is its caller
 	table: Pick<Table, "get" | "who"> & Partial<Pick<Table, "del">>
 	paths: Paths
-	// getCurrentScope, when given: a removal's change is made from the scope open
+	// getCurrentFrame, when given: a removal's change is made from the frame open
 	scheduler:
 		& Pick<Scheduler, "track" | "mark" | "getRun">
-		& Partial<Pick<Scheduler, "getCurrentScope">>
+		& Partial<Pick<Scheduler, "getCurrentFrame">>
 	// what answers each step, in order; none: children alone
 	contributors?: readonly Contributor[]
 }
+
+// what here gives for a map: that a map is there, not what is in it
+export const map: unique symbol = /* @__PURE__ */ Symbol("map")
 
 // the id a walk is at on a level (a contributor's level, with no id of its own): not an id of any
 // entry, so it is never given as an answer (lib's get: nothing there)
@@ -75,6 +78,9 @@ export type Reads = {
 	// tells it, a change deeper under a name does not. ids: only the names holding an id (whether a
 	// name holds one changes only when it is put over, so the read is the same)
 	keys(part: Key, id: Id, path?: readonly Step[], ids?: boolean): string[]
+	// what is at path itself: a map as map (nothing of what is in it), anything else as it is;
+	// told as a read of that alone, so a change deeper in a map tells it nothing
+	here(part: Key, id: Id, path?: readonly Step[]): unknown
 	track(key: unknown): void
 }
 
@@ -344,12 +350,12 @@ export function createPlaces(setup: Setup): Places {
 		tellAll(facts)
 	}
 
-	// an entry taken out leaves no change: one made now, as a write's is, from the scope open (none
+	// an entry taken out leaves no change: one made now, as a write's is, from the frame open (none
 	// open: none); its site the caller of table.del (or of places', with no del given)
 	function removal(): ChangeHeader | undefined {
-		if (scheduler.getCurrentScope?.() === undefined) return undefined
+		if (scheduler.getCurrentFrame?.() === undefined) return undefined
 		const s = {
-			getCurrentScope: () => scheduler.getCurrentScope!(),
+			getCurrentFrame: () => scheduler.getCurrentFrame!(),
 			getRun: () => scheduler.getRun(),
 		}
 		return createChangeHeader(s, undefined, [import.meta.url], table.del)
@@ -412,10 +418,19 @@ export function createPlaces(setup: Setup): Places {
 		return ids ? Object.keys(v).filter((k) => isId(v[k])) : Object.keys(v)
 	}
 
+	// what is at path in the value of the entry under (part, id), itself: a map as map, told as a
+	// read of what is there and not what is in it
+	function readHere(part: Key, id: Id, path: readonly Step[] = []): unknown {
+		if (!peeping) tell(paths.spot(first(part), id, path, false, true))
+		const v = at(table.get(part, id)?.value, path)
+		return isPojo(v) ? map : v
+	}
+
 	// what contributors read through
 	const reads: Reads = {
 		read: readValue,
 		keys: readKeys,
+		here: readHere,
 		track: (key) =>
 			peeping ? undefined : into === undefined ? scheduler.track(key) : void into.add(key),
 	}

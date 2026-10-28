@@ -1,31 +1,31 @@
-// header: a write's, from the scope open. levels, innermost first: extra (one level, if given),
-// the scope open, its parent, ... the root. actor: the first "actor" over all levels; reader: the
+// header: a write's, from the frame open. levels, innermost first: extra (one level, if given),
+// the frame open, the frame it is under, ... the top. actor: the first "actor" over all levels; reader: the
 // first "reader" holding a string. metadata: one new object, the levels merged, inner keys over
 // outer (extra over all), up to and with the first scope whose own info holds the NODE key; none:
 // every level. time: now, whole seconds. site: the one given; none given, outside a run the call's
 // own, in a run none (a capture is ~50-70 µs: too dear per write in a run; a caller who knows the
-// site gives it: the running computer's own, a process's for its setup). no scope open: unscoped,
+// site gives it: the running computer's own, a process's for its setup). no frame open: unscoped,
 // nothing written.
 import type { ChangeHeader, Metadata } from "@ermine/core/node/entry"
-import { type Info, type Scheduler, SchedulerError, type Scope } from "@ermine/core/scheduler"
+import { type Frame, type Info, type Scheduler, SchedulerError } from "@ermine/core/scheduler"
 import { capture, type FileLocation, outside, trace } from "@ermine/core/util/stacktrace"
 
-// a change base: what a change is from the scope open alone (actor, reader, metadata), the header
+// a change base: what a change is from the frame open alone (actor, reader, metadata), the header
 // without its time, site and op
 export type ChangeBase = Omit<ChangeHeader, "time" | "external" | "op">
 
-// the key naming a scope's node (its id): a write's metadata stops at the first scope holding it.
+// the key naming a frame's node (its id): a write's metadata stops at the first frame holding it.
 // the one spelling: use this, never the string
 export const NODE = "node"
 
 const ours = new Set([import.meta.url])
 
-// the change base the scope open makes, extra its innermost level. none open: undefined
+// the change base the frame open makes, extra its innermost level. none open: undefined
 export function createChangeBase(
-	scheduler: Pick<Scheduler, "getCurrentScope">,
+	scheduler: Pick<Scheduler, "getCurrentFrame">,
 	extra?: Info,
 ): ChangeBase | undefined {
-	const open = scheduler.getCurrentScope()
+	const open = scheduler.getCurrentFrame()
 	if (open === undefined) return undefined
 	let actor: unknown
 	let reader: string | undefined
@@ -44,7 +44,7 @@ export function createChangeBase(
 		if (typeof extra.reader === "string") reader = extra.reader
 		levels.push(extra)
 	}
-	for (let o: Scope | undefined = open; o !== undefined; o = o.parent) see(o.info)
+	for (let o: Frame | undefined = open; o !== undefined; o = o.parent) see(o.info)
 	const metadata: Metadata = {}
 	for (let i = levels.length - 1; i >= 0; i--) Object.assign(metadata, levels[i])
 	const out: ChangeBase = { actor }
@@ -59,7 +59,7 @@ export function createChangeBase(
 // engine allows (a removal's header made inside table.del's event: del); none, this one. site: the
 // write's, as the caller knows it (in a run: the running computer's own); none: see above
 export function createChangeHeader(
-	scheduler: Pick<Scheduler, "getCurrentScope" | "getRun">,
+	scheduler: Pick<Scheduler, "getCurrentFrame" | "getRun">,
 	extra?: Info,
 	skip?: Iterable<string>,
 	from?: unknown,
@@ -69,7 +69,7 @@ export function createChangeHeader(
 	whole?: boolean,
 ): ChangeHeader {
 	const w = createChangeBase(scheduler, extra)
-	if (w === undefined) throw new SchedulerError("unscoped", "a write with no scope open")
+	if (w === undefined) throw new SchedulerError("unscoped", "a write with no frame open")
 	const h: ChangeHeader = { ...w, time: Math.floor(Date.now() / 1000) }
 	if (site !== undefined) {
 		h.external = [site]

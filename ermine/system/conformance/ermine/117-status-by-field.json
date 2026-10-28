@@ -1,0 +1,48 @@
+{
+	"title": "getStatus(x, key): one field of the status, read and told alone [the hedgehog2's wall 3, 10-28: a reader checking getStatus(m).state reran every time m ran, its n changing; chee: \"yeah do that\"]: a memo reading m's state is not run again when m runs again and is done again, and is when m fails; one reading m's whole status, or its n, runs again each time m runs",
+	"steps": [
+		{ "op": "ermine", "expect": {} },
+		{ "op": "host", "call": ["ensureNode", "/x", 1] },
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"createMemo",
+						"m",
+						{},
+						["if", ["is", ["read", "/x"], 3], ["throw", "bad"], ["read", "/x"]]
+					]
+				},
+				{
+					"do": ["createMemo", "byState", {}, ["log", "byState", ["getStatus", "m", "state"]]]
+				},
+				{ "do": ["createMemo", "byN", {}, ["log", "byN", ["getStatus", "m", "n"]]] },
+				{
+					"do": [
+						"createMemo",
+						"whole",
+						{},
+						["log", "whole", ["pick", ["getStatus", "m"], ["state"]]]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{ "op": "start", "name": "p", "at": "/code/p", "expect": { "id": "proc:p" } },
+		{ "op": "log", "name": "byState", "expect": { "values": ["done"] } },
+		{ "op": "log", "name": "byN", "expect": { "values": [1] } },
+		{ "op": "log", "name": "whole", "expect": { "values": ["done"] } },
+		{ "op": "host", "call": ["patch", "/x", [{ "path": [], "value": 2 }]] },
+		{ "op": "log", "name": "byState", "expect": { "values": ["done"] } },
+		{ "op": "log", "name": "byN", "expect": { "values": [1, 2] } },
+		{ "op": "log", "name": "whole", "expect": { "values": ["done", "done"] } },
+		{ "op": "host", "call": ["patch", "/x", [{ "path": [], "value": 3 }]] },
+		{ "op": "log", "name": "byState", "expect": { "values": ["done", "failed"] } },
+		{ "op": "log", "name": "byN", "expect": { "values": [1, 2, 3] } },
+		{ "op": "log", "name": "whole", "expect": { "values": ["done", "done", "failed"] } },
+		{ "op": "host", "call": ["getStatus", "/code/p/m", "error"], "expect": { "value": "bad" } },
+		{ "op": "host", "call": ["getStatus", "/code/p/m", "phase"], "expect": { "value": "run" } }
+	]
+}

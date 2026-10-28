@@ -1,0 +1,505 @@
+{
+	"title": "a here spot reads what is at its path itself, a map as a map [the hedgehog's wall 2, 10-28: chee \"we need a fine grained way of looking at the thing we care about, and only change if it changes\"]: a place at its path or above it reaches it; under it, only a place going into a list (a number step just past its path: the list changes); deeper in a map, a key set or taken out, nothing. a here spot is apart from the plain and keys spots at the same path, and released alone",
+	"steps": [
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "n",
+			"path": [
+				"m"
+			],
+			"here": true,
+			"expect": {}
+		},
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "n",
+			"path": [
+				"m",
+				"a"
+			],
+			"here": true,
+			"expect": {}
+		},
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "n",
+			"path": [
+				"l"
+			],
+			"here": true,
+			"expect": {}
+		},
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "n",
+			"path": [
+				"l",
+				1
+			],
+			"here": true,
+			"expect": {}
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [
+				{
+					"path": [
+						"m",
+						"a",
+						"b"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"spots": []
+			}
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [
+				{
+					"path": [
+						"m",
+						"z"
+					]
+				}
+			],
+			"expect": {
+				"spots": []
+			}
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [
+				{
+					"path": [
+						"m",
+						"a"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"spots": [
+					{
+						"here": [
+							"m",
+							"a"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [
+				{
+					"path": [
+						"m"
+					],
+					"value": {}
+				}
+			],
+			"expect": {
+				"spots": [
+					{
+						"here": [
+							"m"
+						]
+					},
+					{
+						"here": [
+							"m",
+							"a"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [
+				{
+					"path": [],
+					"value": {}
+				}
+			],
+			"expect": {
+				"spots": [
+					{
+						"here": [
+							"m"
+						]
+					},
+					{
+						"here": [
+							"m",
+							"a"
+						]
+					},
+					{
+						"here": [
+							"l"
+						]
+					},
+					{
+						"here": [
+							"l",
+							1
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [
+				{
+					"path": [
+						"l",
+						0
+					],
+					"value": 5
+				}
+			],
+			"expect": {
+				"spots": [
+					{
+						"here": [
+							"l"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [
+				{
+					"path": [
+						"l",
+						1,
+						"k"
+					],
+					"value": 5
+				}
+			],
+			"expect": {
+				"spots": [
+					{
+						"here": [
+							"l"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [
+				{
+					"path": [
+						"l",
+						0
+					]
+				}
+			],
+			"expect": {
+				"spots": [
+					{
+						"here": [
+							"l"
+						]
+					},
+					{
+						"here": [
+							"l",
+							1
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": [
+						9
+					]
+				}
+			],
+			"expect": {
+				"spots": [
+					{
+						"here": [
+							"l"
+						]
+					},
+					{
+						"here": [
+							"l",
+							1
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "n",
+			"path": [
+				"m"
+			],
+			"expect": {}
+		},
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "n",
+			"path": [
+				"m"
+			],
+			"keys": true,
+			"expect": {}
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [
+				{
+					"path": [
+						"m",
+						"a",
+						"b"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"spots": [
+					[
+						"m"
+					]
+				]
+			}
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [
+				{
+					"path": [
+						"m",
+						"q"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"spots": [
+					[
+						"m"
+					],
+					{
+						"keys": [
+							"m"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "marks",
+			"patch": {
+				"path": [
+					"m",
+					"a",
+					"b"
+				],
+				"value": 1
+			},
+			"paths": [
+				[
+					"m"
+				],
+				[
+					"m",
+					"a"
+				],
+				[
+					"m",
+					"a",
+					"b"
+				]
+			],
+			"here": true,
+			"expect": {
+				"marks": [
+					false,
+					false,
+					true
+				]
+			}
+		},
+		{
+			"op": "marks",
+			"patch": {
+				"path": [
+					"l",
+					3
+				],
+				"value": 1
+			},
+			"paths": [
+				[
+					"l"
+				],
+				[
+					"l",
+					3
+				],
+				[
+					"l",
+					2
+				]
+			],
+			"here": true,
+			"expect": {
+				"marks": [
+					true,
+					true,
+					false
+				]
+			}
+		},
+		{
+			"op": "release",
+			"source": "v",
+			"id": "n",
+			"path": [
+				"m",
+				"a"
+			],
+			"here": true,
+			"expect": {}
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [
+				{
+					"path": [
+						"m",
+						"a"
+					],
+					"value": 2
+				}
+			],
+			"expect": {
+				"spots": [
+					[
+						"m"
+					],
+					{
+						"keys": [
+							"m"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "release",
+			"source": "v",
+			"id": "n",
+			"path": [
+				"m"
+			],
+			"here": true,
+			"expect": {}
+		},
+		{
+			"op": "release",
+			"source": "v",
+			"id": "n",
+			"path": [
+				"l"
+			],
+			"here": true,
+			"expect": {}
+		},
+		{
+			"op": "release",
+			"source": "v",
+			"id": "n",
+			"path": [
+				"l",
+				1
+			],
+			"here": true,
+			"expect": {}
+		},
+		{
+			"op": "release",
+			"source": "v",
+			"id": "n",
+			"path": [
+				"m"
+			],
+			"expect": {}
+		},
+		{
+			"op": "release",
+			"source": "v",
+			"id": "n",
+			"path": [
+				"m"
+			],
+			"keys": true,
+			"expect": {}
+		},
+		{
+			"op": "held",
+			"expect": {
+				"keys": 0,
+				"spots": 0,
+				"steps": 0
+			}
+		}
+	]
+}

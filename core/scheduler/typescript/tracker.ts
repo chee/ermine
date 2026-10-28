@@ -32,6 +32,7 @@ export function createTracker<O>(): {
 	track: (f: Node<O>, t: Node<O>) => void
 	end: (f: Node<O>) => void
 	leave: (f: Node<O>) => void
+	resume: (f: Node<O>) => void
 	old: (l: Link<O>) => boolean
 	trim: (f: Node<O>) => void
 	dedupe: (f: Node<O>) => void
@@ -130,6 +131,13 @@ export function createTracker<O>(): {
 		f.open = false
 	}
 
+	// the run left goes on (a generator compute's next step): open again, its tick and cursor as
+	// leave left them, so its reads go on after the ones it made before
+	function resume(f: N) {
+		if (f.open) throw new Error("resume in a run: end it first")
+		f.open = true
+	}
+
 	// a link from an earlier run that the latest run did not read: old (its run over). the next
 	// run reading it takes it back; trim lets the old ones go when a run is done
 	function old(l: L): boolean {
@@ -206,5 +214,5 @@ export function createTracker<O>(): {
 		return out
 	}
 
-	return { node, begin, track, end, leave, old, trim, dedupe, add, untrack, reads, readers }
+	return { node, begin, track, end, leave, resume, old, trim, dedupe, add, untrack, reads, readers }
 }

@@ -24,28 +24,32 @@
 // patch in its own coordinates
 //
 // spots: held by key, in a trie of path steps per key; a step is held while a spot is at or under
-// it. a spot in an answer: its path, {"keys": path} for a keys spot, "change" for the change spot.
+// it. a spot in an answer: its path, {"keys": path} for a keys spot, {"here": path} for a here
+// spot, "change" for the change spot.
 // mark's order: the change spot, then each patch's places in turn; a spot already given is
 // skipped. a place walks from the key's top down its path: at each step above the place, its
-// spot; at the step just above an unranged place, its keys spot too; above a removal at index k,
+// spot, then its here spot when the place's next step is a number (into a list); at the step just above an unranged place, its keys spot too; above a removal at index k,
 // the number kids past k in index order, wholly; then on into the next step (none held: the place
-// is done). at the place's step: unranged, wholly; ranged [a, b), its spot, its keys spot, then
+// is done). at the place's step: unranged, wholly; ranged [a, b), its spot, its keys spot, its here spot, then
 // its number kids from a in index order, below b when n is b - a, each wholly. wholly: the
-// step's spot, its keys spot, then each kid wholly in the order the kid steps were made (a step
+// step's spot, its keys spot, its here spot, then each kid wholly in the order the kid steps were made (a step
 // let go and made again comes last)
 //
-//   {"op":"spot","source","id","path","keys"?}  {}  a read's spot, made or found; keys: true, a read
-//                                                 of the keys at path only, a spot of its own
+//   {"op":"spot","source","id","path","keys"?,"here"?}  {}  a read's spot, made or found; keys: true,
+//                                                 a read of the keys at path only, a spot of its own;
+//                                                 here: true, a read of what is at path itself (a map
+//                                                 as a map), a spot of its own
 //   {"op":"change","source","id"}            {}  the change spot, made or found
 //   {"op":"mark","source","id","patches"}    {"spots":[...]}  what the patches mark, each once; a key
 //                                                 with no spots: [] (nothing is made)
 //   {"op":"event","source","id"}             {"spots":[...]}  a whole-node event at that key: a mark
 //                                                 of [{"path":[]}]
-//   {"op":"release","source","id","path"?,"keys"?}  {}  lets the spot go (no path: the change spot);
+//   {"op":"release","source","id","path"?,"keys"?,"here"?}  {}  lets the spot go (no path: the change spot);
 //                                                 not there: nothing. steps left with nothing go, then
 //                                                 the key
-//   {"op":"marks","patch","paths","keys"?}   {"marks":[...]}  the rule, a boolean per path in order
-//                                                 (keys: for a keys read); no key, nothing held
+//   {"op":"marks","patch","paths","keys"?,"here"?}   {"marks":[...]}  the rule, a boolean per path in
+//                                                 order (keys: for a keys read; here: for a here read);
+//                                                 no key, nothing held
 //   {"op":"held"}                            {"keys","spots","steps"}  what is held: keys with a spot,
 //                                                 spots, and steps (per key its top, and each other
 //                                                 prefix of its spots' paths, once)
@@ -97,12 +101,13 @@ function patches(x: unknown): Patch[] {
 	}
 	return x
 }
-const shown = (s: Spot<never>) => s.path === null ? "change" : s.keys ? { keys: s.path } : s.path
+const shown = (s: Spot<never>) =>
+	s.path === null ? "change" : s.keys ? { keys: s.path } : s.here ? { here: s.path } : s.path
 
 function answer(r: Request): Answer {
 	switch (r.op) {
 		case "spot":
-			paths.spot(key(r.source), key(r.id), path(r.path), r.keys === true)
+			paths.spot(key(r.source), key(r.id), path(r.path), r.keys === true, r.here === true)
 			return {}
 		case "change":
 			paths.change(key(r.source), key(r.id))
@@ -115,14 +120,18 @@ function answer(r: Request): Answer {
 			// made, then let go: a spot not there stays not there
 			const s = r.path === undefined
 				? paths.change(key(r.source), key(r.id))
-				: paths.spot(key(r.source), key(r.id), path(r.path), r.keys === true)
+				: paths.spot(key(r.source), key(r.id), path(r.path), r.keys === true, r.here === true)
 			paths.release(s)
 			return {}
 		}
 		case "marks": {
 			if (!Array.isArray(r.paths)) throw new Error("paths is a list")
 			const [patch] = patches([r.patch])
-			return { marks: r.paths.map((p: unknown) => marks(patch, path(p), r.keys === true)) }
+			return {
+				marks: r.paths.map((p: unknown) =>
+					marks(patch, path(p), r.keys === true, r.here === true)
+				),
+			}
 		}
 		case "held":
 			return paths.held()

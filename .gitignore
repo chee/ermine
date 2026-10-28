@@ -72,3 +72,6 @@ playground/experimental_os/mac-archive/ermineOS
 playground/experimental_os/mac-archive/ermineOS-newos
 .tmp*
 .littlesync-state
+
+# Local Netlify folder
+.netlify

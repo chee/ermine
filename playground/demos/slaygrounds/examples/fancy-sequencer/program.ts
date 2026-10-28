@@ -333,7 +333,7 @@ export function roll() {
 				width: (v.drum ? 1 : v.len ?? 1) * CELL - 3 + "px",
 				opacity: String(0.45 + 0.55 * (v.vel ?? 0.8)),
 			}))}
-			data-read={bind("/player/heard", (h) => (h.ids.includes(n.id) ? "yes" : undefined))}
+			data-read={bind("/run/player/heard", (h) => (h.ids.includes(n.id) ? "yes" : undefined))}
 			title={`/${(n.path ?? []).join("/")}: drag to move, click to take out`}
 			onPointerDown={(e: PointerEvent) => {
 				e.stopPropagation()
@@ -384,9 +384,7 @@ export function roll() {
 						{minis[i]}
 						<div class="acts">
 							<button
-								title={`the same notes in ${
-									BARS[(i + 1) % 4]
-								} too (a mount: one node, two places)`}
+								title={`the same notes in ${BARS[(i + 1) % 4]} too (a mount: one node, two places)`}
 								onClick={handler("on/mount", [b])}
 							>
 								⧉ → {BARS[(i + 1) % 4]}
@@ -416,11 +414,7 @@ export function roll() {
 						{ROWS.map((r) => (
 							<div
 								class={`key ${
-									typeof r === "string"
-										? "drum"
-										: [1, 3, 6, 8, 10].includes(r % 12)
-										? "black"
-										: ""
+									typeof r === "string" ? "drum" : [1, 3, 6, 8, 10].includes(r % 12) ? "black" : ""
 								}`}
 							>
 								{typeof r === "string" ? r : r % 12 === 0 ? noteName({ pitch: r }) : ""}
@@ -505,7 +499,8 @@ export function player() {
 	// heard: what this step reads, and how. the bar's pattern, its step folder, each note in it;
 	// a note's route is the way it was reached (/song/bar2/… for a mount of bar1's pattern).
 	// also which bars hold the same pattern node
-	const heard = createMemo("/player/heard", () => {
+	// made inside the player's own node (a memo lives inside what made it): /run/player/heard
+	const heard = createMemo("heard", () => {
 		const next = read("/clock/next") as Next | null | undefined
 		if (!next) return { n: -1, ids: [], notes: [] }
 		const p = `/song/${next.bar}`, pid = idOf(p)
@@ -587,8 +582,8 @@ export function player() {
 			<header>
 				<span class="tag">explain</span>
 				<small>
-					each step: the folder the player read, every note in it and the route it came by. a
-					note lit on the roll is one being read
+					each step: the folder the player read, every note in it and the route it came by. a note
+					lit on the roll is one being read
 				</small>
 				<label>
 					tone

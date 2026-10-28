@@ -172,6 +172,10 @@ function ermineError(e: ErmineError, seen: Seen | undefined): string | undefined
 				`its path or its module.`
 		case "not-yet":
 			return `that is made after the features are set up: use it in a hook, not in setup.`
+		case "outside":
+			return `a memo, effect or pipe lives inside what made it: give it a bare name ("count", ` +
+				`not "./count"). something meant to outlive its maker beside it is a plain node, or a ` +
+				`process of its own.`
 		case "in-act":
 			return fn === "addTeardown"
 				? `an effect's act makes nothing: return the cleanup from the act instead, ` +

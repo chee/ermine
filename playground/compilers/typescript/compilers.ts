@@ -97,7 +97,7 @@ export type Setup = {
 		| "track"
 		| "mark"
 		| "getRun"
-		| "getCurrentScope"
+		| "getCurrentScope" | "getCurrentFrame"
 		| "onRunEnd"
 		| "onEffect"
 		| "onTrack"
