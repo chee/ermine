@@ -3,6 +3,7 @@
 import { createErmine, ensureNode } from "@ermine/system"
 import { createLive } from "./live.ts"
 import { demo } from "./demo.tsx"
+import { shortIds } from "./ids.ts"
 
 export const style = `
 body { font: 16px/1.4 system-ui, sans-serif; margin: 0; background: #fff; color: #000 }
@@ -27,6 +28,7 @@ export const pollClient = await Deno.readTextFile(
 
 export function serve(port: number) {
 	const ermine = createErmine({
+		features: [shortIds()],
 		host: {
 			setup: () => {
 				ensureNode("/shared")

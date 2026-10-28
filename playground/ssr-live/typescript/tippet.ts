@@ -15,6 +15,7 @@ import { dom } from "@ermine/render/dom"
 import { socket } from "@ermine/tippet/carriers/websocket"
 import { createTie, OTHER_ROOM } from "./tie.ts"
 import { beatClock, EPHEMERAL, LOCAL, party } from "./party.tsx"
+import { shortIds } from "./ids.ts"
 
 // a link lost (not refused) is made again after this long
 const AGAIN_MS = 1000
@@ -27,7 +28,7 @@ const { room = "/tippet", root, process: path = "" } = me.dataset
 const have = JSON.parse(me.dataset.have ?? "{}") as Record<string, number>
 const into = document.querySelector("main")!
 
-const ermine = createErmine()
+const ermine = createErmine({ features: [shortIds()] })
 const tie = await createTie(ermine, { at: "/shared", id: root, local: LOCAL, ephemeral: EPHEMERAL })
 
 // the room, linked again when the link is lost; another room's (the server started again): a new page

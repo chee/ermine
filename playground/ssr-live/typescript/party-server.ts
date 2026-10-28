@@ -8,6 +8,7 @@ import { createLive } from "./live.ts"
 import { clocks, EPHEMERAL, LOCAL, party, setupShared } from "./party.tsx"
 import { fonts, style } from "./party-style.ts"
 import { createRoom } from "./room.ts"
+import { shortIds } from "./ids.ts"
 
 const read = (name: string) => Deno.readTextFile(new URL(`../client/${name}`, import.meta.url))
 export const client = await read("live.js")
@@ -19,7 +20,7 @@ const tippet = await read("tippet.js").catch(() => undefined)
 const LINGER = 15_000
 
 export async function serveParty(port: number) {
-	const ermine = createErmine({ host: { setup: setupShared } })
+	const ermine = createErmine({ features: [shortIds()], host: { setup: setupShared } })
 	for (const [at, clock] of clocks) ermine.start(clock, at)
 	// a visitor's presence, by its process's path (/visitors/<id>)
 	const here = (path: string) => `/shared/here/${path.split("/").pop()}`
