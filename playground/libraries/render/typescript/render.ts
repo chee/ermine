@@ -6,13 +6,20 @@
 //             binding): a render again changes and moves only what differs (shift's reconcile)
 //   bind      an early effect at a node of its own under the view's folder (options.at, "view" if
 //             none): view/0, view/1, and a binding made while another plans goes under that one's
-//             node (view/3/0). so the page's bindings are in the graph, each one's value what it
-//             last read. its compute reads and plans what it shows, the bindings inside made there
-//             (an act makes nothing); its act places it
+//             node (view/3/0); in a keyed view (a list's row) under its key (view/3/apple:0). so
+//             the page's bindings are in the graph, each one's value what it last read. its compute
+//             reads and plans what it shows, the bindings inside made there (an act makes nothing);
+//             its act places it
+//   again     a binding made again by its parent's next run, the same (its prop, read, target and
+//             function), is the same binding: it runs only when what it read changes (nominal), and
+//             an element its parent gives it now shows what it showed last. made again different,
+//             it is made new, under its name with a ' more (view/0' for view/0). one its parent's
+//             run makes no more is let go
 //   handler   onClick={handler("on/press", [args])}: the action there, called through
 //             options.call (an event has nothing open: the host says who calls)
 //   says      renderer.say(el, name, value): process, key, source (file:line), bind:<prop|text|
-//             children>, on:<event>, waiting (""); undefined takes it back
+//             children> and on:<event> (the path, from the root), waiting (""); undefined takes it
+//             back
 //   tells     renderer.tell(el, name, detail): "ermine:change" on a bound node, "ermine:call" and
 //             "ermine:called" around a handler; onErmineChange={…} listens
 import {
@@ -22,6 +29,7 @@ import {
 	getStatus,
 	hasNode,
 	list,
+	peep,
 	PENDING,
 	read,
 	readChildren,
@@ -43,8 +51,9 @@ import {
 
 type Node = ReturnType<typeof getNode>
 
-// what render needs from the host: a name the root says, and how an action is called from an
-// event (nothing is open then, so the process can't call it itself)
+// what render needs from the host: the process's path ("a/b"), said by the root and what the
+// bindings' paths are said from, and how an action is called from an event (nothing is open
+// then, so the process can't call it itself)
 export type Options = {
 	name: string
 	call: (action: Node, ...args: unknown[]) => unknown
@@ -90,10 +99,18 @@ export function createRenderer<N extends object, E extends N>(
 	r: Renderer<N, E>,
 ): { render: (into: E, view: Child, options: Options) => N | undefined } {
 	// ---- where bindings go ----
-	// the plan being made: the host's options, the folder a binding made now goes under, and how
-	// many have been made there in this run (a binding made again in its parent's next run, at the
-	// same place, is the same node: its effect claimed again with its new code)
-	type Here = { options: Options; folder: string; n: number }
+	// the plan being made: the host's options, the folder a binding made now goes under, the keys
+	// of the keyed views it is in ("apple:"), how many have been made there in this run, the keys
+	// met there (a binding made again in its parent's next run, at the same place, is the same
+	// node: its effect claimed again with its new code), and the names of the bindings made there
+	type Here = {
+		options: Options
+		folder: string
+		key: string
+		n: number
+		seen?: Map<string, number>
+		made?: Set<string>
+	}
 	let here: Here | undefined
 
 	function within<T>(h: Here, f: () => T): T {
@@ -104,6 +121,19 @@ export function createRenderer<N extends object, E extends N>(
 		} finally {
 			here = was
 		}
+	}
+	// what a keyed view (or row) makes, its bindings named under its key: a row is the same row,
+	// whatever order its list is in. a key met twice here is its second (apple~2). what names use
+	// (/ ~ : ' and %) is said in a key as %2F, %7E, … ("a/b~2" is "a%2Fb%7E2"; "apple" as it is)
+	function keyed<T>(key: string | undefined, f: () => T): T {
+		const now = here
+		if (key === undefined || now === undefined) return f()
+		const seen = now.seen ??= new Map()
+		const at = now.key +
+			key.replace(/[%/~:']/g, (c) => "%" + c.charCodeAt(0).toString(16).toUpperCase())
+		const count = (seen.get(at) ?? 0) + 1
+		seen.set(at, count)
+		return within({ ...now, key: `${at}${count > 1 ? `~${count}` : ""}:`, n: 0, seen }, f)
 	}
 
 	// ---- what the engine keeps ----
@@ -138,24 +168,62 @@ export function createRenderer<N extends object, E extends N>(
 	// but in an act, or in render. the element a binding shows on is chosen by the act that places
 	// it, after the binding is made, so a binding shows through its socket: at once when the socket
 	// has its element, else waiting till it is given one (a binding made new acts at once, inside
-	// the compute that made it, before there is an element)
+	// the compute that made it, before there is an element). a socket is its binding's while the
+	// binding is the same: its parent's next run, making it again, gives it the same socket, and an
+	// element given then (the parent's view made new) shows what the binding showed last
 	type Socket = {
 		el?: E
-		waiting?: (el: E) => void
-		// told the element as it is given, before what waited is shown
+		// what the binding shows, its latest: on an element given, at once if there is one.
+		// told: say "ermine:change" (not the first time it shows, nor on an element just given)
+		show?: (el: E, told: boolean) => void
+		shown?: boolean
+		// what its compute planned last, for its act (the act may be its new code: claimed again
+		// after its compute ran in this pulse)
+		plan?: unknown
+		// the names of the bindings its compute made last, under its node
+		kids?: Set<string>
+		// told the element as it is given, before what it shows is shown
 		readonly given?: (el: E) => void
+		// what it was made as, to know it when made again
+		readonly spec: Spec
+		// its target's path, as said on the element
+		readonly path: string
 	}
-	function give(k: Socket, show: (el: E) => void) {
-		if (k.el) show(k.el)
-		else k.waiting = show
+	function give(k: Socket, show: (el: E, told: boolean) => void) {
+		k.show = show
+		if (!k.el) return
+		show(k.el, k.shown === true)
+		k.shown = true
 	}
 	function attach(k: Socket, el: E) {
+		if (k.el === el) return
 		k.el = el
 		k.given?.(el)
-		const waiting = k.waiting
-		k.waiting = undefined
-		waiting?.(el)
+		if (!k.show) return
+		k.show(el, false)
+		k.shown = true
 	}
+	// the sockets of a render's bindings, by name: a render again (a reload) begins with none
+	const sockets = new WeakMap<Options, Map<string, Socket>>()
+
+	// a binding is made as: what of the element it binds (a prop, or "kids"), how it reads, its
+	// target, and its functions by their text (a closure's values aren't seen: a plain value is
+	// fixed when first made)
+	type Spec = {
+		readonly role: string
+		readonly read: Bound["read"]
+		readonly target: Target
+		readonly fns: readonly unknown[]
+	}
+	const specOf = (role: string, b: Bound): Spec => ({
+		role,
+		read: b.read,
+		target: b.target,
+		fns: [b.fn, b.get, b.row].map(textOf),
+	})
+	const sameSpec = (a: Spec, b: Spec) =>
+		a.role === b.role && a.read === b.read && a.fns.every((f, i) => f === b.fns[i]) &&
+		sameTarget(a.target, b.target)
 
 	// what a compute plans: text, a binding among other kids (its span's socket), an element (its
 	// view, and what was made for it), or a kept node
@@ -187,17 +255,19 @@ export function createRenderer<N extends object, E extends N>(
 	}
 
 	function prepare(v: View): Made {
-		// one binding alone binds the element's own kids (its text, or a list); else they are planned
-		const slots = flat(v.kids)
-		const alone = slots.length === 1 && isBound(slots[0]) ? slots[0] : undefined
-		const bound = new Map<string, Socket>()
-		const on = new Map<string, Listening | undefined>()
-		for (const [name, value] of Object.entries(v.props)) {
-			if (name === "ref") continue
-			if (/^on./.test(name) && value != null) on.set(eventOf(name), listening(value))
-			else if (isBound(value)) bound.set(name, bindProp(name, value))
-		}
-		return { bound, on, kids: alone ? bindKids(alone) : plan(slots) }
+		return keyed(v.key, () => {
+			// one binding alone binds the element's own kids (its text, or a list); else they are planned
+			const slots = flat(v.kids)
+			const alone = slots.length === 1 && isBound(slots[0]) ? slots[0] : undefined
+			const bound = new Map<string, Socket>()
+			const on = new Map<string, Listening | undefined>()
+			for (const [name, value] of Object.entries(v.props)) {
+				if (name === "ref") continue
+				if (/^on./.test(name) && value != null) on.set(eventOf(name), listening(value))
+				else if (isBound(value)) bound.set(name, bindProp(name, value))
+			}
+			return { bound, on, kids: alone ? bindKids(alone) : plan(slots) }
+		})
 	}
 
 	const match = (p: Plan) =>
@@ -215,7 +285,7 @@ export function createRenderer<N extends object, E extends N>(
 	function render(into: E, view: Child, options: Options): N | undefined {
 		const folder = options.at ?? "view"
 		ensureNode(folder)
-		place(into, within({ options, folder, n: 0 }, () => plan(flat([view]))))
+		place(into, within({ options, folder, key: "", n: 0 }, () => plan(flat([view]))))
 		const root = placed.get(into)?.[0]
 		// a root the view made says whose it is
 		const k = root === undefined ? undefined : kind.get(root)
@@ -290,9 +360,10 @@ export function createRenderer<N extends object, E extends N>(
 			else if (/^on./.test(name) && value != null) {
 				listen(el, eventOf(name), made.on.get(eventOf(name)), was, now)
 			} else if (isBound(value)) {
-				say(`bind:${name}`, said(value.target))
+				const k = made.bound.get(name)!
+				say(`bind:${name}`, k.path)
 				now.set("bound:" + name, true)
-				attach(made.bound.get(name)!, el)
+				attach(k, el)
 			} else now.set(r.set(el, name, value), true)
 		}
 		for (const [what, old] of was) if (!now.has(what)) unset(el, what, old, now)
@@ -340,7 +411,7 @@ export function createRenderer<N extends object, E extends N>(
 		if (typeof value === "function") return { fn: value as Listener }
 		if (!isHandler(value) && (typeof value !== "object" || value === null)) return undefined
 		const h = isHandler(value) ? value : handler(value as Node)
-		const at = typeof h.target === "string" ? h.target : "[node]"
+		const at = said(h.target, here!.options.name)
 		const node = typeof h.target === "string" ? getNode(h.target) : h.target
 		return { h, at, node, call: here!.options.call }
 	}
@@ -389,12 +460,13 @@ export function createRenderer<N extends object, E extends N>(
 
 	// ---- the bindings ----
 	// a bound prop: fn's value (in the compute) set by the act. waiting: the prop stays as it was.
-	// the same prop again is no change (no flash)
+	// the same prop again on the same element is no change (no flash)
 	function bindProp(name: string, b: Bound): Socket {
-		let last: unknown = watch
-		return watch(b, (x) => b.fn && x !== undefined ? b.fn(x) : x, (el, next, waiting) => {
+		let last: unknown = watch, on: E | undefined
+		return watch(name, b, (x) => b.fn && x !== undefined ? b.fn(x) : x, (el, next, waiting) => {
 			if (waiting) return false
-			if (Object.is(next, last) && typeof next !== "object") return false
+			if (el === on && Object.is(next, last) && typeof next !== "object") return false
+			on = el
 			const as = r.set(el, name, last = next)
 			let all = boundAs.get(el)
 			if (all === undefined) boundAs.set(el, all = new Map())
@@ -402,44 +474,51 @@ export function createRenderer<N extends object, E extends N>(
 		})
 	}
 
-	// a binding of an element's own kids: what the node holds is shown there (text, or views)
+	// a binding of an element's own kids: what the node holds is shown there (text, or views). a
+	// row of a list (keyed) makes what it makes under its key
 	function bindKids(b: Bound): Socket {
-		const path = said(b.target)
-		const listed = b.read === "each" || b.read === "under"
-		let last: unknown = watch
-		return watch(
-			b,
-			(x, waiting) => {
-				if (waiting) return undefined
-				const shown = listed || b.fn && x !== undefined
-					? b.fn!(x)
-					: x === null
-					? undefined
-					: asText(x)
-				const slots = flat([shown as Child])
-				return { shown, slots, plans: plan(slots) }
-			},
-			(el, s) => {
-				// waiting: what was shown stays (an ellipsis the first time)
-				if (s === undefined) return void (placed.get(el)?.length || place(el, [{ text: "…" }]))
-				const { shown, slots, plans } = s
-				// the same text again is no change (no flash)
-				if (typeof shown !== "object" && Object.is(shown, last)) return false
-				last = shown
-				// text, or views; a derived view that gives nothing keeps what it said it was
-				const text = !listed && slots.every((s) => typeof s === "string") &&
-					(!b.fn || slots.length > 0 || kidsAs.get(el) !== "children")
-				r.say?.(el, `bind:${text ? "text" : "children"}`, path)
-				r.say?.(el, `bind:${text ? "children" : "text"}`, undefined)
-				kidsAs.set(el, text ? "text" : "children")
-				place(el, plans)
-			},
-			(el) => {
-				if (kidsAs.get(el) === "children") return
-				r.say?.(el, "bind:text", path)
-				kidsAs.set(el, "text")
-			},
-		)
+		return keyed(b.key, () => {
+			const path = saidOf(b, here!.options.name)
+			const listed = b.read === "each" || b.read === "under"
+			let last: unknown = watch, on: E | undefined
+			return watch(
+				"kids",
+				b,
+				(x, waiting) => {
+					if (waiting) return undefined
+					const shown = listed || b.fn && x !== undefined
+						? b.fn!(x)
+						: x === null
+						? undefined
+						: asText(x)
+					const slots = flat([shown as Child])
+					return { shown, slots, plans: plan(slots) }
+				},
+				(el, s) => {
+					// waiting: what was shown stays (an ellipsis the first time)
+					if (s === undefined) {
+						return void (placed.get(el)?.length || place(el, [{ text: "…" }]))
+					}
+					const { shown, slots, plans } = s
+					// the same text again on the same element is no change (no flash)
+					if (el === on && typeof shown !== "object" && Object.is(shown, last)) return false
+					last = shown
+					on = el
+					// text, or views; a derived view that gives nothing keeps what it said it was
+					const text = !listed && slots.every((s) => typeof s === "string") &&
+						(!b.fn || slots.length > 0 || kidsAs.get(el) !== "children")
+					r.say?.(el, `bind:${text ? "text" : "children"}`, path)
+					r.say?.(el, `bind:${text ? "children" : "text"}`, undefined)
+					kidsAs.set(el, text ? "text" : "children")
+					place(el, plans)
+				},
+				(el) => {
+					if (kidsAs.get(el) === "children") return
+					r.say?.(el, "bind:text", path)
+					kidsAs.set(el, "text")
+				},
+			)
+		})
 	}
 
 	// a node's own value is shown as text (true, a list, a map); only what a derived view gives is
@@ -462,8 +541,11 @@ export function createRenderer<N extends object, E extends N>(
 	// socket is given. a change after the first is told on the element ("ermine:change"), unless
 	// show says nothing it shows changed. every run acts (equal: never): its plan is new each run,
 	// and a binding made again in its parent's next run acts later in the pulse, on an element its
-	// parent's act may have just made
+	// parent's act may have just made; made again the same and not due (nominal), its socket
+	// shows its last plan on the element it is given. the bindings its last run made and this one
+	// doesn't go (the scheduler takes their nodes at the run's end): their sockets are let go
 	function watch<S>(
+		role: string,
 		b: Bound,
 		make: (v: unknown, waiting: boolean) => S,
 		show: (el: E, s: S, waiting: boolean) => boolean | void,
@@ -471,31 +553,37 @@ export function createRenderer<N extends object, E extends N>(
 	): Socket {
 		const now = here
 		if (now === undefined) throw new Error("@ermine/render: a binding made outside render")
-		const name = `${now.folder}/${now.n++}`
-		const path = said(b.target)
-		const k: Socket = { given }
-		let first = true
-		let planned: S
+		const [name, k] = socketFor(now, specOf(role, b), given)
+		const all = sockets.get(now.options)!
 		createEffect(
 			name,
 			() => {
 				const v = reading(b)
 				// nothing for none; null is a value (fn sees it)
 				const v2 = v === WAITING || v === NOTHING ? undefined : v
-				planned = within(
-					{ options: now.options, folder: name, n: 0 },
-					() => make(v2, v === WAITING),
-				)
+				const made = new Set<string>()
+				let done = false
+				try {
+					k.plan = within(
+						{ options: now.options, folder: name, key: "", n: 0, made },
+						() => make(v2, v === WAITING),
+					)
+					done = true
+				} finally {
+					// a run that throws keeps what the last made (as the scheduler does), and its own
+					const was = k.kids ?? new Set<string>()
+					k.kids = done ? made : new Set([...was, ...made])
+					if (done) { for (const n of was) if (!made.has(n)) forget(all, n) }
+				}
 				return v
 			},
 			(v) => {
-				const s = planned
-				give(k, (el) => {
+				const s = k.plan as S
+				give(k, (el, told) => {
 					r.say?.(el, "waiting", v === WAITING ? "" : undefined)
-					if (show(el, s, v === WAITING) !== false && !first) {
-						r.tell?.(el, "ermine:change", { path })
+					if (show(el, s, v === WAITING) !== false && told) {
+						r.tell?.(el, "ermine:change", { path: k.path })
 					}
-					first = false
 				})
 			},
 			{ early: true, equal: () => false },
@@ -503,18 +591,88 @@ export function createRenderer<N extends object, E extends N>(
 		return k
 	}
 
+	// the name and socket of a binding made now, at the next place here: made again the same as
+	// it was (its node there, the same spec), the ones it had; else new, at its place's name, or
+	// with a ' more while that name is another binding's (going at its parent's run end, or kept
+	// by a run that threw), till one is free
+	function socketFor(now: Here, spec: Spec, given?: (el: E) => void): [string, Socket] {
+		let name = `${now.folder}/${now.key}${now.n++}`
+		let all = sockets.get(now.options)
+		if (all === undefined) sockets.set(now.options, all = new Map())
+		for (; peep(() => hasNode(name)); name += "'") {
+			const k = all.get(name)
+			if (k && sameSpec(k.spec, spec)) {
+				now.made?.add(name)
+				return [name, k]
+			}
+		}
+		const k: Socket = { given, spec, path: saidOf(spec, now.options.name) }
+		all.set(name, k)
+		now.made?.add(name)
+		return [name, k]
+	}
+	// a binding gone: its socket, and those of the bindings made under it
+	function forget(all: Map<string, Socket>, name: string) {
+		const k = all.get(name)
+		all.delete(name)
+		for (const n of k?.kids ?? []) forget(all, n)
+	}
+
 	return { render }
 }
 
 // ---- reading a node ----
-// what's said of a target: its path as written; a handle is "[node]"
-function said(target: Target): string {
-	if (isSlot(target)) return `${said(target[0])}/${target[1]}`
-	return typeof target === "string" ? target : "[node]"
+// what's said of a target: its path from the root, process the process's path ("a/b"); a handle
+// is "[node]", a getter "[getter]"
+function said(target: Target, process: string): string {
+	if (typeof target === "function") return "[getter]"
+	if (isSlot(target)) {
+		const parent = said(target[0], process)
+		return parent === "/" ? `/${target[1]}` : `${parent}/${target[1]}`
+	}
+	return typeof target === "string" ? rooted(target, process) : "[node]"
+}
+// what's said of a binding: its target, or track's word for what it reads (no path)
+function saidOf(b: { readonly read: Bound["read"]; readonly target: Target }, process: string) {
+	return b.read === "track" ? String(b.target) : said(b.target, process)
+}
+// a path from the root, by the processes rule: "/x" from the root, "./x" (and "../x") from the
+// process's folder, a bare "x" under the process's node
+function rooted(path: string, process: string): string {
+	const steps = path.split("/")
+	const out = path.startsWith("/") ? [] : process.split("/").filter(Boolean)
+	if (steps[0] === "." || steps[0] === "..") out.pop()
+	for (const step of steps) {
+		if (step === "..") out.pop()
+		else if (step !== "" && step !== ".") out.push(step)
+	}
+	return "/" + out.join("/")
 }
 
-// the node a target is now: a path, a handle, or what is at name under parent (undefined: none)
+// a function as its text (the same text, the same function), but a bound or native one only as
+// itself: their text is all alike
+function textOf(f: unknown): unknown {
+	if (typeof f !== "function") return f
+	const t = String(f)
+	return t.endsWith("{ [native code] }") ? f : t
+}
+
+// two targets the same: a path by its text, a slot by its parent and name, a getter by its text,
+// a handle only itself
+function sameTarget(a: Target, b: Target): boolean {
+	if (typeof a === "function" || typeof b === "function") {
+		return typeof a === typeof b && textOf(a) === textOf(b)
+	}
+	if (isSlot(a) || isSlot(b)) {
+		return isSlot(a) && isSlot(b) && a[1] === b[1] && sameTarget(a[0], b[0])
+	}
+	return a === b
+}
+
+// the node a target is now: a path, a handle, what is at name under parent, or what a getter
+// gives, called here: in the binding's run, so what it reads is tracked (undefined: none)
 function reach(target: Target): string | Node | undefined {
+	if (typeof target === "function") return reach(target())
 	if (!isSlot(target)) return target
 	const [parent, name] = target
 	const p = reach(parent)
@@ -524,7 +682,7 @@ function reach(target: Target): string | Node | undefined {
 }
 
 // what a binding is of, tracked: a node's value (NOTHING: no node there), an each's entries, an
-// under's children, what track's get gives; WAITING for a pending compute
+// under's children, what track's get gives; WAITING for a pending compute (or a getter pending)
 function reading(b: Bound): unknown {
 	if (b.read === "track") {
 		try {
@@ -534,7 +692,13 @@ function reading(b: Bound): unknown {
 			throw e
 		}
 	}
-	const t = reach(b.target)
+	let t: string | Node | undefined
+	try {
+		t = reach(b.target)
+	} catch (e) {
+		if (e === PENDING) return WAITING
+		throw e
+	}
 	if (t === undefined) return b.read === "value" ? NOTHING : []
 	if (b.read === "each") {
 		return readEntries(t).map((e, index): Item => ({
