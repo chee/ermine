@@ -13,7 +13,25 @@
 //   /host/graphs/<graph>/inbox/<name>   the answers not yet taken, in order: [{ n, m }]
 //   /host/graphs/tick                   Date.now(), each second while an explorer shows
 //   /host/graphs/now                    Date.now(), every 15 s (the "ago"s), likewise
-import { type Ermine, PENDING } from "@ermine/system"
+import {
+	createAction,
+	ensureNode,
+	type Ermine,
+	explain,
+	explainAttributes,
+	explainChildren,
+	getStatus,
+	hasNode,
+	list,
+	patch,
+	peep,
+	PENDING,
+	read,
+	readAttributes,
+	readEntries,
+	remove,
+	rename,
+} from "@ermine/system"
 import { SHOWING, shows } from "./places.ts"
 
 export type GraphName = "page" | "mac"
@@ -38,12 +56,14 @@ type Relay = { send(m: object): void; signed(m: object): Promise<void> }
 // deno-lint-ignore no-explicit-any
 type Any = any
 
+// connectGraphs' helpers are @ermine/system's functions: called inside an action, or from host
+// code (a timer, an answer come back) inside ermine.within
 export function connectGraphs(ermine: Ermine, relay: Relay): { heard(m: Any): void } {
 	const set = (path: string, value: unknown) => {
-		ermine.ensureNode(path)
-		ermine.patch(path, [{ path: [], value }])
+		ensureNode(path)
+		patch(path, [{ path: [], value }])
 	}
-	const now = <T>(path: string): T | undefined => ermine.peep(() => ermine.read(path) as T)
+	const now = <T>(path: string): T | undefined => peep(() => read(path) as T)
 	// an answer for one explorer, in its inbox
 	let told = 0
 	const tell = (graph: GraphName, name: string, m: Any) => {
@@ -62,98 +82,111 @@ export function connectGraphs(ermine: Ermine, relay: Relay): { heard(m: Any): vo
 	const explorers = new Set<string>()
 	const page = pageGraph(ermine)
 
-	for (const graph of GRAPHS) {
-		const G = graphAt(graph)
-		ermine.ensureNode(`${G}/inbox`)
-		ermine.createAction(`${G}/ask`, (name: string, m: Any) => {
-			if (!named(name)) throw new Error(`no explorer is called ${String(name)}`)
-			explorers.add(name)
-			ermine.ensureNode(inboxOf(graph, name), [])
-			const ask = `x${++asked}`
-			if (graph === "mac") {
-				macNames.add(name)
-				whose.set(ask, name)
-				relay.send({ ...m, t: "applet", name: "graph", ask })
-			} else {
-				// answered after the ask returns, as the mac's are
-				queueMicrotask(() => tell("page", name, page.ask({ ...m, ask })))
-			}
-			return ask
-		})
-		ermine.createAction(`${G}/change`, (name: string, m: Any) => {
-			if (!named(name)) throw new Error(`no explorer is called ${String(name)}`)
-			ermine.ensureNode(inboxOf(graph, name), [])
-			const ask = `x${++asked}`
-			if (graph === "mac") {
-				macNames.add(name)
-				whose.set(ask, name)
-				// signed with the key that knocked; one that couldn't be: said where it was asked
-				relay.signed({ ...m, t: "applet", name: "graph", ask }).catch((err) => {
-					whose.delete(ask)
-					tell("mac", name, {
-						do: m?.do,
-						ask,
-						path: m?.path,
-						error: String(err?.message ?? err),
+	ermine.within(() => {
+		for (const graph of GRAPHS) {
+			const G = graphAt(graph)
+			ensureNode(`${G}/inbox`)
+			createAction(`${G}/ask`, (name: string, m: Any) => {
+				if (!named(name)) throw new Error(`no explorer is called ${String(name)}`)
+				explorers.add(name)
+				ensureNode(inboxOf(graph, name), [])
+				const ask = `x${++asked}`
+				if (graph === "mac") {
+					macNames.add(name)
+					whose.set(ask, name)
+					relay.send({ ...m, t: "applet", name: "graph", ask })
+				} else {
+					// answered after the ask returns, as the mac's are
+					queueMicrotask(() => ermine.within(() => tell("page", name, page.ask({ ...m, ask }))))
+				}
+				return ask
+			})
+			createAction(`${G}/change`, (name: string, m: Any) => {
+				if (!named(name)) throw new Error(`no explorer is called ${String(name)}`)
+				ensureNode(inboxOf(graph, name), [])
+				const ask = `x${++asked}`
+				if (graph === "mac") {
+					macNames.add(name)
+					whose.set(ask, name)
+					// signed with the key that knocked; one that couldn't be: said where it was asked
+					relay.signed({ ...m, t: "applet", name: "graph", ask }).catch((err) => {
+						whose.delete(ask)
+						ermine.within(() =>
+							tell("mac", name, {
+								do: m?.do,
+								ask,
+								path: m?.path,
+								error: String(err?.message ?? err),
+							})
+						)
 					})
-				})
-			} else queueMicrotask(() => tell("page", name, page.change({ ...m, ask })))
-			return ask
-		})
-		ermine.createAction(`${G}/took`, (name: string, n: number) => {
-			if (!named(name)) return
-			const at = inboxOf(graph, name)
-			const was = now<{ n: number }[]>(at) ?? []
-			const left = was.filter((x) => x.n > n)
-			if (left.length !== was.length) set(at, left)
-		})
-		// the clipboard is the page's: written in the click's (or the key's) own moment
-		ermine.createAction(`${G}/copy`, (name: string, text: string) => {
-			if (!named(name)) return
-			const done = navigator.clipboard?.writeText(String(text))
-			if (!done) {
-				return tell(graph, name, { do: "copy", error: "this browser won't let a page copy" })
-			}
-			done.then(
-				() => tell(graph, name, { do: "copy", text: String(text) }),
-				() => tell(graph, name, { do: "copy", error: "the browser wouldn't let me copy that" }),
-			)
-		})
-	}
+				} else {
+					queueMicrotask(() => ermine.within(() => tell("page", name, page.change({ ...m, ask }))))
+				}
+				return ask
+			})
+			createAction(`${G}/took`, (name: string, n: number) => {
+				if (!named(name)) return
+				const at = inboxOf(graph, name)
+				const was = now<{ n: number }[]>(at) ?? []
+				const left = was.filter((x) => x.n > n)
+				if (left.length !== was.length) set(at, left)
+			})
+			// the clipboard is the page's: written in the click's (or the key's) own moment
+			createAction(`${G}/copy`, (name: string, text: string) => {
+				if (!named(name)) return
+				const done = navigator.clipboard?.writeText(String(text))
+				if (!done) {
+					return tell(graph, name, { do: "copy", error: "this browser won't let a page copy" })
+				}
+				done.then(
+					() => ermine.within(() => tell(graph, name, { do: "copy", text: String(text) })),
+					() =>
+						ermine.within(() =>
+							tell(graph, name, { do: "copy", error: "the browser wouldn't let me copy that" })
+						),
+				)
+			})
+		}
 
-	// the clocks, only while the page is seen and an explorer shows (places.ts' shows: nobody
-	// looking, nothing written, so nothing reads them again): a tick each second (the explorer asks
-	// what changed on it), and the time every 15 s for the "ago"s, and at once when one comes back
-	// into view
-	set(TICK, Date.now())
-	set(NOW, Date.now())
+		// the clocks, only while the page is seen and an explorer shows (places.ts' shows: nobody
+		// looking, nothing written, so nothing reads them again): a tick each second (the explorer asks
+		// what changed on it), and the time every 15 s for the "ago"s, and at once when one comes back
+		// into view
+		set(TICK, Date.now())
+		set(NOW, Date.now())
+	})
 	let nowAt = Date.now(), seen = false
-	setInterval(() => {
-		const page = SHOWING.map((p) => now(p))
-		const any = document.visibilityState === "visible" &&
-			[...explorers].some((name) => shows(name, page))
-		const back = any && !seen
-		seen = any
-		if (!any) return
-		const t = Date.now()
-		set(TICK, t)
-		if (back || t - nowAt >= 15_000) set(NOW, nowAt = t)
-	}, 1000)
+	setInterval(() =>
+		ermine.within(() => {
+			const page = SHOWING.map((p) => now(p))
+			const any = document.visibilityState === "visible" &&
+				[...explorers].some((name) => shows(name, page))
+			const back = any && !seen
+			seen = any
+			if (!any) return
+			const t = Date.now()
+			set(TICK, t)
+			if (back || t - nowAt >= 15_000) set(NOW, nowAt = t)
+		}), 1000)
 
 	return {
 		// an answer from the relay's graph applet: to the explorer that asked. an answer to no ask (the
 		// graph not answering at all): to every explorer of the mac's
 		heard(m: Any) {
-			if (m?.name !== undefined && m.name !== "graph") return
-			const name = typeof m?.ask === "string" ? whose.get(m.ask) : undefined
-			if (name !== undefined) {
-				whose.delete(m.ask)
-				return tell("mac", name, m)
-			}
-			if (m?.ask === undefined && m?.error) {
-				for (const n of macNames) tell("mac", n, { do: "said", error: String(m.error) })
-			}
+			ermine.within(() => hear(m))
 		},
+	}
+	function hear(m: Any) {
+		if (m?.name !== undefined && m.name !== "graph") return
+		const name = typeof m?.ask === "string" ? whose.get(m.ask) : undefined
+		if (name !== undefined) {
+			whose.delete(m.ask)
+			return tell("mac", name, m)
+		}
+		if (m?.ask === undefined && m?.error) {
+			for (const n of macNames) tell("mac", n, { do: "said", error: String(m.error) })
+		}
 	}
 }
 
@@ -268,7 +301,7 @@ export function pageGraph(ermine: Ermine) {
 		p.startsWith("#") ? ermine.handleOf({ id: p.slice(1), part: "value" }) : p
 	const quiet = <T>(f: () => T, or: T): T => {
 		try {
-			return ermine.peep(f) ?? or
+			return peep(f) ?? or
 		} catch {
 			return or
 		}
@@ -276,9 +309,9 @@ export function pageGraph(ermine: Ermine) {
 	// a value as read, a pending memo's as pending
 	const valueAt = (p: string): unknown => {
 		try {
-			return ermine.peep(() => {
+			return peep(() => {
 				try {
-					return ermine.read(target(p))
+					return read(target(p))
 				} catch (e) {
 					if (e === PENDING) return PENDING
 					throw e
@@ -288,10 +321,10 @@ export function pageGraph(ermine: Ermine) {
 			return e
 		}
 	}
-	const names = (p: string) => quiet(() => [...ermine.list(target(p))].sort(), [] as string[])
+	const names = (p: string) => quiet(() => [...list(target(p))].sort(), [] as string[])
 	const idOf = (p: string): { id?: string; ids: string[]; from?: string } => {
 		if (p.startsWith("#")) return { id: p.slice(1), ids: [p.slice(1)], from: "id" }
-		const items = quiet(() => ermine.readEntries(p), [])
+		const items = quiet(() => readEntries(p), [])
 		const ids = items.filter((i) => !i.refused && i.node)
 			.map((i) => String(ermine.dataOf(i.node)?.node.id ?? ""))
 			.filter(Boolean)
@@ -354,7 +387,7 @@ export function pageGraph(ermine: Ermine) {
 		ermine.records.run(id) !== undefined ||
 		COMPUTER_SCOPE in ((entry("attributes", id)?.value ?? {}) as object)
 	const statusOf = (p: string) => {
-		const st = quiet(() => ermine.getStatus(target(p)), undefined)
+		const st = quiet(() => getStatus(target(p)), undefined)
 		// a plain node's done says nothing: only a computer's (one that has run), or anything not done
 		if (
 			st === undefined ||
@@ -386,7 +419,7 @@ export function pageGraph(ermine: Ermine) {
 	}
 	function whyOf(p: string, part: "value" | "attributes", where: () => Map<string, string>) {
 		const e = quiet(
-			() => part === "value" ? ermine.explain(target(p)) : ermine.explainAttributes(target(p)),
+			() => part === "value" ? explain(target(p)) : explainAttributes(target(p)),
 			undefined,
 		)
 		if (e === undefined) return undefined
@@ -418,7 +451,9 @@ export function pageGraph(ermine: Ermine) {
 				held,
 			}
 		}
-		return { kind: "outside", where: siteOf(w.site ?? e.change?.site), held }
+		// outside (a pipe's writer has no site: said as outside, as before)
+		const site = "site" in w ? w.site : undefined
+		return { kind: "outside", where: siteOf(site ?? e.change?.site), held }
 	}
 	function readersOf(id: string | undefined, all: Map<string, string>) {
 		if (id === undefined) return []
@@ -438,7 +473,7 @@ export function pageGraph(ermine: Ermine) {
 	function nodeAt(p: string) {
 		const { id, ids, from } = idOf(p)
 		const v = valueAt(p)
-		const attrs = quiet(() => ermine.readAttributes(target(p)), undefined) as
+		const attrs = quiet(() => readAttributes(target(p)), undefined) as
 			| Record<string, unknown>
 			| undefined
 		let where: Map<string, string> | undefined
@@ -633,10 +668,10 @@ export function pageGraph(ermine: Ermine) {
 			quiet(
 				() =>
 					part === "value"
-						? ermine.explain(target(at))
+						? explain(target(at))
 						: part === "attributes"
-						? ermine.explainAttributes(target(at))
-						: ermine.explainChildren(target(at)),
+						? explainAttributes(target(at))
+						: explainChildren(target(at)),
 				undefined,
 			)
 		function reads(rs: readonly Any[], d: number, seen: Set<object>): Step[] {
@@ -748,13 +783,15 @@ export function pageGraph(ermine: Ermine) {
 					}],
 				}
 			}
+			// a pipe's writer has no site: said as outside, as before
+			const site = "site" in w ? w.site : undefined
 			return {
 				steps: [{
 					what: "outside",
 					label: "written from outside any run or call",
-					where: w.site ? [siteOf(w.site)!] : where,
+					where: site ? [siteOf(site)!] : where,
 					note: `${c.actor !== undefined ? `by ${brief(c.actor, 60)}, ` : ""}${
-						where.length || w.site ? "from the code at" : "no site was caught"
+						where.length || site ? "from the code at" : "no site was caught"
 					}`,
 				}],
 			}
@@ -811,25 +848,29 @@ export function pageGraph(ermine: Ermine) {
 			return { ...said, error: CHANGEABLE_WORDS }
 		}
 		try {
-			if (m.do === "write") ermine.patch(at, [{ path: [], value: m.value }])
-			else if (m.do === "edit") ermine.patch(at, m.patches ?? [])
+			if (m.do === "write") patch(at, [{ path: [], value: m.value }])
+			else if (m.do === "edit") patch(at, m.patches ?? [])
 			else if (m.do === "make") {
-				if (ermine.peep(() => ermine.hasNode(at))) {
+				if (peep(() => hasNode(at))) {
 					return { ...said, error: `something's already at ${at}` }
 				}
-				ermine.ensureNode(at, m.value)
+				ensureNode(at, m.value)
 			} else if (m.do === "move") {
 				const to = String(m.to)
-				if (ermine.peep(() => ermine.hasNode(to))) {
+				if (peep(() => hasNode(to))) {
 					return { ...said, error: `something's already at ${to}` }
 				}
-				ermine.rename(at, to)
+				rename(at, to)
 				return { ...said, done: "move", at: to }
-			} else if (m.do === "remove") ermine.remove(at)
+			} else if (m.do === "remove") remove(at)
 			return { ...said, done: m.do, at }
 		} catch (e) {
 			return { ...said, error: (e as Error)?.message ?? String(e) }
 		}
 	}
-	return { ask, change }
+	// asked from host code (the page's agent, an answer queued): as the host
+	return {
+		ask: (m: Any): Any => ermine.within(() => ask(m)),
+		change: (m: Any): Any => ermine.within(() => change(m)),
+	}
 }

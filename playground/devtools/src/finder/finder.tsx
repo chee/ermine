@@ -418,6 +418,9 @@ export function Explorer(
 	const M = `finder-${name}-`
 	const A = (k: string) => `on/${M}${k}`
 	const listAt = (p: string) => F(`lists/${enc(p)}`)
+	// a folder's rows not asked yet, or an inbox nothing has come to: no node there, which is
+	// normal. undefined, and read (tracked) once it's there
+	const maybe = (p: string) => hasNode(p) ? read(p) : undefined
 	// what can be changed from here: the mac's graph, all of it (signed); the page's, its state
 	const may = (p: string) => graph === "mac" || changeable(p)
 	const mayInside = (folder: string) => may(kid(folder, "x"))
@@ -486,7 +489,7 @@ export function Explorer(
 				columns(
 					read(PF("at")) as string,
 					isId(read(PF("at")) as string) ? node() : undefined,
-					(p) => read(listAt(p)) as List | undefined,
+					(p) => maybe(listAt(p)) as List | undefined,
 				),
 			),
 	)
@@ -509,7 +512,7 @@ export function Explorer(
 	})
 	// the side: the root's places, and what changed lately (of the rows seen)
 	createMemo(`${M}side`, () => {
-		const root = read(listAt("/")) as List | undefined
+		const root = maybe(listAt("/")) as List | undefined
 		const all: { p: string; when: number; r: Row }[] = []
 		for (const n of list(F("lists"))) {
 			const l = read(F(`lists/${n}`)) as List | undefined
@@ -544,7 +547,7 @@ export function Explorer(
 		const said = read(F("said")) as string, at = read(PF("at")) as string
 		read(NOW)
 		const cols: string[] = JSON.parse(read(`${M}columns`) as string)
-		const here = isId(at) ? undefined : read(listAt(cols.at(-1) ?? "/")) as List | undefined
+		const here = isId(at) ? undefined : maybe(listAt(cols.at(-1) ?? "/")) as List | undefined
 		const n = (read(F("node")) as Any)?.node
 		const told = read(PF("told")) as "" | { text: string; bad: boolean }
 		return {
@@ -570,7 +573,7 @@ export function Explorer(
 		`${M}lists`,
 		() =>
 			(JSON.parse(read(`${M}wanted`) as string) as string[]).filter((c) =>
-				!isId(c) && read(listAt(c)) === undefined
+				!isId(c) && maybe(listAt(c)) === undefined
 			),
 		(missing: string[]) => {
 			for (const c of missing) {
@@ -615,12 +618,13 @@ export function Explorer(
 	// what the graph says back: each answer not read yet, in order; then the host is told they were
 	createEffect(
 		`${M}heard`,
-		() => (read(inboxOf(graph, name)) ?? []) as { n: number; m: Any }[],
+		() =>
+			((maybe(inboxOf(graph, name)) ?? []) as { n: number; m: Any }[])
+				.filter(({ n }) => n > now<number>(F("heard"))),
 		(all: { n: number; m: Any }[]) => {
 			const last = now(F("heard")) as number
 			let upTo = last
 			for (const { n, m } of all) {
-				if (n <= last) continue
 				upTo = n
 				try {
 					heard(m)
@@ -632,6 +636,8 @@ export function Explorer(
 			put(F("heard"), upTo)
 			executeAction(`${G}/took`, name, upTo)
 		},
+		// nothing new is no change: its own took, taking what it read, is no new result
+		{ equal: (next: { n: number; m: Any }[]) => next.length === 0 },
 	)
 
 	// ---- what a person does ----
