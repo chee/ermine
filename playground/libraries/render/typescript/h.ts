@@ -144,3 +144,21 @@ export function make(
 }
 // its kids, as they are
 export const Fragment = (props: { children?: Child }): any => props.children ?? []
+
+// html's void elements: no kids and no closing tag (@ermine/render/html writes them so,
+// @ermine/render/tmpl reads them so)
+export const VOID: ReadonlySet<string> = new Set([
+	"area",
+	"base",
+	"br",
+	"col",
+	"embed",
+	"hr",
+	"img",
+	"input",
+	"link",
+	"meta",
+	"source",
+	"track",
+	"wbr",
+])

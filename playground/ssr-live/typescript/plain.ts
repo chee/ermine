@@ -1,6 +1,7 @@
 // html for a page with no script (live.ts's /?plain, edge.ts's /?v=plain), from what
 // @ermine/render/html renders. LLM generated: a prototype
-import { type Element, html, type Kid, quoted, VOID } from "@ermine/render/html"
+import { VOID } from "@ermine/render/h"
+import { type Element, html, type Kid, quoted } from "@ermine/render/html"
 
 // a unit: an element with a binding and none above it. a page with no script is sent each unit
 // again whole when anything in it changes; first, its unit is a <slot> named by the unit's first
