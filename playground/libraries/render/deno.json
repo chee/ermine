@@ -4,6 +4,7 @@
 	"exports": {
 		".": "./typescript/render.ts",
 		"./h": "./typescript/h.ts",
-		"./dom": "./typescript/dom.ts"
+		"./dom": "./typescript/dom.ts",
+		"./html": "./typescript/html.ts"
 	}
 }
