@@ -1,7 +1,8 @@
 // @ermine/render: views (@ermine/render/h) made real by a renderer, inside a process (its setup),
 // as @ermine/system's functions are. createRenderer(renderer) gives render(into, view, options);
-// @ermine/render/dom is the DOM's. the nodes are the renderer's; what each was made from, what's
-// placed where and what's set on each, the engine keeps
+// @ermine/render/dom is the DOM's, @ermine/render/html html's (a server's, with no DOM). the nodes
+// are the renderer's; what each was made from, what's placed where and what's set on each, the
+// engine keeps
 //   reuse     a node is the nth of its kind under its parent (a tag, a tag and key, text, a
 //             binding): a render again changes and moves only what differs (shift's reconcile)
 //   bind      an early effect at a node of its own under the view's folder (options.at, "view" if
@@ -89,6 +90,9 @@ export type Renderer<N extends object, E extends N> = {
 	nameOf?: (n: N) => string
 	say?: (el: E, name: string, value: string | undefined) => void
 	tell?: (el: E, name: string, detail: object) => void
+	// a binding given el to show on: what of it it binds (a prop's name, or "kids"), and its node
+	// by its name as made (view/0: under the process's node)
+	bound?: (el: E, role: string, name: string) => void
 }
 
 // a node's value, pending; nothing there
@@ -188,6 +192,8 @@ export function createRenderer<N extends object, E extends N>(
 		readonly spec: Spec
 		// its target's path, as said on the element
 		readonly path: string
+		// its node's name
+		readonly name: string
 	}
 	function give(k: Socket, show: (el: E, told: boolean) => void) {
 		k.show = show
@@ -198,6 +204,7 @@ export function createRenderer<N extends object, E extends N>(
 	function attach(k: Socket, el: E) {
 		if (k.el === el) return
 		k.el = el
+		r.bound?.(el, k.spec.role, k.name)
 		k.given?.(el)
 		if (!k.show) return
 		k.show(el, false)
@@ -606,7 +613,7 @@ export function createRenderer<N extends object, E extends N>(
 				return [name, k]
 			}
 		}
-		const k: Socket = { given, spec, path: saidOf(spec, now.options.name) }
+		const k: Socket = { given, spec, path: saidOf(spec, now.options.name), name }
 		all.set(name, k)
 		now.made?.add(name)
 		return [name, k]
