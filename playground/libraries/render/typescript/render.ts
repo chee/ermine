@@ -5,6 +5,8 @@
 // engine keeps
 //   reuse     a node is the nth of its kind under its parent (a tag, a tag and key, text, a
 //             binding): a render again changes and moves only what differs (shift's reconcile)
+//   hydrate   hydrate(into, view, options): what into holds already (a server's html) is taken as
+//             what an earlier render put there (renderer.kidsOf and kindOf say it), then rendered
 //   bind      an early effect at a node of its own under the view's folder (options.at, "view" if
 //             none): view/0, view/1, and a binding made while another plans goes under that one's
 //             node (view/3/0); in a keyed view (a list's row) under its key (view/3/apple:0). so
@@ -93,7 +95,14 @@ export type Renderer<N extends object, E extends N> = {
 	// a binding given el to show on: what of it it binds (a prop's name, or "kids"), and its node
 	// by its name as made (view/0: under the process's node)
 	bound?: (el: E, role: string, name: string) => void
+	// hydrate: an element's kids as they are, and what a node is matched as ("p", "li#a", "#text",
+	// "#bind"; undefined: never reused, left where it is)
+	kidsOf?: (el: E) => N[]
+	kindOf?: (n: N) => string | undefined
 }
+
+// what render and hydrate give
+type Render<N, E> = (into: E, view: Child, options: Options) => N | undefined
 
 // a node's value, pending; nothing there
 const WAITING = Symbol.for("ermine-h.waiting")
@@ -101,7 +110,7 @@ const NOTHING = Symbol.for("ermine-h.nothing")
 
 export function createRenderer<N extends object, E extends N>(
 	r: Renderer<N, E>,
-): { render: (into: E, view: Child, options: Options) => N | undefined } {
+): { render: Render<N, E>; hydrate: Render<N, E> } {
 	// ---- where bindings go ----
 	// the plan being made: the host's options, the folder a binding made now goes under, the keys
 	// of the keyed views it is in ("apple:"), how many have been made there in this run, the keys
@@ -320,12 +329,16 @@ export function createRenderer<N extends object, E extends N>(
 		})
 		const keep = new Set(next)
 		for (const n of prev) if (!keep.has(n) && r.parentOf(n) === parent) r.remove(parent, n)
+		// what's after a node, of what is placed here (a node the engine didn't place is passed over)
+		const after = (n: N) => {
+			let x = r.nextOf(n) ?? null
+			while (x !== null && !keep.has(x)) x = r.nextOf(x) ?? null
+			return x
+		}
 		let before: N | null = null
 		for (let i = next.length - 1; i >= 0; i--) {
 			const n = next[i]
-			if (r.parentOf(n) !== parent || (r.nextOf(n) ?? null) !== before) {
-				r.insert(parent, n, before)
-			}
+			if (r.parentOf(n) !== parent || after(n) !== before) r.insert(parent, n, before)
 			before = n
 		}
 		placed.set(parent, next)
@@ -625,7 +638,25 @@ export function createRenderer<N extends object, E extends N>(
 		for (const n of k?.kids ?? []) forget(all, n)
 	}
 
-	return { render }
+	// what into holds already (a server's html, as the page has it) taken as what an earlier render
+	// placed there, so a render reuses it, each node the nth of its kind as place matches them: what
+	// was made on the server is kept, its props and listeners set again, its bindings given it.
+	// what doesn't match is made new, and what is left over taken out
+	function adopt(el: E) {
+		const kids = (r.kidsOf?.(el) ?? []).filter((n) => {
+			const k = r.kindOf?.(n)
+			if (k !== undefined) kind.set(n, k)
+			return k !== undefined
+		})
+		placed.set(el, kids)
+		for (const n of kids) if (kind.get(n) !== "#text") adopt(n as E)
+	}
+	function hydrate(into: E, view: Child, options: Options): N | undefined {
+		adopt(into)
+		return render(into, view, options)
+	}
+
+	return { render, hydrate }
 }
 
 // ---- reading a node ----
