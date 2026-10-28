@@ -46,6 +46,7 @@ import {
 import { plain, unitName, units } from "./plain.ts"
 import { PICKER, picker, PLAIN, posted, type Said, standIn, tagOf } from "./live.ts"
 import { party, setupShared, stepLife } from "./party.tsx"
+import { newVisitor, shortIds } from "./ids.ts"
 
 // what is kept, on Netlify Blobs or (run here) in a Map
 export type Kept = {
@@ -179,6 +180,7 @@ async function first(store: Kept): Promise<Values> {
 	if (there) return there.values
 	// the first state: the party's shared nodes, life's last step, the pet's last feed
 	const e = createErmine({
+		features: [shortIds()],
 		host: {
 			setup: () => {
 				setupShared()
@@ -239,7 +241,10 @@ async function turn(store: Kept, id: string, seen: number, asked?: Said, again =
 	const after = await entries(store, base.v + 1, head)
 	const atSeen = over(base.values, after.slice(0, from - base.v))
 	const path = `/visitors/${id}`
-	const e = createErmine({ host: { setup: () => restore(only(atSeen, shared)) } })
+	const e = createErmine({
+		features: [shortIds()],
+		host: { setup: () => restore(only(atSeen, shared)) },
+	})
 	const into = createRoot({ ids: "place" })
 	// deno-lint-ignore prefer-const
 	let context: ReturnType<typeof e.getProcessContext>
@@ -478,7 +483,7 @@ export function createEdge(options: EdgeOptions) {
 			const get = request.method === "GET"
 			const store = await options.kept()
 			if (get && url.pathname === "/") {
-				const id = idOf(url.searchParams.get("p")) ?? crypto.randomUUID()
+				const id = idOf(url.searchParams.get("p")) ?? newVisitor()
 				return url.searchParams.get("v") === "plain" ? plainPage(store, id) : page(store, id)
 			}
 			if (request.method === "POST" && url.pathname === "/event") return event(store, request)

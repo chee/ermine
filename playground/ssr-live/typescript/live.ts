@@ -1,7 +1,7 @@
 // ermine live: a page kept as the server's view of it. LLM generated: a prototype. each visitor
-// is a process of its own (folder/<uuid>), its view rendered on the server (@ermine/render/html);
-// the first load is the html, then a stream of what its bindings show, and the page's events come
-// back as posts, each called as the visitor's process
+// is a process of its own (folder/<key>, ids.ts), its view rendered on the server
+// (@ermine/render/html); the first load is the html, then a stream of what its bindings show, and
+// the page's events come back as posts, each called as the visitor's process
 //   GET  /           a new visitor: its process started, its page
 //   GET  /live?p=…   its updates, as server-sent events: data: [[binding, prop, value], …]
 //   POST /event      { p, h, t, value?, checked?, key?, form?, tv?, at? }: the handler h, called
@@ -32,6 +32,7 @@ import {
 	type Update,
 } from "@ermine/render/html"
 import { plain, unitName, units } from "./plain.ts"
+import { newVisitor } from "./ids.ts"
 
 export { render }
 // what a program is given: where to render, what renders there (@ermine/render/html's render here;
@@ -134,7 +135,7 @@ export function createLive(ermine: Ermine, program: Program, options: LiveOption
 	const visitors = new Map<string, Visitor>()
 
 	function visit(mode: Mode): Visitor | Response {
-		const path = `${folder}/${crypto.randomUUID()}`
+		const path = `${folder}/${newVisitor()}`
 		// deno-lint-ignore prefer-const
 		let v: Visitor | undefined
 		// nothing is told till the page is out: the first render is in its html
