@@ -402,6 +402,8 @@ function stickers(): Child {
 			</p>
 			<div
 				class="board"
+				// its size, for a page with no script (nothing measures it there)
+				data-ermine-size="640x220"
 				onClick={handler("on/stick", (e: Ev) => {
 					const { offsetX: x, offsetY: y } = e
 					const { clientWidth: w, clientHeight: h } = e.currentTarget

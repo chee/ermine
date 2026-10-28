@@ -45,5 +45,7 @@ const PORT = 8787
 if (import.meta.main) {
 	const port = Number(Deno.env.get("PORT") ?? PORT)
 	serve(port)
-	console.log(`ermine live: http://localhost:${port}/ (GET and POST only: /?poll)`)
+	console.log(
+		`ermine live: http://localhost:${port}/ (GET and POST only: /?poll, no script: /?plain)`,
+	)
 }
