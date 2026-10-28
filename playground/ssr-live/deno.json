@@ -11,6 +11,11 @@
 	"tasks": {
 		"start": "deno run --allow-net --allow-read --allow-env typescript/server.ts",
 		"measure": "deno run --allow-net --allow-read --allow-env --allow-run --allow-write typescript/measure.ts",
-		"party": "deno run --allow-net --allow-read --allow-env typescript/party-server.ts"
-	}
+		"party": "deno run --allow-net --allow-read --allow-env typescript/party-server.ts",
+		"edge": "deno run --allow-net --allow-read --allow-env typescript/edge-local.ts",
+		"edge-build": "deno run --allow-read --allow-write --allow-run --allow-env typescript/edge-build.ts"
+	},
+	"exclude": [
+		"edge/netlify/edge-functions/live.js"
+	]
 }

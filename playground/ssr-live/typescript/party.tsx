@@ -125,7 +125,7 @@ function every(ms: number, f: () => void) {
 }
 
 // the next generation (a torus); fewer than six alive: sprinkled again
-function stepLife() {
+export function stepLife() {
 	if (!now("/shared/life-on")) return
 	const cells = peep(() => range(LIFE.w * LIFE.h).map((i) => read(`/shared/life/${i}`) as boolean))
 	const around = (i: number) => {
@@ -177,9 +177,14 @@ const cell = (e: Ev) => e.target.value ? [Number(e.target.value)] : undefined
 export const party = ({ into, options }: Page) =>
 	function visitor() {
 		const id = options.name.split("/").pop()!
+		// a name and a colour, the first time: kept, so a visitor rebuilt per request (the edge) keeps them
 		const [animal, emoji] = pick(ANIMALS)
-		const me: Name = { animal, emoji, colour: Math.floor(Math.random() * COLOURS) }
-		ensureNode(`/shared/names/${id}`, me)
+		ensureNode(`/shared/names/${id}`, {
+			animal,
+			emoji,
+			colour: Math.floor(Math.random() * COLOURS),
+		})
+		const me = now<Name>(`/shared/names/${id}`)
 		ensureNode(`/shared/here/${id}`, { ...me, away: false })
 		// this visitor's own: the wall's tool, the pixel asked about, the sticker in hand
 		ensureNode("tool", "paint")
@@ -187,10 +192,12 @@ export const party = ({ into, options }: Page) =>
 		ensureNode("sticker", STICKERS[0])
 
 		createAction("on/tool", (tool: string) => set("tool", tool))
-		createAction("on/paint", (i: number) =>
-			now("tool") === "who" ? set("asked", i) : set(`/shared/wall/${i}`, me.colour))
-		createAction("on/life", (i: number) =>
-			set(`/shared/life/${i}`, !now(`/shared/life/${i}`)))
+		createAction(
+			"on/paint",
+			(i: number) =>
+				now("tool") === "who" ? set("asked", i) : set(`/shared/wall/${i}`, me.colour),
+		)
+		createAction("on/life", (i: number) => set(`/shared/life/${i}`, !now(`/shared/life/${i}`)))
 		createAction("on/life-on", () => set("/shared/life-on", !now("/shared/life-on")))
 		createAction(
 			"on/beat",

@@ -55,6 +55,10 @@ export type Options = {
 	call: (action: Node, ...args: unknown[]) => unknown
 	at?: string
 	tell?: (update: Update) => void
+	// handler ids: a count, never used again (the default), or by place, the folder and the
+	// handler's position in it ("view/3:0"): the same state rendered again gives the same ids (the
+	// edge: a click is found in the page as it was when clicked)
+	ids?: "count" | "place"
 }
 
 // ---- the server's elements ----
@@ -198,7 +202,7 @@ type Kept = {
 // one render's: the host's options, its handlers by id, and the last id given
 type Top = { readonly options: Options; readonly kept: Map<string, Kept>; count: number }
 // the build being made: its render, the folder a binding made now goes under, how many so far
-type Here = { readonly top: Top; readonly folder: string; n: number }
+type Here = { readonly top: Top; readonly folder: string; n: number; k: number }
 let here: Here | undefined
 
 function within<T>(h: Here, f: () => T): T {
@@ -245,7 +249,7 @@ export function render(into: Element, view: Child, options: Options): Element | 
 	if (kept === undefined) handlers.set(into, kept = new Map())
 	forget(kept, folder)
 	const top: Top = { options, kept, count: 0 }
-	into.kids = within({ top, folder, n: 0 }, () => build(flat([view])))
+	into.kids = within({ top, folder, n: 0, k: 0 }, () => build(flat([view])))
 	const root = into.kids[0]
 	if (root !== undefined && "tag" in root) root.attrs.set("data-ermine-process", options.name)
 	return root as Element | undefined
@@ -309,7 +313,7 @@ function listen(el: Element, type: string, value: unknown) {
 	if (!isHandler(value) && (typeof value !== "object" || value === null)) return
 	const h = isHandler(value) ? value : handler(value as Node)
 	const now = here!
-	const id = String(++now.top.count)
+	const id = now.top.options.ids === "place" ? `${now.folder}:${now.k++}` : String(++now.top.count)
 	now.top.kept.set(id, {
 		folder: now.folder,
 		node: typeof h.target === "string" ? getNode(h.target) : h.target,
@@ -324,11 +328,19 @@ function listen(el: Element, type: string, value: unknown) {
 // for the page's: its type, target's value, checked, a form's elements). false: no such handler
 // (an id from before a re-render)
 export function fire(into: Element, id: string, event: unknown): boolean {
+	const call = prepare(into, id, event)
+	call?.()
+	return call !== undefined
+}
+
+// the handler id names, its args made of event now, its call later (the edge finds the handler in
+// the page as it was when clicked, and calls it once the page has caught up). undefined: no such
+// handler
+export function prepare(into: Element, id: string, event: unknown): (() => unknown) | undefined {
 	const k = handlers.get(into)?.get(id)
-	if (k === undefined) return false
+	if (k === undefined) return undefined
 	const args = typeof k.args === "function" ? k.args(event) : k.args ?? []
-	if (args) k.call(k.node, ...args)
-	return true
+	return () => args && k.call(k.node, ...args)
 }
 
 const KEEP = Symbol("keep")
@@ -472,7 +484,7 @@ function watch<S>(
 	createEffect(
 		name,
 		() =>
-			within({ top, folder: name, n: 0 }, () => {
+			within({ top, folder: name, n: 0, k: 0 }, () => {
 				forget(top.kept, name)
 				const v = reading(b)
 				const waiting = v === WAITING
