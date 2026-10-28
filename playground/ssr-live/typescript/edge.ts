@@ -32,7 +32,16 @@ import {
 	remove,
 } from "@ermine/system"
 import type { Options } from "@ermine/render"
-import { createRoot, type Element, fire, html, quoted, sent, take } from "@ermine/render/html"
+import {
+	createRoot,
+	type Element,
+	fire,
+	html,
+	quoted,
+	render,
+	sent,
+	take,
+} from "@ermine/render/html"
 import { plain, unitName, units } from "./plain.ts"
 import { PICKER, picker, PLAIN, posted, type Said, standIn, tagOf } from "./live.ts"
 import { party, setupShared, stepLife } from "./party.tsx"
@@ -246,7 +255,7 @@ async function turn(store: Kept, id: string, seen: number, asked?: Said, again =
 		set("/shared/beat-step", -1)
 		set("/shared/pet/hunger", -1)
 	})
-	const started = e.start(party({ into, options }), path)
+	const started = e.start(party({ into, options, render }), path)
 	if ("refused" in started) throw new Error(`refused: ${started.refused}`)
 	context = e.getProcessContext(started.process)
 	e.within(() => {

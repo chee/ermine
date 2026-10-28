@@ -12,11 +12,14 @@
 // script at all (GET /?plain): the page is a document that never ends, its view in a declarative
 // shadow root with each unit a slot (plain.ts); a unit that changes is sent again into the
 // document, in a tag of its own, and CSS shows only the last of each tag; its events are forms,
-// posted into a hidden iframe and answered 204
+// posted into a hidden iframe and answered 204. or as the page's own (GET /?v=tippet,
+// options.tippet): the html as rendered here, its process then stopped, and a script that runs it
+// in the page instead, from the same nodes, synced (tippet.tsx)
 // a visitor whose stream is gone for linger ms is stopped; a page it had is told 410 and reloads.
 // options.away, back and gone are told as a visitor's stream drops, comes back, and it is stopped
 import { type Ermine, executeAction, pulse } from "@ermine/system"
 import type { Options } from "@ermine/render"
+import type { Child } from "@ermine/render/h"
 import {
 	createRoot,
 	type Element,
@@ -31,8 +34,13 @@ import {
 import { plain, unitName, units } from "./plain.ts"
 
 export { render }
-// what a program is given: where to render, and the options to render with
-export type Page = { readonly into: Element; readonly options: Options }
+// what a program is given: where to render, what renders there (@ermine/render/html's render here;
+// a page's own hydrate, in the tippet version), and the options to render with
+export type Page<E = Element> = {
+	readonly into: E
+	readonly options: Options
+	readonly render: (into: E, view: Child, options: Options) => unknown
+}
 export type Program = (page: Page) => () => unknown
 
 type Visitor = {
@@ -73,7 +81,7 @@ export type Said = {
 	readonly at?: readonly number[]
 }
 
-type Mode = "stream" | "poll" | "plain"
+type Mode = "stream" | "poll" | "plain" | "tippet"
 
 export type LiveOptions = {
 	// the page's script, and its GET and POST version
@@ -91,6 +99,14 @@ export type LiveOptions = {
 	readonly away?: (path: string) => void
 	readonly back?: (path: string) => void
 	readonly gone?: (path: string) => void
+	// the tippet version: its script (served at /tippet.js), what it is told (data- attributes on
+	// its tag, for a page whose process is at path), and that a page's html is out, its process here
+	// stopped
+	readonly tippet?: {
+		readonly script: string
+		readonly says: (path: string) => Readonly<Record<string, string>>
+		readonly rendered?: (path: string) => void
+	}
 }
 
 export type Live = {
@@ -130,7 +146,7 @@ export function createLive(ermine: Ermine, program: Program, options: LiveOption
 			name: path,
 			call: (action, ...args) => context!.within(() => executeAction(action, ...args)),
 		}
-		const started = ermine.start(program({ into, options: page }), path)
+		const started = ermine.start(program({ into, options: page, render }), path)
 		if ("refused" in started) {
 			return new Response(`refused: ${started.refused}`, { status: BROKE })
 		}
@@ -327,17 +343,27 @@ export function createLive(ermine: Ermine, program: Program, options: LiveOption
 		`<title>${title}</title>${options.head ?? ""}<style>${style}${more}${PICKER}</style></head>`
 
 	// the versions a page can pick: this server has every one
-	const offered: readonly Version[] = options.pollClient === undefined
-		? ["stream", "plain"]
-		: ["stream", "poll", "plain"]
+	const offered: readonly Version[] = [
+		"stream",
+		"plain",
+		...options.pollClient === undefined ? [] : ["poll" as const],
+		...options.tippet === undefined ? [] : ["tippet" as const],
+	]
 
 	const document = (v: Visitor) =>
 		head() +
-		`<body>${picker(v.mode, offered)}${html(v.into)}<script src="/${
-			v.mode === "poll" ? "live-poll" : "live"
-		}.js" defer></script>` +
+		`<body>${picker(v.mode, offered)}${html(v.into)}${script(v)}` +
 		Object.keys(scripts).map((name) => `<script src="/${name}" defer></script>`).join("") +
 		`</body></html>`
+	const script = (v: Visitor) => {
+		if (v.mode !== "tippet") {
+			return `<script src="/${v.mode === "poll" ? "live-poll" : "live"}.js" defer></script>`
+		}
+		const says = Object.entries(options.tippet!.says(v.path)).map(([k, x]) =>
+			` data-${k}="${quoted(x)}"`
+		)
+		return `<script type="module" src="/tippet.js"${says.join("")}></script>`
+	}
 
 	// how a new page hears: ?v= the version picked (or ?plain, ?poll); poll only when there is its
 	// script
@@ -345,6 +371,7 @@ export function createLive(ermine: Ermine, program: Program, options: LiveOption
 		const v = q.get("v") ?? (q.has("plain") ? "plain" : q.has("poll") ? "poll" : "stream")
 		if (v === "plain") return "plain"
 		if (v === "poll" && options.pollClient !== undefined) return "poll"
+		if (v === "tippet" && options.tippet !== undefined) return "tippet"
 		return "stream"
 	}
 
@@ -368,7 +395,15 @@ export function createLive(ermine: Ermine, program: Program, options: LiveOption
 				const v = visit(mode)
 				if (v instanceof Response) return v
 				if (mode === "plain") return stream(v, plainStart(v))
-				return new Response(document(v), {
+				const page = document(v)
+				// the tippet version: the page runs its process from here on
+				if (mode === "tippet") {
+					clearTimeout(v.leaving)
+					visitors.delete(v.path)
+					v.stop()
+					options.tippet!.rendered?.(v.path)
+				}
+				return new Response(page, {
 					headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" },
 				})
 			}
@@ -383,6 +418,11 @@ export function createLive(ermine: Ermine, program: Program, options: LiveOption
 			if (request.method === "POST" && url.pathname === "/event") return event(request)
 			if (get && url.pathname === "/live.js") {
 				return new Response(client, { headers: { "content-type": "text/javascript" } })
+			}
+			if (get && url.pathname === "/tippet.js" && options.tippet !== undefined) {
+				return new Response(options.tippet.script, {
+					headers: { "content-type": "text/javascript" },
+				})
 			}
 			if (get && url.pathname === "/live-poll.js" && options.pollClient !== undefined) {
 				return new Response(options.pollClient, {
@@ -416,6 +456,7 @@ const VERSIONS: Record<Version, string> = {
 	plain: "no script: streamed html, forms",
 	poll: "GET and POST",
 	stream: "an event stream",
+	tippet: "the page's own ermine, synced with tippet",
 }
 
 // the picker: a GET form, so it works with no script too (pick, then go)
@@ -426,7 +467,7 @@ export function picker(now: Version, offered: readonly Version[]): string {
 	return `<form class="ermine-versions" method="get" action="/"><label>version ` +
 		`<select name="v">${options.join("")}</select></label> <button>go</button></form>`
 }
-const ORDER: readonly Version[] = ["plain", "poll", "stream"]
+const ORDER: readonly Version[] = ["plain", "poll", "stream", "tippet"]
 
 // the picker's look, beside the page's own
 export const PICKER = ".ermine-versions { display: flex; justify-content: flex-end; gap: 4px;" +
