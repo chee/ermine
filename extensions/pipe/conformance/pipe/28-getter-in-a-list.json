@@ -1,0 +1,29 @@
+{
+	"title": "a getter in a list of froms: fan-in follows the one it gives, the plain one stays",
+	"steps": [
+		{ "op": "ermine", "features": ["pipe"], "expect": {} },
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{ "do": ["ensureNode", "/sel", "/a"] },
+				{ "do": ["ensureNode", "/a", 0] },
+				{ "do": ["ensureNode", "/b", 0] },
+				{ "do": ["ensureNode", "/c", 0] },
+				{ "do": ["ensureNode", "/out", 0] },
+				{ "do": ["pipe", ["all", { "get": ["read", "/sel"] }, "/c"], "/out", { "name": "copy" }] }
+			],
+			"expect": {}
+		},
+		{ "op": "start", "name": "p", "at": "/code/p", "expect": { "id": "proc:p" } },
+		{ "op": "host", "call": ["patch", "/a", [{ "path": [], "value": 1 }]] },
+		{ "op": "host", "call": ["read", "/out"], "expect": { "value": 1 } },
+		{ "op": "host", "call": ["patch", "/sel", [{ "path": [], "value": "/b" }]] },
+		{ "op": "host", "call": ["patch", "/a", [{ "path": [], "value": 2 }]] },
+		{ "op": "host", "call": ["read", "/out"], "expect": { "value": 1 } },
+		{ "op": "host", "call": ["patch", "/b", [{ "path": [], "value": 3 }]] },
+		{ "op": "host", "call": ["read", "/out"], "expect": { "value": 3 } },
+		{ "op": "host", "call": ["patch", "/c", [{ "path": [], "value": 4 }]] },
+		{ "op": "host", "call": ["read", "/out"], "expect": { "value": 4 } }
+	]
+}

@@ -1,0 +1,33 @@
+{
+	"title": "a to getter second, a function after it: a transform whose to follows the getter",
+	"steps": [
+		{ "op": "ermine", "features": ["pipe"], "expect": {} },
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{ "do": ["ensureNode", "/sel", "/x"] },
+				{ "do": ["ensureNode", "/a", 0] },
+				{ "do": ["ensureNode", "/x", 0] },
+				{ "do": ["ensureNode", "/y", 0] },
+				{
+					"do": [
+						"pipe",
+						"/a",
+						{ "get": ["read", "/sel"] },
+						{ "fn": [], "back": ["whole", "$value"] },
+						{ "name": "copy" }
+					]
+				}
+			],
+			"expect": {}
+		},
+		{ "op": "start", "name": "p", "at": "/code/p", "expect": { "id": "proc:p" } },
+		{ "op": "host", "call": ["patch", "/a", [{ "path": [], "value": 1 }]] },
+		{ "op": "host", "call": ["read", "/x"], "expect": { "value": 1 } },
+		{ "op": "host", "call": ["patch", "/sel", [{ "path": [], "value": "/y" }]] },
+		{ "op": "host", "call": ["patch", "/a", [{ "path": [], "value": 2 }]] },
+		{ "op": "host", "call": ["read", "/y"], "expect": { "value": 2 } },
+		{ "op": "host", "call": ["read", "/x"], "expect": { "value": 1 } }
+	]
+}
