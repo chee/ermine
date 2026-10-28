@@ -405,50 +405,6 @@ static void case_writer_hidden_in_records(void) {
 	finish();
 }
 
-// createWriter and start are not-here in a pipe's function, as in a memo or an effect
-static int pipe_codes[2];
-static int pipe_told(es_context *c, void *ctx, const es_watched *w) {
-	(void)ctx, (void)w;
-	op_value *wr = NULL;
-	pipe_codes[0] = es_create_writer(c, &wr);
-	es_clear_thrown();
-	es_child k;
-	es_refused no = {0};
-	pipe_codes[1] = es_start_in(c, plain_kid, NULL, es_text("/work/x"), NULL, &k, &no);
-	es_clear_thrown();
-	CHECK(wr == NULL && k.id == NULL);
-	return 0;
-}
-static es_out makes_pipe(es_context *c, void *ctx) {
-	(void)ctx;
-	es_pipe_options o = {.tell = pipe_told};
-	es_handle *h;
-	CHECK(es_pipe(c, es_on_path(es_text("/src")), &o, &h) == 0);
-	return es_out_of(NULL);
-}
-static void case_not_here_in_a_pipe(void) {
-	fresh();
-	es_handle *h;
-	op_value *zero = op_num(0);
-	CHECK(es_ensure_node(es_host_context(E), es_text("/src"), zero, &h) == 0);
-	es_refused no = {0};
-	CHECK(es_start(E, makes_pipe, NULL, es_text("/code/p"), NULL, &STARTED, &no) == 0);
-	es_pulse(es_host_context(E));
-	pipe_codes[0] = pipe_codes[1] = -1;
-	op_value *five = op_num(5);
-	op_patch pt = {.has_value = 1, .value = five};
-	CHECK(es_patch(es_host_context(E), es_on_path(es_text("/src")), &pt, 1) == 0);
-	es_pulse(es_host_context(E));
-	CHECK(pipe_codes[0] == ES_NOT_HERE);
-	CHECK(pipe_codes[1] == ES_NOT_HERE);
-	es_stop(STARTED, NULL);
-	es_started_free(STARTED);
-	es_pulse(es_host_context(E));
-	op_free(five);
-	op_free(zero);
-	finish();
-}
-
 // a program's start taken says where only: a stopped child's row a feature held is no business of the
 // starter's (the host's own start names it)
 static int hold_rows;
@@ -643,7 +599,6 @@ int main(void) {
 	case_cleanup_through_action();
 	case_teardown_not_in_an_action();
 	case_writer_hidden_in_records();
-	case_not_here_in_a_pipe();
 	case_taken_names_no_holder_to_a_program();
 	case_writer_mark_has_no_user_activated();
 	case_child_stop_asks_as_starter();

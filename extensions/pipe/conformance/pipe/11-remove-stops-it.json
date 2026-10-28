@@ -1,0 +1,200 @@
+{
+	"title": "removing a pipe's node stops it: its node gone, its scope torn down (a teardown its function added told ended; replaced as the next telling began), it hears nothing more; the process that made it keeps running",
+	"steps": [
+		{
+			"op": "ermine",
+			"features": [
+				"pipe"
+			],
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"/k",
+						0
+					],
+					"as": "k"
+				},
+				{
+					"do": [
+						"ensureNode",
+						"/a",
+						0
+					]
+				},
+				{
+					"do": [
+						"pipe",
+						"/a",
+						{
+							"fn": [
+								{
+									"do": [
+										"addTeardown",
+										"tp"
+									]
+								},
+								{
+									"do": [
+										"log",
+										"told",
+										"$value"
+									]
+								}
+							]
+						}
+					]
+				},
+				{
+					"do": [
+						"createEffect",
+						"c",
+						[
+							"read",
+							"$k"
+						],
+						"ctl"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/a",
+				[
+					{
+						"path": [],
+						"value": 1
+					}
+				]
+			]
+		},
+		{
+			"op": "log",
+			"name": "tp",
+			"expect": {
+				"values": []
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/a",
+				[
+					{
+						"path": [],
+						"value": 2
+					}
+				]
+			]
+		},
+		{
+			"op": "log",
+			"name": "tp",
+			"expect": {
+				"values": [
+					"replaced"
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"remove",
+				"/code/p/pipe-1"
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"hasNode",
+				"/code/p/pipe-1"
+			],
+			"expect": {
+				"value": false
+			}
+		},
+		{
+			"op": "log",
+			"name": "tp",
+			"expect": {
+				"values": [
+					"replaced",
+					"ended"
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/a",
+				[
+					{
+						"path": [],
+						"value": 3
+					}
+				]
+			]
+		},
+		{
+			"op": "log",
+			"name": "told",
+			"expect": {
+				"values": [
+					1,
+					2
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/k",
+				[
+					{
+						"path": [],
+						"value": 1
+					}
+				]
+			]
+		},
+		{
+			"op": "log",
+			"name": "ctl",
+			"expect": {
+				"values": [
+					0,
+					1
+				]
+			}
+		},
+		{
+			"op": "status",
+			"name": "p",
+			"expect": {
+				"status": {
+					"state": "done"
+				}
+			}
+		}
+	]
+}

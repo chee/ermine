@@ -1,0 +1,130 @@
+{
+	"title": "fan-in: from a list, one pipe; its function is told which node was written (from, as given)",
+	"steps": [
+		{
+			"op": "ermine",
+			"features": [
+				"pipe"
+			],
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"/a",
+						0
+					]
+				},
+				{
+					"do": [
+						"ensureNode",
+						"/b",
+						0
+					]
+				},
+				{
+					"do": [
+						"ensureNode",
+						"/c",
+						0
+					]
+				},
+				{
+					"do": [
+						"pipe",
+						[
+							"all",
+							"/a",
+							"/b"
+						],
+						"/c",
+						{
+							"fn": [
+								{
+									"do": [
+										"log",
+										"seen",
+										[
+											"all",
+											"$from",
+											"$value"
+										]
+									]
+								}
+							],
+							"back": [
+								"whole",
+								"$value"
+							]
+						}
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/a",
+				[
+					{
+						"path": [],
+						"value": 1
+					}
+				]
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/b",
+				[
+					{
+						"path": [],
+						"value": 2
+					}
+				]
+			]
+		},
+		{
+			"op": "log",
+			"name": "seen",
+			"expect": {
+				"values": [
+					[
+						"/a",
+						1
+					],
+					[
+						"/b",
+						2
+					]
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/c"
+			],
+			"expect": {
+				"value": 2
+			}
+		}
+	]
+}

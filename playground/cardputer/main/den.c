@@ -12,6 +12,7 @@
 #include "core/ed25519/c/ed25519.h"
 #include "core/changeable/c/apply.h"
 #include "core/changeable/c/json.h"
+#include "playground/libraries/upsert/c/upsert.h"
 #include "ermine/encoding/c/cbor.h"
 #include "ermine/processes/c/processes.h"
 #include "ermine/encoding/c/blake3/blake3.h"
@@ -230,7 +231,8 @@ static void upsert_now(void *data) {
 	}
 	pl_changed changed = {0};
 	nd_entry *born = NULL;
-	int code = pl_upsert(p, tb_string(u->part), tb_string(u->id), u->path, u->n, u->v, h, &changed, &born);
+	int code = up_upsert(p, me.w.table, tb_string(u->part), tb_string(u->id), u->path, u->n, u->v, h, &changed,
+		&born);
 	if (code) fprintf(stderr, "den: %s %s: %s\n", u->part, u->id, pl_code_name(code));
 	if (changed.n > 0) pl_commit(p, &changed);
 	for (size_t i = 0; i < changed.n; i++) pl_hold_also(p, changed.entries[i], pl_made_ref(made), pl_made_free);

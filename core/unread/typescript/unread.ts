@@ -31,6 +31,7 @@ import type { ChangeHeader, Entry } from "@ermine/core/node/entry"
 import apply, { type Patch } from "@ermine/core/changeable/apply"
 import type { Scheduler } from "@ermine/core/scheduler"
 import type { Id, Table } from "@ermine/core/table"
+import { isPojo, isTyped } from "@ermine/core/util/kinds"
 import { keep } from "./unread_conformance_hook.ts"
 
 export type Unread = {
@@ -44,14 +45,7 @@ export type Unread = {
 	kept: (value: unknown, handed?: ReadonlySet<unknown>) => void
 }
 
-const isMap = (v: unknown): v is Record<string, unknown> => {
-	if (v === null || typeof v !== "object" || Array.isArray(v)) return false
-	const p = Object.getPrototypeOf(v)
-	return p === Object.prototype || p === null
-}
-const typed = (v: unknown): v is Int8Array =>
-	ArrayBuffer.isView(v) && !(v instanceof DataView) && !(v instanceof Uint8Array)
-const container = (v: unknown): v is object => Array.isArray(v) || isMap(v) || typed(v)
+const container = (v: unknown): v is object => Array.isArray(v) || isPojo(v) || isTyped(v)
 
 export function createUnread(): Unread {
 	// an entry → its token: made at its first write since it was last read
@@ -76,7 +70,7 @@ export function createUnread(): Unread {
 	// apply's owned: a container a write changes, owned, or its copy, owned from now
 	const take = (mine: object) => (v: object): object => {
 		if (owner.get(v) === mine) return v
-		const c = Array.isArray(v) || typed(v) ? v.slice() : { ...v }
+		const c = Array.isArray(v) || isTyped(v) ? v.slice() : { ...v }
 		owner.set(c, mine)
 		return c
 	}
@@ -87,7 +81,7 @@ export function createUnread(): Unread {
 		if (!container(v)) return
 		const was = owner.get(v) === mine
 		if (was) owner.delete(v)
-		if (!was && !top || typed(v)) return
+		if (!was && !top || isTyped(v)) return
 		for (const x of Array.isArray(v) ? v : Object.values(v)) free(x, mine, false)
 	}
 
@@ -137,7 +131,7 @@ export function createUnread(): Unread {
 	// what is owned under v let go, v too: owned copies are connected from the root, so only those
 	// are walked
 	function drop(v: unknown) {
-		if (!container(v) || !out(v) || typed(v)) return
+		if (!container(v) || !out(v) || isTyped(v)) return
 		if (Array.isArray(v)) { for (const x of v) drop(x) }
 		else for (const k in v) drop((v as Record<string, unknown>)[k])
 	}
@@ -153,7 +147,7 @@ export function createUnread(): Unread {
 			seen.add(v)
 		}
 		out(v)
-		if (typed(v)) return
+		if (isTyped(v)) return
 		if (Array.isArray(v)) {
 			for (const x of v) if (container(x)) kept(x, handed, seen ??= new Set([v]))
 		} else {

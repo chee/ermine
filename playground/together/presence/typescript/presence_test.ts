@@ -1,7 +1,5 @@
 import { assert, assertEquals } from "@std/assert"
 import { decode } from "@ermine/encoding/cbor"
-import createEntry from "@ermine/core/node/entry"
-import { place } from "@ermine/core/places"
 import { createPair } from "./channel.ts"
 import { type Device, device } from "./world.ts"
 import {
@@ -61,15 +59,8 @@ Deno.test("one row per device: moving replaces the row", () => {
 
 Deno.test("a cursor at 60 Hz for a second: a patch and a rerun a change, one send each", () => {
 	const { a, b, pair, clock } = two()
-	// mount the anchor in b's tree so places can watch its path
-	b.scheduler.runWithScope(b.scope, () => {
-		const kids = createEntry<Record<string, unknown>>({}, { actor: "b", time: 0 })
-		b.table.add("children", "R", kids)
-		place(kids, "doc", ANCHOR, { actor: "b", time: 0 })
-		b.places.commit([kids])
-	})
 	const patches: unknown[] = []
-	b.places.watchPath(["doc"], (f) => patches.push(...f.patches), { part: PART })
+	b.places.watchAll((f) => void (f.part === PART && f.id === ANCHOR && patches.push(...f.patches)))
 	let reruns = 0
 	b.scheduler.runWithScope(
 		b.scope,

@@ -7,7 +7,7 @@
 		"./ed25519": "./ed25519/typescript/ed25519.ts",
 		"./node": "./node/typescript/node.ts",
 		"./node/entry": "./node/typescript/entry.ts",
-				"./changeable": "./changeable/typescript/changeable.ts",
+		"./changeable": "./changeable/typescript/changeable.ts",
 		"./changeable/apply": "./changeable/typescript/apply.ts",
 		"./changeable/invert": "./changeable/typescript/invert.ts",
 		"./changeable/squish": "./changeable/typescript/squish.ts",
@@ -25,6 +25,7 @@
 		"./scheduler/selector": "./scheduler/typescript/selector.ts",
 		"./table": "./table/typescript/table.ts",
 		"./unread": "./unread/typescript/unread.ts",
+		"./util/kinds": "./util/typescript/kinds.ts",
 		"./util/keyorder": "./util/typescript/keyorder.ts",
 		"./util/stacktrace": "./util/typescript/stacktrace.ts",
 		"./util/walk-string": "./util/typescript/walk-string.ts",
@@ -35,7 +36,6 @@
 		"./places/guard": "./places/typescript/guard.ts",
 		"./places/path": "./places/typescript/path.ts",
 		"./places/status": "./places/typescript/status.ts",
-		"./places/upsert": "./places/typescript/upsert.ts",
 		"./protect": "./protect/typescript/protect.ts",
 		"./clingy": "./clingy/typescript/clingy.ts"
 	}

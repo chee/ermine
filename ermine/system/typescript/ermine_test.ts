@@ -10,6 +10,7 @@ import {
 	remove,
 } from "@ermine/system"
 import { registrations } from "./registry.ts"
+import { NAMES } from "./system/index.ts"
 import { assert, assertEquals, assertThrows } from "@std/assert"
 import { createScheduler, type Scheduler } from "@ermine/core/scheduler"
 import {
@@ -23,7 +24,13 @@ import {
 import { manual } from "./manual_fixture.ts"
 import { trace } from "./trace.ts"
 
-const BASE = ["ermine.ts", "system.ts", "context.ts", "calls.ts", "features.ts"]
+const BASE = [
+	"ermine.ts",
+	"context.ts",
+	"calls.ts",
+	"features.ts",
+	...NAMES.map((f) => `system/${f}.ts`),
+]
 
 // the program a test wrote at a node (ensureNode), as start takes it: its function
 const programAt = (e: { within: <T>(f: () => T) => T }, at: string) =>
@@ -36,6 +43,12 @@ Deno.test("the base holds nothing of patch nodes' or sync's", async () => {
 		assert(!/@ermine\/(patchy|pully|together)/.test(code), `${f} imports patch nodes or sync`)
 		assert(!/"values"|REPLACES|overlay|layers/.test(code), `${f} names sync's or patch nodes'`)
 	}
+})
+
+Deno.test("the system folder's list of files names every file in it", async () => {
+	const files: string[] = []
+	for await (const f of Deno.readDir(new URL("./system/", import.meta.url))) files.push(f.name)
+	assertEquals(files.sort(), NAMES.map((f) => `${f}.ts`).sort())
 })
 
 Deno.test("close() finishes when a feature holds every teardown back", () => {

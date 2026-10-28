@@ -1,17 +1,17 @@
-// @ermine/system (ermine.ts, system.ts) on the line protocol: one JSON request per line in, one answer per line out, in
+// @ermine/system (ermine.ts, system/) on the line protocol: one JSON request per line in, one answer per line out, in
 // order. one ermine per run (a plain one, or the last "ermine" asked): root "R", the host's scope
 // { actor: "test" }, new ids "n1", "n2", … in order, a process's id "proc:<name>". pulses as the
 // harness chooses: after every request the asked-for ones run, till none is asked.
 // node: { path, part } | { id, part }.
 //
 // the ermine:
-// { op: "ermine", features?, deny?, uuid?, calls?, at?, args?, machine? } → {}   features: names
+// { op: "ermine", features?, deny?, uuid?, calls?, at?, args? } → {}   features: names
 //    ("patchy": the real one; "trace", "hints": the real ones; "inline": one written in this
 //    file, listing no files; another
 //    harness adds its own: named, below) or
 //    test features (below); deny: [{ op, path?, id?, from?, pending? }] refused (pending: true: pending) (every field given
 //    matching; from: the asker's place; box: the box it is in, its root's id);
-//    uuid: uuidv7 ids; calls: "never" (a feature holding no call records, onRecord). deny: by path, or { op, id } by id; at, args, machine: the host's node's
+//    uuid: uuidv7 ids; calls: "never" (a feature holding no call records, onRecord). deny: by path, or { op, id } by id; at, args: the host's node's
 // { op: "features" }                       → { features }   ermine.features
 // { op: "late", feature }                  → {}   a test feature adding a hook now (late: true)
 // { op: "uuid", path }                     → { v7 }   whether the id there is a uuidv7
@@ -48,8 +48,9 @@
 //    whatever settles after them
 // { op: "log", name } → { values }; { op: "pulse" }; { op: "kids", id, value }; { op: "put", part,
 //    id, value }; { op: "saved", part, id, path? }; { op: "id", path }; { op: "metadata", part, id }
-//    → { keys, node?, features?, call?, handler?, caller? }; { op: "site", part, id } → { site } (as
-//    ermine/api's harness: program, computer, api, other, none)
+//    → { keys, node?, features?, call?, handler?, caller? }; { op: "site", part, id } → { site }
+//    (setup: the process's, for its setup; computer: a memo or effect made at define's line;
+//    program: the harness's other lines; api: ermine's files; other; none)
 //
 // a test feature: { name, needs?, onTable?, onRead?, onWrite?, onTeardown?, onRecord?, onStatus?, slot?,
 // early?, late? }. early: its setup reads places (not made yet); late: it keeps its FeatureAPI.
@@ -84,10 +85,6 @@
 //   ["explain", target, key?]                 explain(target, key), shown
 //   ["peep", expr]                            peep(() => expr): read untracked
 //   ["ref", path, value]                      ref(path, () => value)
-//   ["watch", x, log]                         pipe(x, fn, { timing: "write" }): each write's
-//                                             patches logged ("refused")
-//   ["pipe", from, to | fn, fnA?, fnB?, o?]   pipe(...): a function { steps, gives? }, the write
-//                                             as $0; o: { timing, name }
 //   ["log", log, expr]                        expr's value logged and given back
 //   ["start", name, at, program?, options?]  start(program, at, options): name its name here, program
 //                                             the node holding it (default at)
@@ -144,7 +141,8 @@ import {
 	type Started,
 } from "./ermine.ts"
 import * as system from "@ermine/system"
-import type { System } from "./system.ts"
+import { FILES as SYSTEM_FILES } from "./system/index.ts"
+import type { System } from "./system/shapes.ts"
 import { isHandle } from "./handles.ts"
 import { bare, hints } from "./hints.ts"
 import type { Run } from "@ermine/processes/runs"
@@ -155,9 +153,9 @@ type Env = Map<string, unknown>
 type Step = { do: [string, ...unknown[]]; as?: string }
 
 // ermine's own files: a site in one is the api's
-const OURS = ["ermine.ts", "system.ts", "context.ts", "calls.ts", "features.ts"].map((f) =>
+const OURS = ["ermine.ts", "context.ts", "calls.ts", "features.ts"].map((f) =>
 	new URL(`./${f}`, import.meta.url).href
-)
+).concat(SYSTEM_FILES)
 
 type Made = {
 	ermine: Ermine
@@ -257,7 +255,6 @@ function make(o: Request = {}): Made {
 		host: {
 			...o.at !== undefined && { at: o.at },
 			...o.args !== undefined && { args: o.args },
-			...o.machine !== undefined && { machine: o.machine },
 		},
 	})
 	made.hostSys = hostSystem(made.ermine)
@@ -268,14 +265,18 @@ const world = () => w ?? make()
 
 // the features asked for by name ("patchy", "inline"; another harness adds its own), and the
 // library functions a program may call beside @ermine/system's (patchy's createPatch and layers;
-// another harness adds its own): each given the names, its raw arguments, and the harness's arg
-// and expr, and run with its caller's scope open (they call @ermine/system's functions, which find
-// it)
+// another harness adds its own): each given the names, its raw arguments, and the harness's arg,
+// expr and run (steps), and run with its caller's scope open (they call @ermine/system's
+// functions, which find it)
 export const named = new Map<string, Feature>()
 export type Library = (
 	env: Env,
 	raw: unknown[],
-	h: { arg: typeof arg; expr: typeof expr },
+	h: {
+		arg: typeof arg
+		expr: (env: Env, e: unknown) => unknown
+		run: (env: Env, steps: readonly Step[]) => void
+	},
 ) => unknown
 export const libraries = new Map<string, Library>()
 
@@ -406,35 +407,6 @@ function call(api: Sys, env: Env, [fn, ...raw]: [string, ...unknown[]]): unknown
 			return api.addTeardown((why) =>
 				log(raw[0] as string, raw[1] === undefined ? why : `${raw[1]}:${why}`)
 			)
-		// a pipe told as each write lands, logging its patches (the form watch had)
-		case "watch":
-			return api.pipe(
-				arg(env, raw[0]) as never,
-				(x) => log(raw[1] as string, x.refused ? "refused" : x.patches),
-				{ timing: "write" },
-			)
-		// pipe(from, to | fn, fnA?, fnB?, options?): a function is { steps, gives? }, run with the
-		// write as $0 ({ patches, value, refused? }); gives: what it gives back (a transform's patches)
-		case "pipe": {
-			const [from, ...rest] = raw as unknown[]
-			const isFn = (x: unknown) =>
-				x !== null && typeof x === "object" && !Array.isArray(x) && "steps" in x
-			const fn = (f: unknown) => {
-				const { steps, gives } = f as { steps: Step[]; gives?: unknown }
-				return (w: { patches: unknown; value: unknown; refused?: true }) => {
-					const inner: Env = new Map(env)
-					inner.set("0", {
-						patches: w.patches,
-						value: w.value,
-						...w.refused && { refused: true },
-					})
-					run(api, inner, steps)
-					return gives === undefined ? undefined : expr(api, inner, gives)
-				}
-			}
-			const args = rest.map((x, i) => isFn(x) ? fn(x) : i === 0 ? arg(env, x) : x)
-			return api.pipe(arg(env, from) as never, ...args as [never])
-		}
 		case "share": {
 			const shared = world().shared
 			const name = raw[1] as string
@@ -556,7 +528,17 @@ function call(api: Sys, env: Env, [fn, ...raw]: [string, ...unknown[]]): unknown
 		default: {
 			// a library's (patchy's createPatch, pully's provide …), in its caller's scope
 			const library = libraries.get(fn)
-			if (library !== undefined) return api.within(() => library(env, raw, { arg, expr }))
+			if (library !== undefined) {
+				return api.within(() =>
+					library(env, raw, {
+						arg,
+						// a program's steps and expressions, for a function the library keeps and calls later:
+						// run as the scope open then (imported's), never the host's
+						expr: (e, x) => expr(imported, e, x),
+						run: (e, steps) => run(imported, e, steps),
+					})
+				)
+			}
 			const f = (api as unknown as Record<string, unknown>)[fn]
 			if (typeof f !== "function") throw new Error(`no api function ${fn}`)
 			return f(...raw.map((a) => arg(env, a)))
@@ -688,7 +670,7 @@ function shownWriter(w: NonNullable<NonNullable<ReturnType<System["explain"]>>["
 	if (w.kind === "method") {
 		return { writer: w.kind, path: w.path ?? null, ...w.call && { n: w.call.n } }
 	}
-	if (w.kind === "pipe") return { writer: w.kind, path: w.path ?? null }
+	if (w.kind === "feature") return { writer: w.feature, path: w.path ?? null }
 	return { writer: w.kind, site: siteOf(w.site) }
 }
 const pairs = (list: readonly object[]) =>
@@ -722,6 +704,7 @@ const runShown = (r: Run) =>
 
 function siteOf(at: { file: string; function?: string } | undefined): string {
 	if (at === undefined) return "none"
+	if (at.function === "setup") return "setup"
 	if (at.file === import.meta.url) return at.function === "define" ? "computer" : "program"
 	if (OURS.includes(at.file)) return "api"
 	return "other"

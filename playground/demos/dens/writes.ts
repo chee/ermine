@@ -10,7 +10,7 @@ import type { Scheduler, Scope } from "@ermine/core/scheduler"
 import type { Id, Key, Table } from "@ermine/core/table"
 import type { Places } from "@ermine/core/places"
 import { createChangeHeader } from "@ermine/core/places/header"
-import { upsert } from "@ermine/core/places/upsert"
+import { upsert } from "@ermine/upsert"
 import { encode, type Value } from "@ermine/encoding/cbor"
 
 const ours = [import.meta.url]

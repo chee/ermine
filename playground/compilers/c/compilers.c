@@ -9,6 +9,7 @@
 #include "../../../ermine/encoding/c/blake3/blake3.h"
 #include "../../../core/clingy/c/clingy.h"
 #include "../../encoding/c/pack.h"
+#include "../../libraries/upsert/c/upsert.h"
 #include "mem.h"
 
 // what an output is typed with, and what a compiler says it gives (as compilers.ts reads them)
@@ -235,7 +236,8 @@ static void put(bd *b, const char *part, const char *id, const char *name, const
 	const char *at[] = {name};
 	pl_changed changed;
 	nd_entry *born;
-	pl_upsert(b->places, tb_string(part), tb_string(id), at, name != NULL, value, h, &changed, &born);
+	up_upsert(b->places, b->table, tb_string(part), tb_string(id), at, name != NULL, value, h, &changed,
+		&born);
 	done_commit(b, &changed);
 	for (size_t i = 0; i < changed.n; i++) {
 		pl_hold_also(b->places, changed.entries[i], pl_made_ref(made), pl_made_free);

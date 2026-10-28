@@ -10,6 +10,7 @@
 #include "../../../extensions/boxes/c/boxes.h"
 #include "../../../experiments/software/c/functions.h"
 #include "../../compilers/c/mem.h"
+#include "../../libraries/upsert/c/upsert.h"
 #include "programs.h"
 #include "programs_json.h"
 #include "../../../ermine/types/c/types.h"
@@ -248,8 +249,8 @@ static void write(void *data) {
 		for (size_t i = 0; i < n; i++) {
 			if (path[i] == NULL) path[i] = "";
 		}
-		pl_upsert(pw_places, tb_string(pw_part(op_get(r, "part"))), pw_key(op_get(r, "id")), path, n,
-			op_get(r, "value"), h, &changed, &node);
+		up_upsert(pw_places, pw_table, tb_string(pw_part(op_get(r, "part"))), pw_key(op_get(r, "id")), path,
+			n, op_get(r, "value"), h, &changed, &node);
 		free(path);
 		commit_host(NULL, &changed);
 		for (size_t i = 0; i < changed.n; i++) {

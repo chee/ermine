@@ -1,0 +1,110 @@
+{
+	"title": "a mirror (to, no function): from's writes land at to, their own patches; one way: to's writes stay at to",
+	"steps": [
+		{
+			"op": "ermine",
+			"features": [
+				"pipe"
+			],
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"/a",
+						{
+							"x": 0,
+							"y": 0
+						}
+					]
+				},
+				{
+					"do": [
+						"ensureNode",
+						"/b",
+						{
+							"x": 0,
+							"y": 5
+						}
+					]
+				},
+				{
+					"do": [
+						"pipe",
+						"/a",
+						"/b"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/a",
+				[
+					{
+						"path": [
+							"x"
+						],
+						"value": 1
+					}
+				]
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/b"
+			],
+			"expect": {
+				"value": {
+					"x": 1,
+					"y": 5
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/b",
+				[
+					{
+						"path": [
+							"y"
+						],
+						"value": 9
+					}
+				]
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/a"
+			],
+			"expect": {
+				"value": {
+					"x": 1,
+					"y": 0
+				}
+			}
+		}
+	]
+}

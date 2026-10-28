@@ -274,4 +274,4 @@ export const whole = (
 	v: unknown,
 ): Patch[] => [v === undefined ? { path: [] } : { path: [], value: v }]
 
-export type { Step }
+export type { Patch, Step }

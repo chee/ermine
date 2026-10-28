@@ -300,6 +300,11 @@ function told<A extends unknown[]>() {
 	return t
 }
 
+// what a listener of the scheduler is given: the arguments of its on… (Scheduler, below)
+type Told<K extends keyof Scheduler> = Scheduler[K] extends (f: (...a: infer A) => void) => unknown
+	? A
+	: never
+
 // thrown at a read of a key whose writer is due: the run stops, and waits after it
 class Stop {}
 
@@ -316,33 +321,16 @@ const inside: unique symbol = /* @__PURE__ */ Symbol("inside")
 type Own = Run & { [inside]: Ran }
 
 export function createScheduler(): Scheduler {
-	const tracks = told<[key: unknown, run: Run]>()
-	const marks = told<
-		[
-			keys: readonly unknown[],
-			run: Run | undefined,
-			due: Computer[],
-			tick: number,
-		]
-	>()
-	const starts = told<[computer: Computer, n: number, rank: number]>()
-	const returns = told<[computer: Computer, n: number, value: unknown]>()
-	const ends = told<
-		[
-			computer: Computer,
-			n: number,
-			ended: Ended,
-			reads: readonly unknown[],
-			more: More,
-		]
-	>()
-	const effects = told<
-		[computer: Computer, n: number, more: { error?: unknown }]
-	>()
-	const settles = told<[]>()
-	const afterPulses = told<[]>()
-	const untracks = told<[key: unknown]>()
-	const firstTracks = told<[key: unknown]>()
+	const tracks = told<Told<"onTrack">>()
+	const marks = told<Told<"onMark">>()
+	const starts = told<Told<"onRunStart">>()
+	const returns = told<Told<"onRunReturn">>()
+	const ends = told<Told<"onRunEnd">>()
+	const effects = told<Told<"onEffect">>()
+	const settles = told<Told<"onSettle">>()
+	const afterPulses = told<Told<"onAfterPulse">>()
+	const untracks = told<Told<"onTrackingEnd">>()
+	const firstTracks = told<Told<"onTrackingStart">>()
 
 	// a node per computation, and per key read
 	const tracker = createTracker<unknown>()
@@ -453,14 +441,16 @@ export function createScheduler(): Scheduler {
 		o.older = o.newer = undefined
 		o.old = false
 	}
-	// what is under o, newest first, then what is old on it, newest first: taken out together
-	function cut(o: Scope): Scope[] {
+	// what is under o, newest first, then what is old on it, newest first: taken out together.
+	// old: only what is old
+	function cut(o: Scope, old = false): Scope[] {
 		const c = o as Computer
-		if (o.newest === undefined && c.before === undefined) return none
+		const newest = old ? undefined : o.newest
+		if (newest === undefined && c.before === undefined) return none
 		const kids: Scope[] = []
-		for (let x = o.newest; x !== undefined; x = x.older) kids.push(x)
+		for (let x = newest; x !== undefined; x = x.older) kids.push(x)
 		for (let x = c.before; x !== undefined; x = x.older) kids.push(x)
-		o.newest = undefined
+		if (newest !== undefined) o.newest = undefined
 		if (c.before !== undefined) c.before = undefined
 		for (const x of kids) {
 			x.older = x.newer = undefined
@@ -471,7 +461,7 @@ export function createScheduler(): Scheduler {
 
 	// a new scope under up, else under the one open; gone: disposed
 	function createScope(info: Info, up?: Scope): Scope {
-		if (up === undefined) return grow(parent(), info)
+		if (up === undefined) up = parent()
 		if (up.state !== "alive") throw disposed()
 		return grow(up, info)
 	}
@@ -506,21 +496,25 @@ export function createScheduler(): Scheduler {
 	// the first cleanup error. what a listener throws in a kid's teardown is held (the bracket
 	// around), never a cleanup's error
 	function down(o: Scope, kids: Scope[], fs: (() => unknown)[]): { error: unknown } | undefined {
+		if (kids.length === 0 && fs.length === 0) return
 		let failed: { error: unknown } | undefined
-		if (kids.length) {
-			enter(opens(o), () => {
-				for (const kid of kids) {
-					const e = dispose(kid)
-					failed ??= e
-				}
-			})
-		}
-		for (let i = fs.length - 1; i >= 0; i--) {
-			try {
-				enter(opens(o), fs[i])
-			} catch (e) {
-				failed ??= { error: e }
+		const was = open
+		open = opens(o)
+		try {
+			for (const kid of kids) {
+				const e = dispose(kid)
+				failed ??= e
 			}
+			for (let i = fs.length - 1; i >= 0; i--) {
+				const f = fs[i]
+				try {
+					f()
+				} catch (e) {
+					failed ??= { error: e }
+				}
+			}
+		} finally {
+			open = was
 		}
 		return failed
 	}
@@ -565,10 +559,8 @@ export function createScheduler(): Scheduler {
 		if (running?.loop) running.cut = true
 		const t = ++tick
 		const now = due(c, t, running) ? [c] : none
-		const outer = thrown
-		thrown = undefined
-		holdFirst(marks.tell([], running?.own, now, t))
-		rethrow(outer)
+		const failed = marks.tell([], running?.own, now, t)
+		if (failed) throw failed.error
 		return true
 	}
 
@@ -583,20 +575,13 @@ export function createScheduler(): Scheduler {
 		c.kind = as.kind
 		c.f = as.f as Computer["f"]
 		c.equal = as.equal as Equal | undefined
-		if (as.kind === "compute") {
-			c.set = as.set
-			c.effect = undefined
-			c.early = false
-		} else {
-			c.effect = as.effect
-			c.set = undefined
-			c.early = as.early === true
-		}
+		c.set = as.kind === "compute" ? as.set : undefined
+		c.effect = as.kind === "effect" ? as.effect : undefined
+		c.early = as.kind === "effect" && as.early === true
 		if (was === as.kind) return
 		c.last = undefined
 		if (as.kind === "effect") {
-			for (const k of c.wrote) if (writers.get(k) === c) writers.delete(k)
-			c.wrote.clear()
+			unwrite(c)
 			return
 		}
 		for (let x = c.newest; x !== undefined; x = x.older) x.deed = false
@@ -610,20 +595,13 @@ export function createScheduler(): Scheduler {
 	// aside are queued, to run once the round's runs are done (runQueuedCleanups)
 	function dropUnclaimedChildren(c: Computer, r: Ran) {
 		if (c.before !== undefined) {
-			const kids: Scope[] = []
-			for (let x: Scope | undefined = c.before; x; x = x.older) kids.push(x)
-			c.before = undefined
-			for (const x of kids) {
-				x.older = x.newer = undefined
-				x.old = false
-			}
+			const kids = cut(c, true)
 			const was = reading
 			const wasRunning = running
 			reading = undefined
 			running = r
 			try {
-				const failed = down(c, kids, none)
-				if (failed) hold(failed.error)
+				holdFirst(down(c, kids, none))
 			} finally {
 				reading = was
 				running = wasRunning
@@ -679,8 +657,7 @@ export function createScheduler(): Scheduler {
 		if (o.state !== "alive") return
 		const outer = thrown
 		thrown = undefined
-		const failed = dispose(o)
-		thrown ??= failed
+		holdFirst(dispose(o))
 		rethrow(outer)
 	}
 
@@ -689,9 +666,9 @@ export function createScheduler(): Scheduler {
 	function dispose(o: Scope): { error: unknown } | undefined {
 		if (o.state !== "alive") return
 		o.state = "disposing"
+		const c = "kind" in o ? o as Computer : undefined
 		let fs = o.teardowns
-		if ("kind" in o) {
-			const c = o as Computer
+		if (c) {
 			drop(c)
 			// queued and set aside before its runs, then its act's: older than the rest
 			if (c.queuedCleanups || c.aside || c.deeds.length) {
@@ -704,7 +681,7 @@ export function createScheduler(): Scheduler {
 		const failed = down(o, cut(o), fs)
 		o.state = "gone"
 		// gone: as the run of a change it names none
-		if ("kind" in o) (o as Computer).ran = undefined
+		if (c) c.ran = undefined
 		unlink(o)
 		return failed
 	}
@@ -717,10 +694,15 @@ export function createScheduler(): Scheduler {
 		const read = tracker.reads(c.node)
 		tracker.untrack(c.node)
 		for (const node of read) unread(node)
-		for (const k of c.wrote) if (writers.get(k) === c) writers.delete(k)
-		c.wrote.clear()
+		unwrite(c)
 		if (c.acting) unact(c)
 		c.kept.length = 0
+	}
+
+	// c the writer of nothing
+	function unwrite(c: Computer) {
+		for (const k of c.wrote) if (writers.get(k) === c) writers.delete(k)
+		c.wrote.clear()
 	}
 
 	const disposed = () => new SchedulerError("disposed", "the scope is disposed")
@@ -777,7 +759,8 @@ export function createScheduler(): Scheduler {
 			deed: doing(o),
 			kind,
 			f,
-			[kind === "compute" ? "set" : "effect"]: then,
+			set: kind === "compute" ? then : undefined,
+			effect: kind === "effect" ? then : undefined,
 			equal,
 			runs: 0,
 			kept: [],
@@ -809,8 +792,8 @@ export function createScheduler(): Scheduler {
 		// it changes is seen. made in a run known to loop: the loop is cut there, as a dropped
 		// loop mark cuts it
 		if (running?.loop) running.cut = true
-		const t = ++tick // its info, the one object it keeps: what was given, and the tick that made it due, its
-		 // making
+		// its info, the one object it keeps: what was given, and the tick that made it due (its making)
+		const t = ++tick
 		;(c as { info: Info }).info = { ...info, mark: t }
 		const now = due(c, t, running) ? [c] : []
 		const outer = thrown
@@ -897,8 +880,7 @@ export function createScheduler(): Scheduler {
 			}
 		}
 		// every listener told; the first error after
-		let failed: { error: unknown } | undefined
-		failed ??= marks.tell(keys, r?.own, now, t)
+		const failed = marks.tell(keys, r?.own, now, t)
 		if (failed) throw failed.error
 		return t
 	}
@@ -927,10 +909,7 @@ export function createScheduler(): Scheduler {
 		}
 		tracker.track(c.node, node!)
 		// every listener told; what one threw comes out after the read is all done
-		let failed: { error: unknown } | undefined
-		if (first) {
-			failed ??= firstTracks.tell(key)
-		}
+		let failed = first ? firstTracks.tell(key) : undefined
 		if (ends.fs.length) {
 			if (r.reads === none) r.reads = []
 			r.reads.push(key)
@@ -1014,29 +993,27 @@ export function createScheduler(): Scheduler {
 			}
 		}
 		own[inside] = r
-		const was = reading
-		const wasRunning = running
-		running = r
-		// what its runs made is old, its cleanups set aside, till a run is done (dropUnclaimedChildren). torn
-		// down by a listener: nothing more
-		if (c.state !== "alive") {
-			running = wasRunning
-			return
-		}
+		// torn down by a listener: nothing more
+		if (c.state !== "alive") return
+		// what its runs made is old, its cleanups set aside, till a run is done (dropUnclaimedChildren)
 		liftChildren(c)
 		// its info, in place: this run's number, and the tick of the mark that made it due
 		c.info.run = n
 		c.info.mark = mark
-		let out: Out
-		reading = r
+		let value: unknown
+		let failed: { error: unknown } | undefined
+		const was = reading
+		const wasRunning = running
+		reading = running = r
 		tracker.begin(c.node)
 		// enter's bracket, written out: no closure per run
 		const wasOpen = open
 		open = { scope: c, by: own }
 		try {
-			out = { value: c.f(c.last?.value) }
+			value = c.f(c.last?.value)
 		} catch (e) {
-			out = e === PENDING ? { value: PENDING } : { error: e }
+			if (e === PENDING) value = PENDING
+			else failed = { error: e }
 		} finally {
 			open = wasOpen
 			reading = was
@@ -1046,10 +1023,10 @@ export function createScheduler(): Scheduler {
 		}
 		if (c.state !== "alive") return
 		if (r.stopped) return stop(r)
-		if ("error" in out) return finish(r, "failed", { error: out.error })
-		if (out.value === PENDING) return finish(r, "pending")
-		if (isPromise(out.value)) return awaiting(r, out.value)
-		result(r, out.value)
+		if (failed) return finish(r, "failed", failed)
+		if (value === PENDING) return finish(r, "pending")
+		if (isPromise(value)) return awaiting(r, value)
+		result(r, value)
 	}
 
 	function stop(r: Ran) {
@@ -1083,43 +1060,39 @@ export function createScheduler(): Scheduler {
 		if (r.loop && (!equal || r.cut)) {
 			return finish(r, "looping", { equal, through: r.loop })
 		}
+		if (equal) return finish(r, "done", { equal })
 		if (c.kind === "effect") {
-			if (!equal) {
-				const q = c.early ? earlies : acts
-				const a: Act = c.acting = { r, value: v, at: q.items.length }
-				q.items.push(a)
-				q.live++
-				return finish(r, "done", { equal, kept: v })
-			}
-			return finish(r, "done", { equal })
-		}
-		if (!equal) {
-			let failed: { error: unknown } | undefined
-			const was = reading
-			const wasRunning = running
-			reading = undefined
-			running = r
-			try {
-				enter(
-					{ scope: c, by: c },
-					() => (c.set as (value: unknown) => void)(v),
-				)
-			} catch (e) {
-				failed = { error: e }
-			} finally {
-				reading = was
-				running = wasRunning
-			}
-			// a set that threw may have written part: the last is forgotten, so the next result is
-			// given to set, equal or not
-			if (failed) {
-				c.last = undefined
-				return finish(r, "failed", { equal, error: failed.error, kept: v })
-			}
-			c.last = { value: v }
+			const q = c.early ? earlies : acts
+			const a: Act = c.acting = { r, value: v, at: q.items.length }
+			q.items.push(a)
+			q.live++
 			return finish(r, "done", { equal, kept: v })
 		}
-		finish(r, "done", { equal })
+		// enter's bracket, written out, as in begin
+		let failed: { error: unknown } | undefined
+		const was = reading
+		const wasRunning = running
+		const wasOpen = open
+		reading = undefined
+		running = r
+		open = { scope: c, by: c }
+		try {
+			;(c.set as (value: unknown) => void)(v)
+		} catch (e) {
+			failed = { error: e }
+		} finally {
+			open = wasOpen
+			reading = was
+			running = wasRunning
+		}
+		// a set that threw may have written part: the last is forgotten, so the next result is
+		// given to set, equal or not
+		if (failed) {
+			c.last = undefined
+			return finish(r, "failed", { equal, error: failed.error, kept: v })
+		}
+		c.last = { value: v }
+		finish(r, "done", { equal, kept: v })
 	}
 
 	function finish(r: Ran, ended: Ended, more: More = {}) {
@@ -1189,14 +1162,11 @@ export function createScheduler(): Scheduler {
 
 	// acts
 
-	// a out of its queue: a hole where it was
-	function unqueue(q: Queue, a: Act) {
-		q.items[a.at] = undefined
-		q.live--
-	}
-
+	// c's act out of its queue: a hole where it was
 	function unact(c: Computer) {
-		unqueue(c.early ? earlies : acts, c.acting!)
+		const q = c.early ? earlies : acts
+		q.items[c.acting!.at] = undefined
+		q.live--
 		c.acting = undefined
 	}
 
@@ -1208,25 +1178,24 @@ export function createScheduler(): Scheduler {
 		thrown = undefined
 		try {
 			while (q.items[q.head] === undefined) q.head++
-			const a = q.items[q.head]!
-			unqueue(q, a)
-			a.r.c.acting = undefined
-			if (q.live) owners(a.r.c, q)
-			act(a)
+			perform(q.items[q.head]!, q)
 		} finally {
 			rethrow(outer)
 		}
 	}
-	function owners(c: Computer, q: Queue) {
-		for (let o = c.parent; o !== undefined; o = o.parent) {
-			const x = "kind" in o ? (o as Computer).acting : undefined
-			if (x === undefined || (o as Computer).early !== c.early) continue
-			unqueue(q, x)
-			x.r.c.acting = undefined
-			owners(x.r.c, q)
-			act(x)
-			return
+	// a out of its queue, and acted, after the act of the nearest computer above it in q
+	function perform(a: Act, q: Queue) {
+		const c = a.r.c
+		unact(c)
+		if (q.live) {
+			for (let o = c.parent; o !== undefined; o = o.parent) {
+				const x = "kind" in o ? (o as Computer).acting : undefined
+				if (x === undefined || (o as Computer).early !== c.early) continue
+				perform(x, q)
+				break
+			}
 		}
+		act(a)
 	}
 	// a queue all taken: made new
 	function clear(q: Queue) {
@@ -1240,7 +1209,6 @@ export function createScheduler(): Scheduler {
 	// value is old, so it does not act; its next run does. torn down by a teardown: nothing more
 	function act(a: Act) {
 		const c = a.r.c
-		c.acting = undefined
 		if (c.state !== "alive" || order.has(c)) return
 		const was = reading
 		const wasRunning = running
@@ -1264,7 +1232,7 @@ export function createScheduler(): Scheduler {
 		if (c.state !== "alive") {
 			reading = was
 			running = wasRunning
-			if (failed) hold(failed.error)
+			holdFirst(failed)
 			return
 		}
 		// a cleanup wrote what it reads: due again, it does not act on the old value, its run does
@@ -1272,17 +1240,20 @@ export function createScheduler(): Scheduler {
 			c.cleaned = true
 			reading = was
 			running = wasRunning
-			if (failed) hold(failed.error)
+			holdFirst(failed)
 			return
 		}
 		c.cleaned = false
 		c.doing = true
+		const wasOpen = open
+		open = { scope: c, by: c }
 		try {
 			const effect = c.effect as (value: unknown, previous: unknown) => void
-			enter({ scope: c, by: c }, () => effect(a.value, c.last?.value))
+			effect(a.value, c.last?.value)
 		} catch (e) {
 			failed ??= { error: e }
 		} finally {
+			open = wasOpen
 			c.doing = false
 			reading = was
 			running = wasRunning

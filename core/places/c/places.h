@@ -48,7 +48,7 @@
 typedef struct pl pl;
 // only the places, so that it can be the ctx of the hooks below
 pl *pl_new(void);
-// its watches stopped, and it let go; with the last of a places and its views (pl_view), the holds,
+// the pl_watch_all functions it was given stopped, and it let go; with the last of a places and its views (pl_view), the holds,
 // the pairs and what is open; none of what it was connected to
 void pl_free(pl *p);
 // the one unread (core/unread) children writes go through (pl_place and the rest), shared by its views, let
@@ -131,10 +131,9 @@ tb_key pl_root(const pl *p);
 const pl_contributor *const *pl_contributors(const pl *p, size_t *n);
 // the same places from another root, asked by contributors of its own (the array kept, the
 // caller's, as are the contributors and root's string; none: children alone): one set of spots,
-// keeps, holds and watches, one commit (pl_commit on either) and one table hook (pl_event on either)
-// with p, so whoever writes tells it nothing more. A box's places (ermine/boxes). Its watches find
-// their path from its root. Let go by pl_free on it, before or after p's (what they share goes with
-// the last)
+// keeps, holds and pl_watch_all functions, one commit (pl_commit on either) and one table hook
+// (pl_event on either) with p, so whoever writes tells it nothing more. A box's places
+// (ermine/boxes). Let go by pl_free on it, before or after p's (what they share goes with the last)
 pl *pl_view(pl *p, tb_key root, const pl_contributor *const *contributors, size_t n);
 
 // hooks, ctx the pl
@@ -182,29 +181,7 @@ int pl_rename(pl *p, nd_entry *children, const char *name, const char *to, ch_he
 int pl_move(pl *p, nd_entry *from, const char *name, nd_entry *into, const char *to,
 	ch_header header, pl_changed *changed);
 
-// upsert: a value made or patched at a path of names inside the entry under (part, id), the way
-// upsert.ts does. No entry there: one made holding the value nested (the places' own, let go of at
-// pl_free), added to the table (its event tells readers); *made it, for the caller to pl_hold the
-// header's block on; *changed nothing. An entry: one patch at the path, the nested remainder put at
-// the first level that is no map or has no such key (a level that is no map is put over); *changed
-// that entry. The same value (compared deeply, a map's keys in any order) already there: nothing is
-// written. The value is borrowed and held (op_ref) by the entry; the strings are copied; made may
-// be NULL. id and part must outlive the table's entry for them, as the table needs. 0
-int pl_upsert(pl *p, tb_key part, tb_key id, const char *const *path, size_t n,
-	const op_value *value, ch_header header, pl_changed *changed, nd_entry **made);
-// pl_upsert, the write (on an entry there) through pl_unread's un_update: for an entry the caller
-// means changed in place until read, as ermine/processes' trie
-int pl_upsert_unread(pl *p, tb_key part, tb_key id, const char *const *path, size_t n,
-	const op_value *value, ch_header header, pl_changed *changed, nd_entry **made);
-// the value at the path, else make() (a new value: the caller's, which this lets go of) put there as
-// pl_upsert does, with changed and made as there. Gives the value now at the path, borrowed from
-// the table: good until the node changes. Reads nothing of the scheduler's
-const op_value *pl_get_or_set(pl *p, tb_key part, tb_key id, const char *const *path, size_t n,
-	op_value *(*make)(void *ctx), void *ctx, ch_header header, pl_changed *changed,
-	nd_entry **made);
-
-// an entry the caller made and added to the table, which the places lets go of at pl_free (as the ones
-// pl_upsert makes)
+// an entry the caller made and added to the table, which the places lets go of at pl_free
 void pl_own(pl *p, nd_entry *node);
 // the same, let go of sooner: once table holds it no more (taken out, or another put in its
 // place), pl_sweep frees it, and its holds, as the reference's table lets go of an entry taken
@@ -229,34 +206,18 @@ typedef struct {
 } pl_fact;
 
 // after a write: the spots its patches mark, said changed in one call, by the run open; then each
-// watch told what landed at its node. A watch that writes commits in turn, in the same run
+// function pl_watch_all was given told what landed. One that writes commits in turn, in the same run
 void pl_commit(pl *p, const pl_changed *changed);
 
-// watches: fn is told each fact landing at the node at a path, from now, as it lands, after the
-// mark, in the order the watches were made. The node is found when the watch is made, and again
-// after a batch lands in a children entry on its route (the folders its path went through), by a
-// plain walk of the children entries that tells the scheduler nothing; a fact is told only if its
-// id is that node, found by one lookup of the id. A table event is told as one fact. A watch stopped on the way is not told
+// fn is told every fact, anywhere, as it lands (a commit's, a table event's), after the mark, in the
+// order the functions were given: what a run wrote, for runs.h. A table event is told as one fact. A
+// function stopped on the way is not told
 typedef struct pl_watch pl_watch;
 typedef void (*pl_watch_fn)(const pl_fact *fact, void *ctx);
-// only the part, when has_part; only the patches touching at (a path in the value: a patch's path,
-// or its move's, is at, above at or under at), when has_at: the fact told with only those patches,
-// and not told if none touch. The pieces are copied
-typedef struct {
-	int has_part;
-	tb_key part;
-	int has_at;
-	const op_key *at;
-	size_t at_length;
-} pl_watching;
-// path (n names) copied; options may be NULL. Gives back the watch, for pl_stop
-pl_watch *pl_watch_path(pl *p, const char *const *path, size_t n, pl_watch_fn fn, void *ctx,
-	const pl_watching *options);
+// gives back the watch, for pl_stop
+pl_watch *pl_watch_all(pl *p, pl_watch_fn fn, void *ctx);
 // the stop: no more is told; the watch is let go of (a second stop is a mistake)
 void pl_stop(pl_watch *w);
-// every fact, anywhere, told to fn as it lands (a commit's, a table event's), after the mark and
-// before the watches at paths: what a run wrote, for runs.h. Stopped with pl_stop
-pl_watch *pl_watch_all(pl *p, pl_watch_fn fn, void *ctx);
 
 // what is at path in a value: a number into a list or a typed array, a name into a map; nothing
 // there: NULL. Bytes are one whole value: a number into them is nothing. A typed array's element

@@ -6,7 +6,7 @@ import createEntry, { type Entry } from "@ermine/core/node/entry"
 import { createScheduler } from "@ermine/core/scheduler"
 import type { Id, Key } from "@ermine/core/table"
 import { createChangeHeader } from "@ermine/core/places/header"
-import { upsert } from "@ermine/core/places/upsert"
+import { upsert } from "@ermine/upsert"
 import { createBox } from "@ermine/boxes"
 import { createErmine } from "@ermine/system"
 import {

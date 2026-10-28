@@ -10,6 +10,7 @@
 #include "../../../core/places/c/world_harness.h"
 #include "compilers.h"
 #include "mem.h"
+#include "../../libraries/upsert/c/upsert.h"
 
 static hf *functions;
 static bd **builds;
@@ -169,6 +170,50 @@ static void enter(void *data) {
 	tb_sub(world_table, tb_string(e->part), e->id, node);
 }
 
+// an upsert (libraries/upsert) of a request's part, id, path (names) and value, committed, the
+// header's block held; why: set when it was refused
+typedef struct {
+	const op_value *request;
+	const char *why;
+} upserting;
+
+static void upsert_in(void *data) {
+	upserting *u = data;
+	const op_value *r = u->request, *id = op_get(r, "id"), *value = op_get(r, "value");
+	if (!world_is(id, OP_STR)) {
+		u->why = "id: not a string";
+		return;
+	}
+	if (value == NULL) {
+		u->why = "no value";
+		return;
+	}
+	ch_header h;
+	pl_made *made;
+	char *bad = pl_header(world_places, NULL, 0, CH_HERE, &h, &made);
+	if (bad) {
+		free(bad);
+		u->why = SC_UNSCOPED;
+		return;
+	}
+	size_t n;
+	const char **path = world_address(op_get(r, "path"), &n);
+	for (size_t i = 0; i < n; i++) {
+		if (path[i] == NULL) path[i] = "";
+	}
+	pl_changed changed;
+	nd_entry *node;
+	up_upsert(world_places, world_table, tb_string(world_part(op_get(r, "part"))), world_key(id), path, n,
+		value, h, &changed, &node);
+	free(path);
+	pl_commit(world_places, &changed);
+	for (size_t i = 0; i < changed.n; i++) {
+		pl_hold_also(world_places, changed.entries[i], pl_made_ref(made), pl_made_free);
+	}
+	if (node != NULL) pl_hold(world_places, node, made, pl_made_free);
+	else pl_made_free(made);
+}
+
 typedef struct {
 	bd *made;
 } making;
@@ -322,6 +367,12 @@ static op_value *answer(const op_value *r) {
 		world_hosted(enter, &e);
 		op_free(fn);
 		return op_map();
+	}
+	if (strcmp(op, "upsert") == 0) {
+		upserting u = {r, NULL};
+		const char *bad = world_hosted(upsert_in, &u);
+		if (bad == NULL) bad = u.why;
+		return bad ? world_error(bad) : op_map();
 	}
 	if (strcmp(op, "builds") == 0) {
 		for (size_t i = 0; i < nscopes; i++) {

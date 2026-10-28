@@ -16,7 +16,7 @@
 //   may        the policy every read and write is asked of; none: all allowed
 //   root       the root's id; none: a new one
 //   host       the host's node: where it is placed (none: nowhere, reached by ermine.id), the
-//              host's args, the machine it publishes, and its setup: run once, untracked, in the
+//              host's args and its setup: run once, untracked, in the
 //              host's scope as createErmine ends (a throw: ermine closed, the error thrown)
 //   info       the host's scope's info (actor, …), beside its node
 // made inside, in order: the scheduler; sites (skipping ermine's files and every feature's files,
@@ -30,7 +30,7 @@
 // host's, an action's caller the host's node, addTeardown(fn) at close.
 // the host's node: one plain node, not a process (no row, nothing to stop). its id: a send's
 // caller from the host, and its scope's NODE. its attributes: ermine.host.args,
-// ermine.host.machine, ermine.features (what ermine.features shows).
+// ermine.features (what ermine.features shows).
 // the lifecycle:
 //   start(fn, at, { args })   a process at at running fn, its
 //                        setup, given nothing, the process's scope open [chee 10-26: "so let's do
@@ -53,12 +53,12 @@
 // computer's latest run, call(id) a handler's latest send, waits() every send waiting; tracked.
 import type { ChangeHeader } from "@ermine/core/node/entry"
 import { children, createPlaces, type Id, type Path, type Places } from "@ermine/core/places"
-import { place } from "./names.ts"
-import { getStatus } from "./process.ts"
+import { place } from "./system/names.ts"
+import { getStatus } from "./system/status.ts"
 import { enterScheduler, leaveScheduler, registerScheduler, registerScope } from "./registry.ts"
 import { isHandle, mint } from "./handles.ts"
 import { createChangeHeader, NODE } from "@ermine/core/places/header"
-import type { FileLocation } from "@ermine/core/util/stacktrace"
+import { capture, type FileLocation } from "@ermine/core/util/stacktrace"
 import { createStatus, STATUS, TABLE as STATUS_TABLE } from "@ermine/core/places/status"
 import type { Policy } from "@ermine/core/protect"
 import { idAt, PROCESS, processes as rows } from "@ermine/processes"
@@ -114,16 +114,14 @@ import {
 	type Why,
 	type Write,
 } from "./context.ts"
-import {
-	attach,
-	type Base,
-	type Held,
-	innerOf,
-	seenIn,
-	type Status,
-	type System,
-	WAITING,
-} from "./system.ts"
+import { seenIn, viewOf } from "./system/addressing.ts"
+import { FILES as SYSTEM_FILES } from "./system/index.ts"
+import type { Base } from "./system/base.ts"
+import { computerAt } from "./system/made.ts"
+import { putStatus, setKey } from "./system/status.ts"
+import { callAbove } from "./system/scopes.ts"
+import { attach, innerOf } from "./system/setting.ts"
+import { type ChangeView, type Held, type Status, type System, WAITING } from "./system/shapes.ts"
 
 export { ErmineError, FeatureError } from "./features.ts"
 export type {
@@ -151,7 +149,7 @@ export type {
 	Why,
 	Write,
 } from "./context.ts"
-export { SCOPE, SendError, WAITING } from "./system.ts"
+export { SCOPE, SendError, WAITING } from "./system/shapes.ts"
 export type {
 	Caller,
 	CallView,
@@ -164,14 +162,12 @@ export type {
 	System,
 	Touched,
 	Waiting,
-	Watched,
 	Writer,
-} from "./system.ts"
+} from "./system/shapes.ts"
 export type { Call, Wait } from "./calls.ts"
 
 // the host's node's attributes
 export const ARGS = "ermine.host.args"
-export const MACHINE = "ermine.host.machine"
 export const FEATURES = "ermine.features"
 
 export type Options = {
@@ -182,7 +178,6 @@ export type Options = {
 	host?: {
 		at?: string | Path
 		args?: readonly string[]
-		machine?: unknown
 		setup?: () => unknown
 	}
 	info?: Info
@@ -232,23 +227,14 @@ export type Ermine = {
 }
 
 // ermine's own files: a site is the first frame outside them (and the features')
-const OURS = [
+const OURS = /* @__PURE__ */ [
 	"ermine.ts",
 	"context.ts",
 	"calls.ts",
 	"features.ts",
 	"registry.ts",
 	"handles.ts",
-	"system.ts",
 	"acting.ts",
-	"nodes.ts",
-	"reading.ts",
-	"patching.ts",
-	"explaining.ts",
-	"names.ts",
-	"computing.ts",
-	"actions.ts",
-	"process.ts",
 ].map((f) => new URL(`./${f}`, import.meta.url).href)
 
 // a uuidv7 (rfc 9562): 48 bits of ms, then a 12-bit count within the ms (started random), then
@@ -287,10 +273,16 @@ export function createErmine(options: Options = {}): Ermine {
 
 	// 2. sites: skipping ermine's files, the scheduler's and processes' start, and (added as the
 	// features are set up: the skip list is live) every feature's files
-	const ours = new Set<string>([...OURS, ...SCHEDULER_FILES, ...START_FILES])
+	const ours = new Set<string>([...OURS, ...SYSTEM_FILES, ...SCHEDULER_FILES, ...START_FILES])
 	// the build site of the public function called innermost (enter's), if it was given one
 	let built: FileLocation | undefined
-	const sites = createSites(s, { ours, given: () => built })
+	// the setups running now, by their scope: each process's site (setupSite)
+	const setups = new Map<Scope, { site?: FileLocation | null }>()
+	// a computer's site: a build site if given; made in a process's setup, the process's
+	const sites = createSites(s, {
+		ours,
+		given: (made) => built ?? (made === "computer" ? setupSite() : undefined),
+	})
 
 	// 3. the table; each feature's setup; onTable's layers over it
 	// made later, reached from closures made now
@@ -308,6 +300,8 @@ export function createErmine(options: Options = {}): Ermine {
 			dataOf: (x: unknown) => { node: NodeData } | undefined
 			seen: (id: Id, context: ProcessContext) => Path | undefined
 			calling: () => Calling | undefined
+			// pipe-extension: core gap
+			viewOf: (change: ChangeHeader) => ChangeView
 		}
 		| undefined
 	const table: Table = createTable((part, id) => first.onTableChange(part as Key, id))
@@ -340,6 +334,8 @@ export function createErmine(options: Options = {}): Ermine {
 		dataOf: () => made?.dataOf,
 		seen: () => made?.seen,
 		calling: () => made?.calling,
+		viewOf: () => made?.viewOf,
+		siteOf: sites.siteOf,
 	})
 	const { hooks } = features
 	// each new id through onId: the base's a uuidv7 (a node's), proc:<boot>-<n> (a process's)
@@ -400,9 +396,11 @@ export function createErmine(options: Options = {}): Ermine {
 	}
 	const offSettle = s.onSettle(queuePulse)
 
-	// a write's site: in a run, the running computer's own; outside one, a build site given (built),
-	// nothing captured, else the caller of the public function called innermost (entry), found in
-	// the nearest 10 frames. what onTrace gives: the whole trace text kept beside it too (text)
+	// a write's site (the rule is index.ts'): in a run, the running computer's own; outside one, a
+	// build site given (built), nothing captured; in a process's setup, the process's (setupSite);
+	// else the caller of the public function called innermost (entry), found in the nearest 10
+	// frames. what onTrace gives: the whole trace text kept beside it too (text), captured whatever
+	// else is known
 	let entry: unknown
 	const header = (): ChangeHeader => {
 		const run = s.getRun()
@@ -413,9 +411,42 @@ export function createErmine(options: Options = {}): Ermine {
 		if (t.built !== undefined && !t.text) {
 			return createChangeHeader(s, undefined, undefined, undefined, t.built)
 		}
+		const own = t.text ? undefined : setupSite()
+		if (own !== undefined) return createChangeHeader(s, undefined, undefined, undefined, own)
 		const h = createChangeHeader(s, undefined, ours, entry, undefined, t.text)
 		if (t.built !== undefined) h.external = [t.built]
 		return h
+	}
+	// the site header() gives now without reading the stack: a run's computer's, a build's, a
+	// setup's; none: undefined (whoever writes finds it, once)
+	const siteNow = (): FileLocation | undefined => {
+		const run = s.getRun()
+		return run !== undefined ? sites.siteOf(run.computer) : built ?? setupSite()
+	}
+	// f, its writes given site as a build site's (none: f as it is): the base's own writes for a
+	// process, its status as setup settles, take the process's site
+	const sited = <T>(site: FileLocation | undefined, f: () => T): T => {
+		if (site === undefined) return f()
+		const had = built
+		built = site
+		try {
+			return f()
+		} finally {
+			built = had
+		}
+	}
+	// the site of the setup the scope open is, none given (see index.ts): the line of the first
+	// write or computer made in it that was given none, found once, marked with the function
+	// "setup". no setup open: undefined
+	function setupSite(): FileLocation | undefined {
+		const open = s.getCurrentScope()
+		const m = open === undefined ? undefined : setups.get(open)
+		if (m === undefined) return undefined
+		if (m.site === undefined) {
+			const at = capture(ours, entry)
+			m.site = at === undefined ? null : { ...at, function: "setup" }
+		}
+		return m.site ?? undefined
 	}
 	// f(inner, ...a) with enter as the entry: a write's site is found from enter's caller on, or is
 	// site, a build's
@@ -523,15 +554,13 @@ export function createErmine(options: Options = {}): Ermine {
 	// the open call's caller (the nearest call scope's), as a place: a process's at, a computer's its
 	// process's, the host none; no call open: undefined [chee 10-25: "so it should run as both"]
 	const caller = (): { from?: Path; box?: Id } | undefined => {
-		for (let o = s.getCurrentScope(); o !== undefined; o = o.parent) {
-			if (o.info.call === undefined || o.info.handler === undefined) continue
-			const by = (o.info.caller as { node?: Id } | undefined)?.node
-			if (by === undefined || by === node) return {}
-			const ctx = contexts.get(by) ?? computerContexts.get(by)
-			if (ctx?.context.process === undefined) return {}
-			return { from: ctx.context.at, ...ctx.box !== undefined && { box: ctx.box } }
-		}
-		return undefined
+		const o = callAbove(s.getCurrentScope())
+		if (o === undefined) return undefined
+		const by = (o.info.caller as { node?: Id } | undefined)?.node
+		if (by === undefined || by === node) return {}
+		const ctx = contexts.get(by) ?? computerAt(madeNodes, by)?.inner
+		if (ctx?.context.process === undefined) return {}
+		return { from: ctx.context.at, ...ctx.box !== undefined && { box: ctx.box } }
 	}
 	const parts: Parts = {
 		scheduler: s,
@@ -630,14 +659,13 @@ export function createErmine(options: Options = {}): Ermine {
 			[ARGS]: options.host?.args ?? [],
 			[FEATURES]: features.shown,
 		}
-		if (options.host?.machine !== undefined) attrs[MACHINE] = options.host.machine
 		hostInner.put({ part: "attributes", id: node, patches: [{ path: [], value: attrs }] })
 	})
 
 	// 6. scope nodes, processes, statuses, records: every write of theirs through onWrite, as
 	// the host's (rows, start's attributes, scope nodes going) or as the context that made the
 	// computer (its status)
-	const computerContexts = new Map<Id, Inner>()
+	const madeNodes: Base["made"] = new Map()
 	const scopes = createScopeNodes({
 		scheduler: s,
 		table: {
@@ -663,7 +691,7 @@ export function createErmine(options: Options = {}): Ermine {
 		table,
 		scheduler: s,
 		write: (part, id, patches, header) =>
-			(computerContexts.get(id) ?? hostInner).writer(part, id, patches, header),
+			(computerAt(madeNodes, id)?.inner ?? hostInner).writer(part, id, patches, header),
 	})
 	const runs = createRuns({
 		places: { describe: p.describe, watchAll: p.watchAll },
@@ -686,7 +714,7 @@ export function createErmine(options: Options = {}): Ermine {
 				if (r.call !== undefined) keep(r.call)
 			}),
 	})
-	// each running process's context, by its node's id (its places, where it runs: system.ts seenIn)
+	// each running process's context, by its node's id (its places, where it runs: system/addressing.ts seenIn)
 	const contexts = new Map<Id, Inner>()
 	const whys = new Map<Id, Why>()
 	const base: Base = {
@@ -695,20 +723,10 @@ export function createErmine(options: Options = {}): Ermine {
 		statuses,
 		runs,
 		calls,
-		memos: new Set(),
-		contexts: computerContexts,
-		awaiting: new Set(),
+		made: madeNodes,
 		missing: new Map(),
 		setting: new Set(),
-		pipes: new Set(),
-		piped: [],
-		pipeDepth: 0,
-		// what pipes heard told (those heard while telling: at the pulse after), then the pulse
-		pulse: () => {
-			const now = base.piped.splice(0)
-			for (const tell of now) tell()
-			s.pulse()
-		},
+		pulse: () => s.pulse(),
 		methods: new Map(),
 		whys,
 		// set once start's stop is made (below)
@@ -781,7 +799,7 @@ export function createErmine(options: Options = {}): Ermine {
 		// a process a program started: under the scope that started it
 		base.start = (fn, at, o, under) => start(fn, at, o, under)
 
-		// a running process stopped by its node (unplace, remove: system.ts)
+		// a running process stopped by its node (unplace, remove: system/names.ts)
 		base.stop = (id) => {
 			const process = started.find((p) => p.id === id)
 			if (process !== undefined) stop(process)
@@ -802,13 +820,19 @@ export function createErmine(options: Options = {}): Ermine {
 			}
 			const paths = pathsOf(at)
 			const here = o.places ?? p
+			const startSite = siteNow()
 			enterScheduler(s)
 			let made: ReturnType<Processes["start"]>
 			try {
 				made = processes!.start(
 					here,
 					paths.at,
-					{ args: o.args, folder: paths.folder, ...under !== undefined && { under } },
+					{
+						args: o.args,
+						folder: paths.folder,
+						...under !== undefined && { under },
+						...startSite !== undefined && { site: startSite },
+					},
 					(inside) => {
 						const pid = inside.id
 						const inner = createProcessContext(parts, {
@@ -827,7 +851,7 @@ export function createErmine(options: Options = {}): Ermine {
 							...here.root !== root && { box: here.root },
 						})
 						contexts.set(pid, inner)
-						// its context, found by its scope (system.ts): no api object [chee 10-25: ">Drop the
+						// its context, found by its scope (registry.ts): no api object [chee 10-25: ">Drop the
 						// objects. ye"]; setup is given nothing [chee 10-25: "we are getting rid of setup(api)
 						// right?"]
 						attach(base, inner)
@@ -835,27 +859,32 @@ export function createErmine(options: Options = {}): Ermine {
 						s.registerTeardown(inside.scope, () => {
 							contexts.delete(pid)
 						})
+						// the process's site: its setup's once found, else its start's
+						let own = startSite
 						// the process's status and value, written as it settles (its status in the status table)
-						const attrs = (patches: Write["patches"]) =>
-							inner.put({ part: STATUS_TABLE, id: pid, patches })
 						const done = (v: unknown) => {
 							if (inside.scope.state !== "alive") return
 							// the base's own writes for the process: its scope opened (a promise settles with nothing open)
-							s.runWithScope(inside.scope, () => {
-								if (v !== undefined) {
-									inner.put({ part: "value", id: pid, patches: whole(v) })
-								}
-								attrs([{ path: [STATUS] }, { path: [WAITING] }])
-							})
+							sited(
+								own ?? sites.siteOf(inside.scope),
+								() =>
+									s.runWithScope(inside.scope, () => {
+										if (v !== undefined) {
+											inner.put({ part: "value", id: pid, patches: whole(v) })
+										}
+										putStatus(inner, pid, [setKey(STATUS), setKey(WAITING)])
+									}),
+							)
 							queuePulse()
 						}
 						const failed = (e: unknown) => {
 							if (inside.scope.state !== "alive") return
 							const error = e === undefined ? new Error("undefined") : e
-							s.runWithScope(
-								inside.scope,
-								() => attrs([{ path: [STATUS], value: error }, { path: [WAITING] }]),
-							)
+							sited(own ?? sites.siteOf(inside.scope), () =>
+								s.runWithScope(
+									inside.scope,
+									() => putStatus(inner, pid, [setKey(STATUS, error), setKey(WAITING)]),
+								))
 							queuePulse()
 						}
 						// setup run once, given nothing (its functions imported), untracked, in a scope of its own
@@ -868,10 +897,14 @@ export function createErmine(options: Options = {}): Ermine {
 							// the same as from the process's scope
 							const at = s.createScope({ process: inside.at }, inside.scope)
 							let out: unknown
-							// the nodes it reads that aren't there, kept while it runs (system.ts waitFor)
+							// the nodes it reads that aren't there, kept while it runs (system/reading.ts waitFor)
 							base.setting.add(pid)
+							// its writes with no site given take the process's (setupSite)
+							setups.set(at, {})
 							const missed = () => {
+								own = setups.get(at)?.site ?? own
 								base.setting.delete(pid)
+								setups.delete(at)
 								const paths = base.missing.get(pid)?.paths ?? []
 								base.missing.delete(pid)
 								return paths
@@ -888,12 +921,12 @@ export function createErmine(options: Options = {}): Ermine {
 								}))
 								// the nodes it read that weren't there (paths from the root, shown as each sees them)
 								for (const p of paths) waits.push({ missing: p })
-								attrs([{ path: [WAITING], value: waits.length ? waits : ["PENDING"] }])
+								putStatus(inner, pid, [setKey(WAITING, waits.length ? waits : ["PENDING"])])
 								return
 							}
 							missed()
 							if (!isPromise(out)) return done(out)
-							attrs([{ path: [WAITING], value: ["a promise"] }])
+							putStatus(inner, pid, [setKey(WAITING, ["a promise"])])
 							out.then(done, failed)
 						}
 						run(fn)
@@ -1019,6 +1052,8 @@ export function createErmine(options: Options = {}): Ermine {
 				alive()
 				return calls.calling(s.getCurrentScope())
 			},
+			// pipe-extension: core gap
+			viewOf: (change) => (alive(), viewOf(base, change)),
 		}
 		// the host's setup: run once, untracked, in the host's scope; a throw closes ermine and is
 		// thrown here (no process status to show it in), what it returns not kept

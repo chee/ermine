@@ -1,209 +1,63 @@
-// software: running programs on runners, on processes. what can run here is offered as nodes
-// (offers.ts); a program runs on one of them as a process (run.ts). no policy (whoever calls may),
-// no den, no asking: what decides who may run what, and what takes work from elsewhere, is a
-// program someone starts. processes (@ermine/processes) is a process's life; this builds on it.
-// programs (satisfy, openwith, building through compilers) builds on this
+// software: run a program through a loader. a program is a node: its value is the code. a loader is
+// an action (@ermine/system's createAction), placed by whoever has it; called with (program, at) it
+// starts a process at `at` whose setup reads the program and runs what the loader made of it.
+// the process is started inside the loader's action, so it belongs to the scope that placed the
+// loader: kill the loader, and what it ran goes [chee 10-27: "whatever naturally emerges is right"]
 //
-//   const software = createSoftware({ scheduler, table, places, scopes, scope })
-//   const js = software.offer(session, "runners", "javascript",
-//     { [TAKES]: "com.netscape.javascript-source", [API]: "ermine.api" }, apis.run)
-//   const p = software.run("/system/den/runners/javascript", "/apps/clock.js", "/work/clock")
-//   // a Process, or { refused: ... }
-//   software.run({ id: RUN, live }, { id: CAT, build }, "/work/cat")   // carried: programs' way
-//   const l = software.load("/work/clock/runners/letter", { id, code, type }, { by: p })
-//   // { live, release }: one hold; the same program on the same runner again shares the load
-//   software.stop(p, "SIGHUP")
+//   createLoader("loaders/js", (code, program) => () => eval(code))    // placed by the host or a process
+//   run("/loaders/js", "/apps/clock.js", "/work/clock")                // { process, stop, status } | { refused: "taken", at }
 //
-// an owner: a node things are offered under, with a scope they go with: a process (run here or
-// not), or an install's node (stored: what is offered under it stays when its scope goes, only the
-// live values go, as an install's does across sessions). made the first time it is named
-// writes: with the caller's scope open, or the owner's; each one's site the first call outside
-// these files
-import { type Id, type Path, type Places, PlacesError } from "@ermine/core/places"
-import { createChangeHeader } from "@ermine/core/places/header"
-import {
-	type Address,
-	createProcesses,
-	type Process,
-	type Processes,
-} from "@ermine/processes/start"
-import type { ScopeNodes } from "@ermine/processes/scopes"
-import type { Scheduler, Scope } from "@ermine/core/scheduler"
-import type { Sited } from "@ermine/sites"
-import type { Table } from "@ermine/core/table"
-import { type Ctx, holder, ours, type Owner, type Place, through } from "./common.ts"
-import { createOffers, type Kind, type Offered } from "./offers.ts"
-import {
-	type Carried,
-	createRun,
-	type Handle,
-	type Loaded,
-	type LoadOptions,
-	type Options,
-	type Program,
-	type Refused,
-} from "./run.ts"
+// finding a loader (matching a program's needs to a loader's provides) is not software's: it is
+// handed the loader. the two names are the placeholders for whoever places a program or a loader
+// to write its facts under
+import { createAction, createEffect, executeAction, PENDING, read, start } from "@ermine/system"
+import type { Node } from "@ermine/system"
 
-ours.add(import.meta.url)
+// on a program's node, written by whoever placed it: what it needs to run
+export const NEEDS = "love.ermine.software.needs"
+// on a loader's node, written by whoever placed it: what it provides
+export const PROVIDES = "love.ermine.software.provides"
 
-export type {
-	Carried,
-	Handle,
-	Kind,
-	Loaded,
-	LoadOptions,
-	Offered,
-	Options,
-	Place,
-	Program,
-	Refused,
-}
-export { ATTRIBUTE, TYPE } from "./common.ts"
-// the files of software, for a host's sites (@ermine/sites' ours): a scope's site is past them
-export { ours } from "./common.ts"
-export { API, COMPILER_TAKES, GIVES, KIND, runnerOf, SIZE, TAKES, WHERE } from "./offers.ts"
-export { hashOf, PROGRAM, PROGRAM_API, REASONS, RUNNER } from "./run.ts"
-export type { Runnable, Runner, Start } from "./run.ts"
+type Path = string | readonly string[]
+// a program: the node (a path or a handle) whose value is its code
+export type Program = Path | Node
+// the setup a loader made of the code: runs once, as the process
+export type Setup = () => unknown
+// what start gives back, or the path taken
+export type Run = ReturnType<typeof start>
 
-export type Setup = {
-	scheduler: Scheduler
-	table: Table
-	// where runners and programs are found from (and processes run, unless places are given)
-	places: Places
-	scopes: Pick<ScopeNodes, "give">
-	// what runs goes under it (on a runner offered here, under its offer, under its owner's scope
-	// too): torn down, everything run here goes
-	scope: Scope
-	sites?: Pick<Sited, "createScope">
-	// how a pulse is asked for: f run soon, once (none: queueMicrotask)
-	schedule?: (f: () => void) => void
-	// files a write's site skips beside software's: a library's over it (programs'), so the site is
-	// its caller's
-	ours?: Iterable<string>
-	// a new process's node id (processes' Setup.id). none: processes' own
-	id?: () => Id
+// a loader at `name`: a program's value, and its node, in; the setup out, run once as the process.
+// the action reads the program and asks load for the setup: load throwing refuses (the caller gets
+// the error, the call's record says failed, nothing is started); the read is one of the call's
+// reads. code not there yet is pending and not special. the system leaves a setup that threw PENDING
+// as it is (setup runs once), so the started function waits itself: an effect reads the program
+// (pending till it is placed) and its act asks load and runs the setup, once. an act makes no memos,
+// effects or actions, so a program that waited for its code can write and read but not make
+// computes, its return is not the process's value, and a load that throws fails that effect
+export function createLoader(
+	name: Path,
+	load: (value: unknown, program: Node) => Setup,
+): Node {
+	return createAction(name, (program: Program, at: Path): Run => {
+		let setup: Setup
+		try {
+			setup = load(read(program), program as Node)
+		} catch (e) {
+			if (e !== PENDING) throw e
+			return start(() => {
+				let ran = false
+				createEffect("code", () => read(program), (value) => {
+					if (ran) return
+					ran = true
+					load(value, program as Node)()
+				})
+			}, at)
+		}
+		return start(setup, at)
+	})
 }
 
-export type Software = {
-	offer: (
-		by: Place,
-		kind: Kind,
-		name: string,
-		attributes?: Readonly<Record<string, unknown>>,
-		live?: unknown,
-	) => Offered | { readonly refused: "taken"; readonly at: Path }
-	withdraw: (offer: Offered | Id) => void
-	run: (
-		runner: Address | Carried,
-		program: Address | Program,
-		at: Address,
-		options?: Options,
-	) => Process | Refused
-	load: (runner: Address | Carried, program: Address | Program, options: LoadOptions) =>
-		| Loaded
-		| Refused
-	stop: (p: Process | Id, reason?: unknown) => void
-	// the processes it runs, in start order; the offers it holds
-	running: () => readonly Process[]
-	offers: () => readonly Offered[]
-	// a process's latest first run by its node's id (processes'); none without places' describe
-	// and watchAll
-	runs?: Processes["runs"]
-}
-
-export function createSoftware(setup: Setup): Software {
-	const { scheduler: s, table, places } = setup
-	const schedule = setup.schedule ?? queueMicrotask
-	const version = {}
-	const queued = { now: false }
-	const owners = new Map<Id, Owner>()
-	// what a write's site skips: software's files, and the library's over it
-	const skip = new Set([...ours, ...setup.ours ?? []])
-	const c: Ctx = {
-		s,
-		table,
-		home: places,
-		scopes: setup.scopes,
-		// its own processes, so a write's site skips these files too
-		processes: createProcesses({
-			scheduler: s,
-			table,
-			places,
-			scopes: setup.scopes,
-			sites: setup.sites,
-			owner: setup.scope,
-			ours: skip,
-			id: setup.id,
-		}),
-		scope: setup.scope,
-		createScope: setup.sites?.createScope ?? s.createScope,
-		commit: (changed) => {
-			if (changed.length) places.commit(changed)
-		},
-		headerOf: () => createChangeHeader(s, undefined, [...skip, ...through]),
-		version,
-		changed: () => void s.mark([version]),
-		later() {
-			if (queued.now || s.getRun() !== undefined) return
-			queued.now = true
-			schedule(() => {
-				queued.now = false
-				s.pulse()
-			})
-		},
-		running: [],
-		byId: new Map(),
-		offers: new Map(),
-		loads: new Map(),
-		// a process run here is its own owner; any other place, one made the first time, gone with
-		// its scope
-		ownerOf(by: Place): Owner {
-			const run = c.byId.get(by.id)
-			if (run !== undefined && !run.ended) return run
-			let o = owners.get(by.id)
-			if (o !== undefined && o.scope.state === "alive") return o
-			if (by.scope.state !== "alive") throw new PlacesError("nothing-there", String(by.id))
-			o = {
-				...by,
-				under: by.scope,
-				places: c.home,
-				args: [],
-				folder: by.at.slice(0, -1),
-				folders: new Map(),
-				offers: [],
-				loads: [],
-			}
-			owners.set(by.id, o)
-			holder(s, o)
-			const made = o
-			s.registerTeardown(by.scope, () => {
-				if (owners.get(by.id) === made) owners.delete(by.id)
-			})
-			return o
-		},
-	}
-	const offers = createOffers(c)
-	const run = createRun(c)
-	return {
-		offer: offers.offer,
-		withdraw: offers.withdraw,
-		run: run.run,
-		load: run.load,
-		stop: run.stop,
-		runs: c.processes.runs,
-		running: () => {
-			s.track(version)
-			return c.running.flatMap((p) => p.process === undefined ? [] : [p.process])
-		},
-		offers: () => {
-			s.track(version)
-			return [...c.offers.values()].map(({ id, at, kind, name, by }) => ({
-				id,
-				at,
-				kind,
-				name,
-				by,
-			}))
-		},
-	}
+// the loader at `loader` run on `program` at `at`: its action called
+export function run(loader: Path | Node, program: Program, at: Path): Run {
+	return executeAction(loader, program, at) as Run
 }

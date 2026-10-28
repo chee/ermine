@@ -24,6 +24,7 @@
 
 #include "core/changeable/c/json.h"
 #include "core/changeable/c/update.h"
+#include "playground/libraries/upsert/c/upsert.h"
 #include "fb.h"
 #include "parts.h"
 #include "host.h"
@@ -99,7 +100,8 @@ static void write_now(void *data) {
 	const char *path[1] = {w->name};
 	pl_changed changed = {0};
 	nd_entry *born = NULL;
-	int code = pl_upsert(p, tb_string("attributes"), tb_string(w->t->id), path, 1, w->v, h, &changed, &born);
+	int code = up_upsert(p, host_get().table, tb_string("attributes"), tb_string(w->t->id), path, 1, w->v, h,
+		&changed, &born);
 	if (code != 0) fprintf(stderr, "things: %s not written: %s\n", w->name, pl_code_name(code));
 	if (changed.n > 0) pl_commit(p, &changed);
 	for (size_t i = 0; i < changed.n; i++) pl_hold_also(p, changed.entries[i], pl_made_ref(made), pl_made_free);

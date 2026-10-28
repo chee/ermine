@@ -11,6 +11,7 @@ import { traceOf } from "@ermine/core/places/header"
 import type { ChangeHeader } from "@ermine/core/node/entry"
 import ermine, { type Options } from "./unplugin.ts"
 import { manual } from "../../../ermine/system/typescript/manual_fixture.ts"
+import { NAMES } from "../../../ermine/system/typescript/system/index.ts"
 
 const toFileUrl = (p: string) => pathToFileURL(p)
 const here = fromFileUrl(new URL(".", import.meta.url))
@@ -136,7 +137,7 @@ Deno.test("build: external false: @ermine/system's own files are neither transfo
 		transformInclude: (id: string) => boolean
 	}
 	const system = fromFileUrl(new URL("../../../ermine/system/", import.meta.url))
-	for (const f of ["mod.ts", "typescript/system.ts", "site.ts"]) {
+	for (const f of ["mod.ts", ...NAMES.map((n) => `typescript/system/${n}.ts`), "site.ts"]) {
 		const id = join(system, f)
 		assertEquals(plugin.transformInclude(id), false, `${f} is not transformed`)
 		const text = await Deno.readTextFile(id)

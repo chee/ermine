@@ -1,6 +1,6 @@
-// the C places when a watch writes (places.h: "A watch that writes commits in turn, in the same
-// run"): the watches after it are still told what landed first, whole, though the write let go of
-// it. exits 1 at the first thing that is not so. run under the sanitizers for the frees
+// the C places when a pl_watch_all function writes (places.h: "One that writes commits in turn, in
+// the same run"): the functions after it are still told what landed first, whole, though the write
+// let go of it. exits 1 at the first thing that is not so. run under the sanitizers for the frees
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,6 +19,17 @@ static pl *p;
 static tb_table *table;
 static nd_entry *kids, *thing;
 
+// what the first watch's write of 2 refers to: kept by the entry till its next update
+typedef struct {
+	op_patch patch;
+	op_value *two;
+} rewrite;
+static void rewrite_free(void *b) {
+	rewrite *r = b;
+	op_free(r->two);
+	free(r);
+}
+
 // the first watch: told the first fact, it writes the same entry again, and commits
 static int writes;
 static void writer(const pl_fact *fact, void *ctx) {
@@ -29,9 +40,14 @@ static void writer(const pl_fact *fact, void *ctx) {
 	if (ctx == NULL) {
 		CHECK(pl_place(p, kids, "b", tb_string("B"), (ch_header){0}, &changed) == 0);
 	} else {
-		op_value *two = op_num(2);
-		CHECK(pl_upsert(p, tb_string("value"), tb_string("T"), NULL, 0, two, (ch_header){0}, &changed, NULL) == 0);
-		op_free(two);
+		rewrite *r = malloc(sizeof *r);
+		CHECK(r != NULL);
+		r->two = op_num(2);
+		r->patch = (op_patch){.has_value = 1, .value = r->two};
+		size_t failed;
+		CHECK(nd_update(thing, &r->patch, 1, (ch_header){0}, &failed) == OP_OK);
+		pl_hold(p, thing, r, rewrite_free);
+		changed = (pl_changed){1, {thing}};
 	}
 	pl_commit(p, &changed);
 }
@@ -52,16 +68,13 @@ static void reader(const pl_fact *fact, void *ctx) {
 	if (last->has_value && last->value->type == OP_NUM) number = last->value->num;
 }
 
-static const pl_contributor *const given[] = {&pl_children};
-static int given_contributors;
 static void setup(void *ctx, sc_scheduler **s, pt_paths **paths) {
 	p = pl_new();
 	*s = sc_new((sc_options){0});
 	sc_on_tracking_end(*s, pl_forget, p);
 	table = tb_make(pl_event, p);
 	*paths = pt_new();
-	pl_connect(p, &(pl_setup){.root = tb_string("R"), .table = table, .paths = *paths, .scheduler = *s,
-		.contributors = given_contributors ? given : NULL, .ncontributors = given_contributors});
+	pl_connect(p, &(pl_setup){.root = tb_string("R"), .table = table, .paths = *paths, .scheduler = *s});
 	kids = nd_make_entry(NULL, NULL);
 	pl_own(p, kids);
 	tb_add(table, tb_string("children"), tb_string("R"), kids);
@@ -93,7 +106,7 @@ int main(void) {
 	CHECK(strcmp(name, "a") == 0);
 	teardown(s, paths);
 
-	// a table event: the reader is told the value added, 1, though the writer's upsert of 2
+	// a table event: the reader is told the value added, 1, though the writer's write of 2
 	// replaced it
 	setup((void *)1, &s, &paths);
 	op_value *one = op_num(1);
@@ -103,21 +116,6 @@ int main(void) {
 	tb_add(table, tb_string("value"), tb_string("T"), thing);
 	CHECK(writes == 2 && told == 2);
 	CHECK(number == 1);
-	teardown(s, paths);
-
-	// a watchPath with contributors given finds its path through them: the spots that reads made are
-	// let go, nothing tracks them
-	given_contributors = 1;
-	setup(NULL, &s, &paths);
-	writes = 1;
-	CHECK(pl_place(p, kids, "a", tb_string("A"), (ch_header){0}, &changed) == 0);
-	pl_commit(p, &changed);
-	size_t spots = pt_held_of(paths).spots;
-	const char *names[] = {"a"};
-	pl_watch *w = pl_watch_path(p, names, 1, reader, NULL, NULL);
-	CHECK(pt_held_of(paths).spots == spots);
-	pl_stop(w);
-	CHECK(pt_held_of(paths).spots == spots);
 	teardown(s, paths);
 	return 0;
 }

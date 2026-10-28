@@ -27,7 +27,7 @@ nc_sources="$nc/core/changeable/c/value.c $nc/core/changeable/c/apply.c $nc/core
   $nc/ermine/encoding/c/blake3/blake3.c $nc/ermine/encoding/c/blake3/blake3_dispatch.c $nc/ermine/encoding/c/blake3/blake3_portable.c $nc/core/ed25519/c/sha2.c \
   $nc/playground/together/stacks/subduction/c/subduction/store_files.c $nc/playground/together/stacks/subduction/c/subduction/platform_posix.c \
   $nc/playground/together/stacks/subduction/c/subduction/websocket.c $nc/playground/together/stacks/subduction/c/subduction/transport_openssl.c \
-  $nc/playground/experimental_os/newos/fronts/fronts.c $nc/playground/experimental_os/newos/card/card.c $nc/playground/experimental_os/newos/card/net.c \
+  $nc/playground/libraries/upsert/c/upsert.c $nc/playground/experimental_os/newos/fronts/fronts.c $nc/playground/experimental_os/newos/card/card.c $nc/playground/experimental_os/newos/card/net.c \
   $nc/playground/experimental_os/newos/card/drv_sync.c $nc/core/ed25519/c/ed25519.c"
 # newos/*.c not built: none
 nc_skip=""

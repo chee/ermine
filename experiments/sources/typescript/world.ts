@@ -11,7 +11,7 @@ import { children, createPlaces } from "@ermine/core/places"
 import { PROCESS, processes as rows } from "@ermine/processes"
 import { createProcesses } from "@ermine/processes/start"
 import { createChangeHeader } from "@ermine/core/places/header"
-import { upsert } from "@ermine/core/places/upsert"
+import { upsert } from "@ermine/upsert"
 import { createScopeNodes } from "@ermine/processes/scopes"
 import { createHistory } from "./history.ts"
 

@@ -7,7 +7,7 @@
 // than the first, and any settings as "name=value" (the pigs' weights to start at). by path, so a
 // source started again is followed
 import { createChangeHeader } from "@ermine/core/places/header"
-import { upsert } from "@ermine/core/places/upsert"
+import { upsert } from "@ermine/upsert"
 import update from "@ermine/core/changeable/update"
 import type { Entry } from "@ermine/core/node/entry"
 import { get } from "@ermine/core/places/lib"

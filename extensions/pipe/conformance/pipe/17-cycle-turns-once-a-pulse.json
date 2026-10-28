@@ -1,0 +1,142 @@
+{
+	"title": "a cycle of pulse pipes turns once a pulse (a write a pipe's telling made is told at the next), for as long as its functions write: a reader sees each turn",
+	"steps": [
+		{
+			"op": "ermine",
+			"features": [
+				"pipe"
+			],
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"/a",
+						0
+					]
+				},
+				{
+					"do": [
+						"ensureNode",
+						"/b",
+						0
+					]
+				},
+				{
+					"do": [
+						"pipe",
+						"/a",
+						"/b",
+						{
+							"fn": [
+								{
+									"do": [
+										"log",
+										"turns",
+										"$value"
+									]
+								}
+							],
+							"back": [
+								"if",
+								[
+									"is",
+									"$value",
+									4
+								],
+								"$none",
+								[
+									"whole",
+									[
+										"inc",
+										"$value"
+									]
+								]
+							]
+						}
+					]
+				},
+				{
+					"do": [
+						"pipe",
+						"/b",
+						"/a"
+					]
+				},
+				{
+					"do": [
+						"createEffect",
+						"see",
+						[
+							"read",
+							"/a"
+						],
+						"seen"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/a",
+				[
+					{
+						"path": [],
+						"value": 0
+					}
+				]
+			]
+		},
+		{
+			"op": "log",
+			"name": "turns",
+			"expect": {
+				"values": [
+					0,
+					1,
+					2,
+					3,
+					4
+				]
+			}
+		},
+		{
+			"op": "log",
+			"name": "seen",
+			"expect": {
+				"values": [
+					0,
+					1,
+					2,
+					3,
+					4
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/b"
+			],
+			"expect": {
+				"value": 4
+			}
+		}
+	]
+}

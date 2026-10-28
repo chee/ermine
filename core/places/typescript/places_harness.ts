@@ -13,7 +13,7 @@
 // { op: "cached", path }                    → { id? }
 // { op: "cachedList", at }                  → { names }
 // { op: "watch", name, scope, f }           → {}   a compute running program f (world: state)
-// { op: "watchPath", name, path, part?, at? } → {}   places' watchPath
+// { op: "watchAll", name, id?, part? }     → {}   places' watchAll, the facts of that id and part
 // { op: "watched", name }                   → { facts }   since last asked:
 //    { part, id, patches, actor? }
 // { op: "unwatch", name }                   → {}

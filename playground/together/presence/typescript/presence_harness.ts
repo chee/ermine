@@ -29,18 +29,13 @@
 // { op: "watch", dev, name, f }              → {}   f: {presence: anchor} | {row: [anchor, who]}
 //    (a row gone: null); runs counted, the result (compared as JSON) kept
 // { op: "state", name }                      → { runs, value }
-// the anchor in the tree (watching a path needs a node mounted there)
-// { op: "mount", dev, name, id }             → {}   the children entry "R" has id under name
-// { op: "watchPath", dev, name, path }       → {}   places' watchPath on the part "presence", the
-//    patches it is told counted
+// { op: "watchAll", dev, name, anchor }      → {}   places' watchAll: the patches told of the part
+//    "presence" at the anchor, counted
 // { op: "told", name }                       → { patches }
 // saving
 // { op: "save", dev, save }                  → {}   whether the device keeps presence in a save
 // { op: "keep", dev?, part, save? }          → { keep }   keep: the device's, or { save } given
 import { decode } from "@ermine/encoding/cbor"
-import createEntry from "@ermine/core/node/entry"
-import { place } from "@ermine/core/places"
-import { createChangeHeader } from "@ermine/core/places/header"
 import { createPair } from "./channel.ts"
 import { type Device, device } from "./world.ts"
 import {
@@ -162,20 +157,10 @@ function answer(r: Request): Json {
 			if (w === undefined) throw new Error(`no watch ${r.name}`)
 			return { runs: w.runs, value: w.value }
 		}
-		case "mount": {
-			const d = dev(r)
-			d.scheduler.runWithScope(d.scope, () => {
-				const kids = createEntry<Record<string, unknown>>({}, createChangeHeader(d.scheduler))
-				d.table.add("children", "R", kids)
-				place(kids, r.name, r.id, createChangeHeader(d.scheduler))
-				d.places.commit([kids])
-			})
-			return {}
-		}
-		case "watchPath": {
+		case "watchAll": {
 			const t = { patches: 0 }
-			dev(r).places.watchPath(r.path, (f) => void (t.patches += f.patches.length), {
-				part: PART,
+			dev(r).places.watchAll((f) => {
+				if (f.part === PART && f.id === r.anchor) t.patches += f.patches.length
 			})
 			told.set(r.name, t)
 			return {}

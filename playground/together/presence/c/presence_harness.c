@@ -117,7 +117,7 @@ static op_value *live_json(const pres_live *l) {
 	return o;
 }
 
-// connections, watches, path watches: by name ------------------------------------------------------
+// connections, watches, watchAlls: by name ------------------------------------------------------
 
 typedef struct {
 	char *name;
@@ -194,9 +194,10 @@ static void make_watch(void *data) {
 	sc_create_computer(w->d->scheduler, def, NULL, 0);
 }
 
-// a path watch: the patches it was told, counted
+// a watchAll: the patches it was told of the part "presence" at the anchor, counted
 typedef struct {
 	char *name;
+	char *anchor;
 	pl_watch *watch;
 	size_t patches;
 } told;
@@ -205,39 +206,8 @@ static size_t ntold, captold;
 
 static void told_fact(const pl_fact *f, void *ctx) {
 	told *t = ctx;
+	if (strcmp(f->part.string, PRES_PART) != 0 || strcmp(f->id.string, t->anchor) != 0) return;
 	t->patches += f->patches_length;
-}
-
-// the mount: the children entry "R" has the id under the name --------------------------------------
-
-typedef struct {
-	device *d;
-	const char *name;
-	const char *id;
-} mounting;
-
-static void mount_in(void *data) {
-	mounting *m = data;
-	device *d = m->d;
-	ch_header h;
-	pl_made *made;
-	char *bad = pl_header(d->places, NULL, 0, CH_HERE, &h, &made);
-	if (bad != NULL) abort();
-	op_value *empty = op_map();
-	nd_entry *kids = nd_make_entry(empty, &h);
-	op_free(empty);
-	pl_hold(d->places, kids, made, pl_made_free);
-	pl_own(d->places, kids);
-	tb_add(d->table, tb_string("children"), tb_string("R"), kids);
-	bad = pl_header(d->places, NULL, 0, CH_HERE, &h, &made);
-	if (bad != NULL) abort();
-	pl_changed changed = {0};
-	pl_place(d->places, kids, m->name, tb_string(m->id), h, &changed);
-	for (size_t i = 0; i < changed.n; i++) {
-		pl_hold_also(d->places, changed.entries[i], pl_made_ref(made), pl_made_free);
-	}
-	pl_made_free(made);
-	pl_commit(d->places, &changed);
 }
 
 // requests ---------------------------------------------------------------------------------------
@@ -372,25 +342,13 @@ static op_value *answer(const op_value *r) {
 		op_set(o, "swept", list);
 		return o;
 	}
-	if (strcmp(op, "mount") == 0) {
-		const char *name = hh_str(r, "name"), *id = hh_str(r, "id");
-		if (name == NULL || id == NULL) return error("no name or id");
-		mounting m = {d, name, id};
-		sc_run_with_scope(d->scope, mount_in, &m);
-		return op_map();
-	}
-	if (strcmp(op, "watchPath") == 0) {
-		const op_value *path = op_get(r, "path");
-		if (path == NULL || path->type != OP_LIST) return error("no path");
-		const char **names = xalloc((path->count + 1) * sizeof *names);
-		for (size_t i = 0; i < path->count; i++) {
-			names[i] = path->items[i]->type == OP_STR ? path->items[i]->str : "";
-		}
+	if (strcmp(op, "watchAll") == 0) {
+		const char *anchor = hh_str(r, "anchor");
+		if (anchor == NULL) return error("no anchor");
 		told *t = xalloc(sizeof *t);
 		t->name = xdup(hh_str(r, "name") ? hh_str(r, "name") : "");
-		pl_watching options = {.has_part = 1, .part = tb_string(PRES_PART)};
-		t->watch = pl_watch_path(d->places, names, path->count, told_fact, t, &options);
-		free(names);
+		t->anchor = xdup(anchor);
+		t->watch = pl_watch_all(d->places, told_fact, t);
 		PUSH(toldlist, ntold, captold, t);
 		return op_map();
 	}
@@ -496,6 +454,7 @@ void hh_finish(void) {
 	for (size_t i = 0; i < ntold; i++) {
 		pl_stop(toldlist[i]->watch);
 		free(toldlist[i]->name);
+		free(toldlist[i]->anchor);
 		free(toldlist[i]);
 	}
 	free(toldlist);

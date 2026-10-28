@@ -436,24 +436,3 @@ Deno.test("a walk goes on through a level of the rows as if it were a folder, wi
 	w.stop(["dev", "clock"])
 	assertEquals(get(w.places, ["dev", "clock"]), undefined)
 })
-
-Deno.test("watchPath finds its path through the contributors, and again as a process starts and stops", () => {
-	const w = world(false)
-	w.tree()
-	w.start(["work", "clock"], "P")
-	const told: string[] = []
-	const stop = w.places.watchPath(["work", "clock"], (f) => told.push(String(f.id)))
-	w.kids("P", { on: "PON", more: "X" })
-	w.kids("C0", { on: "ON0", other: "Y" })
-	w.stop(["work", "clock"])
-	w.kids("P", { on: "PON", again: "X" })
-	w.kids("C0", { on: "ON0", other: "Z" })
-	// a level with no saved folder
-	stop()
-	const deep: string[] = []
-	w.places.watchPath(["dev", "clock"], (f) => deep.push(String(f.id)))
-	w.start(["dev", "clock"], "P")
-	w.kids("P", { on: "PON", third: "X" })
-	assertEquals(told, ["P", "C0"])
-	assertEquals(deep, ["P"])
-})

@@ -1,13 +1,14 @@
 // what a call of @ermine/system's functions acts as: the context of the scope open (a process's, or
-// the host's, process 0's: registry.ts), its implementation (system.ts) run as it
+// the host's, process 0's: registry.ts), its implementation (system/) run as it
 import { PENDING } from "@ermine/core/scheduler"
 import type { Inner } from "./context.ts"
 import { found, unfound } from "./registry.ts"
 import { take } from "./site.ts"
-import { here } from "./system.ts"
+import { here } from "./system/setting.ts"
 
 // name's implementation run as the context found (a writer: entered, so its writes' site is the
-// line calling in; few frames between: a site is found in the stack's first ten)
+// line calling in; few frames between: a site is found in the stack's first ten; and a pulse asked
+// for as it returns: every write asks, one that throws asks none)
 export function go<A extends unknown[], T>(
 	name: string,
 	writer: boolean,
@@ -19,7 +20,11 @@ export function go<A extends unknown[], T>(
 	let inner: Inner | undefined
 	try {
 		const i = inner = found(name)
-		return writer ? here(i).base.enter(f, i, a, site) : f(i, ...a)
+		if (!writer) return f(i, ...a)
+		const h = here(i)
+		const out = h.base.enter(f, i, a, site)
+		h.queuePulse()
+		return out
 	} catch (e) {
 		// through the ermine's onError hooks (hints.ts adds advice); PENDING as it is. no context
 		// found (nothing-open): through the first ermine open with any

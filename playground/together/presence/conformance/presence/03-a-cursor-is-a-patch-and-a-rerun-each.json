@@ -18,18 +18,10 @@
 			"topic": "work"
 		},
 		{
-			"op": "mount",
-			"dev": "b",
-			"name": "doc",
-			"id": "work"
-		},
-		{
-			"op": "watchPath",
+			"op": "watchAll",
 			"dev": "b",
 			"name": "w",
-			"path": [
-				"doc"
-			]
+			"anchor": "work"
 		},
 		{
 			"op": "watch",

@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "../../../libraries/upsert/c/upsert.h"
+
 static void *xalloc(size_t n) {
 	void *p = calloc(1, n ? n : 1);
 	if (p == NULL) {
@@ -79,7 +81,7 @@ int fr_add(pl *l, tb_table *table, const char *part, tb_key parent, const char *
 		return 0;
 	}
 	const char *path[] = {name};
-	pl_upsert_unread(l, tb_string(part), parent, path, 1, list, header, changed, NULL);
+	up_upsert_unread(l, table, tb_string(part), parent, path, 1, list, header, changed, NULL);
 	op_free(list);
 	return 0;
 }
@@ -108,7 +110,7 @@ int fr_remove(pl *l, tb_table *table, const char *part, tb_key parent, const cha
 		for (size_t k = 0; k < was->count; k++)
 			if ((long)k != i) op_push(list, op_ref(was->items[k]));
 		const char *path[] = {name};
-		pl_upsert_unread(l, tb_string(part), parent, path, 1, list, header, changed, NULL);
+		up_upsert_unread(l, table, tb_string(part), parent, path, 1, list, header, changed, NULL);
 		op_free(list);
 		return 0;
 	}

@@ -37,7 +37,7 @@
 //   name (a trace's frame has one)
 // - a site token is opaque (its place held by the runtime), never a location a holder could edit;
 //   each token holds the one wrapper its call site needs, made once (no allocation a call)
-// - the runtime: go (system.ts) takes the site first thing, for every function, so nothing the
+// - the runtime: go (acting.ts) takes the site first thing, for every function, so nothing the
 //   function runs (peep's f, a nested call) gets it; enter (ermine.ts) holds it beside its entry,
 //   entered (a box handle's place, unplace) clears it. a write's header with one: that site,
 //   nothing captured, no trace text; the traceAlways feature (@ermine/system/trace): the trace

@@ -84,14 +84,18 @@
 			}
 		},
 		{
-			"op": "upsert",
+			"op": "edit",
 			"part": "value",
 			"id": "rows",
-			"path": [
-				"apps",
-				"y"
+			"patches": [
+				{
+					"path": [
+						"apps",
+						"y"
+					],
+					"value": "Y"
+				}
 			],
-			"value": "Y",
 			"expect": {}
 		},
 		{
@@ -114,16 +118,23 @@
 			}
 		},
 		{
-			"op": "upsert",
+			"op": "edit",
 			"part": "value",
 			"id": "rows",
-			"path": [
-				"work",
-				"a",
-				"b",
-				"c"
+			"patches": [
+				{
+					"path": [
+						"work"
+					],
+					"value": {
+						"a": {
+							"b": {
+								"c": "Z"
+							}
+						}
+					}
+				}
 			],
-			"value": "Z",
 			"expect": {}
 		},
 		{
@@ -146,14 +157,18 @@
 			}
 		},
 		{
-			"op": "upsert",
+			"op": "edit",
 			"part": "value",
 			"id": "rows",
-			"path": [
-				"apps",
-				"z"
+			"patches": [
+				{
+					"path": [
+						"apps",
+						"z"
+					],
+					"value": "Z2"
+				}
 			],
-			"value": "Z2",
 			"expect": {}
 		},
 		{
@@ -176,15 +191,19 @@
 			}
 		},
 		{
-			"op": "upsert",
+			"op": "edit",
 			"part": "value",
 			"id": "rows",
-			"path": [
-				"work",
-				"a",
-				"b"
+			"patches": [
+				{
+					"path": [
+						"work",
+						"a",
+						"b"
+					],
+					"value": "P"
+				}
 			],
-			"value": "P",
 			"expect": {}
 		},
 		{

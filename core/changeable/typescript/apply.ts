@@ -10,6 +10,7 @@
 // a map's key order is not part of its value: a map is its keys and what is at each. nothing owes
 // an order (a key put may come back anywhere among the others); maps are compared by content
 import { count, type Hint, joins, near, walk } from "@ermine/core/util/walk-string"
+import { isPojo, isTyped, type Typed } from "@ermine/core/util/kinds"
 
 export type Key = string | number
 export type Span = readonly [number, number]
@@ -41,31 +42,11 @@ export class ApplyError extends Error {
 	}
 }
 
-// a typed array: a sequence of its elements. bytes, a Uint8Array, are one whole value: never
-// spliced (MUTATE.tex)
-type Typed = Int8Array | Uint16Array | Int16Array | Uint32Array | Int32Array
-const typed = (v: unknown): v is Typed =>
-	ArrayBuffer.isView(v) && !(v instanceof DataView) && !(v instanceof Uint8Array)
 const isList = Array.isArray
-function isMap(v: unknown): v is Record<string, unknown> {
-	if (v === null || typeof v !== "object" || isList(v)) return false
-	const p = Object.getPrototypeOf(v)
-	return p === Object.prototype || p === null
-}
+const isObject = (v: unknown): v is object => v !== null && typeof v === "object"
 
 // where nothing is there yet
 const ABSENT = /* @__PURE__ */ Symbol("absent")
-
-class Fail {
-	constructor(readonly code: Code) {}
-}
-const fail = (code: Code): never => {
-	throw new Fail(code)
-}
-
-// a lone high met by a lone low is one pair: one position
-const high = (c: number) => (c & 0xfc00) === 0xd800
-const low = (c: number) => (c & 0xfc00) === 0xdc00
 
 // a bigint index or range end is the whole number it is (cbor.ts reads one past 2^53 - 1 as a
 // bigint: past every end); the patch as given when it has none
@@ -73,10 +54,9 @@ const big = (k: unknown) => typeof k === "bigint"
 const unbig = <T>(keys: T): T =>
 	isList(keys) && keys.some(big) ? keys.map((k) => big(k) ? Number(k) : k) as T : keys
 function numbered(p: Patch): Patch {
-	if (p === null || typeof p !== "object") return p
-	const path = unbig(p.path)
-	const range = unbig(p.range)
-	const move = p.move !== null && typeof p.move === "object" ? numbered(p.move as Patch) : p.move
+	if (!isObject(p)) return p
+	const path = unbig(p.path), range = unbig(p.range)
+	const move = isObject(p.move) ? numbered(p.move as Patch) : p.move
 	if (path === p.path && range === p.range && move === p.move) return p
 	const q = { ...p, path } as Patch
 	if (range !== undefined) q.range = range
@@ -84,119 +64,124 @@ function numbered(p: Patch): Patch {
 	return q
 }
 
-function shape(p: Patch): boolean {
-	if (p === null || typeof p !== "object" || !isList(p.path)) return false
-	if (!p.path.every((k) => typeof k === "string" || Number.isInteger(k) && k >= 0)) return false
-	if (p.range !== undefined) {
-		const r = p.range
-		if (!isList(r) || r.length !== 2 || !r.every((n) => Number.isInteger(n) && n >= 0)) {
-			return false
-		}
-	}
-	if (p.move !== undefined) {
-		if ("value" in p) return false
-		const m = p.move as Patch
-		if (m === null || typeof m !== "object" || "value" in m || "move" in m) return false
-		return shape(m)
-	}
-	return true
+const index = (n: unknown) => Number.isInteger(n) && (n as number) >= 0
+// a move's own move is none, and neither has a value beside it
+function shape(p: Patch, inner = false): boolean {
+	if (!isObject(p) || !isList(p.path)) return false
+	if (!p.path.every((k) => typeof k === "string" || index(k))) return false
+	const r = p.range
+	if (r !== undefined && !(isList(r) && r.length === 2 && r.every(index))) return false
+	if (inner) return !("value" in p || "move" in p)
+	return p.move === undefined || !("value" in p) && shape(p.move as Patch, true)
 }
 
-// a move's take, for the undo: what moved, the gap it left (back), what puts it back there
-// (untake), whether the take joined lone surrogates (taking) or was out of a list (listed)
-type Took = { m: unknown; back: Target; untake: Patch | null; taking: boolean; listed: boolean }
+// a key put as an own one, whatever its name
+const define = (o: object, k: string, value: unknown) =>
+	Object.defineProperty(o, k, { value, writable: true, enumerable: true, configurable: true })
 
-// in place: each container put new in another's place and the one it replaced (pairs: now, was,
-// now, was…), and the containers that may hold one now (under), for a refused call to put back.
-// none once owned copied the root given: nothing of it changed
-type Back = { pairs: object[]; under: object[] }
+// in place: each container put new in another's place, by what it replaced (was), and the
+// containers that may hold one now (under), for a refused call to put back. none once owned
+// copied the root given: nothing of it changed
+type Back = { was: Map<object, object>; under: Set<object> }
+
+// the gap before path's last key, in the list that holds it (d: that many further along)
+const gap = (path: readonly Key[], d = 0): Target => {
+	const k = (path.at(-1) as number) + d
+	return { path: path.slice(0, -1), range: [k, k] }
+}
+// list put in at that gap
+const ins = (path: readonly Key[], list: unknown[], d = 0): Patch => ({
+	...gap(path, d),
+	value: list,
+})
+// what was at path (ABSENT: nothing), put back
+const restore = (path: readonly Key[], old: unknown): Patch =>
+	old === ABSENT ? { path } : { path, value: old }
+// where no undo is wanted, what is pushed
+const none = () => {}
 
 // one edit's content, changed patch by patch; undo: the undo is wanted. back: in place, where what
-// it puts new in a container's place is noted (none: made at the first)
+// it puts new in a container's place is noted (none: made at the first; null: owned copied the
+// root given, so nothing of it changed and nothing is noted)
 function createWork(
-	root: unknown,
+	given: unknown,
 	undo: boolean,
 	cow: boolean,
 	owned?: (container: object) => object,
-	back?: Back,
+	back?: Back | null,
 ) {
+	// the patch being applied, for a refusal to name
+	let which = 0
+	function fail(code: Code): never {
+		throw new ApplyError(code, which)
+	}
 	// made here: may change in place, until the undo holds it. few, scanned; past 16, a WeakSet
-	let own: object[] | WeakSet<object> | undefined
+	let own: object[] | WeakSet<object> = []
 	const mine = <T extends object>(c: T): T => {
-		if (!cow) return c
-		if (own === undefined) own = [c]
-		else if (!Array.isArray(own)) own.add(c)
-		else if (own.length < 16) own.push(c)
-		else (own = new WeakSet(own)).add(c)
+		if (cow) {
+			if (!isList(own)) own.add(c)
+			else if (own.length < 16) own.push(c)
+			else (own = new WeakSet(own)).add(c)
+		}
 		return c
 	}
 	const copy = <T extends object>(v: T): T =>
 		!cow
 			? owned ? owned(v) as T : v
-			: own !== undefined && (Array.isArray(own) ? own.includes(v) : own.has(v))
+			: (isList(own) ? own.includes(v) : own.has(v))
 			? v
 			: mine((isList(v) ? v.slice() : { ...v }) as T)
-	// top: owned copied the root given (then nothing of it changes, nor needs putting back)
 	const work = {
-		root,
+		root: given,
 		back,
-		top: undefined as object | undefined,
-		clones: undefined as unknown[] | undefined,
+		clones: undefined as Map<unknown, unknown> | undefined,
 	}
 
-	// in place: c put new where was was, at path's first n keys: noted, with the containers above
-	// it. copied: by owned, was as it was (the root given: top)
-	function note(c: object, was: object, path: readonly Key[], n: number, copied = false) {
-		if (cow || c === was || work.top !== undefined) return
-		if (copied && n === 0 && was === root) return void (work.top = c)
-		const { pairs, under } = work.back ??= { pairs: [], under: [] }
-		pairs.push(c, was)
+	// in place: c put new where old was, at path's first n keys: noted, with the containers above
+	// it. copied: by owned, old as it was (the root given: nothing of it changes, nor needs putting
+	// back)
+	function note(c: object, old: object, path: readonly Key[], copied = false, n = path.length) {
+		if (cow || c === old || work.back === null) return
+		if (copied && n === 0 && old === given) return void (work.back = null)
+		const { was, under } = work.back ??= { was: new Map(), under: new Set() }
+		was.set(c, old)
 		let v = work.root as Record<Key, unknown>
 		for (let i = 0; i < n; i++) {
-			under.push(v)
+			under.add(v)
 			v = v[path[i]] as Record<Key, unknown>
 		}
 	}
 
-	// the container holding path's last key, made own along the way; [] has none
-	function parent(path: readonly Key[]): Record<Key, unknown> {
-		const top = work.root
-		let v = work.root = copyIn(top)
-		note(v, top as object, path, 0, true)
-		for (let i = 0; i < path.length - 1; i++) {
-			const at = v as Record<Key, unknown>
-			const next = at[enter(at, path[i])]
-			const c = copyIn(next)
-			if (c !== next) {
-				at[path[i]] = c
-				note(c, next as object, path, i + 1, true)
-			}
-			v = c
-		}
-		return v as Record<Key, unknown>
-	}
-	function copyIn(v: unknown): object {
-		if (v === ABSENT) return fail("no-key")
-		if (!isList(v) && !isMap(v)) return fail("wrong-kind")
-		return copy(v)
-	}
 	// k into v, which must be there
 	function enter(v: unknown, k: Key): Key {
-		if (isList(v)) {
-			if (typeof k !== "number") fail("wrong-kind")
-			if ((k as number) >= v.length) fail("no-key")
-		} else if (isMap(v)) {
-			if (typeof k !== "string") fail("wrong-kind")
-			if (!Object.hasOwn(v, k)) fail("no-key")
-		} else fail("wrong-kind")
+		const list = isList(v)
+		if (typeof k !== (list ? "number" : "string") || !list && !isPojo(v)) fail("wrong-kind")
+		if (list ? (k as number) >= v.length : !Object.hasOwn(v as object, k)) fail("no-key")
 		return k
 	}
-	// what is at path, unchanged; n: only so far along it
-	function get(path: readonly Key[], n = path.length): unknown {
+	// what is at path, unchanged; short: that many keys short of it
+	function get(path: readonly Key[], short = 0): unknown {
 		let v = work.root
-		if (v === ABSENT && n > 0) fail("no-key")
-		for (let i = 0; i < n; i++) v = (v as Record<Key, unknown>)[enter(v, path[i])]
+		for (let i = 0; i < path.length - short; i++) {
+			v = (v as Record<Key, unknown>)[enter(v, path[i])]
+		}
 		return v
+	}
+	// the container holding path's last key, made own along the way; [] has none
+	function parent(path: readonly Key[]): Record<Key, unknown> {
+		let v = work.root, above: Record<Key, unknown> | undefined
+		for (let i = 0;; i++) {
+			if (!isList(v) && !isPojo(v)) fail("wrong-kind")
+			const c = copy(v as object) as Record<Key, unknown>
+			if (c !== v) {
+				if (i) above![path[i - 1]] = c
+				else work.root = c
+				note(c, v as object, path, true, i)
+			}
+			if (i === path.length - 1) return c
+			v = c[enter(c, path[i])]
+			above = c
+		}
 	}
 
 	// the last string made here, and what is known of it: the next patch to it walks from there
@@ -213,336 +198,278 @@ function createWork(
 		// the root taken by a move: nothing there, as at a key
 		if (v === ABSENT) fail("no-key")
 		if (a > b) fail("range")
-		if (typeof v !== "string" && !isList(v) && !typed(v)) fail("wrong-kind")
-		let start = a, end: number, back: unknown
+		// l: a lone high met a lone low at the left edge, which the undo widens over
+		let l = 0, back: unknown
 		if (typeof v === "string") {
 			const at = memo !== null && memo.s === v ? near(v, a, b, false, memo) : walk(v, a, b)
-			if (!at) return fail("range")
+			if (!at) fail("range")
 			if (w !== undefined && typeof w !== "string") fail("wrong-kind")
-			const [x, y, n] = at
+			const [x, y, n] = at!
 			const add = (w ?? "") as string, o = v.slice(0, x) + add + v.slice(y), e = x + add.length
 			// a lone high met by a lone low: l at the left edge, r at the right (nothing put in: both
 			// edges are one). one pair now, a position fewer, and the finger may be inside it. rare:
 			// forget, the next walks
-			const l = joins(o, x) ? 1 : 0, r = add ? joins(o, e) ? 1 : 0 : l
+			l = +joins(o, x)
+			const r = add ? +joins(o, e) : l
 			size = add ? count(add) : 0
 			joined = l + r > 0
 			memo = joined ? null : { s: o, n: n >= 0 ? n - (b - a) + size : -1, k: a + size, i: e }
 			taken = v.slice(x, y)
 			set(path, o)
-			// the undo widens over a pair made, and puts its other half back with what was there
-			start = a - l
-			end = start + size + (add ? 0 : l)
-			back = joined ? v.slice(x - l, y + r) : taken
-		} else if (isList(v)) {
+			// the undo puts the other half of a pair made back, with what was there
+			if (joined) back = v.slice(x - l, y + r)
+		} else if (isList(v) || isTyped(v)) {
 			if (b > v.length) fail("range")
-			if (w !== undefined && !isList(w)) fail("wrong-kind")
-			let l = copy(v)
-			const put = (w ?? []) as unknown[]
-			// spread past ~100k arguments overflows the stack: rebuild
-			if (put.length > 10000) {
-				taken = back = mine(l.slice(a, b))
-				l = mine(l.slice(0, a).concat(put, l.slice(b)))
-			} else taken = back = mine(l.splice(a, b - a, ...put))
-			size = w ? (w as unknown[]).length : 0
-			joined = false
-			set(path, l)
-			note(l, v, path, path.length, true)
-			end = a + size
-		} else {
-			const t = v as Typed
-			if (b > t.length) fail("range")
-			if (w !== undefined && (!typed(w) || w.constructor !== t.constructor)) fail("wrong-kind")
-			size = w ? (w as Typed).length : 0
-			joined = false
-			taken = back = t.slice(a, b)
-			const len = t.length - (b - a) + size
-			// in place only when the length stays
-			if (!cow && len === t.length) {
-				const o = copy(t)
-				if (o !== t) set(path, o), note(o, t, path, path.length, true)
-				if (w) o.set(w as Typed, a)
-			} else {
-				const n = new (t.constructor as new (n: number) => Typed)(len)
-				n.set(t.subarray(0, a), 0)
-				if (w) n.set(w as Typed, a)
-				n.set(t.subarray(b), a + size)
-				set(path, n)
-				note(n, t, path, path.length)
+			if (
+				w !== undefined &&
+				!(isList(v) ? isList(w) : isTyped(w) && w.constructor === v.constructor)
+			) {
+				fail("wrong-kind")
 			}
-			end = a + size
-		}
-		if (!un) return null
-		const empty = (back as ArrayLike<unknown>).length === 0
-		if (empty && start === end) return null
-		return empty ? { path, range: [start, end] } : { path, range: [start, end], value: back }
+			size = w ? (w as ArrayLike<unknown>).length : 0
+			joined = false
+			if (isList(v)) {
+				let n = copy(v)
+				const put = (w ?? []) as unknown[]
+				// spread past ~100k arguments overflows the stack: rebuild
+				if (put.length > 10000) {
+					taken = mine(n.slice(a, b))
+					n = mine(n.slice(0, a).concat(put, n.slice(b)))
+				} else taken = mine(n.splice(a, b - a, ...put))
+				set(path, n)
+				note(n, v, path, true)
+			} else {
+				const t = v as Typed
+				taken = t.slice(a, b)
+				const len = t.length - (b - a) + size
+				// in place only when the length stays
+				if (!cow && len === t.length) {
+					const o = copy(t)
+					if (o !== t) set(path, o), note(o, t, path, true)
+					if (w) o.set(w as Typed, a)
+				} else {
+					const n = new (t.constructor as new (n: number) => Typed)(len)
+					n.set(t.subarray(0, a))
+					if (w) n.set(w as Typed, a)
+					n.set(t.subarray(b), a + size)
+					set(path, n)
+					note(n, t, path)
+				}
+			}
+		} else fail("wrong-kind")
+		if (!undone) return null
+		back ??= taken
+		const start = a - l, end = a + size - (w ? l : 0), u: Patch = { path, range: [start, end] }
+		if ((back as ArrayLike<unknown>).length) u.value = back
+		else if (start === end) return null
+		return u
 	}
 	// what is at path becomes w (undefined: removed, ABSENT at []); what was there (ABSENT: nothing)
 	function set(path: readonly Key[], w: unknown): unknown {
-		if (path.length === 0) {
+		if (!path.length) {
 			const old = work.root
 			work.root = w === undefined ? ABSENT : w
 			return old
 		}
 		const at = parent(path), k = path[path.length - 1]
+		let old: unknown
 		if (isList(at)) {
 			if (typeof k !== "number") fail("wrong-kind")
-			if ((k as number) >= at.length) fail("no-key")
-			const old = at[k as number]
-			if (w === undefined) at.splice(k as number, 1)
-			else at[k as number] = w
-			return old
+			if (k >= at.length) fail("no-key")
+			old = at[k]
+		} else {
+			if (typeof k !== "string") fail("wrong-kind")
+			old = Object.hasOwn(at, k) ? at[k] : ABSENT
 		}
-		if (typeof k !== "string") fail("wrong-kind")
-		const old = Object.hasOwn(at, k) ? at[k] : ABSENT
-		if (w === undefined) delete at[k]
-		// a key of "__proto__" is a key: an engine with the setter would set the prototype
-		else if (k === "__proto__") define(at, k, w)
+		if (w === undefined) {
+			if (isList(at)) at.splice(k as number, 1)
+			else delete at[k]
+			// a key of "__proto__" is a key: an engine with the setter would set the prototype
+		} else if (k === "__proto__") define(at, k, w)
 		else at[k] = w
 		return old
 	}
 
 	// the patch landed: its undo pushed when wanted
-	function step(p: Patch): void {
+	function step(p: Patch, i: number): void {
+		which = i
+		const P = p.path, has = "value" in p, w = p.value
 		// nothing there: only a put at the whole
-		if (work.root === ABSENT && (p.path.length || p.range || !("value" in p))) fail("no-key")
+		if (work.root === ABSENT && (P.length || p.range || !has)) fail("no-key")
 		if (p.move) return move(p, p.move)
-		const w = "value" in p ? p.value : undefined
-		if (p.range) {
-			const u = splice(p.path, p.range[0], p.range[1], w)
-			if (un) un.push(u)
-			return
-		}
-		if (w === undefined && "value" in p) fail("not-a-patch")
-		if (w !== undefined || !p.path.length) {
-			const old = set(p.path, w)
-			if (un) un.push(old === ABSENT ? { path: p.path } : { path: p.path, value: old })
-			return
-		}
+		if (p.range) return void push(splice(P, p.range[0], p.range[1], w))
+		if (w === undefined && has) fail("not-a-patch")
 		// removing a missing map key: nothing
-		const at = get(p.path, p.path.length - 1), k = p.path[p.path.length - 1]
-		if (isMap(at) && typeof k === "string" && !Object.hasOwn(at, k)) return
-		const old = set(p.path, undefined)
-		if (un) {
-			un.push(
-				isList(at)
-					? {
-						path: p.path.slice(0, -1),
-						range: [k as number, k as number],
-						value: mine([old]),
-					}
-					: { path: p.path, value: old },
-			)
-		}
+		const k = P[P.length - 1], at = w === undefined && P.length ? get(P, 1) : undefined
+		if (isPojo(at) && typeof k === "string" && !Object.hasOwn(at, k)) return
+		const old = set(P, w)
+		if (undone) push(isList(at) ? ins(P, mine([old])) : restore(P, old))
 	}
 
 	// a move is a take, then a landing in what is left
 	function move(p: Patch, from: Target): void {
-		const P = p.path, F = from.path
+		const P = p.path, F = from.path, r = from.range
 		if (under(p, from)) fail("into-itself")
 		// onto itself, a key or an element or the whole: nothing changes, once it is there
-		if (!p.range && !from.range && same(P, F)) {
-			get(F)
-			return
-		}
-		let m: unknown, took: Took | undefined, taken0: Patch | null = null
-		if (from.range) {
-			const c = from.range[0]
-			taken0 = splice(F, c, from.range[1], undefined)
-			const untake = held(taken0)
+		if (!p.range && !r && within(P, F) && within(F, P)) return void get(F)
+		// the gap the take leaves (back), what puts it back there (taken0), whether the take joined
+		// lone surrogates or was out of a list (awry: the undo cannot move it back whole)
+		let m: unknown, back: Target = { path: F }, taken0: Patch | null = null, awry = false
+		if (r) {
+			taken0 = splice(F, r[0], r[1], undefined)
 			m = taken
-			if (un) {
-				took = { m, back: { path: F, range: [c, c] }, untake, taking: joined, listed: false }
-			}
+			back = { path: F, range: [r[0], r[0]] }
+			awry = joined
 		} else {
 			m = set(F, undefined)
 			// a missing map key: nothing to take
 			if (m === ABSENT) fail("no-key")
-			if (un) {
-				const listed = F.length > 0 && isList(get(F, F.length - 1)),
-					f = F[F.length - 1] as number
-				const back: Target = listed ? { path: F.slice(0, -1), range: [f, f] } : { path: F }
-				taken0 = listed ? { ...back, value: mine([m]) } : { path: F, value: m }
-				const untake = held(taken0)
-				took = { m, back, untake, taking: false, listed }
+			if (undone) {
+				awry = F.length > 0 && isList(get(F, 1))
+				if (awry) back = gap(F)
+				taken0 = awry ? ins(F, mine([m])) : restore(F, m)
 			}
 		}
-		try {
-			if (!p.range) {
-				const listy = un !== undefined && P.length > 0 && isList(get(P, P.length - 1))
-				// a span out of a list lands whole: owned's to keep
-				const old = set(P, owned && from.range && isList(m) ? owned(m) : m)
-				if (took) un!.unland(p, from, took, old, listy)
-				return
-			}
-			// one element into a list's span: as a list of one
-			const one = isList(get(P)) && !from.range
-			const unput = splice(P, p.range[0], p.range[1], one ? [m] : m)
-			if (took) un!.unfill(p, from, took, one, unput)
-		} catch (e) {
-			// in place the take stands: the undo must have it put back
-			if (!cow && took) un!.push(taken0)
-			throw e
+		// in place, what the undo holds of what moved is a copy: the tree goes on changing
+		// (a refused call takes back with what moved itself: clones, copy then it)
+		let untake = taken0
+		if (!cow && taken0 && "value" in taken0) {
+			const c = clone(taken0.value)
+			if (c !== taken0.value) (work.clones ??= new Map()).set(c, taken0.value)
+			untake = { ...taken0, value: c }
 		}
-	}
-	// in place, what the undo holds of what moved is a copy: the tree goes on changing
-	// (a refused call takes back with what moved itself: clones, copy then it)
-	function held(u: Patch | null): Patch | null {
-		if (cow || u === null || !("value" in u)) return u
-		const c = clone(u.value)
-		if (c !== u.value) (work.clones ??= []).push(c, u.value)
-		return { ...u, value: c }
-	}
-
-	// the undo's part, made only when wanted
-	const un = undo ? undoer() : undefined
-	function undoer() {
-		// v and what of it was made here: never changed here again, the undo holds it
-		function keep(v: unknown) {
-			// by a stack, not recursion: a value may be nested deeper than the call stack holds
-			const todo = [v]
-			for (let x; todo.length;) {
-				x = todo.pop()
-				if (x === null || typeof x !== "object" || own === undefined) continue
-				if (Array.isArray(own)) {
-					const i = own.indexOf(x)
-					if (i < 0) continue
-					own[i] = own[own.length - 1]
-					own.pop()
-				} else if (!own.delete(x)) continue
-				if (isList(x)) { for (const y of x) todo.push(y) }
-				else for (const k in x) todo.push((x as Record<string, unknown>)[k])
-			}
-		}
-		// each patch's undo as it lands (null: nothing); the undo of all is read off it last patch
-		// first
-		const undone: Patch[] = []
-		const push = (p: Patch | null) => {
-			if (p === null) return
-			if ("value" in p) keep(p.value)
-			undone.push(p)
-		}
-
+		// the move back to the gap, from where what moved landed
+		const to = (there: Target): Patch => ({ ...back, move: there })
+		// the undo of the landing (ups), or what undoes it alone (land), then the take's
+		let ups: (Patch | false)[] | undefined, land: Patch | null = null
 		// a move's undo is the landing's, then the take's. better, one move back, with what the
 		// landing replaced put beside what moved first: exact unless a path back would be
 		// into-itself, a lone surrogate met another (a string's), or what moved cannot be moved back
 		// whole (the whole, or a string or typed array out of a list)
-
-		// the landing at P, unranged: old was there (ABSENT: nothing), listy: in a list
-		function unland(p: Patch, from: Target, took: Took, old: unknown, listy: boolean) {
-			const P = p.path, F = from.path, { back, untake } = took
-			// what moved stays in the value, still walked: the undo's copy of it is never changed
-			const fall = (undone: Patch) => (push(undone), push(untake))
-			const unset: Patch = old === ABSENT ? { path: P } : { path: P, value: old }
-			if (!P.length) return fall(unset)
-			if (from.range) {
-				// the span back, out of the sequence it became, which is then put back
-				if (took.taking || within(P, F)) return fall(unset)
-				const n = from.range[1] - from.range[0]
-				if (n) push({ ...back, move: { path: P, range: [0, n] } })
-				// P's place moved by the n put back in front of it, if both are in one list
-				return push(
-					!n
-						? unset
-						: old === ABSENT
-						? { path: shift(P, back, n) }
-						: { path: shift(P, back, n), value: old },
-				)
+		try {
+			if (!p.range) {
+				const listy = undone && P.length > 0 && isList(get(P, 1))
+				// a span out of a list lands whole: owned's to keep
+				const old = set(P, owned && r && isList(m) ? owned(m) : m)
+				if (undone) {
+					land = restore(P, old)
+					const at: Target = { path: P }
+					if (r) {
+						// the span back, out of the sequence it became, which is then put back, its place
+						// moved by the n put back in front of it, if both are in one list
+						const n = r[1] - r[0]
+						if (!awry && !within(P, F)) {
+							ups = [
+								n > 0 && to({ path: P, range: [0, n] }),
+								restore(shift(P, back, n), old),
+							]
+						}
+					} else if (listy) {
+						// what was replaced goes in beside it first
+						if (!under(back, at)) ups = [ins(P, mine([old]), 1), to(at)]
+					} else if (!within(P, back.path)) {
+						// a map's key: put back once what moved has left it
+						ups = [to(at), old !== ABSENT && restore(shift(P, back), old)]
+					}
+				}
+			} else {
+				const [a, b] = p.range
+				// one element into a list's span: as a list of one
+				const one = isList(get(P)) && !r
+				land = splice(P, a, b, one ? [m] : m)
+				if (undone) {
+					const t = taken as ArrayLike<unknown>
+					const at: Target = one ? { path: [...P, a] } : { path: P, range: [a, a + size] }
+					// a lone high at the end of what moved would meet a lone low that begins what it
+					// replaced
+					if (
+						(one || !(awry || joined || typeof m === "string" && joins(m + t, m.length))) &&
+						!under(back, at)
+					) {
+						ups = [
+							t.length > 0 && { path: P, range: [a + size, a + size], value: t },
+							(size > 0 || !r) && to(at),
+						]
+					}
+				}
 			}
-			const there: Patch = { ...back, move: { path: P } }
-			if (listy) {
-				// what was replaced goes in beside it first
-				if (under(there, there.move!)) return fall(unset)
-				const k = P[P.length - 1] as number
-				push({ path: P.slice(0, -1), range: [k + 1, k + 1], value: mine([old]) })
-				return push(there)
-			}
-			if (old === ABSENT) return under(there, there.move!) ? fall(unset) : push(there)
-			// a map's key: put back once what moved has left it
-			if (within(P, back.path)) return fall(unset)
-			push(there)
-			push({ path: shift(P, back), value: old })
+		} catch (e) {
+			// in place the take stands: the undo must have it put back
+			if (!cow) push(taken0)
+			throw e
 		}
-		// the landing in a span of P; one: one element into a list; unput undoes it (null: nothing)
-		function unfill(p: Patch, from: Target, took: Took, one: boolean, unput: Patch | null) {
-			const P = p.path, [a] = p.range!, { m, back, untake } = took
-			const fall = (undone: Patch | null) => (push(undone), push(untake))
-			const t = taken as ArrayLike<unknown>
-			let there: Patch
-			if (one) there = { ...back, move: { path: [...P, a] } }
-			else {
-				// a lone high at the end of what moved would meet a lone low that begins what it replaced
-				const meets = typeof m === "string" && m.length > 0 && t.length > 0 &&
-					high(m.charCodeAt(m.length - 1)) && low((t as string).charCodeAt(0))
-				if (took.listed || took.taking || joined || meets) return fall(unput)
-				there = { ...back, move: { path: P, range: [a, a + size] } }
-			}
-			if (under(there, there.move!)) return fall(unput)
-			if (t.length) push({ path: P, range: [a + size, a + size], value: t })
-			if (size || !from.range) push(there)
-		}
-
-		return { undone, push, unland, unfill }
+		if (undone) (ups ?? [land, untake]).forEach(push)
 	}
 
-	return { work, step, undone: un?.undone }
+	// each patch's undo as it lands (null: nothing); the undo of all is read off it last patch first
+	const undone: Patch[] | undefined = undo ? [] : undefined
+	const push: (p: Patch | null | false) => void = !undone ? none : (p) => {
+		if (!p) return
+		if ("value" in p) keep!(p.value)
+		undone.push(p)
+	}
+	// v and what of it was made here: never changed here again, the undo holds it
+	const keep = undone && ((v: unknown) => {
+		// by a stack, not recursion: a value may be nested deeper than the call stack holds
+		const todo = [v]
+		while (todo.length) {
+			const x = todo.pop()
+			if (!isObject(x)) continue
+			if (isList(own)) {
+				const i = own.indexOf(x)
+				if (i < 0) continue
+				own.splice(i, 1)
+			} else if (!own.delete(x)) continue
+			if (isList(x)) { for (const y of x) todo.push(y) }
+			else for (const k in x) todo.push((x as Record<string, unknown>)[k])
+		}
+	})
+
+	return { work, step, undone }
 }
 
 // in place, a refused call taken back: what is at v's place once each container put new in
 // another's place is the one it replaced again (a typed array given what it holds now: it may
 // have changed in place before it was replaced). only the containers that may hold one are walked
-function putBack(v: unknown, back: { was: Map<object, object>; under: Set<object> }): unknown {
-	if (v === null || typeof v !== "object") return v
+function putBack(v: unknown, back: Back): unknown {
+	if (!isObject(v)) return v
 	let o: object = v, w: object | undefined
 	while ((w = back.was.get(o)) !== undefined) o = w
 	if (o !== v) {
-		if (!typed(o)) return o
+		if (!isTyped(o)) return o
 		if (o.length !== (v as Typed).length) return v
 		o.set(v as Typed)
 		return o
 	}
-	if (!back.under.has(v) || typed(v)) return v
-	if (isList(v)) {
-		for (let i = 0; i < v.length; i++) {
-			const r = putBack(v[i], back)
-			if (r !== v[i]) v[i] = r
-		}
-		return v
-	}
+	if (!back.under.has(v) || isTyped(v)) return v
 	const m = v as Record<string, unknown>
 	for (const k of Object.keys(m)) {
 		const r = putBack(m[k], back)
-		if (r === m[k]) continue
-		// "__proto__" is a key: an engine with the setter would set the prototype
-		if (k === "__proto__") define(m, k, r)
-		else m[k] = r
+		if (r !== m[k]) define(m, k, r)
 	}
 	return v
 }
 
-// a key put as an own one, whatever its name
-const define = (o: object, k: string, value: unknown) =>
-	Object.defineProperty(o, k, { value, writable: true, enumerable: true, configurable: true })
-
 // lists, maps and typed arrays copied all the way down; the rest (strings, numbers, bytes) as is
 function clone(v: unknown): unknown {
-	const leaf = (x: unknown) => isList(x) ? [] : isMap(x) ? {} : typed(x) ? x.slice() : x
+	const leaf = (x: unknown) => isList(x) ? [] : isPojo(x) ? {} : isTyped(x) ? x.slice() : x
 	const out = leaf(v)
 	// by a stack, not recursion: a value may be nested deeper than the call stack holds
-	const todo: [unknown, any][] = [[v, out]]
+	const todo: [unknown, object][] = [[v, out as object]]
 	for (let t; (t = todo.pop());) {
 		const [from, to] = t
 		if (isList(from)) {
+			const into = to as unknown[]
 			for (let i = 0; i < from.length; i++) {
 				const c = leaf(from[i])
-				to.push(c)
-				if (isList(from[i]) || isMap(from[i])) todo.push([from[i], c])
+				into.push(c)
+				if (c !== from[i]) todo.push([from[i], c as object])
 			}
-		} else if (isMap(from)) {
+		} else if (isPojo(from)) {
 			for (const k of Object.keys(from)) {
 				const c = leaf(from[k])
 				define(to, k, c)
-				if (isList(from[k]) || isMap(from[k])) todo.push([from[k], c])
+				if (c !== from[k]) todo.push([from[k], c as object])
 			}
 		}
 	}
@@ -552,34 +479,29 @@ function clone(v: unknown): unknown {
 // b is a, or under it
 const within = (a: readonly Key[], b: readonly Key[]) =>
 	a.length <= b.length && a.every((k, i) => k === b[i])
-const same = (a: readonly Key[], b: readonly Key[]) => a.length === b.length && within(a, b)
 
 // p's place lies inside what from takes: under its path, or in its span
 function under(p: Target, from: Target) {
-	const f = from.path, q = p.path
-	if (q.length < f.length || !f.every((k, i) => k === q[i])) return false
-	if (!from.range) return q.length > f.length
-	if (q.length === f.length) return false
-	const k = q[f.length]
-	return typeof k === "number" && k >= from.range[0] && k < from.range[1]
+	const f = from.path, q = p.path, r = from.range, k = q[f.length]
+	return within(f, q) &&
+		(r ? typeof k === "number" && k >= r[0] && k < r[1] : q.length > f.length)
 }
 
 // path, once n elements are put in at the gap of at, a list's range
 function shift(path: readonly Key[], at: Target, n = 1): readonly Key[] {
-	const d = at.path.length
-	if (!at.range || path.length <= d || !within(at.path, path)) return path
-	const i = path[d] as number
-	if (i < at.range[0]) return path
+	const d = at.path.length, i = path[d] as number
+	if (!n || !at.range || path.length <= d || !within(at.path, path) || i < at.range[0]) return path
 	const out = path.slice()
 	out[d] = i + n
 	return out
 }
 
 // the undo of all the patches: each patch's (from its mark in undone), the last patch's first
-function unroll(undone: Patch[], marks: number[], out: Patch[]) {
+function unroll(undone: Patch[], marks: number[], out: Patch[] = []) {
 	for (let j = marks.length - 1, end = undone.length; j >= 0; end = marks[j--]) {
 		for (let k = marks[j]; k < end; k++) out.push(undone[k])
 	}
+	return out
 }
 
 // the patches, in order, on value (undefined: nothing there); the value after them (undefined:
@@ -603,35 +525,26 @@ export default function apply(
 	try {
 		for (const given of patches) {
 			const p = numbered(given)
-			try {
-				if (!shape(p)) fail("not-a-patch")
-				if (undone) marks.push(undone.length)
-				step(p)
-			} catch (e) {
-				if (e instanceof Fail) throw new ApplyError(e.code, i)
-				throw e
-			}
-			i++
+			if (!shape(p)) throw new ApplyError("not-a-patch", i)
+			if (undone) marks.push(undone.length)
+			step(p, i++)
 		}
 	} catch (e) {
 		if (!cow) {
-			const back: Patch[] = []
-			unroll(undone!, marks, back)
 			// what the taking back changes may come to hold what was put new: walked after
 			const b = work.back
-			const again = createWork(work.root, false, false, b && ((c) => (b.under.push(c), c)), b)
-			const clones = new Map<unknown, unknown>()
-			for (let i = 0, cs = work.clones ?? []; i < cs.length; i += 2) clones.set(cs[i], cs[i + 1])
-			for (const p of back) {
-				again.step(
-					"value" in p && clones.has(p.value) ? { ...p, value: clones.get(p.value) } : p,
-				)
+			const again = createWork(
+				work.root,
+				false,
+				false,
+				b ? (c) => (b.under.add(c), c) : undefined,
+				b,
+			)
+			for (const p of unroll(undone!, marks)) {
+				const c = work.clones?.get(p.value)
+				again.step(c ? { ...p, value: c } : p, i)
 			}
-			if (b && work.top === undefined) {
-				const was = new Map<object, object>()
-				for (let i = 0; i < b.pairs.length; i += 2) was.set(b.pairs[i], b.pairs[i + 1])
-				putBack(again.work.root, { was, under: new Set(b.under) })
-			}
+			if (b) putBack(again.work.root, b)
 		}
 		throw e
 	}

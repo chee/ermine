@@ -12,6 +12,7 @@
 #include "../../../core/ed25519/c/ed25519.h"
 #include "../../../ermine/encoding/c/blake3/blake3.h"
 #include "sessions.h"
+#include "../../libraries/upsert/c/upsert.h"
 
 #define PUSH(v, n, cap, x) \
 	do { \
@@ -223,7 +224,7 @@ static void put_in(void *data) {
 	const char *path[1] = {p->key};
 	pl_changed changed;
 	nd_entry *node;
-	pl_upsert(places, tb_string(SESS_PART), tb_string(p->node), path, 1, p->value, h, &changed, &node);
+	up_upsert(places, table, tb_string(SESS_PART), tb_string(p->node), path, 1, p->value, h, &changed, &node);
 	for (size_t i = 0; i < changed.n; i++) pl_hold_also(places, changed.entries[i], pl_made_ref(made), pl_made_free);
 	if (node != NULL) pl_hold(places, node, made, pl_made_free);
 	else pl_made_free(made);

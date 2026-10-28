@@ -8,11 +8,11 @@ import {
 	list,
 	patch,
 	peep,
-	pipe,
 	read,
 	ref,
 	unplace,
 } from "@ermine/system"
+import { pipe } from "@ermine/pipe"
 import { host } from "@ermine/slaygrounds/tools"
 import { bind, handler } from "ermine-h"
 import apply from "@ermine/core/changeable/apply"

@@ -1,14 +1,6 @@
 /** @jsxImportSource ermine-h */
-import {
-	createAction,
-	ensureNode,
-	explain,
-	patch,
-	peep,
-	pipe,
-	read,
-	type Watched,
-} from "@ermine/system"
+import { createAction, ensureNode, explain, patch, peep, read } from "@ermine/system"
+import { pipe, type Told as Watched } from "@ermine/pipe"
 import { bind, handler } from "ermine-h"
 
 // piece-pipe: one thing in two shapes, kept in step by patches (a little cambria). v1 says name,
@@ -78,6 +70,7 @@ const show = (p: Patch) =>
 // pipe sees it; no actor of its own to say (every write here is the host's)
 const by = (w: Watched) => {
 	const writer = w.change && peep(() => explain(w.change!))?.writer
+	if (writer?.kind === "feature") return writer.feature
 	return writer?.kind === "method" ? String(writer.path?.join("/")) : writer?.kind ?? "?"
 }
 

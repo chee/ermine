@@ -1,4 +1,4 @@
-// actions (system.ts' createAction, executeAction, explain …; calls.ts), in C: actions, the call scope,
+// actions (system/actions.ts' createAction, executeAction; system/explaining.ts' explain …; calls.ts), in C: actions, the call scope,
 // call records, getCaller, explain and its views, teardowns, promises. C's job, function by function
 // (ermine.h says each):
 //   state: es_actions_new, es_actions_free, es_is_action (each action placed, by its node: the
@@ -674,12 +674,6 @@ static void writer_of(es_context *c, const op_value *change, es_explained *out) 
 				}
 			}
 		}
-		return;
-	}
-	const op_value *pipe = meta == NULL ? NULL : op_get(meta, "pipe");
-	if (pipe != NULL && node != NULL && node->type == OP_STR) {
-		w->kind = ES_WRITER_PIPE;
-		path_of(c, node->str, &w->has_path, &w->path, &w->npath);
 		return;
 	}
 	w->kind = ES_WRITER_OUTSIDE;
@@ -2078,9 +2072,9 @@ int es_create_writer(es_context *c, op_value **writer) {
 		return es_fail_ermine(ES_GONE, "gone: what this writer was created in has ended");
 	}
 	const op_value *node = value_of(own, PL_NODE, OP_STR);
-	if ((node != NULL && es_is_computer(e, node->str)) || es_pair_of(own, "pipe") != NULL) {
+	if (node != NULL && es_is_computer(e, node->str)) {
 		return es_fail_ermine(ES_NOT_HERE,
-			"createWriter in a memo, effect or pipe: create it in setup or an action, and use the writer there");
+			"createWriter in a memo or effect: create it in setup or an action, and use the writer there");
 	}
 	writer_rec *b = es_alloc(sizeof *b);
 	b->x = x;

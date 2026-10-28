@@ -25,7 +25,7 @@
     "npm:@codemirror/lint@6": "6.9.7",
     "npm:@codemirror/state@6": "6.7.6",
     "npm:@codemirror/view@6": "6.43.14",
-    "npm:@deno/vite-plugin@^2.0.4": "2.0.4_vite@8.3.4_esbuild@0.25.12",
+    "npm:@deno/vite-plugin@^2.0.4": "2.0.4_vite@8.3.4",
     "npm:@lezer/highlight@1": "1.2.5",
     "npm:@noble/curves@1.9.7": "1.9.7",
     "npm:@noble/hashes@1.8.0": "1.8.0",
@@ -241,7 +241,7 @@
         "w3c-keyname"
       ]
     },
-    "@deno/vite-plugin@2.0.4_vite@8.3.4_esbuild@0.25.12": {
+    "@deno/vite-plugin@2.0.4_vite@8.3.4": {
       "integrity": "sha512-v9bm0NJx0SVPAyUeUi+iMXCByFIkaTtpWbGXwuNdDwfIdwHOVqe6sZz2wvWwulZqpA4QeGnxlJAkC4sZfoHCfQ==",
       "dependencies": [
         "@deno/loader@npm:@jsr/deno__loader@0.5.0",

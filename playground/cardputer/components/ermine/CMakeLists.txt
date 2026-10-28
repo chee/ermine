@@ -32,6 +32,7 @@ idf_component_register(
 		${TIPPET}/wire.c ${TIPPET}/step.c ${TIPPET}/pack.c ${TIPPET}/sign.c ${TIPPET}/log.c ${TIPPET}/store.c
 		${TIPPET}/store_file.c ${TIPPET}/sync.c ${TIPPET}/http.c ${TIPPET}/history.c
 		${R}/playground/trust/c/trust.c ${R}/playground/installs/c/installs.c ${R}/playground/sessions/c/sessions.c
+		${R}/playground/libraries/upsert/c/upsert.c
 	INCLUDE_DIRS ${R}
 	REQUIRES fatfs
 )

@@ -430,35 +430,9 @@ int world_edit(const char *part, tb_key id, const op_value *patches, nd_entry **
 	return OP_OK;
 }
 
-// upsert (typescript/upsert.ts), by a request's part, id, path (names) and value
-static int world_upsert(const op_value *r, const char **why) {
-	const op_value *id = op_get(r, "id"), *value = op_get(r, "value");
-	if (!world_is(id, OP_STR)) return *why = "id: not a string", -1;
-	if (value == NULL) return *why = "no value", -1;
-	ch_header h;
-	pl_made *made;
-	if (header_now(&h, &made, why)) return -1;
-	size_t n;
-	const char **path = world_address(op_get(r, "path"), &n);
-	for (size_t i = 0; i < n; i++) {
-		if (path[i] == NULL) path[i] = "";
-	}
-	pl_changed changed;
-	nd_entry *node;
-	pl_upsert(world_places, tb_string(world_part(op_get(r, "part"))), world_key(id), path, n, value, h,
-		&changed, &node);
-	free(path);
-	pl_commit(world_places, &changed);
-	hold_header(&changed, made);
-	if (node != NULL) pl_hold(world_places, node, made, pl_made_free);
-	else pl_made_free(made);
-	return 0;
-}
-
 int world_write(const op_value *r, const char **why, size_t *failed) {
 	const char *op = world_text(op_get(r, "op"));
 	*why = NULL;
-	if (strcmp(op, "upsert") == 0) return world_upsert(r, why);
 	if (strcmp(op, "edit") == 0) {
 		return world_edit(world_part(op_get(r, "part")), world_key(op_get(r, "id")),
 			op_get(r, "patches"), NULL, why, failed);
@@ -649,18 +623,6 @@ static nd_entry *made_node(const op_value *value, op_value **out) {
 	return node;
 }
 
-// the value a getOrSet is to make
-static const op_value *made_value;
-static op_value *make_value(void *ctx) {
-	(void)ctx;
-	return op_ref((op_value *)made_value);
-}
-static op_value *world_snap_into(const op_value *got) {
-	op_value *o = op_map();
-	if (got != NULL) op_set(o, "value", world_snap(got));
-	return o;
-}
-
 // the world's requests that write or change the table, made in the host's scope
 typedef struct {
 	const op_value *r;
@@ -693,35 +655,6 @@ static void in_host(void *data) {
 			}
 		}
 		c->out = op_map();
-	} else if (strcmp(op, "getOrSet") == 0) {
-		const op_value *id = op_get(r, "id"), *value = op_get(r, "value");
-		const char *why;
-		ch_header h;
-		pl_made *made;
-		if (!world_is(id, OP_STR) || value == NULL) {
-			c->out = world_error("id: not a string");
-			return;
-		}
-		if (header_now(&h, &made, &why)) {
-			c->out = world_error(why);
-			return;
-		}
-		size_t n;
-		const char **path = world_address(op_get(r, "path"), &n);
-		for (size_t i = 0; i < n; i++) {
-			if (path[i] == NULL) path[i] = "";
-		}
-		pl_changed changed;
-		nd_entry *node;
-		made_value = value;
-		const op_value *got = pl_get_or_set(world_places, tb_string(world_part(op_get(r, "part"))),
-			world_key(id), path, n, make_value, NULL, h, &changed, &node);
-		free(path);
-		pl_commit(world_places, &changed);
-		hold_header(&changed, made);
-		if (node != NULL) pl_hold(world_places, node, made, pl_made_free);
-		else pl_made_free(made);
-		c->out = world_snap_into(got);
 	} else if (strcmp(op, "del") == 0) {
 		int code = tb_del(world_table, tb_string(world_part(op_get(r, "part"))),
 			world_key(op_get(r, "id")));
@@ -758,7 +691,7 @@ static void in_header(void *data) {
 	pl_made_free(made);
 }
 
-// the requests' watchPath watches: what each is told, kept by name -------------------------------
+// the requests' watchAll watches: what each is told, kept by name -------------------------------
 
 typedef struct {
 	char *name;
@@ -767,6 +700,8 @@ typedef struct {
 	op_value *told;
 	// a fact says how many sites its change has
 	int sites;
+	// only the facts of this id and this part, when given (copied)
+	char *id, *part;
 } told_watch;
 static told_watch **told_watches;
 static size_t ntold, captold;
@@ -780,6 +715,8 @@ static told_watch *told_named(const char *name) {
 
 static void told_fact(const pl_fact *f, void *ctx) {
 	told_watch *w = ctx;
+	if (w->id != NULL && strcmp(f->id.string, w->id) != 0) return;
+	if (w->part != NULL && strcmp(f->part.string, w->part) != 0) return;
 	op_value *o = op_map();
 	op_set(o, "part", op_str(f->part.string));
 	op_set(o, "id", op_str(f->id.string));
@@ -789,38 +726,27 @@ static void told_fact(const pl_fact *f, void *ctx) {
 	op_push(w->told, o);
 }
 
-static op_value *watch_path(const op_value *r) {
+static op_value *watch_all(const op_value *r) {
 	const char *name = world_text(op_get(r, "name"));
 	if (name == NULL) return world_error("no name");
 	told_watch *old = told_named(name);
 	if (old != NULL) {
 		pl_stop(old->watch);
 		old->watch = NULL;
-	}
-	size_t n, at_n = 0;
-	const char **path = world_address(op_get(r, "path"), &n);
-	for (size_t i = 0; i < n; i++) {
-		if (path[i] == NULL) path[i] = "";
-	}
-	pl_watching options = {0};
-	const op_value *part = op_get(r, "part"), *at = op_get(r, "at");
-	if (world_is(part, OP_STR)) options.has_part = 1, options.part = tb_string(part->str);
-	op_key *at_keys = NULL;
-	if (world_is(at, OP_LIST)) {
-		at_keys = world_path(at, &at_n);
-		options.has_at = 1, options.at = at_keys, options.at_length = at_n;
-	}
-	if (old == NULL) {
+		free(old->id);
+		free(old->part);
+		old->id = old->part = NULL;
+	} else {
 		old = world_alloc(sizeof *old);
 		old->name = world_copy(name);
 		old->told = op_list();
 		PUSH(told_watches, ntold, captold, old);
 	}
-	const op_value *sites = op_get(r, "sites");
+	const op_value *id = op_get(r, "id"), *part = op_get(r, "part"), *sites = op_get(r, "sites");
+	if (world_is(id, OP_STR)) old->id = world_copy(id->str);
+	if (world_is(part, OP_STR)) old->part = world_copy(part->str);
 	old->sites = sites != NULL && sites->type == OP_BOOL && sites->bool_;
-	old->watch = pl_watch_path(world_places, path, n, told_fact, old, &options);
-	free(path);
-	free(at_keys);
+	old->watch = pl_watch_all(world_places, told_fact, old);
 	return op_map();
 }
 
@@ -828,8 +754,8 @@ static op_value *watch_path(const op_value *r) {
 static op_value *world_answer(const op_value *r) {
 	const char *op = world_text(op_get(r, "op"));
 	if (op == NULL) return world_error("no op");
-	const char *hosted[] = {"kids", "value", "share", "del", "edit", "upsert",
-		"getOrSet", "place", "unplace", "rename", "move"};
+	const char *hosted[] = {"kids", "value", "share", "del", "edit",
+		"place", "unplace", "rename", "move"};
 	for (size_t i = 0; i < sizeof hosted / sizeof *hosted; i++) {
 		if (strcmp(op, hosted[i]) != 0) continue;
 		hosting c = {.r = r};
@@ -879,7 +805,7 @@ static op_value *world_answer(const op_value *r) {
 		op_set(o, "status", world_status_json(v));
 		return o;
 	}
-	if (strcmp(op, "watchPath") == 0) return watch_path(r);
+	if (strcmp(op, "watchAll") == 0) return watch_all(r);
 	if (strcmp(op, "watched") == 0) {
 		told_watch *t = told_named(world_text(op_get(r, "name")) ? world_text(op_get(r, "name")) : "");
 		if (t == NULL) return world_error("no watch");
@@ -894,6 +820,8 @@ static op_value *world_answer(const op_value *r) {
 			pl_stop(t->watch);
 			op_free(t->told);
 			free(t->name);
+			free(t->id);
+			free(t->part);
 			for (size_t i = 0; i < ntold; i++) {
 				if (told_watches[i] == t) told_watches[i] = told_watches[--ntold], i = ntold;
 			}
@@ -1060,6 +988,8 @@ void world_finish(void) {
 	for (size_t i = 0; i < ntold; i++) {
 		op_free(told_watches[i]->told);
 		free(told_watches[i]->name);
+		free(told_watches[i]->id);
+		free(told_watches[i]->part);
 		free(told_watches[i]);
 	}
 	free(told_watches);

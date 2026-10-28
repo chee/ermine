@@ -17,7 +17,6 @@ import {
 	patchAttributes,
 	patchChildren,
 	peep,
-	pipe,
 	pulse,
 	read,
 	readAllChildren,
@@ -314,8 +313,8 @@ Deno.test("@ermine/system: a closed ermine is let go: nothing of it found", () =
 })
 
 Deno.test("@ermine/system: a second copy of its module (another URL) finds the same processes: one registry", async () => {
-	const url = new URL("./nodes.ts", import.meta.url).href
-	const copy = await import(`${url}?copy=${Math.random()}`) as typeof import("./nodes.ts")
+	const url = new URL("./system/nodes.ts", import.meta.url).href
+	const copy = await import(`${url}?copy=${Math.random()}`) as typeof import("./system/nodes.ts")
 	assert(copy.ensureNode !== ensureNode)
 	const e = createErmine({ features: [manual] })
 	e.within(() => ensureNode("/code/p", () => void copy.ensureNode("./v", "from the copy")))
@@ -360,33 +359,5 @@ Deno.test("@ermine/system: a memo's earlier promise settling late leaves it awai
 	await new Promise((r) => setTimeout(r))
 	e.within(() => pulse())
 	assertEquals(state(), "done")
-	e.close()
-})
-
-Deno.test("@ermine/system: a pipe that stops its own process, then throws, is not the pulse's error", () => {
-	const e = createErmine({ features: [manual] })
-	e.within(() => ensureNode("/src", 1))
-	const running = e.start(() => {
-		pipe("/src", () => {
-			;(running as { stop(): void }).stop()
-			throw new Error("after stop")
-		})
-	}, "/work/p")
-	e.within(() => patch("/src", [{ path: [], value: 2 }]))
-	e.within(() => pulse())
-	e.close()
-})
-
-Deno.test("@ermine/system: a pipe's function that rejects fails the pipe's status (observed)", async () => {
-	const e = createErmine({ features: [manual] })
-	e.within(() => ensureNode("/src", 1))
-	let made: unknown
-	e.start(() => {
-		made = pipe("/src", () => Promise.reject(new Error("later no")), { timing: "write" })
-	}, "/code/p")
-	e.within(() => patch("/src", [{ path: [], value: 2 }]))
-	await new Promise((r) => setTimeout(r))
-	const status = e.within(() => getStatus(made as never)) as { state: string; error?: Error }
-	assertEquals([status.state, status.error?.message], ["failed", "later no"])
 	e.close()
 })

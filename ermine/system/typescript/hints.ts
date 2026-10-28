@@ -35,7 +35,7 @@ import { PlacesError } from "@ermine/core/places"
 import { Refusal } from "@ermine/core/places/guard"
 import { PENDING, SchedulerError } from "@ermine/core/scheduler"
 import { ErmineError, type Feature, FeatureError } from "./features.ts"
-import type { Status, Waiting } from "./system.ts"
+import type { Status, Waiting } from "./system/shapes.ts"
 
 // what the erring program could see, beside the error: the function it called, the status of
 // what it read (getStatus's, as it sees it), whether it was its setup
@@ -91,13 +91,9 @@ function nothingThere(at: string | undefined, seen: Seen | undefined): string {
 		return `the node that handle names isn't reachable now (unplaced): get it again by its ` +
 			`path, getNode("/…").`
 	}
-	if (at === "a node with no place") {
-		return `pipe needs a node reached by a path: give it the path, or the node getNode or ` +
-			`ensureNode gave.`
-	}
 	if (at === "not a change this ermine shows") {
-		return `explain takes a path, a node, or a change it was shown (readAll's from.change, ` +
-			`a pipe's write's change), never an object made by hand.`
+		return `explain takes a path, a node, or a change it was shown (readAll's from.change), ` +
+			`never an object made by hand.`
 	}
 	const p = slash(at)
 	switch (seen?.fn) {
@@ -172,16 +168,8 @@ function ermineError(e: ErmineError, seen: Seen | undefined): string | undefined
 					`with nothing open, so it can't write. use a function* that yields promises: ` +
 					`createAction(path, function* () { try { yield promise } catch { …write… } }).`
 			}
-			return /pipe takes/.test(e.message)
-				? `pipe(from, fn) tells fn each write at from; pipe(from, to) mirrors it, ` +
-					`pipe(from, to, there) transforms it, pipe(from, to, there, back) translates both ` +
-					`ways: there and back are functions given the write, giving patches.`
-				: `ermine.start takes the program's function itself: start(program, "/path"), not ` +
-					`its path or its module.`
-		case "looping":
-			return `this pipe was told by pipes' writes, as they landed, too deep (a pipe writing ` +
-				`where another pipe hears, round again): it is told no more. give one of them ` +
-				`{ timing: "pulse" } (the default), so each hop waits a pulse.`
+			return `ermine.start takes the program's function itself: start(program, "/path"), not ` +
+				`its path or its module.`
 		case "not-yet":
 			return `that is made after the features are set up: use it in a hook, not in setup.`
 		case "in-act":

@@ -1,5 +1,5 @@
 {
-	"title": "why(x), one step: the change at x and who made it. from outside any run or call: its site (the program's line); by a memo's run: the computer and the run, while its latest run's record holds the change; by a send: the handler and the call, likewise; a newer record not holding it: replaced, naming the writer's node. nothing there: none",
+	"title": "why(x), one step: the change at x and who made it. from outside any run or call: its site (the program's line; written in a process's setup, the process's: \"setup\"); by a memo's run: the computer and the run, while its latest run's record holds the change; by a send: the handler and the call, likewise; a newer record not holding it: replaced, naming the writer's node. nothing there: none",
 	"steps": [
 		{
 			"op": "ermine",
@@ -143,6 +143,35 @@
 			"call": [
 				"explain",
 				"$a"
+			],
+			"expect": {
+				"value": {
+					"writer": "outside",
+					"site": "setup"
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"patch",
+				"$u",
+				[
+					{
+						"path": [],
+						"value": 9
+					}
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"explain",
+				"$u"
 			],
 			"expect": {
 				"value": {

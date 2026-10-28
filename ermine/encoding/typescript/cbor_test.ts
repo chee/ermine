@@ -504,3 +504,67 @@ Deno.test("cbor: a value nests at most DEPTH containers, either way, refused wit
 	}
 	assertThrows(() => decode(new Uint8Array(DEPTH + 1).fill(0xd8)), CborError)
 })
+
+// encode(x, { live: true }): a live value or symbol is a stand-in naming it
+function named() {}
+class Kennel {}
+const LIVE: [string, unknown, string][] = [
+	["a named function", named, "function named"],
+	["an anonymous function", (() => () => 1)(), "function anonymous"],
+	["a symbol", Symbol("s"), "Symbol(s)"],
+	["a Map", new Map(), "Map"],
+	["a Set", new Set(), "Set"],
+	["a Promise", Promise.resolve(), "Promise"],
+	["an ArrayBuffer", new ArrayBuffer(1), "ArrayBuffer"],
+	["a clamped array", new Uint8ClampedArray(1), "Uint8ClampedArray"],
+	["a Date", new Date(0), "Date"],
+	["a class object", new Kennel(), "Kennel"],
+	["an object with no constructor name", Object.create({ constructor: 1 }), "object"],
+]
+
+for (const [name, x, kind] of LIVE) {
+	Deno.test(`cbor: live: ${name} is a stand-in of "${kind}"`, () => {
+		assertThrows(() => encode(x as Value), CborError)
+		assertThrows(() => encode(x as Value, { live: false }), CborError)
+		const bytes = encode(x as Value, { live: true })
+		assertEquals(hex(bytes), hex(encode(new Stand(kind))))
+		assertEquals(decode(bytes), new Stand(kind))
+		const inside = { a: [x, 1], b: x } as unknown as Value
+		assertEquals(decode(encode(inside, { live: true })), {
+			a: [new Stand(kind), 1],
+			b: new Stand(kind),
+		})
+	})
+}
+
+Deno.test("cbor: live changes nothing for a value without live things", () => {
+	const v: Value = { a: [1, "x", null, new Uint16Array([1]), new Stand("k")], b: 2n ** 70n }
+	assertEquals(hex(encode(v, { live: true })), hex(encode(v)))
+})
+
+Deno.test("cbor: live still refuses what is not a live value", () => {
+	const opt = { live: true }
+	const a: Value[] = []
+	a.push(a)
+	for (let i = 0; i < 70; i++) a.push(a)
+	let deep: Value = [], n: Value = deep
+	for (let i = 0; i < 70; i++) n = (n as Value[])[0] = [] as Value[]
+	;(n as Value[]).push(deep)
+	for (
+		const x of [
+			a,
+			deep,
+			nest(DEPTH + 1),
+			{ [Symbol("k")]: 1 },
+			undefined,
+			{ a: undefined },
+			"\ud800",
+			new Stand(undefined as never),
+		]
+	) {
+		assertThrows(() => encode(x as Value, opt), CborError)
+	}
+	let held: unknown = () => 1
+	for (let i = 0; i < DEPTH; i++) held = [held]
+	assertThrows(() => encode(held as Value, opt), CborError, "deeper")
+})

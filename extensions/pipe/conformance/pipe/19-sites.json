@@ -1,0 +1,207 @@
+{
+	"title": "a pipe's writes carry its memo's site, at either timing: made in a process's setup, the process's (\"setup\", the base's rule); made in an action's call, the line that made the pipe",
+	"steps": [
+		{
+			"op": "ermine",
+			"features": [
+				"pipe"
+			],
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"/a",
+						0
+					]
+				},
+				{
+					"do": [
+						"ensureNode",
+						"/b",
+						0
+					]
+				},
+				{
+					"do": [
+						"ensureNode",
+						"/c",
+						0
+					]
+				},
+				{
+					"do": [
+						"ensureNode",
+						"/d",
+						0
+					]
+				},
+				{
+					"do": [
+						"ensureNode",
+						"/e",
+						0
+					]
+				},
+				{
+					"do": [
+						"pipe",
+						"/a",
+						"/b"
+					]
+				},
+				{
+					"do": [
+						"pipe",
+						"/a",
+						"/c",
+						{
+							"timing": "write"
+						}
+					]
+				},
+				{
+					"do": [
+						"createAction",
+						"on/make",
+						[
+							{
+								"do": [
+									"pipe",
+									"/a",
+									"/d",
+									{
+										"name": "into-d"
+									}
+								]
+							},
+							{
+								"do": [
+									"pipe",
+									"/a",
+									"/e",
+									{
+										"timing": "write",
+										"name": "into-e"
+									}
+								]
+							}
+						]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/a",
+				[
+					{
+						"path": [],
+						"value": 1
+					}
+				]
+			]
+		},
+		{
+			"op": "pipesite",
+			"part": "value",
+			"path": [
+				"b"
+			],
+			"expect": {
+				"site": "setup"
+			}
+		},
+		{
+			"op": "pipesite",
+			"part": "value",
+			"path": [
+				"c"
+			],
+			"expect": {
+				"site": "setup"
+			}
+		},
+		{
+			"op": "pipesite",
+			"part": "value",
+			"path": [
+				"a"
+			],
+			"expect": {
+				"site": "program"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"executeAction",
+				"on/make"
+			],
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/a",
+				[
+					{
+						"path": [],
+						"value": 2
+					}
+				]
+			]
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "pipesite",
+			"part": "value",
+			"path": [
+				"d"
+			],
+			"expect": {
+				"site": "pipe"
+			}
+		},
+		{
+			"op": "pipesite",
+			"part": "value",
+			"path": [
+				"e"
+			],
+			"expect": {
+				"site": "pipe"
+			}
+		},
+		{
+			"op": "pipesite",
+			"part": "value",
+			"path": [
+				"b"
+			],
+			"expect": {
+				"site": "setup"
+			}
+		}
+	]
+}

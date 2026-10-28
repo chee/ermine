@@ -1,0 +1,114 @@
+{
+	"title": "a pipe writes as itself: explain names the pipe (its feature and its node's path) as the writer, and a function told a write a pipe made can tell from its change (explain(w.change))",
+	"steps": [
+		{
+			"op": "ermine",
+			"features": [
+				"pipe"
+			],
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"/a",
+						0
+					]
+				},
+				{
+					"do": [
+						"ensureNode",
+						"/b",
+						0
+					]
+				},
+				{
+					"do": [
+						"pipe",
+						"/a",
+						"/b"
+					]
+				},
+				{
+					"do": [
+						"pipe",
+						"/b",
+						{
+							"fn": [
+								{
+									"do": [
+										"log",
+										"who",
+										[
+											"explain",
+											"$change"
+										]
+									]
+								}
+							]
+						}
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/a",
+				[
+					{
+						"path": [],
+						"value": 1
+					}
+				]
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"explain",
+				"/b"
+			],
+			"expect": {
+				"value": {
+					"writer": "pipe",
+					"path": [
+						"code",
+						"p",
+						"pipe-1"
+					]
+				}
+			}
+		},
+		{
+			"op": "log",
+			"name": "who",
+			"expect": {
+				"values": [
+					{
+						"writer": "pipe",
+						"path": [
+							"code",
+							"p",
+							"pipe-1"
+						]
+					}
+				]
+			}
+		}
+	]
+}

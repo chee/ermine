@@ -27,9 +27,10 @@ export type SitesOptions = {
 	// this file is always one. a Set is used as given, live (this file added to it): files added
 	// later are skipped too, from the next site read
 	ours?: Iterable<string>
-	// the site known now without a stack (a build's, @ermine/unplugin): taken over a capture; none
-	// (or it gives undefined): captured
-	given?: () => FileLocation | undefined
+	// the site known now without a stack (a build's, @ermine/unplugin, or a process's setup's): taken
+	// over a capture; none (or it gives undefined): captured. made says what is being made: a
+	// scope, or a computer (a memo or an effect)
+	given?: (made: "scope" | "computer") => FileLocation | undefined
 }
 
 export type Sited = {
@@ -77,8 +78,8 @@ export function createSites(
 	const held = new WeakMap<Scope, Held>()
 	const given = options.given
 	// the site given now, or the stack above entry
-	const at = (entry: unknown): Held => {
-		const site = given?.()
+	const at = (entry: unknown, made: "scope" | "computer"): Held => {
+		const site = given?.(made)
 		return site === undefined ? hold(entry) : { site }
 	}
 
@@ -88,16 +89,17 @@ export function createSites(
 	}
 
 	const createRootScope: Sited["createRootScope"] = (info) =>
-		note(scheduler.createRootScope(info), at(createRootScope))
+		note(scheduler.createRootScope(info), at(createRootScope, "scope"))
 	const createScope: Sited["createScope"] = (info, parent) =>
-		note(scheduler.createScope(info, parent), at(createScope))
+		note(scheduler.createScope(info, parent), at(createScope, "scope"))
 	const createComputer = <T>(
 		f: (previous: T | undefined) => T | PromiseLike<T> | typeof PENDING,
 		set: (value: T) => void,
 		equal?: Equal<T>,
 		key?: unknown,
 		info?: Info,
-	): Computer => note(scheduler.createComputer(f, set, equal, key, info), at(createComputer))
+	): Computer =>
+		note(scheduler.createComputer(f, set, equal, key, info), at(createComputer, "computer"))
 	const createEffect = <T>(
 		f: (previous: T | undefined) => T | PromiseLike<T> | typeof PENDING,
 		effect: (value: T, previous: T | undefined) => void,
@@ -105,7 +107,7 @@ export function createSites(
 		options?: Parameters<Scheduler["createEffect"]>[3],
 		info?: Info,
 	): Computer => {
-		const site = at(createEffect)
+		const site = at(createEffect, "computer")
 		return note(scheduler.createEffect(f, effect, equal, options, info), site)
 	}
 
