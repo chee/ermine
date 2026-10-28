@@ -50,7 +50,7 @@
 //    id, value }; { op: "saved", part, id, path? }; { op: "id", path }; { op: "metadata", part, id }
 //    → { keys, node?, features?, call?, handler?, caller? }; { op: "site", part, id } → { site }
 //    (setup: the process's, for its setup; computer: a memo or effect made at define's line;
-//    handler: an action made at handler's line; program: the harness's other lines; api: ermine's files; other; none); { op: "samesite",
+//    handler: an action made at handler's line; program: the harness's other lines; api: ermine's files; other; none: of its sites, the last); { op: "sites", part, id } → { sites }: each of them so, oldest first; { op: "samesite",
 //    part, ids: [a, b] } → { same }: whether their changes' sites are one place (file, line,
 //    column); { op: "callsite", id } → { site }: the handler id's latest call's, where it was called
 //
@@ -1013,10 +1013,14 @@ async function answer(r: Request): Promise<Record<string, unknown>> {
 			return "caller" in md ? plain(md.caller) as Record<string, unknown> : {}
 		}
 		case "site":
-			return { site: siteOf(e.table.get(r.part as Key, r.id)?.change?.external?.[0]) }
+			return { site: siteOf(e.table.get(r.part as Key, r.id)?.change?.external?.at(-1)) }
+		case "sites":
+			return {
+				sites: (e.table.get(r.part as Key, r.id)?.change?.external ?? []).map((x) => siteOf(x)),
+			}
 		case "samesite": {
 			const [a, b] = (r.ids as string[]).map((id) =>
-				e.table.get(r.part as Key, id)?.change?.external?.[0]
+				e.table.get(r.part as Key, id)?.change?.external?.at(-1)
 			)
 			const at = (x: typeof a) => x && [x.file, x.line, x.column ?? null].join(":")
 			return { same: a !== undefined && at(a) === at(b) }

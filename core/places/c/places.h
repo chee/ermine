@@ -394,6 +394,9 @@ typedef struct pl_made pl_made;
 // is open; *out and *made are not set
 char *pl_header(pl *l, const sc_pair *extra, size_t n, const ch_site *site, ch_header *out,
 	pl_made **made);
+// the same with nsites sites from site, oldest first (copied; none: 0)
+char *pl_header_sites(pl *l, const sc_pair *extra, size_t n, const ch_site *site, size_t nsites,
+	ch_header *out, pl_made **made);
 // one more hold of the block, for one more node to refer to it
 pl_made *pl_made_ref(pl_made *made);
 // lets one hold go; the last frees the block. For pl_hold's release

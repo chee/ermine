@@ -57,7 +57,7 @@ export type Status = {
 // what made a change, one step: a computer (a memo or effect; run: its latest record, when that
 // still holds the change), a method (call: its record while it is the handler's latest, whether or not it holds the write), a feature's
 // thing writing as itself (a scope whose info holds NODE and feature: a pipe), or code outside any
-// (site: its first; fallback: a process's write with nothing open)
+// (site: its last, the nearest; fallback: a process's write with nothing open)
 // nodes named by their path from the root (seen; none: moved,
 // or placed by no functions): no ids [chee 10-25: "i'm not sure the process api should be able to do
 // anything by id"; "not quite true when there is sync"]
@@ -103,6 +103,7 @@ export type Caller = { readonly actor: unknown; readonly process?: Path }
 export type ChangeView = {
 	readonly time: number
 	readonly actor: unknown
+	// of its sites (the header's external, oldest first), the last: the nearest
 	readonly site?: FileLocation
 	// made through a writer (createWriter) that ran while navigator.userActivation.isActive
 	// (useractivation.ts): a person had just interacted with the page, no more

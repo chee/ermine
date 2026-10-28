@@ -74,14 +74,21 @@ Deno.test("build: (b) each write's site is written in at build: the program's fi
 		const file = toFileUrl(join(dir, "program.ts")).href
 		const e = await run(out)
 		const x = changeAt(e, "x")
-		assertEquals(x.external, [{ file, line: 6, column: 9 }])
-		assertEquals(changeAt(e, "y").external, [{ file, line: 7, column: 2 }])
+		// its own line last, after its frames' (the process's start, its setup's)
+		assertEquals(x.external?.at(-1), { file, line: 6, column: 9 })
+		assertEquals(changeAt(e, "y").external?.at(-1), { file, line: 7, column: 2 })
+		assert(
+			x.external!.every((s) =>
+				s.file !== new URL("../../../ermine/system/typescript/site.ts", import.meta.url).href
+			),
+			"no site in ermine's files",
+		)
 		assertEquals(traceOf(x), undefined, "no trace text: nothing captured")
 		assertEquals(e.within(() => read("/x")), 2)
 		e.close()
 		// traceAlways: the text captured too, the site still the build's
 		const always = await run(out, [traceAlways])
-		assertEquals(changeAt(always, "y").external, [{ file, line: 7, column: 2 }])
+		assertEquals(changeAt(always, "y").external?.at(-1), { file, line: 7, column: 2 })
 		assert(traceOf(changeAt(always, "y"))?.includes("setup"))
 		always.close()
 	})
@@ -95,8 +102,8 @@ Deno.test("build: (a) nothing rewritten: the trace finds the program's line, erm
 		assert(code.includes("sourceMappingURL=program.js.map"), "source maps on")
 		const file = toFileUrl(join(dir, "program.ts")).href
 		const e = await run(out, [trace])
-		const [x] = changeAt(e, "x").external!
-		const [y] = changeAt(e, "y").external!
+		const x = changeAt(e, "x").external!.at(-1)!
+		const y = changeAt(e, "y").external!.at(-1)!
 		assertEquals([x.file, x.line], [file, 6])
 		assertEquals([y.file, y.line], [file, 7])
 		assert(traceOf(changeAt(e, "y")) !== undefined, "captured: the trace text beside it")

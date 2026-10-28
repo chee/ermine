@@ -3329,8 +3329,22 @@ static int answer(const op_value *r, op_value **res) {
 		TRY(es_alive(e));
 		const nd_entry *entry = entry_of(r);
 		*res = op_map();
-		const ch_site *site = entry != NULL && entry->change.external_length > 0 ? &entry->change.external[0] : NULL;
+		// of its sites, the last: the nearest
+		const ch_site *site = entry != NULL && entry->change.external_length > 0
+			? &entry->change.external[entry->change.external_length - 1]
+			: NULL;
 		op_set(*res, "site", op_str(site_of(site)));
+		return 0;
+	}
+	if (strcmp(op, "sites") == 0) {
+		TRY(es_alive(e));
+		const nd_entry *entry = entry_of(r);
+		op_value *all = op_list();
+		for (size_t i = 0; entry != NULL && i < entry->change.external_length; i++) {
+			op_push(all, op_str(site_of(&entry->change.external[i])));
+		}
+		*res = op_map();
+		op_set(*res, "sites", all);
 		return 0;
 	}
 	if (strcmp(op, "samesite") == 0) {
@@ -3342,7 +3356,9 @@ static int answer(const op_value *r, op_value **res) {
 			if (!is_str(ids->items[i])) continue;
 			const nd_entry *entry = text(r, "part") == NULL ? NULL
 				: tb_get(W->e->table, tb_string(text(r, "part")), tb_string(ids->items[i]->str));
-			if (entry != NULL && entry->change.external_length > 0) at[i] = &entry->change.external[0];
+			if (entry != NULL && entry->change.external_length > 0) {
+				at[i] = &entry->change.external[entry->change.external_length - 1];
+			}
 		}
 		int same = at[0] != NULL && at[1] != NULL && at[0]->file != NULL && at[1]->file != NULL &&
 			strcmp(at[0]->file, at[1]->file) == 0 && at[0]->line == at[1]->line &&
