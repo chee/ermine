@@ -1,0 +1,33 @@
+{
+	"title": "a plain end is fixed at the first make: its owner's next run, giving another, keeps the first (a function is the way to follow)",
+	"steps": [
+		{ "op": "ermine", "features": ["pipe"], "expect": {} },
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{ "do": ["ensureNode", "/sel", "/a"] },
+				{ "do": ["ensureNode", "/a", 0] },
+				{ "do": ["ensureNode", "/b", 0] },
+				{ "do": ["ensureNode", "/out", 0] },
+				{
+					"do": [
+						"createMemo",
+						"maker",
+						{},
+						["is", ["pipe", ["read", "/sel"], "/out", { "name": "copy" }], 0]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{ "op": "start", "name": "p", "at": "/code/p", "expect": { "id": "proc:p" } },
+		{ "op": "host", "call": ["patch", "/a", [{ "path": [], "value": 1 }]] },
+		{ "op": "host", "call": ["read", "/out"], "expect": { "value": 1 } },
+		{ "op": "host", "call": ["patch", "/sel", [{ "path": [], "value": "/b" }]] },
+		{ "op": "host", "call": ["patch", "/b", [{ "path": [], "value": 2 }]] },
+		{ "op": "host", "call": ["read", "/out"], "expect": { "value": 1 } },
+		{ "op": "host", "call": ["patch", "/a", [{ "path": [], "value": 3 }]] },
+		{ "op": "host", "call": ["read", "/out"], "expect": { "value": 3 } }
+	]
+}

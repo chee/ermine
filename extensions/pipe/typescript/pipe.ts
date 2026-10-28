@@ -12,11 +12,20 @@
 //   pipe(["a", "c"], "b", (w) => …)                          // fan-in: one pipe; w.from says which
 //   pipe("a", "b", { timing: "write", name: "copy" })        // options: last, a plain object
 //
-// the forms: pipe(from, to?, a?, b?, options?). the second a function: a watch (from, a, options?);
-// else it is to. from a list: every node in it (a path written as a list of names: getNode it);
+// the forms: pipe(from, to?, a?, b?, options?). the second a function and nothing after it but
+// options: a watch (from, a, options?); else it is to. from a list: every node in it (a path written as a list of names: getNode it);
 // with a list, b is refused. options: name (none: pipe-<n>, the n-th pipe the scope open made, in
 // a run its run's n-th, so its owner's next run makes it again by place), timing ("pulse", the
 // default, or "write").
+// a getter: from, to, or one of a list, given as a function giving the target (a path, a path
+// list, a node), as in Solid: what can change is passed as a function. a to getter is second with
+// a function after it, else options.to (second alone is a watch).
+//   pipe(() => read("/sel"), "/out")     // follows /sel's path: when /sel changes, so does the pipe
+// the pipe's memo calls it in its own run: what it reads is the pipe's dependency, so when it gives
+// another target the pipe follows the new end (looked up by path as below). a plain value is
+// static, Solid's rule for a prop that is not an accessor: fixed at the first make; its owner's
+// next run giving another keeps the first. what a and b read is not the pipe's dependency: they are told,
+// untracked.
 // what a function is told, w: patches (the write's), change (its view: explain(w.change) gives its
 // writer, so a write from a pipe shows as one), from (which node was written, as given), value (the
 // node's value now). it gives back patches, written at to (b's: at from); nothing: nothing written.
@@ -75,7 +84,12 @@ export type Told = {
 	readonly value: unknown
 }
 export type Fn = (w: Told) => readonly Patch[] | undefined | void
-export type Options = { readonly name?: string; readonly timing?: "pulse" | "write" }
+export type Getter = () => Target
+export type Options = {
+	readonly name?: string
+	readonly timing?: "pulse" | "write"
+	readonly to?: Target | Getter
+}
 
 const NAME = "pipe"
 
@@ -94,6 +108,8 @@ type Spec = {
 	readonly a?: Fn
 	readonly b?: Fn
 	readonly write: boolean
+	// getters among the ends: the given ones (a function or a target), whose run gives the ends
+	readonly dyn?: readonly unknown[]
 }
 // where a pipe hears: an end of its, and the part
 type Ear = { readonly p: Pipe; readonly end: number; readonly part: Key }
@@ -110,6 +126,8 @@ type Pipe = {
 	readonly info: Record<string, unknown>
 	readonly gone: () => void
 	spec: Spec
+	// the ends its getters gave last: what they gave, and the spec of that
+	res?: { readonly key: readonly unknown[]; readonly spec: Spec }
 	// the ids its ends had when last looked up, the spec it heard them for, and its ears
 	ids: readonly Id[]
 	for?: Spec
@@ -256,9 +274,11 @@ const pipes: Feature = {
 
 		// a pipe's memo's run: its spec taken (made again: the new one), its ends looked up and heard,
 		// what was queued told; the latest telling's throw, its own
-		const run = (spec: Spec) => {
+		const run = (made: Spec) => {
 			const p = live.get(s.getRun()!.computer)
 			if (p === undefined) return
+			// getters called here, in the memo's run: what they read, the pipe's
+			const spec = made.dyn === undefined ? made : resolved(p, made)
 			if (p.spec !== spec) {
 				p.spec = spec
 				p.write = undefined
@@ -280,6 +300,17 @@ const pipes: Feature = {
 				if (q.end < 0 ? spec.b !== undefined : q.end < spec.n) tell(p, q)
 			}
 			if (p.failed !== undefined) throw p.failed.e
+		}
+
+		// a getters' spec: they called, the ends they give now (the spec of the last, when the same)
+		function resolved(p: Pipe, made: Spec): Spec {
+			const given = made.dyn!.map((x) => typeof x === "function" ? (x as Getter)() : x as Target)
+			const key = given.map((x) => Array.isArray(x) ? `l${JSON.stringify(x)}` : x)
+			const was = p.res
+			if (was !== undefined && key.every((k, i) => k === was.key[i])) return was.spec
+			const spec = peep(() => shape(me, given, made.n, made.a, made.b, made.write))
+			p.res = { key, spec }
+			return spec
 		}
 
 		f.onCreateFunction((m, next) => {
@@ -365,19 +396,16 @@ const isOptions = (x: unknown): x is Options =>
 	x !== null && typeof x === "object" && !Array.isArray(x) &&
 	Object.getPrototypeOf(x) === Object.prototype
 
-// a pipe made as the process calling (in a setup, a run or an action): its node
-export function pipe(from: Target | readonly Target[], ...rest: unknown[]): Node {
-	const o = isOptions(rest[rest.length - 1]) ? rest.pop() as Options : {}
-	const [to, a, b] = typeof rest[0] === "function"
-		? [undefined, rest[0] as Fn]
-		: rest as [Target?, Fn?, Fn?]
-	const froms = Array.isArray(from) ? from as readonly Target[] : [from as Target]
-	if (froms.length === 0 || (b !== undefined && froms.length > 1)) {
-		throw new Error("pipe: from is one node or more; translating, one")
-	}
-	const given = to === undefined ? froms : [...froms, to]
+// the spec of ends given: their handles, lookups and paths
+function shape(
+	m: Made,
+	given: readonly Target[],
+	n: number,
+	a: Fn | undefined,
+	b: Fn | undefined,
+	write: boolean,
+): Spec {
 	const ends = given.map((x) => typeof x === "string" || Array.isArray(x) ? getNode(x) : x as Node)
-	const m = featureOf(ends[0])
 	const nodes = ends.map((x) => m.f.dataOf(x)!.node)
 	const looks = nodes.map((d) => m.f.handleOf({ ...d, part: "attributes" }))
 	const root = peep(() => readEntries("/"))[0]?.node
@@ -385,17 +413,62 @@ export function pipe(from: Target | readonly Target[], ...rest: unknown[]): Node
 			root !== undefined && m.f.dataOf(root)!.node.id === m.f.places.root
 		? nodes.map((d) => d.path!)
 		: undefined
-	const spec: Spec = {
+	return {
 		given,
 		ends,
 		looks,
 		...paths !== undefined && { paths },
 		parts: nodes.map((d) => d.part),
-		n: froms.length,
+		n,
 		...a !== undefined && { a },
 		...b !== undefined && { b },
-		write: o.timing === "write",
+		write,
 	}
+}
+
+// a pipe made as the process calling (in a setup, a run or an action): its node
+export function pipe(
+	from: Target | Getter | readonly (Target | Getter)[],
+	...rest: unknown[]
+): Node {
+	const o = isOptions(rest[rest.length - 1]) ? rest.pop() as Options : {}
+	// the second a function, alone: a watch; with a function after it, a getter for to (a mirror
+	// with a getter for to: options.to)
+	const watch = typeof rest[0] === "function" && rest.length === 1
+	const [at, a, b] = watch ? [undefined, rest[0] as Fn] : rest as [(Target | Getter)?, Fn?, Fn?]
+	if (at !== undefined && o.to !== undefined) throw new Error("pipe: to given twice")
+	const to = at ?? o.to
+	const froms = Array.isArray(from)
+		? from as readonly (Target | Getter)[]
+		: [from as Target | Getter]
+	if (froms.length === 0 || (b !== undefined && froms.length > 1)) {
+		throw new Error("pipe: from is one node or more; translating, one")
+	}
+	const given = to === undefined ? froms : [...froms, to]
+	const write = o.timing === "write"
+	const dyn = given.some((x) => typeof x === "function")
+	// with getters the ends are the run's; the ermine is found by the root the process sees
+	const first = given[0] as string | readonly string[] | Node
+	const m = featureOf(
+		dyn
+			? getNode("/")
+			: typeof first === "string" || Array.isArray(first)
+			? getNode(first as string)
+			: first as Node,
+	)
+	const spec: Spec = dyn
+		? {
+			given: [],
+			ends: [],
+			looks: [],
+			parts: [],
+			n: froms.length,
+			...a !== undefined && { a },
+			...b !== undefined && { b },
+			write,
+			dyn: given,
+		}
+		: shape(m, given as Target[], froms.length, a, b, write)
 	const name = o.name ?? m.name()
 	const { run } = m
 	m.making = spec
