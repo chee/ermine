@@ -1,4 +1,4 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import {
 	addTeardown,
 	createAction,
@@ -20,7 +20,7 @@ import {
 import { host, up } from "@ermine/slaygrounds/tools"
 import type { Found } from "@ermine/compilers"
 import type { Extra } from "./host.ts"
-import { bind, handler } from "ermine-h"
+import { bind, handler, track } from "@ermine/render/h"
 
 // fancy-notebook: a reactive notebook. every cell is a node, ./cells/<id>, named by its own id,
 // its source a node under it (src). their order is a list of ids in ./order. a cell's value is a
@@ -629,7 +629,7 @@ export default function program() {
 
 	// what a cell shows: by its kind
 	function output(id: string, v) {
-		const at = `values/${v.name}`
+		const at = `./values/${v.name}`
 		if (v.kind === "md") return <div class="out md">{bind(at, html)}</div>
 		if (v.kind === "chart") return <div class="out chart">{bind(at, (spec) => chart(spec))}</div>
 		if (v.kind === "code") {
@@ -640,8 +640,10 @@ export default function program() {
 			)
 		}
 		if (v.kind === "slider") {
-			return bind(`cells/${id}/src`, (src) => {
+			return bind(`./cells/${id}/src`, (src) => {
 				const o = options(src)
+				// the name read here, so a rename makes the slider again on its new value
+				const name = (read(`./cells/${id}`) as { name: string }).name, at = `./values/${name}`
 				return (
 					<label class="out slider">
 						<input
@@ -650,7 +652,7 @@ export default function program() {
 							max={String(o.max)}
 							step={String(o.step)}
 							value={bind(at, String)}
-							onInput={handler("on/set", (e) => [v.name, +e.target.value])}
+							onInput={handler("on/set", (e) => [name, +e.target.value])}
 						/>
 						<output>{bind(at, num)}</output>
 					</label>
@@ -670,6 +672,13 @@ export default function program() {
 
 	function body(id: string, v) {
 		const editable = v.kind !== "input" && (v.kind === "code" || v.kind === "chart" || v.open)
+		// what ./flow says of this cell, by its name as it is now: read here, since a binding made
+		// again the same keeps what it closed over (a rename keeps the cell's place)
+		const flow = (show: (name: string) => (f) => unknown) =>
+			track(
+				() => [read("./flow"), (read(`./cells/${id}`) as { name: string }).name] as const,
+				([f, name]) => show(name)(f) as never,
+			)
 		return [
 			<div class="head">
 				<span class={`kind k-${v.kind}`} title={v.kind}>
@@ -687,7 +696,7 @@ export default function program() {
 						return [id, typed]
 					})}
 				/>
-				{bind("flow", status(v.name, v.kind))}
+				{flow((name) => status(name, v.kind))}
 				<span class="fill" />
 				{v.kind === "chart" && (
 					<span class="types">
@@ -718,18 +727,18 @@ export default function program() {
 				</span>
 			</div>,
 			output(id, v),
-			<div class="err">{bind("flow", (f) => f?.[v.name]?.error)}</div>,
+			<div class="err">{flow((name) => (f) => f?.[name]?.error)}</div>,
 			editable && (
 				<textarea
 					class="src"
 					spellcheck={false}
-					rows={bind(`cells/${id}/src`, (s) => String(s).split("\n").length)}
-					value={bind(`cells/${id}/src`)}
+					rows={bind(`./cells/${id}/src`, (s) => String(s).split("\n").length)}
+					value={bind(`./cells/${id}/src`)}
 					onInput={handler("on/src", (e) => [id, e.target.value])}
 					onKeyDown={tab}
 				/>
 			),
-			<footer class="foot">{bind("flow", foot(v.name))}</footer>,
+			<footer class="foot">{flow(foot)}</footer>,
 		]
 	}
 
@@ -751,17 +760,17 @@ export default function program() {
 						sizes.observe(e)
 					}}
 				>
-					{bind("order", (all: string[]) =>
+					{bind("./order", (all: string[]) =>
 						all.map((id) => (
 							<section
 								key={id}
 								class="cell"
-								data-name={bind(`cells/${id}`, (v) => v.name)}
-								data-kind={bind(`cells/${id}`, (v) => v.kind)}
+								data-name={bind(`./cells/${id}`, (v) => v.name)}
+								data-kind={bind(`./cells/${id}`, (v) => v.kind)}
 								onPointerEnter={(e) => lit(e.currentTarget.dataset.name)}
 								onPointerLeave={() => lit(undefined)}
 							>
-								{bind(`cells/${id}`, (v) => body(id, v))}
+								{bind(`./cells/${id}`, (v) => body(id, v))}
 							</section>
 						)))}
 				</div>

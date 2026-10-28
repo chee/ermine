@@ -1,7 +1,7 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import { createAction, ensureNode, explain, patch, peep, read } from "@ermine/system"
 import { pipe, type Told as Watched } from "@ermine/pipe"
-import { bind, handler } from "ermine-h"
+import { bind, handler } from "@ermine/render/h"
 
 // piece-pipe: one thing in two shapes, kept in step by patches (a little cambria). v1 says name,
 // temp_c and cute; v2 says title, temp_f and mood. one pipe between the nodes (pipe(v1, v2, there,
@@ -138,26 +138,26 @@ export default function program() {
 						<label>
 							name
 							<input
-								value={bind("v1", (v) => field(v, "name") ?? "")}
+								value={bind("./v1", (v) => field(v, "name") ?? "")}
 								onInput={handler("on/v1", (e) => ["name", value(e)])}
 								spellcheck={false}
 							/>
 						</label>
 						<label>
-							temp_c <b class="num">{bind("v1", (v) => `${field(v, "temp_c")}°C`)}</b>
+							temp_c <b class="num">{bind("./v1", (v) => `${field(v, "temp_c")}°C`)}</b>
 							<input
 								type="range"
 								min="-10"
 								max="40"
 								step="1"
-								value={bind("v1", (v) => String(field(v, "temp_c")))}
+								value={bind("./v1", (v) => String(field(v, "temp_c")))}
 								onInput={handler("on/v1", (e) => ["temp_c", Number(value(e))])}
 							/>
 						</label>
 						<label class="check">
 							<input
 								type="checkbox"
-								checked={bind("v1", (v) => !!field(v, "cute"))}
+								checked={bind("./v1", (v) => !!field(v, "cute"))}
 								onChange={handler(
 									"on/v1",
 									(e) => ["cute", (e.target as HTMLInputElement).checked],
@@ -166,7 +166,7 @@ export default function program() {
 							cute
 						</label>
 						<button onClick={handler("on/reset")}>put v1 back whole</button>
-						<code class="raw">{bind("v1", (v) => JSON.stringify(v))}</code>
+						<code class="raw">{bind("./v1", (v) => JSON.stringify(v))}</code>
 					</div>
 				</section>
 				<div class="tube">
@@ -192,39 +192,39 @@ export default function program() {
 						<label>
 							title
 							<input
-								value={bind("v2", (v) => field(v, "title") ?? "")}
+								value={bind("./v2", (v) => field(v, "title") ?? "")}
 								onInput={handler("on/v2", (e) => ["title", value(e)])}
 								spellcheck={false}
 							/>
 						</label>
 						<label>
-							temp_f <b class="num">{bind("v2", (v) => `${field(v, "temp_f")}°F`)}</b>
+							temp_f <b class="num">{bind("./v2", (v) => `${field(v, "temp_f")}°F`)}</b>
 							<input
 								type="range"
 								min="14"
 								max="104"
 								step="0.1"
-								value={bind("v2", (v) => String(field(v, "temp_f")))}
+								value={bind("./v2", (v) => String(field(v, "temp_f")))}
 								onInput={handler("on/v2", (e) => ["temp_f", Number(value(e))])}
 							/>
 						</label>
 						<div class="mood">
 							mood
 							<button
-								class={bind("v2", (v) => field(v, "mood") === "cute" ? "on" : "")}
+								class={bind("./v2", (v) => field(v, "mood") === "cute" ? "on" : "")}
 								onClick={handler("on/v2", ["mood", "cute"])}
 							>
 								cute
 							</button>
 							<button
-								class={bind("v2", (v) => field(v, "mood") === "grumpy" ? "on" : "")}
+								class={bind("./v2", (v) => field(v, "mood") === "grumpy" ? "on" : "")}
 								onClick={handler("on/v2", ["mood", "grumpy"])}
 							>
 								grumpy
 							</button>
 						</div>
 						<button onClick={handler("on/v2", ["sticker", "🐾"])}>add a sticker 🐾</button>
-						<code class="raw">{bind("v2", (v) => JSON.stringify(v))}</code>
+						<code class="raw">{bind("./v2", (v) => JSON.stringify(v))}</code>
 					</div>
 				</section>
 			</div>

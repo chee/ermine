@@ -1,4 +1,4 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import {
 	addTeardown,
 	createAction,
@@ -14,7 +14,7 @@ import {
 } from "@ermine/system"
 import { host } from "@ermine/slaygrounds/tools"
 import type { Meter, Tools } from "./host.ts"
-import { bind, handler } from "ermine-h"
+import { bind, handler } from "@ermine/render/h"
 
 // program.ts: the pyramid stress test. a sierpinski triangle of dots, each showing a number that
 // lives in a graph node. an effect per dot reads its node and writes the text: only the dots whose
@@ -228,7 +228,7 @@ export default function program() {
 		<label>
 			{label}{" "}
 			<select
-				value={bind("config", (c) => String(c[key]))}
+				value={bind("./config", (c) => String(c[key]))}
 				onChange={handler("on/set", (e) => {
 					const v = (e.target as HTMLSelectElement).value
 					return [key, typeof options[0] === "number" ? +v : v]

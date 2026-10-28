@@ -1,6 +1,6 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import { createAction, ensureNode, patch, peep, read, unplace } from "@ermine/system"
-import { bind, handler } from "ermine-h"
+import { bind, handler } from "@ermine/render/h"
 
 // program.ts: a notebook. its notes live in /data, a folder the host seeded, away from this
 // process's own nodes: a view and its buttons are live values, which a pack cannot carry. the host

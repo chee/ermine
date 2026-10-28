@@ -1,4 +1,4 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import {
 	createAction,
 	createEffect,
@@ -13,7 +13,7 @@ import {
 	unplace,
 } from "@ermine/system"
 import { createPatch, layers } from "@ermine/patchy/feature"
-import { bind, handler } from "ermine-h"
+import { bind, handler } from "@ermine/render/h"
 
 // fancy-layers: a pixel editor on patch nodes. the picture is a node, ./picture, an array of 256
 // colours. the layers over it are patch nodes (patch/land/layers, patchy's overlay) placed under
@@ -446,7 +446,7 @@ export default function program() {
 
 	const chip = (name: string) => (
 		<button
-			class={bind("filter", (v) => (v === name ? "on" : ""))}
+			class={bind("./filter", (v) => (v === name ? "on" : ""))}
 			onClick={handler("on/filter", [name])}
 		>
 			{name}
@@ -480,7 +480,7 @@ export default function program() {
 							<b
 								key={c}
 								style={{ background: c }}
-								class={bind("ink", (v) => (v === c ? "on" : ""))}
+								class={bind("./ink", (v) => (v === c ? "on" : ""))}
 								onClick={handler("on/ink", [c])}
 							/>
 						))}
@@ -497,7 +497,7 @@ export default function program() {
 						<button
 							class="cool"
 							onClick={handler("on/apply")}
-							disabled={bind("filter", (v) => !v)}
+							disabled={bind("./filter", (v) => !v)}
 						>
 							apply preview
 						</button>
@@ -519,7 +519,7 @@ export default function program() {
 						<label>
 							<input
 								type="checkbox"
-								checked={bind("lens")}
+								checked={bind("./lens")}
 								onChange={handler("on/lens")}
 							/>
 							who wins

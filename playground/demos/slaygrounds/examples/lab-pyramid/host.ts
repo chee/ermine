@@ -4,7 +4,7 @@
 // second) are the program's own
 import { createWorld } from "@ermine/slaygrounds/world"
 import { createAction, executeAction, peep, read } from "@ermine/system"
-import { render } from "ermine-h"
+import { render } from "@ermine/render/dom"
 
 // what the page measures. writes: commits landed (each a write of a node's value); acts: effects
 // that acted; runs: computations that ran; pulses: pulses ended, pulseMs the time in them, maxMs

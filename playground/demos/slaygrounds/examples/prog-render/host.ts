@@ -16,7 +16,7 @@ import {
 	runner,
 } from "@ermine/slaygrounds/renderers"
 import { createWorld } from "@ermine/slaygrounds/world"
-import { render } from "ermine-h"
+import { render } from "@ermine/render/dom"
 
 export type { Draw, Got, Host, Renderer } from "@ermine/slaygrounds/renderers"
 

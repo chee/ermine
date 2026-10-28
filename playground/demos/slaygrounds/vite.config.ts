@@ -1,7 +1,7 @@
 // deno task serve (vite's dev server), deno task build (into dist/), deno task preview (dist/ served)
 // the page, plus what the world's iframe imports by its import map: each export of each workspace
-// package (@ermine/core/table, @ermine/core/places/path, …) and ermine-h, the playground's own view
-// library. served from source while developing, each its own module in dist/ when built
+// package (@ermine/core/table, @ermine/core/places/path, …, @ermine/render for the views). served
+// from source while developing, each its own module in dist/ when built
 // - /importmap.json: specifier → url, the same urls vite gives these files inside its own
 //   imports, so a host, a program and the libraries share one instance of each module
 // - /types.json: the sources each specifier reaches, for the language server's type hints
@@ -43,7 +43,13 @@ for (const member of root.workspace) {
 		})
 	}
 }
-// its jsx runtimes are the same module
+// @jsxImportSource @ermine: @ermine/jsx-runtime, which is the dev runtime too (a program's jsx is
+// made for development: sucrase imports @ermine/jsx-dev-runtime)
+entries.find((e) => e.specifiers.includes("@ermine/jsx-runtime"))?.specifiers.push(
+	"@ermine/jsx-dev-runtime",
+)
+// ermine-h, the older view library: the sync world's examples draw with it (that world is not on
+// @ermine/system); its jsx runtimes are the same module
 entries.push({
 	specifiers: ["ermine-h", "ermine-h/jsx-runtime", "ermine-h/jsx-dev-runtime"],
 	file: join(here, "src/h/h.ts"),

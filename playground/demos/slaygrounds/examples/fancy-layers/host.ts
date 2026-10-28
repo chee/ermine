@@ -4,7 +4,7 @@
 import patchy, { land } from "@ermine/patchy/feature"
 import { createWorld } from "@ermine/slaygrounds/world"
 import { createAction } from "@ermine/system"
-import { render } from "ermine-h"
+import { render } from "@ermine/render/dom"
 
 const world = createWorld({ render, features: [patchy], processes: [{ name: "layers" }] })
 world.seed(() => void createAction("/system/land", land(world.ermine)))

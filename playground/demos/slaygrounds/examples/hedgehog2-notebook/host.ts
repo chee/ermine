@@ -3,7 +3,7 @@
 // stops the process and starts it again, and the cells are still there
 import { createWorld } from "@ermine/slaygrounds/world"
 import { ensureNode, hasNode, patchAttributes } from "@ermine/system"
-import { render } from "ermine-h"
+import { render } from "@ermine/render/dom"
 
 // kind: code | markdown | slider | text | chart. code and markdown hold their source in `code`; a
 // slider min/max/step/value; a text input its value; a chart the name it draws (`of`). attrs: how a

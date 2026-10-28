@@ -6,7 +6,7 @@
 // the page: a rack case with two rows; each module's view goes in its row, in the order started.
 // the patch bay's view goes under the case, its canvas over the whole world (the cables)
 import { createWorld } from "@ermine/slaygrounds/world"
-import { render } from "ermine-h"
+import { render } from "@ermine/render/dom"
 
 const rack1 = ["clock", "steps", "osc1", "osc2", "lfo", "mixer"]
 const rack2 = ["filter", "env", "delay", "scope", "out"]

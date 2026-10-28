@@ -27,8 +27,8 @@ const lines = $("lines")
 const state = $("state")
 
 // ---- the editor: chee's own lychee theme (copied from slaygrounds) ----
-// the map from vite.config.ts: ermine's modules, and the playground's own view library (ermine-h)
-// under plain names
+// the map from vite.config.ts: ermine's modules (the views' @ermine/render among them) under plain
+// names
 // one base, worked out at load: the folder this page is in (/ locally, /slaygrounds/ on the site),
 // so nothing here names an absolute path. the iframe's import map needs absolute urls
 const base = new URL("./", location.href).href

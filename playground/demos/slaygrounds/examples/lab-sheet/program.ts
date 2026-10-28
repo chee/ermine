@@ -1,6 +1,6 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import { createAction, createMemo, ensureNode, patch, PENDING, read } from "@ermine/system"
-import { bind, handler } from "ermine-h"
+import { bind, handler } from "@ermine/render/h"
 
 // program.ts: a spreadsheet. ./cells/A1 holds the text typed; calc:A1 is a memo that reads it, and
 // the memo of each cell it names (a pending memo makes its reader pending: read throws PENDING). so editing a cell reruns that cell's calc, and a
@@ -170,7 +170,7 @@ export default function program() {
 		>
 			{bind("calc:" + ref, answer(ref))}
 			<input
-				value={bind("cells/" + ref)}
+				value={bind("./cells/" + ref)}
 				onChange={handler("on/edit", (e) => [ref, e.target.value])}
 				onKeyDown={(e: KeyboardEvent) => {
 					// a block, never cond && …: a listener returning false would cancel the key

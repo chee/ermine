@@ -1,7 +1,7 @@
 /// <reference lib="dom" />
 // what just happened, in one line under the render: who changed what, read off the changes as
 // they are written (the world's places.commit, wrapped like solid-ermine wraps moments.push) and the
-// calls ermine-h tells ("ermine:call", "ermine:called"). a run of writes with no gap between them
+// calls @ermine/render tells ("ermine:call", "ermine:called"). a run of writes with no gap between them
 // (until the next task) is one happening:
 //   you pressed "+1" → /demo/on/press → wrote demo/add → adding acted → demo/counter = 3
 // a write is said by its header's pairs: made in a part ("part"), it is that part acting (an

@@ -2,7 +2,7 @@ import { createWorld } from "@ermine/slaygrounds/world"
 import { ensureNode, executeAction, hasNode, list, patch, read, remove } from "@ermine/system"
 import { trace } from "@ermine/core/scheduler/trace"
 import * as lib from "@ermine/core/places/lib"
-import { render } from "ermine-h"
+import { render } from "@ermine/render/dom"
 
 // fancy-embark's host: the world (@ermine/slaygrounds/world), one process, embark, and what only a
 // host can give it (each in extend below, with what it is for):

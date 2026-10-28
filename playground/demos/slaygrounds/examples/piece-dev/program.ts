@@ -1,7 +1,7 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import type { API } from "@ermine/programs/api"
 import type { Process } from "@ermine/programs/start"
-import { bind, handler } from "ermine-h"
+import { bind, handler } from "@ermine/render/h"
 
 // piece-dev: processes at paths. a process runs at a path (a row in the root's process trie, never
 // saved), and the places ask the processes first, then the children: while it runs, a walk to its

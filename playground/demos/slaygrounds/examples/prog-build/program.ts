@@ -8,7 +8,7 @@ import {
 	read,
 } from "@ermine/system"
 import { host } from "@ermine/slaygrounds/tools"
-import { bind, h, handler } from "ermine-h"
+import { bind, h, handler } from "@ermine/render/h"
 import type { Extra } from "./host.ts"
 
 // program.ts has two things. files is the disk: each entry is a node in the graph at its path,
@@ -178,7 +178,7 @@ export function shell() {
 				"h3",
 				null,
 				"code ",
-				h("span", { class: "path mono" }, bind("selected")),
+				h("span", { class: "path mono" }, bind("./selected")),
 				h(
 					"small",
 					null,

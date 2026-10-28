@@ -1,4 +1,4 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import {
 	addTeardown,
 	createAction,
@@ -12,7 +12,7 @@ import {
 	read,
 	ref,
 } from "@ermine/system"
-import { bind, handler } from "ermine-h"
+import { bind, handler } from "@ermine/render/h"
 
 // toy-tarot: you cannot draw until you have gathered enough entropy. mouse moves over the pad become
 // samples (x, y, time, time since the last); the pool is a SHA-256 of them (an async compute); when
@@ -465,7 +465,7 @@ export default function program() {
 	}
 
 	// a spread's button is lit while it is the spread
-	const lit = (kind: string) => bind("spread", (k) => (k === kind ? "on" : ""))
+	const lit = (kind: string) => bind("./spread", (k) => (k === kind ? "on" : ""))
 	// the buttons that need a deck: off until the reading is dealt
 	const undealt = bind("reading", (r) => r.cards[0].card < 0)
 
@@ -650,7 +650,7 @@ export default function program() {
 					</span>
 					{" · "}
 					{bind("stats", (s) => s.n)} samples mixed with SHA-256 · deck fingerprint{" "}
-					{bind("fingerprint")} · read {bind("rereads", (r) => r + 1)} of this seed
+					{bind("fingerprint")} · read {bind("./rereads", (r) => r + 1)} of this seed
 				</div>
 			</div>
 			<div class="box">
@@ -672,10 +672,10 @@ export default function program() {
 				<p class="wait">the cards are waiting: gather entropy to deal</p>
 				<div
 					class={bind(
-						"spread",
+						"./spread",
 						(k) => (k === "cross" ? "table cross" : "table"),
 					)}
-					data-wave={bind("wave", (w) => (w ? "on" : "off"))}
+					data-wave={bind("./wave", (w) => (w ? "on" : "off"))}
 				>
 					{bind("reading", (r) => r.cards.map(card))}
 				</div>

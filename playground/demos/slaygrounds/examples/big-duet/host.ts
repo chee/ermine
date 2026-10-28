@@ -2,7 +2,7 @@
 // are one export (person) placed twice, each told its name by args, and the poet. who changed the
 // text, and how: the world's change and who
 import { createWorld } from "@ermine/slaygrounds/world"
-import { render } from "ermine-h"
+import { render } from "@ermine/render/dom"
 
 const world = createWorld({
 	render,

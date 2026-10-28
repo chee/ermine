@@ -4,7 +4,7 @@
 // table and places. the program reads it by host(), and stops what it makes at its teardown
 import { createWorld } from "@ermine/slaygrounds/world"
 import { createBuilds } from "@ermine/compilers"
-import { render } from "ermine-h"
+import { render } from "@ermine/render/dom"
 
 type Id = string | symbol
 

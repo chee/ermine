@@ -6,7 +6,7 @@ import createEntry from "@ermine/core/node/entry"
 import { createPathCache } from "@ermine/core/places/cache"
 import { createChangeHeader } from "@ermine/core/places/header"
 import { createWorld } from "@ermine/slaygrounds/world"
-import { render } from "ermine-h"
+import { render } from "@ermine/render/dom"
 
 const world = createWorld({
 	render,

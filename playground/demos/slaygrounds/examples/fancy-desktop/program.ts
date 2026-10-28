@@ -1,4 +1,4 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import {
 	addTeardown,
 	createAction,
@@ -22,7 +22,7 @@ import {
 } from "@ermine/system"
 import { host, inspect, up } from "@ermine/slaygrounds/tools"
 import type { Opening } from "./host.ts"
-import { bind, handler, under } from "ermine-h"
+import { bind, handler, under } from "@ermine/render/h"
 
 // what the host's extend adds (host.ts says what each is for)
 type Host = {
@@ -477,8 +477,8 @@ export function shell() {
 		const name = w.name
 		return (
 			<section
-				class={bind([w, "folded"], (f) => (f ? "win folded" : "win"))}
-				style={bind([w, "pos"], frame)}
+				class={bind([w.at, "folded"], (f) => (f ? "win folded" : "win"))}
+				style={bind([w.at, "pos"], frame)}
 				onPointerDown={handler("on/raise", [name])}
 			>
 				<header
@@ -496,22 +496,22 @@ export function shell() {
 						title="close: take its record from /windows"
 						onClick={handler("on/close", [name])}
 					/>
-					<span class="name">{bind([w, "info"], (i) => i.title)}</span>
-					<span class="via">{bind([w, "info"], (i) => `${i.app} · ${i.from}`)}</span>
+					<span class="name">{bind([w.at, "info"], (i) => i.title)}</span>
+					<span class="via">{bind([w.at, "info"], (i) => `${i.app} · ${i.from}`)}</span>
 					<button
 						class="shade"
 						title="fold it (minimise)"
 						onClick={handler("on/fold", [name])}
 					/>
 				</header>
-				<div class="body">{bind("views", (v: Record<string, unknown>) => v?.[name] ?? "")}</div>
+				<div class="body">{bind("./views", (v: Record<string, unknown>) => v?.[name] ?? "")}</div>
 			</section>
 		)
 	}
 
 	const Icon = ({ x, dock }: { x: Thing; dock?: boolean }) => (
 		<button
-			class={bind("selected", (s) => (s === x.path ? "icon on" : "icon"))}
+			class={bind("./selected", (s) => (s === x.path ? "icon on" : "icon"))}
 			title={`${x.path} · ${x.is ?? "says nothing"}`}
 			onClick={handler(dock ? "on/open" : "on/select", [x.path])}
 			onDblClick={dock ? undefined : handler("on/open", [x.path])}
@@ -571,8 +571,8 @@ export function shell() {
 				<div class="sub">/windows: each an app the shell runs</div>
 				{under("/windows", (w) => (
 					<button onClick={handler("on/show", [w.name])}>
-						{bind([w, "info"], (i) => `${i.title} · ${i.app}`)}{" "}
-						<span class="dim">{bind([w, "folded"], (f) => (f ? "folded" : w.name))}</span>
+						{bind([w.at, "info"], (i) => `${i.title} · ${i.app}`)}{" "}
+						<span class="dim">{bind([w.at, "folded"], (f) => (f ? "folded" : w.name))}</span>
 					</button>
 				))}
 			</div>
@@ -584,7 +584,7 @@ export function shell() {
 			<nav class="bar">
 				{["cherry", "file", "window"].map((m) => (
 					<button
-						class={bind("menu", (open) => (open === m ? "m on" : "m"))}
+						class={bind("./menu", (open) => (open === m ? "m on" : "m"))}
 						onClick={handler("on/menu", [m])}
 					>
 						{m === "cherry" ? "🍒" : m === "file" ? "File" : "Window"}
@@ -615,7 +615,7 @@ export function shell() {
 					)}
 				</footer>
 			</main>
-			{bind("menu", (m: string) =>
+			{bind("./menu", (m: string) =>
 				m
 					? [
 						<div class="scrim" onPointerDown={handler("on/menu", [""])} />,
@@ -868,7 +868,7 @@ function files(name: string) {
 						? l.items.map((m) => (
 							<button
 								key={m.path}
-								class={bind("selected", (s) => (s === m.path ? "file on" : "file"))}
+								class={bind("./selected", (s) => (s === m.path ? "file on" : "file"))}
 								title={`${m.path}${m.peek ? ` = ${m.peek}` : ""}`}
 								onClick={handler("on/select", [m.path])}
 								onDblClick={handler(`${name}/on/go`, [m.path])}

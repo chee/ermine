@@ -1,4 +1,4 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import {
 	addTeardown,
 	createAction,
@@ -9,7 +9,7 @@ import {
 	read,
 	ref,
 } from "@ermine/system"
-import { bind, handler } from "ermine-h"
+import { bind, handler } from "@ermine/render/h"
 
 // program.ts: boids on a canvas. the rules' numbers are nodes under ./params: edit one in the
 // graph tab (or drag a slider, which writes the same node) and the flock changes at once. the
@@ -183,14 +183,14 @@ export default function program() {
 						min={String(min)}
 						max={String(max)}
 						step={String(step)}
-						value={bind("params/" + k, String)}
+						value={bind("./params/" + k, String)}
 						onInput={handler("on/set", (e) => [k, +value(e)])}
 					/>,
-					<output>{bind("params/" + k)}</output>,
+					<output>{bind("./params/" + k)}</output>,
 				])}
 				<span>pointer</span>
 				<select
-					value={bind("params/pointer")}
+					value={bind("./params/pointer")}
 					onChange={handler("on/set", (e) => ["pointer", value(e)])}
 				>
 					<option value="avoid">pushes</option>

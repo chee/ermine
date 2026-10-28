@@ -1,4 +1,4 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import {
 	createAction,
 	createEffect,
@@ -9,7 +9,7 @@ import {
 	read,
 } from "@ermine/system"
 import { who } from "@ermine/slaygrounds/tools"
-import { bind, handler } from "ermine-h"
+import { bind, handler } from "@ermine/render/h"
 
 // the greeter owns the action, and what it last said is saved at ./last (a reload keeps it). a call
 // runs in a scope under the greeter's, holding its caller; who() says who called and whether a

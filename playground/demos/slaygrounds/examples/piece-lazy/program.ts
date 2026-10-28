@@ -1,6 +1,6 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import { createAction, createMemo, ensureNode, patch, peep, read } from "@ermine/system"
-import { bind, handler } from "ermine-h"
+import { bind, handler } from "@ermine/render/h"
 
 // piece-lazy: /dev/clock ticks only while someone reads it. its provider is the host's, through
 // the pully feature: any run reading the clock's value wakes it, the last one to stop puts it to

@@ -1,4 +1,4 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import {
 	createAction,
 	createMemo,
@@ -11,7 +11,7 @@ import {
 	unplace,
 } from "@ermine/system"
 import { createPatch, layers } from "@ermine/patchy/feature"
-import { bind, handler } from "ermine-h"
+import { bind, handler } from "@ermine/render/h"
 
 // piece-skin: my tweak over a shared thing. the card at /shared/card is everyone's; my tweak is a
 // patch node in my own tree at /me/tweaks/cherry, laid over the card's value (patchy's

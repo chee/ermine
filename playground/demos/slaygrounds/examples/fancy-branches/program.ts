@@ -1,4 +1,4 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import apply from "@ermine/core/changeable/apply"
 import invert from "@ermine/core/changeable/invert"
 import {
@@ -14,7 +14,7 @@ import {
 	ref,
 	unplace,
 } from "@ermine/system"
-import { bind, handler } from "ermine-h"
+import { bind, handler } from "@ermine/render/h"
 
 // fancy-branches: time travel with branches. a small drawing (shapes on a sky) whose every change
 // is kept as a step: its patches and their inverses, a node each under /branches/steps. a step
@@ -942,7 +942,7 @@ export default function program() {
 	addTeardown(() => cancelAnimationFrame(anim))
 
 	const tool = (m: string, text: string) => (
-		<button class={bind("mode", (v) => (v === m ? "on" : ""))} onClick={handler("on/mode", [m])}>
+		<button class={bind("./mode", (v) => (v === m ? "on" : ""))} onClick={handler("on/mode", [m])}>
 			{text}
 		</button>
 	)
@@ -983,7 +983,7 @@ export default function program() {
 						{kinds.map((k) => (
 							<button
 								key={k}
-								class={bind("kind", (v) => (v === k ? "on" : ""))}
+								class={bind("./kind", (v) => (v === k ? "on" : ""))}
 								onClick={handler("on/kind", [k])}
 							>
 								{k}
@@ -995,7 +995,7 @@ export default function program() {
 						{inks.map((c) => (
 							<b
 								key={c}
-								class={bind("ink", (v) => (v === c ? "sw on" : "sw"))}
+								class={bind("./ink", (v) => (v === c ? "sw on" : "sw"))}
 								style={{ background: c }}
 								onClick={handler("on/ink", [c])}
 							/>
@@ -1094,7 +1094,7 @@ export default function program() {
 				<h2>
 					the tree<em>click a step to jump</em>
 				</h2>
-				{bind("notice", (n: any) =>
+				{bind("./notice", (n: any) =>
 					n
 						? (
 							<div class={n.kind === "ok" ? "notice ok" : "notice"}>
@@ -1111,7 +1111,7 @@ export default function program() {
 					{wrap}
 				</div>
 				<p class="jumped">
-					{bind("jumped", (j: any) =>
+					{bind("./jumped", (j: any) =>
 						!j
 							? ""
 							: `jumped to #${j.n}: ${j.down.length} inverse${

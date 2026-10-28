@@ -35,9 +35,9 @@ function handle(m: Message) {
 			skipLibCheck: true,
 			lib: ["esnext", "dom"],
 			// jsx in program.tsx (the editor's program.ts, as the server sees it): the automatic
-			// runtime, from ermine-h unless the file's @jsxImportSource says another
+			// runtime, @ermine's (@ermine/jsx-runtime) unless the file's @jsxImportSource says another
 			jsx: "react-jsx",
-			jsxImportSource: "ermine-h",
+			jsxImportSource: "@ermine",
 			paths: m.paths,
 		},
 		include: ["host.ts", "program.ts", "program.tsx", "types/**/*"],

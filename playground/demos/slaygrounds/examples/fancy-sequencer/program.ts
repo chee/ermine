@@ -1,4 +1,4 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import {
 	createAction,
 	createEffect,
@@ -17,7 +17,7 @@ import {
 	unplace,
 } from "@ermine/system"
 import { up } from "@ermine/slaygrounds/tools"
-import { bind, handler, under } from "ermine-h"
+import { bind, handler, under } from "@ermine/render/h"
 
 // fancy-sequencer: a song of four bars, each holding a pattern; a pattern holds a folder per step
 // (s0…s15), and a note is a node in its step's folder:
@@ -132,10 +132,10 @@ export function clock() {
 			<span class="tag">fancy sequencer</span>
 			<button
 				class="play"
-				data-on={bind("clock/playing", (p) => (p ? "on" : undefined))}
+				data-on={bind("/clock/playing", (p) => (p ? "on" : undefined))}
 				onClick={handler("on/play")}
 			>
-				{bind("clock/playing", (p) => (p ? "■ stop" : "▶ play"))}
+				{bind("/clock/playing", (p) => (p ? "■ stop" : "▶ play"))}
 			</button>
 			<label>
 				tempo
@@ -143,10 +143,10 @@ export function clock() {
 					type="range"
 					min="60"
 					max="180"
-					value={bind("clock/tempo")}
+					value={bind("/clock/tempo")}
 					onInput={handler("on/tempo", (e: Event) => [+(e.target as HTMLInputElement).value])}
 				/>
-				<b>{bind("clock/tempo")}</b>
+				<b>{bind("/clock/tempo")}</b>
 			</label>
 			<label>
 				swing
@@ -155,13 +155,13 @@ export function clock() {
 					min="0"
 					max="0.6"
 					step="0.01"
-					value={bind("clock/swing")}
+					value={bind("/clock/swing")}
 					onInput={handler("on/swing", (e: Event) => [+(e.target as HTMLInputElement).value])}
 				/>
-				<b>{bind("clock/swing", pct)}</b>
+				<b>{bind("/clock/swing", pct)}</b>
 			</label>
 			<span class="pos" title="/clock/at: the step being heard">
-				{bind("clock/at", (a) => `${a.bar} · ${String(a.step + 1).padStart(2, "0")}/16`)}
+				{bind("/clock/at", (a) => `${a.bar} · ${String(a.step + 1).padStart(2, "0")}/16`)}
 			</span>
 		</div>
 	)
@@ -324,17 +324,20 @@ export function roll() {
 		const row = Math.min(ROWS.length - 1, Math.max(0, Math.floor((e.clientY - r.top) / ROW)))
 		return { step, row }
 	}
-	const NoteView = ({ n, k }: { n: Any; k: number }) => (
+	const NoteView = ({ n, k, path }: { n: Any; k: number; path: string }) => (
 		<div
 			class="note"
-			data-kind={bind(n, (v: Note) => v.drum ?? "pitch")}
-			style={bind(n, (v: Note) => ({
+			data-kind={bind(n.at, (v: Note) => v.drum ?? "pitch")}
+			style={bind(n.at, (v: Note) => ({
 				top: rowOf(v) * ROW + "px",
 				width: (v.drum ? 1 : v.len ?? 1) * CELL - 3 + "px",
 				opacity: String(0.45 + 0.55 * (v.vel ?? 0.8)),
 			}))}
-			data-read={bind("/run/player/heard", (h) => (h.ids.includes(n.id) ? "yes" : undefined))}
-			title={`/${(n.path ?? []).join("/")}: drag to move, click to take out`}
+			data-read={bind(
+				"/run/player/heard",
+				(h) => (h.ids.includes(idOf(path)) ? "yes" : undefined),
+			)}
+			title={`${path}: drag to move, click to take out`}
 			onPointerDown={(e: PointerEvent) => {
 				e.stopPropagation()
 				const el = e.currentTarget as HTMLElement
@@ -358,7 +361,7 @@ export function roll() {
 				]
 			})}
 		>
-			{bind(n, noteName)}
+			{bind(n.at, noteName)}
 		</div>
 	)
 
@@ -368,7 +371,7 @@ export function roll() {
 				{BARS.map((b, i) => (
 					<div
 						class="bar card"
-						data-selected={bind("roll/bar", (s) => (s === b ? "yes" : undefined))}
+						data-selected={bind("/roll/bar", (s) => (s === b ? "yes" : undefined))}
 						data-playing={bind("/clock/at", (a) => (a.bar === b ? "yes" : undefined))}
 						onClick={handler("on/select", [b])}
 					>
@@ -405,7 +408,7 @@ export function roll() {
 				<header>
 					<span class="tag">roll</span>
 					<small>
-						{bind("roll/bar", (b) => `editing ${b}`)}{" "}
+						{bind("/roll/bar", (b) => `editing ${b}`)}{" "}
 						· draw on the grid · drag a note · click one to take it out
 					</small>
 				</header>
@@ -453,10 +456,13 @@ export function roll() {
 								opacity: h.here ? "1" : "0.25",
 							}))}
 						/>
-						{bind("roll/bar", (b) =>
+						{bind("/roll/bar", (b) =>
 							STEPS.map((k) => (
 								<div class="col" style={{ left: k * CELL + "px" }}>
-									{under(`/song/${b}/s${k}`, (n) => <NoteView n={n} k={k} />)}
+									{under(
+										`/song/${b}/s${k}`,
+										(n) => <NoteView n={n} k={k} path={`/song/${b}/s${k}/${n.name}`} />,
+									)}
 								</div>
 							)))}
 					</div>
@@ -592,7 +598,7 @@ export function player() {
 						min="0"
 						max="1"
 						step="0.01"
-						value={bind("player/tone")}
+						value={bind("/player/tone")}
 						onInput={handler(
 							"on/tone",
 							(e: Event) => [+(e.target as HTMLInputElement).value],
@@ -606,7 +612,7 @@ export function player() {
 						min="0"
 						max="0.8"
 						step="0.01"
-						value={bind("player/echo")}
+						value={bind("/player/echo")}
 						onInput={handler(
 							"on/echo",
 							(e: Event) => [+(e.target as HTMLInputElement).value],
@@ -615,7 +621,7 @@ export function player() {
 				</label>
 			</header>
 			<ol>
-				{bind("player/trace", (lines: Any[]) =>
+				{bind("/player/trace", (lines: Any[]) =>
 					lines.slice().reverse().map((l, i) => (
 						<li key={String(l.n)} class={i === 0 ? "now" : ""}>
 							<b class="where">

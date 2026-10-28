@@ -1,7 +1,7 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import type { API } from "@ermine/programs/api"
 import type { Tools } from "./host.ts"
-import { bind, type Child, handler } from "ermine-h"
+import { bind, type Child, handler } from "@ermine/render/h"
 
 // five ways for processes to talk. none of them is a message bus: every one is nodes, calls and
 // reads, so every one shows up in the graph tab as it happens (open it, pick a card with ⌖). each

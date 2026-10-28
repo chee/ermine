@@ -1,4 +1,4 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import {
 	createAction,
 	createEffect,
@@ -10,7 +10,7 @@ import {
 	peep,
 	read,
 } from "@ermine/system"
-import { bind, handler, under } from "ermine-h"
+import { bind, handler, under } from "@ermine/render/h"
 
 // friends-dinner: dinner at mine, friday. say if you're coming, pick what you'll bring, send the
 // invites. the post (a process of its own) brings the friends' replies one by one, from its timers.
@@ -233,7 +233,7 @@ export default function dinner() {
 								)
 								: null)}
 					</div>
-					{under("guests", (g) => (
+					{under("./guests", (g) => (
 						<div
 							class={g.name === "you" ? "guest you" : "guest"}
 							style={bind("seats", (s: Seats) => at(s.spots[g.name!]))}
@@ -249,10 +249,10 @@ export default function dinner() {
 										: "display:none"
 								})}
 							>
-								{bind(g, (v: Guest) =>
+								{bind(g.at, (v: Guest) =>
 									v.dish ?? "")}
 							</span>
-							{bind(g, (v: Guest) => (v.answer
+							{bind(g.at, (v: Guest) => (v.answer
 								? <span class="say" key={`${v.answer}${v.at}`}>{say(v.answer)}</span>
 								: null))}
 						</div>
@@ -260,15 +260,15 @@ export default function dinner() {
 				</div>
 				<div class="list">
 					<h3>the list</h3>
-					{under("guests", (g) => (
+					{under("./guests", (g) => (
 						<div>
 							<span>{FACE[g.name!]}</span> {g.name}
-							<small>{bind(g, (v: Guest) => v.dish ?? "")}</small>
+							<small>{bind(g.at, (v: Guest) => v.dish ?? "")}</small>
 							<b
-								class={bind(g, (v: Guest) =>
+								class={bind(g.at, (v: Guest) =>
 									v.answer ?? "none")}
 							>
-								{bind(g, (v: Guest) => v.answer ?? "?")}
+								{bind(g.at, (v: Guest) => v.answer ?? "?")}
 							</b>
 						</div>
 					))}
@@ -286,7 +286,7 @@ export default function dinner() {
 				are you coming?
 				{(["yes", "maybe", "no"] as Answer[]).map((a) => (
 					<button
-						class={bind("guests/you", (v: Guest) => (v.answer === a ? "on" : ""))}
+						class={bind("./guests/you", (v: Guest) => (v.answer === a ? "on" : ""))}
 						onClick={handler("on/answer", ["you", a])}
 					>
 						{a}
@@ -295,7 +295,7 @@ export default function dinner() {
 				<span style="margin-left:10px">bringing</span>
 				{DISHES.map((d) => (
 					<button
-						class={bind("guests/you", (v: Guest) => (v.dish === d ? "on" : ""))}
+						class={bind("./guests/you", (v: Guest) => (v.dish === d ? "on" : ""))}
 						onClick={handler("on/bring", [d])}
 					>
 						{d}

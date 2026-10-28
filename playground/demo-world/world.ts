@@ -2,14 +2,14 @@
 // which processes run:
 //
 //   import { createWorld } from "@ermine/slaygrounds/world"
-//   import { render } from "ermine-h"
+//   import { render } from "@ermine/render/dom"
 //   const world = createWorld({ render, processes: [{ name: "counter" }] })
 //   world.seed(() => ensureNode("/data/n", 21))
 //   export const reload = world.reload
 //
 // a world is one createErmine (the host's object, world.ermine; the host calls @ermine/system's functions inside
 // ermine.within, which seed does), and what the page needs beside it: boxes in the
-// page, ermine-h's view of a process, the inspector's names. a program is a module; each process
+// page, a process's view drawn with @ermine/render, the inspector's names. a program is a module; each process
 // runs one export (default "default"), given nothing: it imports @ermine/system's functions and
 // the world's tools (tools.ts) and calls them while it runs. its return, a view or an element, is
 // made real in the process's box in the page. a process runs at /<name> (at: where else), its
@@ -26,8 +26,6 @@
 // extend gives a process what its host has of its own, read there by host()
 import { createChangeHeader, NODE } from "@ermine/core/places/header"
 import { move, type Path, place, type Places, rename, unplace } from "@ermine/core/places"
-import * as lib from "@ermine/core/places/lib"
-import { plan } from "@ermine/core/places/path"
 import { isPending } from "@ermine/core/places/status"
 import { type Computer, createScheduler, type Info, type Scheduler } from "@ermine/core/scheduler"
 import { trace } from "@ermine/core/scheduler/trace"
@@ -61,13 +59,15 @@ export type Spec = {
 	readonly args?: readonly string[]
 }
 
-// ermine-h's render, handed in (the world imports no view library)
+// @ermine/render/dom's render, handed in (the world imports no view library): called in a process's
+// setup, its bindings that process's; call: an action called from an event, as the process
 // the page's, reached loosely: the world names no DOM types (the editor's type checker has no dom lib)
 // deno-lint-ignore no-explicit-any
 type Element = any
 // deno-lint-ignore no-explicit-any
 const page = globalThis as any
-export type Render = (into: Element, view: unknown, process: unknown) => unknown
+// (handed { name, call }: the process's name, and an action called as the process)
+export type Render = (into: Element, view: never, options: never) => unknown
 
 export type Options = {
 	render: Render
@@ -91,7 +91,7 @@ export type Options = {
 	types?: true | readonly Known[]
 }
 
-// an h item: an id, and its path where known
+// a node: its id, and its path where known
 type Item = { id: Id; path?: string[]; name?: string }
 
 export function createWorld(o: Options) {
@@ -152,7 +152,7 @@ export function createWorld(o: Options) {
 		: undefined
 	if (presence) startSweeper(presence, o.presence?.sweep ?? 1000)
 
-	// ---- a process's box in the page, and what ermine-h is handed ----
+	// ---- a process's box in the page, and what its render is handed ----
 	const views = new Map<string, Element>()
 	function box(name: string): Element {
 		let el = views.get(name)
@@ -163,67 +163,18 @@ export function createWorld(o: Options) {
 		}
 		return el
 	}
-	// the names from the root to an id: a walk down, told to nobody
-	function where(id: Id): string[] | undefined {
-		const seen = new Set<Id>()
-		const walk = (at: Id, names: string[]): string[] | undefined => {
-			if (at === id) return names
-			if (seen.has(at) || names.length > 24) return
-			seen.add(at)
-			const v = table.get("children", at)?.value as Record<string, unknown> | undefined
-			for (const [name, kid] of Object.entries(v ?? {})) {
-				if (typeof kid !== "string") continue
-				const found = walk(kid, [...names, name])
-				if (found) return found
+	// an action called from an event (nothing open then), made as the process (the scope its setup
+	// ran in); a click's trust is the event's, read live by who() as the action runs
+	function caller(at: readonly string[], scope: ReturnType<Scheduler["getCurrentScope"]>) {
+		return (action: never, ...args: unknown[]) => {
+			if (scope === undefined || scope.state !== "alive") {
+				throw new Error(`${at.join("/")} has stopped`)
 			}
-		}
-		return walk(places.root, [])
-	}
-	const pathOf = (x: Item) => x.path ?? where(x.id)
-	// ermine-h's view of the process at `at`, its scope open where it was made: a handler calls its
-	// action in that scope, as the process
-	function viewer(at: readonly string[], scope: ReturnType<Scheduler["getCurrentScope"]>) {
-		// h's find: "/" or any "." ".." in it, steps from the root (or from from); else the names under
-		// the process's own node, and nowhere else: h asks it whether the process has a name, and
-		// reads a name it has not from the root
-		const find = (address: string[], from?: Item): Item[] => {
-			const steps = address.some((a) => a === "/" || a === "." || a === "..")
-			const path = !steps && from === undefined ? [...at, ...address] : plan(
-				address[0] === "/" ? address : ["/", ...(from ? pathOf(from) ?? [] : []), ...address],
-			)
-			const id = path && lib.get(places, path)
-			return id === undefined ? [] : [{ id, path: path!, name: path![path!.length - 1] }]
-		}
-		return {
-			name: at.join("/"),
-			where: (entry?: Item) => entry === undefined ? at : pathOf(entry),
-			find,
-			get: (item: Item) => places.readValue("value", item.id),
-			pending: (item: Item) => isPending(places, item.id),
-			members: (item: Item) => {
-				const path = pathOf(item) ?? []
-				return lib.members(places, path).map((m) => ({ ...m, path: [...path, m.name] }))
-			},
-			// the action's call is made as the process (the scope its setup ran in); a click's trust is
-			// the event's, read live by who() as the action runs
-			call: (address: string[], args: unknown[]) => {
-				if (scope === undefined || scope.state !== "alive") {
-					throw new Error(`${at.join("/")} has stopped`)
-				}
-				return s.runWithScope(
-					scope,
-					() => executeAction("/" + address.join("/"), ...args),
-				)
-			},
-			effect(read: () => unknown, act: (v: unknown, before: unknown) => void, name?: string) {
-				const c = s.createEffect(read, act)
-				if (name) binds.set(c, name)
-				return c
-			},
+			return s.runWithScope(scope, () => executeAction(action, ...args))
 		}
 	}
-	// only a view is made real in a box: an element, ermine-h's view or binding, or a list holding
-	// one. any other return (a number, a string, data) is the process's value, and nothing more
+	// only a view is made real in a box: an element, a view or a binding (@ermine/render's, by
+	// ermine-h's Symbol.for keys), or a list holding one. any other return (a number, a string, data) is the process's value, and nothing more
 	const VIEW = Symbol.for("ermine-h.view"), BOUND = Symbol.for("ermine-h.bound")
 	const isView = (v: unknown): boolean =>
 		(typeof page.Node === "function" && v instanceof page.Node) ||
@@ -274,7 +225,10 @@ export function createWorld(o: Options) {
 			try {
 				const view = fn()
 				if (!isView(view)) return view
-				return o.render(box(at.join("/")), view, viewer(at, mine ?? scope))
+				return o.render(box(at.join("/")), view as never, {
+					name: at.join("/"),
+					call: caller(at, mine ?? scope),
+				} as never)
 			} catch (e) {
 				console.error(`${spec.name}: its setup threw:`, e)
 				throw e

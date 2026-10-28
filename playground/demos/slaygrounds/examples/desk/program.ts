@@ -1,4 +1,4 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import {
 	createAction,
 	createEffect,
@@ -17,7 +17,7 @@ import {
 	unplace,
 } from "@ermine/system"
 import { host, inspect, up } from "@ermine/slaygrounds/tools"
-import { bind, handler, type Item, under } from "ermine-h"
+import { bind, handler, type Item, under } from "@ermine/render/h"
 
 // desk: nothing here knows how to draw itself. a renderer is a node holding source text,
 // (v, w, h, near) => ops, in root/library; a folder carries its own under render/<type> (the library
@@ -825,6 +825,7 @@ export function desk() {
 	// a chip is a renderer placed (or in the library); drag it into a window
 	const Chip = ({ c, from }: { c: Chip; from?: string }) => (
 		<span
+			key={c.id}
 			class="chip"
 			data-chip={bind("library", (m) => m[c.id]?.name ?? "")}
 			data-type={c.type ?? bind("library", (m) => m[c.id]?.type ?? "")}
@@ -840,7 +841,9 @@ export function desk() {
 	// a folder's render/ chips: the members under its render node
 	const Strip = ({ f, at }: { f: string; at: string }) => (
 		<span class="chips">
-			{under(`${at}/render`, (c) => <Chip c={{ id: c.id as string, type: c.name! }} from={f} />)}
+			{under(`${at}/render`, (c) => (
+				<Chip c={{ id: idOf(`${at}/render/${c.name}`) as string, type: c.name }} from={f} />
+			))}
 		</span>
 	)
 	// an accent: the nearest one up; click gives this folder its own (or the next colour), alt-click
@@ -860,12 +863,12 @@ export function desk() {
 	// a tile: the canvas its process paints (the first time from what it already drew), its name,
 	// a mount's count; picked, a ring at the pixel
 	const Tile = ({ f, thing }: { f: string; thing: Item }) => {
-		const id = thing.id as string
+		const id = idOf(`/desk/${f}/${thing.name}`) as string
 		const mine = (p: any) => p.id === id && p.folder === f
 		return (
 			<div
 				class={bind("mounts", (n) => n[id] > 1 ? "tile mounted" : "tile")}
-				data-picked={bind("picked", mine)}
+				data-picked={bind("./picked", mine)}
 				title="drag to move; alt-drag to mount; double-click to change it"
 				onDblClick={handler("on/poke", [id])}
 			>
@@ -900,7 +903,7 @@ export function desk() {
 							</i>
 						))}
 				</div>
-				{bind("picked", (p) =>
+				{bind("./picked", (p) =>
 					mine(p) && <div class="x" style={`left: ${p.x}px; top: ${p.y}px`} />)}
 			</div>
 		)
@@ -1067,8 +1070,8 @@ export function desk() {
 				<div>
 					<button onClick={handler("on/source", () => [pic.name, ta!.value])}>save</button>
 					{" "}
-					<span class={bind("compiled", (m: string) => m.startsWith("not") ? "err" : "dim")}>
-						{bind("compiled")}
+					<span class={bind("./compiled", (m: string) => m.startsWith("not") ? "err" : "dim")}>
+						{bind("./compiled")}
 					</span>
 				</div>,
 			],
@@ -1091,7 +1094,7 @@ export function desk() {
 				drag a tile to another window to <b>move</b> it; hold alt to <b>mount</b>{" "}
 				it in both. drag a renderer chip into a window: that folder draws with it. click a
 				pixel: who drew it?
-				<span class="said">{bind("said")}</span>
+				<span class="said">{bind("./said")}</span>
 			</p>
 			<div class="wins">
 				{FOLDERS.map((f) => <Win f={f} />)}
@@ -1102,7 +1105,7 @@ export function desk() {
 					<div class="strip">
 						<span class="k">library</span>
 						<span class="chips">
-							{under("/library", (m) => <Chip c={{ id: m.id as string }} />)}
+							{under("/library", (m) => <Chip c={{ id: idOf(`/library/${m.name}`) as string }} />)}
 						</span>
 					</div>
 					<div class="strip" data-drop="desk">

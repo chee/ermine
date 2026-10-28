@@ -1,4 +1,4 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import {
 	createAction,
 	createEffect,
@@ -14,7 +14,7 @@ import {
 } from "@ermine/system"
 import { pipe } from "@ermine/pipe"
 import { host } from "@ermine/slaygrounds/tools"
-import { bind, handler } from "ermine-h"
+import { bind, handler } from "@ermine/render/h"
 import apply from "@ermine/core/changeable/apply"
 import { count, unit } from "@ermine/core/util/walk-string"
 

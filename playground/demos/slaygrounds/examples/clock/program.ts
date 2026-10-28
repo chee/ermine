@@ -1,4 +1,4 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import {
 	addTeardown,
 	createAction,
@@ -11,7 +11,7 @@ import {
 	read,
 } from "@ermine/system"
 import { host } from "@ermine/slaygrounds/tools"
-import { bind, handler } from "ermine-h"
+import { bind, handler } from "@ermine/render/h"
 
 // the clock: counts /time up every second. its own timer writes through a writer made in setup;
 // the timer is cleared at its teardown. the view's button stops it (its row is taken out, its

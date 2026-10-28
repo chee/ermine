@@ -2,7 +2,7 @@
 // a frame is found walking up the way it was reached: the world's up, with a ceiling (stop) and the
 // frames visited told (walk)
 import { createWorld } from "@ermine/slaygrounds/world"
-import { render } from "ermine-h"
+import { render } from "@ermine/render/dom"
 
 const world = createWorld({ render, processes: [{ name: "lisp" }], actor: "you@laptop" })
 

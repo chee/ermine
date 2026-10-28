@@ -2,7 +2,7 @@
 // windowsill: default; the clock, the fox and the frog: one export each). who wrote a thing: the
 // world's who and change
 import { createWorld } from "@ermine/slaygrounds/world"
-import { render } from "ermine-h"
+import { render } from "@ermine/render/dom"
 
 const world = createWorld({
 	render,

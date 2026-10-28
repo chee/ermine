@@ -6,7 +6,7 @@
 // memo compiles
 import { createWorld } from "@ermine/slaygrounds/world"
 import { get } from "@ermine/core/places/lib"
-import { render } from "ermine-h"
+import { render } from "@ermine/render/dom"
 
 const world = createWorld({
 	render,

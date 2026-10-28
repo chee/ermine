@@ -6,7 +6,7 @@ import createEntry from "@ermine/core/node/entry"
 import { createStore as createPacks } from "@ermine/pack-indexeddb"
 import { createWorld } from "@ermine/slaygrounds/world"
 import { createAction, ensureNode, patch, place } from "@ermine/system"
-import { render } from "ermine-h"
+import { render } from "@ermine/render/dom"
 
 const packs = createPacks("ermine-slaygrounds")
 const NAME = "lab-save"

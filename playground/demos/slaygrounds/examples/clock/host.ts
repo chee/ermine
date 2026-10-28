@@ -1,7 +1,7 @@
 // clock's host: the world (@ermine/slaygrounds/world) and two processes, each running an export of
 // program.ts: the clock counts /time, the view reads it
 import { createWorld } from "@ermine/slaygrounds/world"
-import { render } from "ermine-h"
+import { render } from "@ermine/render/dom"
 
 const world = createWorld({
 	render,

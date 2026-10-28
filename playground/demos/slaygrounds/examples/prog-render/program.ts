@@ -1,4 +1,4 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import {
 	createAction,
 	createMemo,
@@ -10,7 +10,7 @@ import {
 	readAttributes,
 } from "@ermine/system"
 import { host } from "@ermine/slaygrounds/tools"
-import { bind } from "ermine-h"
+import { bind } from "@ermine/render/h"
 import type { Extra, Got, Renderer } from "./host.ts"
 
 // program.ts: edit me while it runs. four processes, one export each. the app (default) writes a

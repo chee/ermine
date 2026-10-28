@@ -8,7 +8,7 @@ import { ATTRIBUTES, satisfy } from "@ermine/programs"
 import { createWorld } from "@ermine/slaygrounds/world"
 import { ensureNode, patchAttributes } from "@ermine/system"
 import * as lib from "@ermine/core/places/lib"
-import { render } from "ermine-h"
+import { render } from "@ermine/render/dom"
 
 const TEXT = "public.plain-text"
 const JSON_TYPE = "public.json"

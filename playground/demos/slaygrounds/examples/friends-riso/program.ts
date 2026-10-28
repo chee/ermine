@@ -1,4 +1,4 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import {
 	createAction,
 	createMemo,
@@ -9,7 +9,7 @@ import {
 	read,
 	unplace,
 } from "@ermine/system"
-import { bind, type Bound, type Child, handler, under } from "ermine-h"
+import { bind, type Bound, type Child, handler, under } from "@ermine/render/h"
 
 // friends-riso: a riso poster for the picnic. type the words, press print. three drums (yellow,
 // blue, pink) each lay their ink down a little off from the others, a new wobble every copy.
@@ -194,7 +194,7 @@ export default function program() {
 	// the proof: the sheet as the drums are now (where the last copy landed, the ink left)
 	const proof = (name: Ink) =>
 		bind(
-			`drums/${name}`,
+			`./drums/${name}`,
 			(d: Drum) =>
 				d.on ? look(INKS[name].colour, d.dx, d.dy, d.ink / INKS[name].cost) : "opacity:0;",
 		)
@@ -214,7 +214,7 @@ export default function program() {
 			<div class="top">
 				<span class="tag">riso shop</span>
 				<input
-					value={bind("words")}
+					value={bind("./words")}
 					maxLength={40}
 					placeholder="what does the poster say?"
 					onInput={handler("on/words", (e) => [e.target.value])}
@@ -224,14 +224,14 @@ export default function program() {
 			<div class="row">
 				<div class="proof">
 					<span class="label">proof</span>
-					<Sheet words={bind("words")} size={bind("words", size)} layer={proof} />
+					<Sheet words={bind("./words")} size={bind("./words", size)} layer={proof} />
 				</div>
 				<div class="side">
 					<div class="drums">
 						{DRUMS.map((n) => (
 							<div
 								class={bind(
-									`drums/${n}`,
+									`./drums/${n}`,
 									(d: Drum) => `drum${d.on ? "" : " off"}${d.ink <= 0 ? " dry" : ""}`,
 								)}
 								style={`--c:${INKS[n].colour}`}
@@ -248,17 +248,17 @@ export default function program() {
 									<i
 										class="c"
 										style={bind(
-											`drums/${n}`,
+											`./drums/${n}`,
 											(d: Drum) => `transform:translate(${d.dx}px,${d.dy}px)`,
 										)}
 									/>
 								</div>
 								<div class="gauge">
-									<i style={bind(`drums/${n}`, (d: Drum) => `width:${d.ink}%`)} />
+									<i style={bind(`./drums/${n}`, (d: Drum) => `width:${d.ink}%`)} />
 								</div>
 								<small>
 									{bind(
-										`drums/${n}`,
+										`./drums/${n}`,
 										(d: Drum) => (d.ink <= 0 ? "dry! 🫠" : `${d.ink}% left`),
 									)}
 								</small>
@@ -276,13 +276,13 @@ export default function program() {
 							(n) => (n ? null : <div class="empty">press print: copies land here</div>),
 						)}
 						<div class="pile">
-							{under("prints", (copy) => (
+							{under("./prints", (copy) => (
 								<div
 									class="copy"
-									style={bind(copy, (c: Copy) => `rotate:${c.tilt}deg`)}
+									style={bind(copy.at, (c: Copy) => `rotate:${c.tilt}deg`)}
 								>
 									{bind(
-										copy,
+										copy.at,
 										(c: Copy) => (
 											<Sheet words={c.words} size={size(c.words)} layer={kept(c)} />
 										),

@@ -3,7 +3,7 @@
 // reads is tracked as the asker's reads are, so editing the rules reruns whatever asked
 import { createWorld } from "@ermine/slaygrounds/world"
 import { ensureNode } from "@ermine/system"
-import { render } from "ermine-h"
+import { render } from "@ermine/render/dom"
 import { get } from "@ermine/core/places/lib"
 import { no, type Policy, yes } from "@ermine/core/protect"
 

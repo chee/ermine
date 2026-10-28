@@ -1,4 +1,4 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import {
 	addTeardown,
 	createAction,
@@ -12,7 +12,7 @@ import {
 	read,
 	ref,
 } from "@ermine/system"
-import { bind, handler } from "ermine-h"
+import { bind, handler } from "@ermine/render/h"
 
 // program.ts: the game of life as a graph. every cell is a node under ./cells (alive or not). each
 // cell has two effects made here:
@@ -183,19 +183,19 @@ export default function program() {
 			<style>{LOOK}</style>
 			<div class="row card">
 				<button onClick={handler("on/play")}>
-					{bind("speed", (v) => (v ? "pause" : "play"))}
+					{bind("./speed", (v) => (v ? "pause" : "play"))}
 				</button>
 				<button onClick={handler("on/step")}>step</button>
 				<button onClick={handler("on/random")}>random</button>
 				<button onClick={handler("on/clear")}>clear</button>
 				<select
-					value={bind("rule", (r) => r.name)}
+					value={bind("./rule", (r) => r.name)}
 					onChange={handler("on/rule", (e) => [e.target.value])}
 				>
 					{Object.keys(RULES).map((k) => <option value={k}>{k}</option>)}
 				</select>
 				<span class="tag">
-					generation <b>{bind("generation")}</b>
+					generation <b>{bind("./generation")}</b>
 				</span>
 				{tag("alive", "alive")}
 				{tag("flips", "flips")}

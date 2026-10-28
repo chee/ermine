@@ -1,4 +1,4 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import {
 	addTeardown,
 	createAction,
@@ -15,7 +15,7 @@ import {
 	unplace,
 } from "@ermine/system"
 import { inspect, up } from "@ermine/slaygrounds/tools"
-import { bind, handler } from "ermine-h"
+import { bind, handler } from "@ermine/render/h"
 
 // fancy-scene: a 3D scene graph on the ermine graph.
 //   every object is a node at /scene/…: its transform, colour and shape are nodes under it, and
@@ -725,12 +725,13 @@ export function view() {
 	const Row = ({ x }: { x: Item }) => (
 		<li
 			key={x.path}
-			class={bind("picked", (p) => (p === x.path ? "row on" : "row"))}
+			class={bind("./picked", (p) => (p === x.path ? "row on" : "row"))}
 			style={{ paddingLeft: `${6 + x.depth * 13}px` }}
 			title={x.path}
 			onClick={handler("on/pick", [x.path])}
 		>
 			<i
+				key={x.shape}
 				class={`shp ${x.shape}`}
 				style={bind(
 					`${x.path}/colour`,
@@ -865,10 +866,10 @@ export function view() {
 				<div class="hud">
 					<span class="tag">fancy-scene</span>
 					<button onClick={handler("on/pause")}>
-						{bind("spin/speed", (v) => (v ? "■ stop the spinner" : "↻ spin"))}
+						{bind("./spin/speed", (v) => (v ? "■ stop the spinner" : "↻ spin"))}
 					</button>
 					<button onClick={handler("on/tags")}>
-						{bind("tags", (v) => (v ? "tags: every object" : "tags: picked + spun"))}
+						{bind("./tags", (v) => (v ? "tags: every object" : "tags: picked + spun"))}
 					</button>
 				</div>
 				<p class="help">drag: orbit · wheel: zoom · click: pick</p>
@@ -920,7 +921,7 @@ export function spin() {
 			</style>
 			<i
 				class="beat"
-				style={bind("spin/speed", (v) => `animation-play-state:${v ? "running" : "paused"}`)}
+				style={bind("./spin/speed", (v) => `animation-play-state:${v ? "running" : "paused"}`)}
 				onAnimationIteration={handler("on/turn")}
 			/>
 		</div>

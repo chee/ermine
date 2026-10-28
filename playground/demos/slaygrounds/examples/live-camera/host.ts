@@ -7,7 +7,7 @@
 // debounces the typing and hands the text to the transform
 import { createWorld } from "@ermine/slaygrounds/world"
 import { peep, read } from "@ermine/system"
-import { render } from "ermine-h"
+import { render } from "@ermine/render/dom"
 
 const cm = await import(
 	new URL("examples/live-camera/cm.js", parent.__base ?? parent.location.origin + "/").href

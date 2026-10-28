@@ -47,7 +47,7 @@ import {
 } from "@ermine/system"
 import { type Box, createBox } from "@ermine/boxes"
 import { createWorld } from "@ermine/slaygrounds/world"
-import { render } from "ermine-h"
+import { render } from "@ermine/render/dom"
 
 const JS = "com.netscape.javascript-source"
 const WASM = "public.wasm"

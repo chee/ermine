@@ -5,7 +5,7 @@
 import { createWorld } from "@ermine/slaygrounds/world"
 import { executeAction } from "@ermine/system"
 import pipes from "@ermine/pipe"
-import { render } from "ermine-h"
+import { render } from "@ermine/render/dom"
 
 const cm = await import(
 	new URL("examples/piece-lens/cm.js", parent.__base ?? parent.location.origin + "/").href
