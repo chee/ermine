@@ -44,7 +44,7 @@
 				"ermine.programs.takes": [
 					"public.c-source"
 				],
-				"ermine.programs.gives": "public.wasm-executable",
+				"ermine.programs.gives": "public.wasm",
 				"ermine.programs.compiler": {
 					"name": "upper",
 					"version": "1"
@@ -62,7 +62,7 @@
 			"id": "RUN",
 			"value": {
 				"ermine.programs.takes": [
-					"public.wasm-executable"
+					"public.wasm"
 				]
 			},
 			"expect": {}
@@ -209,7 +209,7 @@
 							"at": [
 								"run"
 							],
-							"attributes": "8834c4ba2970472c8fc475d360d981459932aaa0b645c8a519773c21dc9dc9a7"
+							"attributes": "9bf25218f353c7f47ef2fab830f8847418851a438e76d385a6e9e3b98fb6666e"
 						}
 					],
 					"box": "W",
@@ -312,7 +312,7 @@
 							"at": [
 								"run"
 							],
-							"attributes": "8834c4ba2970472c8fc475d360d981459932aaa0b645c8a519773c21dc9dc9a7"
+							"attributes": "9bf25218f353c7f47ef2fab830f8847418851a438e76d385a6e9e3b98fb6666e"
 						}
 					],
 					"box": "W",

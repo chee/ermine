@@ -58,12 +58,14 @@ static op_value *strings_value(const char *const *list) {
 	return a;
 }
 
-// a type's node's value, { conformsTo, fileNameExtension, mimeType }: new
+// a type's node's value, { conformsTo, filenameExtension, mimeType, referenceURL?, version? }: new
 static op_value *ty_value(const ty_known *t) {
 	op_value *m = op_map();
 	op_set(m, "conformsTo", strings_value(t->conforms));
-	op_set(m, "fileNameExtension", strings_value(t->extensions));
+	op_set(m, "filenameExtension", strings_value(t->extensions));
 	op_set(m, "mimeType", strings_value(t->mimes));
+	if (t->reference_url != NULL) op_set(m, "referenceURL", op_str(t->reference_url));
+	if (t->version != NULL) op_set(m, "version", op_int(*t->version));
 	return m;
 }
 
@@ -256,7 +258,7 @@ int ty_install(const ty_install_setup *s) {
 		                                              : &ty_extra[i - ty_well_known_count];
 		size_t at = norder;
 		for (size_t j = 0; j < norder; j++) {
-			if (strcmp(order[j]->name, t->name) == 0) at = j;
+			if (strcmp(order[j]->identifier, t->identifier) == 0) at = j;
 		}
 		if (at == norder) order[norder++] = t;
 		last[at] = t;
@@ -266,17 +268,17 @@ int ty_install(const ty_install_setup *s) {
 	size_t nnamed = 0;
 	for (size_t i = 0; i < norder; i++) {
 		const ty_known *t = last[i];
-		const char *id = child_of(s->table, folder, t->name);
+		const char *id = child_of(s->table, folder, t->identifier);
 		int existing = id != NULL;
 		if (existing) id = kept(s, id);
 		else {
-			const char *path[TY_DEPTH + 1] = {ty_path[0], ty_path[1], t->name};
+			const char *path[TY_DEPTH + 1] = {ty_path[0], ty_path[1], t->identifier};
 			id = made_id(s, path, TY_DEPTH + 1);
 		}
 		op_value *v = ty_value(t);
 		put_value(&w, id, v);
 		op_free(v);
-		if (!existing) named[nnamed] = t->name, nameids[nnamed++] = id;
+		if (!existing) named[nnamed] = t->identifier, nameids[nnamed++] = id;
 	}
 	if (nnamed > 0) put_names(&w, folder, named, nameids, nnamed);
 	free(last), free(order), free(named), free(nameids);
@@ -388,19 +390,28 @@ static const char *claimed(const ty_extensions *e, const char *ext) {
 	return NULL;
 }
 
+// a folder's members that are nodes, in its order (key_order), their names borrowed from here (the
+// caller's, pl_members_free). new: free
+static named_id *in_order(pl *p, const ty_folder *folder, pl_members *here, size_t *count) {
+	*here = pl_members_at(p, (const char *const *)folder->path, folder->n);
+	named_id *sorted = ty_alloc((here->n + 1) * sizeof *sorted);
+	*count = 0;
+	for (size_t i = 0; i < here->n; i++) {
+		if (here->items[i].id.symbol != NULL) continue;
+		sorted[(*count)++] = (named_id){here->items[i].name, here->items[i].id};
+	}
+	qsort(sorted, *count, sizeof *sorted, key_order);
+	return sorted;
+}
+
 ty_extensions ty_extensions_of(pl *p, const ty_folder *folder) {
 	ty_extensions e = {0};
 	if (folder == NULL) return e;
-	pl_members here = pl_members_at(p, (const char *const *)folder->path, folder->n);
-	named_id *sorted = ty_alloc((here.n + 1) * sizeof *sorted);
-	size_t count = 0;
-	for (size_t i = 0; i < here.n; i++) {
-		if (here.items[i].id.symbol != NULL) continue;
-		sorted[count++] = (named_id){here.items[i].name, here.items[i].id};
-	}
-	qsort(sorted, count, sizeof *sorted, key_order);
+	pl_members here;
+	size_t count;
+	named_id *sorted = in_order(p, folder, &here, &count);
 	for (size_t i = 0; i < count; i++) {
-		op_key key = {.type = OP_STR_KEY, .s = "fileNameExtension"};
+		op_key key = {.type = OP_STR_KEY, .s = "filenameExtension"};
 		const op_value *v = pl_read(p, tb_string("value"), sorted[i].id, &key, 1);
 		if (v == NULL) continue;
 		size_t many = v->type == OP_LIST ? v->count : v->type == OP_STR ? 1 : 0;
@@ -432,7 +443,7 @@ const char *ty_by_name(const ty_extensions *e, const char *name) {
 	const char *found = NULL;
 	for (const char *dot = strchr(lower + (*lower ? 1 : 0), '.'); dot != NULL && found == NULL;
 		dot = strchr(dot + 1, '.')) {
-		found = claimed(e, dot);
+		found = claimed(e, dot + 1);
 	}
 	free(lower);
 	return found;
@@ -456,4 +467,118 @@ char *ty_type_of(pl *p, const char *id, const char *const *at, size_t n, const t
 	char *out = uti != NULL ? ty_dup(uti) : NULL;
 	ty_extensions_free(&own);
 	return out;
+}
+
+// swift's UTType -------------------------------------------------------------------------------
+
+// one field of a type's value, borrowed; undeclared or none: NULL
+static const op_value *field(pl *p, const ty_folder *folder, const char *type, const char *name) {
+	tb_key id;
+	if (folder == NULL || !node_of(p, folder, type, &id)) return NULL;
+	op_key key = {.type = OP_STR_KEY, .s = name};
+	return pl_read(p, tb_string("value"), id, &key, 1);
+}
+
+// a string or a list's i-th string (a string is one, a list its strings); NULL: none
+static const char *string_at(const op_value *v, size_t i) {
+	if (v == NULL) return NULL;
+	if (v->type == OP_STR) return i == 0 ? v->str : NULL;
+	if (v->type != OP_LIST) return NULL;
+	for (size_t j = 0, k = 0; j < v->count; j++) {
+		if (v->items[j]->type != OP_STR) continue;
+		if (k++ == i) return v->items[j]->str;
+	}
+	return NULL;
+}
+
+static char *dup_or_null(const char *s) { return s != NULL ? ty_dup(s) : NULL; }
+
+bool ty_is_declared(pl *p, const ty_folder *folder, const char *type) {
+	tb_key id;
+	return folder != NULL && node_of(p, folder, type, &id);
+}
+
+bool ty_is_dynamic(const char *type) { return strncmp(type, "dyn.", 4) == 0; }
+
+bool ty_is_public(const char *type) { return strncmp(type, "public.", 7) == 0; }
+
+char *ty_preferred_filename_extension(pl *p, const ty_folder *folder, const char *type) {
+	return dup_or_null(string_at(field(p, folder, type, "filenameExtension"), 0));
+}
+
+char *ty_preferred_mime_type(pl *p, const ty_folder *folder, const char *type) {
+	return dup_or_null(string_at(field(p, folder, type, "mimeType"), 0));
+}
+
+char *ty_reference_url(pl *p, const ty_folder *folder, const char *type) {
+	const op_value *v = field(p, folder, type, "referenceURL");
+	return v != NULL && v->type == OP_STR ? ty_dup(v->str) : NULL;
+}
+
+int ty_version(pl *p, const ty_folder *folder, const char *type, long long *out) {
+	const op_value *v = field(p, folder, type, "version");
+	if (v == NULL || v->type != OP_NUM) return 0;
+	*out = (long long)v->num;
+	return 1;
+}
+
+ty_conformance ty_supertypes(pl *p, const ty_folder *folder, const char *type) {
+	ty_conformance c = ty_conform(p, folder, type);
+	free(c.all[0]);
+	memmove(c.all, c.all + 1, (c.n - 1) * sizeof *c.all);
+	c.n--;
+	return c;
+}
+
+bool ty_conforms_to(pl *p, const ty_folder *folder, const char *type, const char *to) {
+	if (strcmp(type, to) == 0) return true;
+	ty_conformance c = ty_conform(p, folder, type);
+	bool found = false;
+	for (size_t i = 1; i < c.n && !found; i++) found = strcmp(c.all[i], to) == 0;
+	ty_conformance_free(&c);
+	return found;
+}
+
+bool ty_is_subtype_of(pl *p, const ty_folder *folder, const char *type, const char *of) {
+	return strcmp(type, of) != 0 && ty_conforms_to(p, folder, type, of);
+}
+
+bool ty_is_supertype_of(pl *p, const ty_folder *folder, const char *type, const char *of) {
+	return ty_is_subtype_of(p, folder, of, type);
+}
+
+// the first type in the folder's order whose field holds tag (any case) and conforms
+static char *by_tag(pl *p, const ty_folder *folder, const char *name, const char *tag, const char *to) {
+	if (folder == NULL) return NULL;
+	char *want = lowered(tag);
+	pl_members here;
+	size_t count;
+	named_id *sorted = in_order(p, folder, &here, &count);
+	char *found = NULL;
+	for (size_t i = 0; i < count && found == NULL; i++) {
+		op_key key = {.type = OP_STR_KEY, .s = name};
+		const op_value *v = pl_read(p, tb_string("value"), sorted[i].id, &key, 1);
+		bool holds = false;
+		for (size_t j = 0; !holds && string_at(v, j) != NULL; j++) {
+			char *x = lowered(string_at(v, j));
+			holds = strcmp(x, want) == 0;
+			free(x);
+		}
+		if (holds && ty_conforms_to(p, folder, sorted[i].name, to != NULL ? to : TY_DATA)) {
+			found = ty_dup(sorted[i].name);
+		}
+	}
+	free(sorted);
+	pl_members_free(&here);
+	free(want);
+	return found;
+}
+
+char *ty_from_filename_extension(pl *p, const ty_folder *folder, const char *extension,
+	const char *conforming_to) {
+	return by_tag(p, folder, "filenameExtension", extension, conforming_to);
+}
+
+char *ty_from_mime_type(pl *p, const ty_folder *folder, const char *mime_type, const char *conforming_to) {
+	return by_tag(p, folder, "mimeType", mime_type, conforming_to);
 }

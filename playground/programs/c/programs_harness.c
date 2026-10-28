@@ -307,8 +307,8 @@ static void install(void *data) {
 		known = pw_alloc((list->count + 1) * sizeof *known);
 		for (size_t i = 0; i < list->count; i++) {
 			const op_value *t = list->items[i];
-			known[i] = (ty_known){pw_text(op_get(t, "name")), list_of(op_get(t, "conformsTo")),
-				list_of(op_get(t, "fileNameExtension")), list_of(op_get(t, "mimeType"))};
+			known[i] = (ty_known){pw_text(op_get(t, "identifier")), list_of(op_get(t, "conformsTo")),
+				list_of(op_get(t, "filenameExtension")), list_of(op_get(t, "mimeType"))};
 		}
 		s.list = known;
 		s.n = list->count;

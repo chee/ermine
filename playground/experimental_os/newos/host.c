@@ -125,12 +125,12 @@ static const ty_known TYPES[] = {
 	{"public.executable", (const char *const[]){"public.item", NULL}, NULL, NULL},
 	{"public.text", (const char *const[]){"public.data", "public.content", NULL}, NULL, NULL},
 	{"public.source-code", (const char *const[]){"public.text", NULL}, NULL, NULL},
-	{"com.netscape.javascript-source", (const char *const[]){"public.source-code", "public.executable", NULL}, (const char *const[]){".js", NULL}, NULL},
-	{"public.c-source", (const char *const[]){"public.source-code", NULL}, (const char *const[]){".c", NULL}, NULL},
+	{"com.netscape.javascript-source", (const char *const[]){"public.source-code", "public.executable", NULL}, (const char *const[]){"js", NULL}, NULL},
+	{"public.c-source", (const char *const[]){"public.source-code", NULL}, (const char *const[]){"c", NULL}, NULL},
 	{"party.chee.ermine.driver", (const char *const[]){"public.data", NULL}, NULL, NULL},
 	{"party.chee.ermine.exec", (const char *const[]){"public.data", NULL}, NULL, NULL},
-	{"org.webassembly.wasm", (const char *const[]){"public.data", "public.executable", NULL}, (const char *const[]){".wasm", NULL}, NULL},
-	{DYLIB_TYPE, (const char *const[]){"public.data", "public.executable", NULL}, (const char *const[]){".dylib", NULL}, NULL},
+	{"org.webassembly.wasm", (const char *const[]){"public.data", "public.executable", NULL}, (const char *const[]){"wasm", NULL}, NULL},
+	{DYLIB_TYPE, (const char *const[]){"public.data", "public.executable", NULL}, (const char *const[]){"dylib", NULL}, NULL},
 };
 
 // the runners (ermine/programs' host runners): a name, what it takes, its function

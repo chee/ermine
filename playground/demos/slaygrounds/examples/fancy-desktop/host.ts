@@ -95,7 +95,7 @@ const CLOCK = "party.chee.ermine.clock"
 const OWN = [
 	{ name: PICTURE, conformsTo: "public.image" },
 	{ name: LIST, conformsTo: "public.json" },
-	{ name: CLOCK, conformsTo: "public.json" },
+	{ identifier: CLOCK, conformsTo: "public.json" },
 ]
 
 // what the shell asks of the host (see program.ts)

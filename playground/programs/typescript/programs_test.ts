@@ -26,7 +26,7 @@ import { conformance, installTypes, type Known, TYPES, typesAt } from "@ermine/t
 
 const C = "public.c-source"
 const JS = "com.netscape.javascript-source"
-const WASM = "public.wasm-executable"
+const WASM = "public.wasm"
 const ARM = "party.chee.ermine.arm64-executable"
 
 type Loader = {
@@ -178,7 +178,7 @@ Deno.test("types: installed at R/ermine/types, conformance followed, and found f
 	assertEquals(again, [])
 	assertEquals(JSON.stringify(w.table.get("children", "ermine/types")?.value), before)
 	// one more, into the folder there
-	w.types([{ name: "party.chee.ermine.clockface", conformsTo: "public.json" }])
+	w.types([{ identifier: "party.chee.ermine.clockface", conformsTo: "public.json" }])
 	assertEquals(
 		conformance(w.places, t, "party.chee.ermine.clockface").all.slice(0, 3),
 		["party.chee.ermine.clockface", "public.json", "public.text"],
@@ -313,7 +313,7 @@ Deno.test("a type missing from ermine/types: unknown-type; installed, it fits", 
 			why: "unknown-type",
 		}, { why: "no-chain", ...face }],
 	}])
-	w.types([{ name: "party.chee.ermine.clockface", conformsTo: "public.json" }])
+	w.types([{ identifier: "party.chee.ermine.clockface", conformsTo: "public.json" }])
 	w.s.pulse()
 	assertEquals(ran.runs, 2)
 	assertEquals(ran.values[1], {

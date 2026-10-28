@@ -54,7 +54,7 @@
 				"ermine.programs.takes": [
 					"public.c-source"
 				],
-				"ermine.programs.gives": "public.wasm-executable",
+				"ermine.programs.gives": "public.wasm",
 				"ermine.programs.needs": [
 					"javascript",
 					"fetch"
@@ -66,11 +66,11 @@
 			"op": "attrs",
 			"id": "WCLANG",
 			"value": {
-				"ermine.type": "public.wasm-executable",
+				"ermine.type": "public.wasm",
 				"ermine.programs.takes": [
 					"public.c-source"
 				],
-				"ermine.programs.gives": "public.wasm-executable",
+				"ermine.programs.gives": "public.wasm",
 				"ermine.programs.needs": [
 					"wasm32"
 				]
@@ -83,7 +83,7 @@
 			"value": {
 				"ermine.type": "com.netscape.javascript-source",
 				"ermine.programs.takes": [
-					"public.wasm-executable"
+					"public.wasm"
 				],
 				"ermine.programs.provides": [
 					"wasm32"
@@ -300,7 +300,7 @@
 							"clang"
 						],
 						"for": "WCLANG",
-						"type": "public.wasm-executable",
+						"type": "public.wasm",
 						"why": "wrong-type"
 					},
 					{
@@ -309,7 +309,7 @@
 							"page"
 						],
 						"for": "WCLANG",
-						"type": "public.wasm-executable",
+						"type": "public.wasm",
 						"why": "wrong-type"
 					},
 					{
@@ -329,7 +329,7 @@
 							"clang"
 						],
 						"for": "CAT",
-						"type": "public.wasm-executable",
+						"type": "public.wasm",
 						"why": "wrong-type"
 					},
 					{
@@ -338,7 +338,7 @@
 							"page"
 						],
 						"for": "CAT",
-						"type": "public.wasm-executable",
+						"type": "public.wasm",
 						"why": "wrong-type"
 					},
 					{
@@ -348,7 +348,7 @@
 							"clang"
 						],
 						"for": "CAT",
-						"type": "public.wasm-executable",
+						"type": "public.wasm",
 						"why": "wrong-type"
 					}
 				]
@@ -483,7 +483,7 @@
 							"clang"
 						],
 						"for": "WCLANG",
-						"type": "public.wasm-executable",
+						"type": "public.wasm",
 						"why": "wrong-type"
 					},
 					{
@@ -492,7 +492,7 @@
 							"page"
 						],
 						"for": "WCLANG",
-						"type": "public.wasm-executable",
+						"type": "public.wasm",
 						"why": "wrong-type"
 					},
 					{
@@ -512,7 +512,7 @@
 							"clang"
 						],
 						"for": "CAT",
-						"type": "public.wasm-executable",
+						"type": "public.wasm",
 						"why": "wrong-type"
 					},
 					{
@@ -521,7 +521,7 @@
 							"page"
 						],
 						"for": "CAT",
-						"type": "public.wasm-executable",
+						"type": "public.wasm",
 						"why": "wrong-type"
 					},
 					{
@@ -531,7 +531,7 @@
 							"clang"
 						],
 						"for": "CAT",
-						"type": "public.wasm-executable",
+						"type": "public.wasm",
 						"why": "wrong-type"
 					}
 				]

@@ -26,7 +26,7 @@ import {
 } from "./start.ts"
 
 const C = "public.c-source"
-const WASM = "public.wasm-executable"
+const WASM = "public.wasm"
 
 // sited: the scopes made through ermine/sites, programs', software's and processes' files in its
 // ours. software's pulses asked for are never run: each test pulses

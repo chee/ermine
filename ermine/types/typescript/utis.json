@@ -1,151 +1,3866 @@
 [
-	{"name":"public.item"},
-	{"name":"public.content"},
-	{"name":"public.message"},
-	{"name":"public.contact"},
-	{"name":"public.configuration"},
-	{"name":"public.composite-content","conformsTo":"public.content"},
-	{"name":"public.data","conformsTo":"public.item"},
-	{"name":"public.database"},
-	{"name":"public.archive","conformsTo":"public.data"},
-	{"name":"public.directory","conformsTo":"public.item"},
-	{"name":"public.executable","conformsTo":"public.item"},
-	{"name":"com.microsoft.windows-dynamic-link-library","conformsTo":["public.executable","public.data"],"mimeType":"application/x-msdownload","fileNameExtension":".dll"},
-	{"name":"com.microsoft.windows-executable","conformsTo":["public.executable","public.data"],"mimeType":"application/x-msdownload","fileNameExtension":".exe"},
-	{"name":"public.object-code","conformsTo":["public.executable","public.data"],"fileNameExtension":".o"},
-	{"name":"public.unix-executable","conformsTo":["public.executable","public.data"]},
-	{"name":"public.node-dynamic-link-library","conformsTo":["public.executable","public.data"],"fileNameExtension":".node"},
-	{"name":"public.bare-dynamic-link-library","conformsTo":["public.executable","public.data"],"fileNameExtension":".bare"},
-	{"name":"com.sun.java-class","conformsTo":["public.executable","public.data"],"fileNameExtension":".class"},
-	{"name":"public.key-value","conformsTo":"public.data"},
-	{"name":"com.sun.java-properties","conformsTo":"public.key-value","fileNameExtension":".properties","mimeType":"text/x-java-properties"},
-	{"name":"public.zip-archive","conformsTo":"public.archive","fileNameExtension":".zip","mimeType":"application/zip"},
-	{"name":"com.sun.java-keystore","conformsTo":"public.archive","fileNameExtension":".jks"},
-	{"name":"com.sun.java-archive","conformsTo":["public.executable","public.zip-archive"],"mimeType":"application/x-java-archive","fileNameExtension":".jar"},
-	{"name":"com.sun.java-web-archive","conformsTo":"com.sun.java-archive","fileNameExtension":".war"},
-	{"name":"com.sun.java-enterprise-archive","conformsTo":"com.sun.java-archive","fileNameExtension":".ear"},
-	{"name":"public.folder","conformsTo":"public.directory"},
-	{"name":"public.volume","conformsTo":"public.folder"},
-	{"name":"com.apple.resolvable"},
-	{"name":"public.symlink","conformsTo":["public.item","com.apple.resolvable"]},
-	{"name":"public.url","conformsTo":"public.data"},
-	{"name":"public.log","conformsTo":"public.data","fileNameExtension":".log"},
-	{"name":"systemd.journal","conformsTo":"public.log","mimeType":"application/vnd.fdo.journal"},
-	{"name":"public.file-url","conformsTo":"public.url"},
-	{"name":"public.text","conformsTo":["public.data","public.content"]},
-	{"name":"public.plain-text","conformsTo":"public.text","fileNameExtension":[".txt",".text"],"mimeType":"text/plain"},
-	{"name":"public.utf8-plain-text","conformsTo":"public.plain-text"},
-	{"name":"public.utf16-external-plain-text","conformsTo":"public.plain-text"},
-	{"name":"public.utf16-plain-text","conformsTo":"public.plain-text"},
-	{"name":"public.rtf","conformsTo":"public.text","fileNameExtension":".rtf","mimeType":"text/rtf"},
-	{"name":"public.html","conformsTo":"public.text","fileNameExtension":[".html",".htm",".shtml",".shtm"],"mimeType":"text/html"},
-	{"name":"public.css","conformsTo":"public.text","fileNameExtension":".css","mimeType":"text/css"},
-	{"name":"public.xml","conformsTo":"public.text","fileNameExtension":".xml","mimeType":"text/xml"},
-	{"name":"public.json","conformsTo":"public.text","fileNameExtension":".json","mimeType":["application/json","text/json"]},
-	{"name":"public.yaml","conformsTo":"public.text","fileNameExtension":[".yml",".yaml"],"mimeType":"application/x-yaml"},
-	{"name":"public.toml","conformsTo":["public.text","public.configuration"],"fileNameExtension":".toml","mimeType":"application/toml"},
-	{"name":"public.ini","conformsTo":["public.text","public.configuration"],"fileNameExtension":".ini","mimeType":"zz-application/zz-winassoc-ini"},
-	{"name":"public.conf","conformsTo":["public.text","public.configuration"],"fileNameExtension":".conf"},
-	{"name":"public.csp-report","conformsTo":"public.json","mimeType":"application/csp-report"},
-	{"name":"public.source-code","conformsTo":"public.plain-text"},
-	{"name":"public.script","conformsTo":"public.source-code"},
-	{"name":"com.sun.java-source","conformsTo":"public.source-code","fileNameExtension":[".java",".jav"]},
-	{"name":"public.shell-script","conformsTo":"public.script","fileNameExtension":[".sh",".command"],"mimeType":"text/x-shellscript"},
-	{"name":"public.bash-script","conformsTo":"public.shell-script","fileNameExtension":".bash"},
-	{"name":"public.ksh-script","conformsTo":"public.shell-script","fileNameExtension":".ksh","mimeType":["text/x-script.ksh","application/x-ksh"]},
-	{"name":"public.tcsh-script","conformsTo":"public.shell-script","fileNameExtension":".tcsh","mimeType":"text/x-script.ksh"},
-	{"name":"public.csh-script","conformsTo":"public.shell-script","fileNameExtension":".csh","mimeType":"text/x-script.ksh"},
-	{"name":"public.lex-source","conformsTo":"public.source-code","fileNameExtension":[".l",".lm",".lmm",".lpp",".lxx",".ll"]},
-	{"name":"public.yacc-source","conformsTo":"public.source-code","fileNameExtension":[".y",".ym",".ymm",".ypp",".yxx",".yy"]},
-	{"name":"public.make-source","conformsTo":"public.script","fileNameExtension":[".make",".mak",".gmk",".mk"]},
-	{"name":"public.perl-script","conformsTo":"public.shell-script","fileNameExtension":".pl"},
-	{"name":"public.python-script","conformsTo":"public.shell-script","fileNameExtension":".py"},
-	{"name":"public.ruby-script","conformsTo":"public.shell-script","fileNameExtension":[".rb",".rbw"]},
-	{"name":"public.php-script","conformsTo":"public.shell-script","fileNameExtension":[".php",".php3",".php4",".ph3",".ph4",".phtml"]},
-	{"name":"public.assembly-source","conformsTo":"public.source-code","fileNameExtension":[".s",".asm"]},
-	{"name":"public.sourcemap","conformsTo":"public.json","fileNameExtension":[".js.map",".mjs.map"]},
-	{"name":"com.netscape.javascript-source","conformsTo":["public.source-code","public.executable"],"fileNameExtension":[".mjs",".cjs",".js",".jscript",".javascript"],"mimeType":["application/ecmascript","application/javascript","application/x-ecmascript","application/x-javascript","text/ecmascript","text/javascript","text/javascript1.0","text/javascript1.1","text/javascript1.2","text/javascript1.3","text/javascript1.4","text/javascript1.5","text/jscript","text/livescript","text/x-ecmascript","text/x-javascript"]},
-	{"name":"public.bzip2-archive","conformsTo":"public.archive","fileNameExtension":".bzip2"},
-	{"name":"org.gnu.gnu-tar-archive","conformsTo":"public.archive","fileNameExtension":".tar","mimeType":"application/x-tar"},
-	{"name":"public.tar-archive","conformsTo":"org.gnu.gnu-tar-archive","fileNameExtension":".tar","mimeType":["application/x-tar","application/tar"]},
-	{"name":"public.brotli","conformsTo":"public.archive","fileNameExtension":".br","mimeType":"application/brotli"},
-	{"name":"org.gnu.gnu-zip-archive","conformsTo":"public.archive","fileNameExtension":[".gz",".gzip"],"mimeType":["application/gzip","application/x-gzip"]},
-	{"name":"org.gnu.gnu-zip-tar-archive","conformsTo":"org.gnu.gnu-zip-archive","mimeType":"application/tar+gzip","fileNameExtension":[".tar.gz",".tgz"]},
-	{"name":"public.tar-bzip2-archive","conformsTo":"public.bzip2-archive","fileNameExtension":[".tbz2",".tbz"]},
-	{"name":"com.apple.xar-archive","conformsTo":"public.archive","fileNameExtension":".xar"},
-	{"name":"com.microsoft.cab-archive","conformsTo":["public.archive","public.data"],"fileNameExtension":".cab","mimeType":"application/vnd.ms-cab-compressed"},
-	{"name":"public.xz-archive","conformsTo":"public.archive","fileNameExtension":".xz","mimeType":"application/x-xz"},
-	{"name":"public.zst-archive","conformsTo":"public.archive","fileNameExtension":".zst","mimeType":"application/zst"},
-	{"name":"public.7z-archive","conformsTo":"public.archive","fileNameExtension":".7z","mimeType":"application/x-7z-compressed"},
-	{"name":"public.rar-archive","conformsTo":"public.archive","fileNameExtension":".rar","mimeType":["application/x-rar-compressed","application/vnd.rar"]},
-	{"name":"public.cpio-archive","conformsTo":"public.archive","fileNameExtension":[".cpio",".pax"],"mimeType":"application/x-cpio"},
-	{"name":"public.rpm-archive","conformsTo":"public.archive","fileNameExtension":".rpm","mimeType":"application/x-rpm"},
-	{"name":"public.ar-archive","conformsTo":"public.archive","fileNameExtension":[".a",".lib"]},
-	{"name":"public.deb-archive","conformsTo":"public.ar-archive","fileNameExtension":".deb","mimeType":["application/vnd.debian.binary-package","application/x-deb"]},
-	{"name":"public.arch-linux-archive","conformsTo":"public.archive"},
-	{"name":"public.arch-linux-archive.xz","conformsTo":["public.arch-linux-archive","public.xz-archive"],"fileNameExtension":".pkg.tar.xz"},
-	{"name":"public.arch-linux-archive.zst","conformsTo":["public.arch-linux-archive","public.zst-archive"],"fileNameExtension":".pkg.tar.zst"},
-	{"name":"com.apple.package","conformsTo":"public.directory"},
-	{"name":"com.apple.application","conformsTo":"public.data"},
-	{"name":"public.wasm-executable","conformsTo":["public.executable"],"mimeType":"application/wasm","fileNameExtension":".wasm"},
-	{"name":"public.wasm-text","conformsTo":["public.text"],"fileNameExtension":".wat"},
-	{"name":"com.apple.application-bundle","conformsTo":"com.apple.application","fileNameExtension":[".app",".framework",".kext",".plugin",".docset",".xpc",".qlgenerator",".component",".saver",".mdimport"]},
-	{"name":"public.disk-image","conformsTo":"public.archive"},
-	{"name":"public.image","conformsTo":["public.data","public.content"]},
-	{"name":"public.case-insensitive-text"},
-	{"name":"public.filename-extension","conformsTo":"public.case-insensitive-text"},
-	{"name":"public.mime-type","conformsTo":"public.case-insensitive-text"},
-	{"name":"public.presentation","conformsTo":"public.composite-content"},
-	{"name":"com.microsoft.word.doc","conformsTo":["public.data","public.composite-content"],"fileNameExtension":[".doc",".docx"]},
-	{"name":"com.microsoft.excel.xls","conformsTo":["public.data","public.composite-content"],"fileNameExtension":[".xls",".xlsx"]},
-	{"name":"com.microsoft.powerpoint.ppt","conformsTo":["public.data","public.presentation"],"fileNameExtension":".ppt"},
-	{"name":"com.microsoft.word.wordml","conformsTo":["public.data","public.composite-content"]},
-	{"name":"public.svg-image","conformsTo":["public.image","public.xml"],"mimeType":"image/svg+xml","fileNameExtension":[".svg",".svgz"]},
-	{"name":"public.jpeg","conformsTo":"public.image","mimeType":["image/jpeg"],"fileNameExtension":[".jpg",".jpeg"]},
-	{"name":"public.jxl","conformsTo":"public.image","mimeType":["image/jxl"],"fileNameExtension":[".jxl"]},
-	{"name":"public.jpeg2000","conformsTo":"public.image","mimeType":["image/jp2","image/jpx","image/jpm"],"fileNameExtension":".jk2"},
-	{"name":"public.webp","conformsTo":"public.image","mimeType":"image/webp","fileNameExtension":".webp"},
-	{"name":"public.heic","conformsTo":"public.image","mimeType":"image/heic","fileNameExtension":".heic"},
-	{"name":"public.avif","conformsTo":"public.image","mimeType":"image/avif","fileNameExtension":".avif"},
-	{"name":"public.jxl","conformsTo":"public.image","mimeType":"image/jxl","fileNameExtension":".jxl"},
-	{"name":"com.adobe.postscript","conformsTo":"public.image","fileNameExtension":".ps","mimeType":"application/postscript"},
-	{"name":"net.daringfireball.markdown","conformsTo":"public.text","fileNameExtension":[".md",".markdown"],"mimeType":"text/markdown"},
-	{"name":"public.jsx","conformsTo":"public.source-code","fileNameExtension":[".jsx"],"mimeType":"text/jsx"},
-	{"name":"public.mdx","conformsTo":["net.daringfireball.markdown","public.jsx"],"fileNameExtension":[".mdx"],"mimeType":"text/mdx"},
-	{"name":"com.apple.disk-image","conformsTo":"public.disk-image","fileNameExtension":[".dmg",".smi",".img"],"mimeType":"application/x-apple-diskimage"},
-	{"name":"public.oci.image.layer.v1","conformsTo":"public.data"},
-	{"name":"public.oci.image.layer.v1.tar","conformsTo":"public.oci.image.layer.v1","fileNameExtension":".tar","mimeType":"application/vnd.oci.image.layer.v1.tar"},
-	{"name":"public.oci.image.layer.v1.tar.gzip","conformsTo":"public.oci.image.layer.v1","fileNameExtension":".tar.gz","mimeType":"application/vnd.oci.image.layer.v1.tar+gzip"},
-	{"name":"public.oci.image.layer.v1.tar.zstd","conformsTo":"public.oci.image.layer.v1","fileNameExtension":".tar.zstd","mimeType":"application/vnd.oci.image.layer.v1.tar+zstd"},
-	{"name":"public.security.private-key","conformsTo":"public.data"},
-	{"name":"public.security.certificate","conformsTo":"public.data"},
-	{"name":"public.security.certificate.trust","conformsTo":"public.security.certificate"},
-	{"name":"public.security.certificate.request","conformsTo":"public.data"},
-	{"name":"public.pkcs8","conformsTo":"public.data","fileNameExtension":[".p8",".key"],"mimeType":"application/pkcs8"},
-	{"name":"public.pkcs10","conformsTo":"public.data","fileNameExtension":[".p10",".csr"],"mimeType":"application/pkcs10"},
-	{"name":"public.pkix-cert","conformsTo":"public.security.certificate","fileNameExtension":".cer","mimeType":"application/pkix-cert"},
-	{"name":"public.pkix-crl","conformsTo":"public.data","fileNameExtension":".crl","mimeType":"application/pkix-crl"},
-	{"name":"public.pkcs7-mime","conformsTo":"public.data","fileNameExtension":".p7c","mimeType":"application/pkcs7-mime"},
-	{"name":"public.x-x509-ca-cert","conformsTo":"public.security.certificate","fileNameExtension":[".crt",".der"],"mimeType":"application/x-x509-ca-cert"},
-	{"name":"public.x-x509-user-cert","conformsTo":"public.security.certificate","fileNameExtension":".crt","mimeType":"application/x-x509-user-cert"},
-	{"name":"public.x-pkcs7-crl","conformsTo":"public.data","fileNameExtension":".crl","mimeType":"application/x-pkcs7-crl"},
-	{"name":"public.x-pkcs12","conformsTo":"public.data","fileNameExtension":[".p12",".pfx"],"mimeType":"application/x-pkcs12"},
-	{"name":"public.x-pem-file","conformsTo":"public.data","fileNameExtension":".pem","mimeType":"application/x-pem-file"},
-	{"name":"public.x-pkcs7-certificates","conformsTo":"public.security.certificate","fileNameExtension":[".p7b",".spc"],"mimeType":"application/x-pkcs7-certificates"},
-	{"name":"public.x-pkcs7-certreqresp","conformsTo":"public.data","fileNameExtension":".p7r","mimeType":"application/x-pkcs7-certreqresp"},
-	{"name":"public.systemd-service-unit","conformsTo":["public.text","public.configuration"],"fileNameExtension":".service"},
-	{"name":"public.systemd-socket-unit","conformsTo":["public.text","public.configuration"],"fileNameExtension":".socket"},
-	{"name":"public.systemd-timer-unit","conformsTo":["public.text","public.configuration"],"fileNameExtension":".timer"},
-	{"name":"public.systemd-path-unit","conformsTo":["public.text","public.configuration"],"fileNameExtension":".socket"},
-	{"name":"public.systemd-device-unit","conformsTo":["public.text","public.configuration"],"fileNameExtension":".device"},
-	{"name":"public.systemd-mount-unit","conformsTo":["public.text","public.configuration"],"fileNameExtension":".mount"},
-	{"name":"public.systemd-swap-unit","conformsTo":["public.text","public.configuration"],"fileNameExtension":".swap"},
-	{"name":"public.systemd-target-unit","conformsTo":["public.text","public.configuration"],"fileNameExtension":".target"},
-	{"name":"public.systemd-slice-unit","conformsTo":["public.text","public.configuration"],"fileNameExtension":".slice"},
-	{"name":"public.systemd-scope-unit","conformsTo":["public.text","public.configuration"],"fileNameExtension":".scope"},
-	{"name":"public.webmanifest","conformsTo":["public.json","public.configuration"],"fileNameExtension":".webmanifest","mimeType":"application/manifest+json"},
-	{"name":"public.polkit.rules","conformsTo":["com.netscape.javascript-source","public.configuration"],"fileNameExtension":".rules"},
-	{"name":"com.apple.xcode.project","conformsTo":["public.composite-content","com.apple.package"],"fileNameExtension":[".xcodeproj",".xcode",".pbproj"]},
-	{"name":"public.c-plus-plus-header","conformsTo":"public.source-code","fileNameExtension":[".hh",".hp",".hpp",".hxx",".h++",".ipp"]},
-	{"name":"public.c-plus-plus-source","conformsTo":"public.source-code","fileNameExtension":[".cc",".cp",".cpp",".cxx",".c++"]}
+	{
+		"identifier": "com.adobe.pdf",
+		"conformsTo": [
+			"public.data",
+			"public.composite-content"
+		],
+		"filenameExtension": [
+			"pdf"
+		],
+		"mimeType": [
+			"application/pdf"
+		]
+	},
+	{
+		"identifier": "com.adobe.postscript",
+		"conformsTo": [
+			"public.data",
+			"public.composite-content"
+		],
+		"filenameExtension": [
+			"ps"
+		],
+		"mimeType": [
+			"application/postscript"
+		]
+	},
+	{
+		"identifier": "com.apple.alias-file",
+		"conformsTo": [
+			"public.data",
+			"com.apple.resolvable"
+		]
+	},
+	{
+		"identifier": "com.apple.applescript.script",
+		"conformsTo": [
+			"public.data",
+			"public.script"
+		],
+		"filenameExtension": [
+			"scpt"
+		]
+	},
+	{
+		"identifier": "com.apple.applescript.script-bundle",
+		"conformsTo": [
+			"com.apple.bundle",
+			"com.apple.package"
+		],
+		"filenameExtension": [
+			"scptd"
+		]
+	},
+	{
+		"identifier": "com.apple.applescript.text",
+		"conformsTo": [
+			"public.script"
+		],
+		"filenameExtension": [
+			"applescript"
+		]
+	},
+	{
+		"identifier": "com.apple.application",
+		"conformsTo": [
+			"public.executable"
+		]
+	},
+	{
+		"identifier": "com.apple.application-and-system-extension",
+		"conformsTo": [
+			"com.apple.xpc-service"
+		],
+		"filenameExtension": [
+			"appex"
+		]
+	},
+	{
+		"identifier": "com.apple.application-bundle",
+		"conformsTo": [
+			"com.apple.application",
+			"com.apple.localizable-name-bundle",
+			"com.apple.package"
+		],
+		"filenameExtension": [
+			"app"
+		]
+	},
+	{
+		"identifier": "com.apple.application-file",
+		"conformsTo": [
+			"com.apple.application",
+			"public.data"
+		],
+		"filenameExtension": [
+			"app"
+		]
+	},
+	{
+		"identifier": "com.apple.application-icon"
+	},
+	{
+		"identifier": "com.apple.archive",
+		"conformsTo": [
+			"public.data",
+			"public.archive"
+		],
+		"filenameExtension": [
+			"aar",
+			"yaa"
+		]
+	},
+	{
+		"identifier": "com.apple.arobject",
+		"conformsTo": [
+			"public.data"
+		],
+		"filenameExtension": [
+			"arobject"
+		]
+	},
+	{
+		"identifier": "com.apple.binary-property-list",
+		"conformsTo": [
+			"com.apple.property-list"
+		],
+		"filenameExtension": [
+			"plist"
+		]
+	},
+	{
+		"identifier": "com.apple.bookmark",
+		"conformsTo": [
+			"public.data",
+			"com.apple.resolvable"
+		]
+	},
+	{
+		"identifier": "com.apple.bundle",
+		"conformsTo": [
+			"public.directory"
+		]
+	},
+	{
+		"identifier": "com.apple.disk-image",
+		"conformsTo": [
+			"public.archive",
+			"public.data",
+			"public.disk-image"
+		]
+	},
+	{
+		"identifier": "com.apple.flat-rtfd",
+		"conformsTo": [
+			"public.data",
+			"public.composite-content"
+		]
+	},
+	{
+		"identifier": "com.apple.folder-icon"
+	},
+	{
+		"identifier": "com.apple.framework",
+		"conformsTo": [
+			"com.apple.bundle"
+		],
+		"filenameExtension": [
+			"framework"
+		]
+	},
+	{
+		"identifier": "com.apple.icns",
+		"conformsTo": [
+			"public.image"
+		],
+		"filenameExtension": [
+			"icns"
+		]
+	},
+	{
+		"identifier": "com.apple.internet-location",
+		"conformsTo": [
+			"public.stored-url",
+			"public.data"
+		]
+	},
+	{
+		"identifier": "com.apple.live-photo"
+	},
+	{
+		"identifier": "com.apple.localizable-name-bundle",
+		"conformsTo": [
+			"com.apple.bundle"
+		]
+	},
+	{
+		"identifier": "com.apple.m4v-video",
+		"conformsTo": [
+			"public.mpeg-4"
+		],
+		"filenameExtension": [
+			"m4v"
+		],
+		"mimeType": [
+			"video/x-m4v"
+		]
+	},
+	{
+		"identifier": "com.apple.metadata-importer",
+		"conformsTo": [
+			"com.apple.plugin"
+		],
+		"filenameExtension": [
+			"mdimporter"
+		]
+	},
+	{
+		"identifier": "com.apple.mount-point",
+		"conformsTo": [
+			"public.item",
+			"com.apple.resolvable"
+		]
+	},
+	{
+		"identifier": "com.apple.package",
+		"conformsTo": [
+			"public.directory"
+		]
+	},
+	{
+		"identifier": "com.apple.plugin",
+		"conformsTo": [
+			"com.apple.bundle",
+			"com.apple.package"
+		],
+		"filenameExtension": [
+			"plugin"
+		]
+	},
+	{
+		"identifier": "com.apple.property-list",
+		"conformsTo": [
+			"public.data"
+		],
+		"filenameExtension": [
+			"plist"
+		]
+	},
+	{
+		"identifier": "com.apple.protected-mpeg-4-audio",
+		"conformsTo": [
+			"public.audio"
+		],
+		"filenameExtension": [
+			"m4p"
+		]
+	},
+	{
+		"identifier": "com.apple.protected-mpeg-4-video",
+		"conformsTo": [
+			"com.apple.m4v-video"
+		]
+	},
+	{
+		"identifier": "com.apple.quicklook-generator",
+		"conformsTo": [
+			"com.apple.plugin"
+		],
+		"filenameExtension": [
+			"qlgenerator"
+		]
+	},
+	{
+		"identifier": "com.apple.quicktime-movie",
+		"conformsTo": [
+			"public.movie"
+		],
+		"filenameExtension": [
+			"mov",
+			"qt"
+		],
+		"mimeType": [
+			"video/quicktime"
+		]
+	},
+	{
+		"identifier": "com.apple.reality",
+		"conformsTo": [
+			"public.data"
+		],
+		"filenameExtension": [
+			"reality"
+		],
+		"mimeType": [
+			"model/vnd.reality"
+		]
+	},
+	{
+		"identifier": "com.apple.resolvable"
+	},
+	{
+		"identifier": "com.apple.rtfd",
+		"conformsTo": [
+			"com.apple.package",
+			"public.composite-content"
+		],
+		"filenameExtension": [
+			"rtfd"
+		]
+	},
+	{
+		"identifier": "com.apple.scenekit.scene",
+		"conformsTo": [
+			"public.data",
+			"public.3d-content"
+		],
+		"filenameExtension": [
+			"scn",
+			"scnz"
+		]
+	},
+	{
+		"identifier": "com.apple.shazamcatalog",
+		"conformsTo": [
+			"public.data"
+		],
+		"filenameExtension": [
+			"shazamcatalog"
+		]
+	},
+	{
+		"identifier": "com.apple.shazamsignature",
+		"conformsTo": [
+			"public.data"
+		],
+		"filenameExtension": [
+			"shazamsignature"
+		]
+	},
+	{
+		"identifier": "com.apple.systempreference.prefpane",
+		"conformsTo": [
+			"com.apple.package",
+			"com.apple.bundle"
+		],
+		"filenameExtension": [
+			"prefPane"
+		]
+	},
+	{
+		"identifier": "com.apple.webarchive",
+		"conformsTo": [
+			"public.data",
+			"public.composite-content"
+		],
+		"filenameExtension": [
+			"webarchive"
+		],
+		"mimeType": [
+			"application/x-webarchive"
+		]
+	},
+	{
+		"identifier": "com.apple.xar-archive",
+		"conformsTo": [
+			"public.data",
+			"public.archive"
+		],
+		"filenameExtension": [
+			"xar"
+		]
+	},
+	{
+		"identifier": "com.apple.xcode.project",
+		"conformsTo": [
+			"public.composite-content",
+			"com.apple.package"
+		],
+		"filenameExtension": [
+			"xcodeproj",
+			"xcode",
+			"pbproj"
+		],
+		"referenceURL": "http://developer.apple.com/tools/xcode/"
+	},
+	{
+		"identifier": "com.apple.xml-property-list",
+		"conformsTo": [
+			"public.xml",
+			"com.apple.property-list"
+		],
+		"filenameExtension": [
+			"plist"
+		]
+	},
+	{
+		"identifier": "com.apple.xpc-service",
+		"conformsTo": [
+			"com.apple.bundle",
+			"com.apple.package"
+		],
+		"filenameExtension": [
+			"xpc"
+		]
+	},
+	{
+		"identifier": "com.compuserve.gif",
+		"conformsTo": [
+			"public.image"
+		],
+		"filenameExtension": [
+			"gif"
+		],
+		"mimeType": [
+			"image/gif"
+		]
+	},
+	{
+		"identifier": "com.microsoft.bmp",
+		"conformsTo": [
+			"public.image"
+		],
+		"filenameExtension": [
+			"bmp",
+			"dib"
+		],
+		"mimeType": [
+			"image/bmp"
+		]
+	},
+	{
+		"identifier": "com.microsoft.cab-archive",
+		"conformsTo": [
+			"public.data",
+			"public.archive"
+		],
+		"filenameExtension": [
+			"cab"
+		],
+		"mimeType": [
+			"application/vnd.ms-cab-compressed"
+		]
+	},
+	{
+		"identifier": "com.microsoft.excel.xls",
+		"conformsTo": [
+			"public.data",
+			"public.composite-content",
+			"public.spreadsheet"
+		],
+		"filenameExtension": [
+			"xls"
+		],
+		"mimeType": [
+			"application/vnd.ms-excel",
+			"application/msexcel"
+		]
+	},
+	{
+		"identifier": "com.microsoft.ico",
+		"conformsTo": [
+			"public.image"
+		],
+		"filenameExtension": [
+			"ico"
+		],
+		"mimeType": [
+			"image/vnd.microsoft.icon"
+		]
+	},
+	{
+		"identifier": "com.microsoft.internet-shortcut",
+		"conformsTo": [
+			"public.stored-url",
+			"public.data"
+		],
+		"filenameExtension": [
+			"url"
+		]
+	},
+	{
+		"identifier": "com.microsoft.powerpoint.ppt",
+		"conformsTo": [
+			"public.data",
+			"public.presentation"
+		],
+		"filenameExtension": [
+			"ppt"
+		],
+		"mimeType": [
+			"application/vnd.ms-powerpoint",
+			"application/mspowerpoint"
+		]
+	},
+	{
+		"identifier": "com.microsoft.typescript",
+		"conformsTo": [
+			"public.script",
+			"public.source-code"
+		],
+		"filenameExtension": [
+			"ts",
+			"tsx",
+			"cts",
+			"mts"
+		],
+		"mimeType": [
+			"application/typescript"
+		],
+		"referenceURL": "https://typescriptlang.org"
+	},
+	{
+		"identifier": "com.microsoft.waveform-audio",
+		"conformsTo": [
+			"public.audio"
+		],
+		"filenameExtension": [
+			"wav",
+			"wave",
+			"bwf"
+		],
+		"mimeType": [
+			"audio/vnd.wave",
+			"audio/wav",
+			"audio/wave",
+			"audio/x-wav"
+		]
+	},
+	{
+		"identifier": "com.microsoft.windows-dynamic-link-library",
+		"conformsTo": [
+			"public.data",
+			"public.executable"
+		],
+		"filenameExtension": [
+			"dll"
+		],
+		"mimeType": [
+			"application/x-msdownload"
+		]
+	},
+	{
+		"identifier": "com.microsoft.windows-executable",
+		"conformsTo": [
+			"public.data",
+			"public.executable"
+		],
+		"filenameExtension": [
+			"exe"
+		],
+		"mimeType": [
+			"application/x-msdownload"
+		]
+	},
+	{
+		"identifier": "com.microsoft.word.doc",
+		"conformsTo": [
+			"public.data",
+			"public.composite-content"
+		],
+		"filenameExtension": [
+			"doc"
+		],
+		"mimeType": [
+			"application/msword"
+		]
+	},
+	{
+		"identifier": "com.microsoft.word.wordml",
+		"conformsTo": [
+			"public.xml",
+			"public.composite-content"
+		],
+		"filenameExtension": [
+			"xml"
+		]
+	},
+	{
+		"identifier": "com.netscape.javascript-source",
+		"conformsTo": [
+			"public.script",
+			"public.executable"
+		],
+		"filenameExtension": [
+			"js",
+			"jscript",
+			"javascript",
+			"mjs",
+			"cjs"
+		],
+		"mimeType": [
+			"text/javascript"
+		]
+	},
+	{
+		"identifier": "com.pixar.universal-scene-description",
+		"conformsTo": [
+			"public.3d-content",
+			"public.data"
+		],
+		"filenameExtension": [
+			"usd"
+		],
+		"referenceURL": "https://openusd.org"
+	},
+	{
+		"identifier": "com.pixar.universal-scene-description-mobile",
+		"conformsTo": [
+			"com.pixar.universal-scene-description"
+		],
+		"filenameExtension": [
+			"usdz"
+		],
+		"mimeType": [
+			"model/vnd.usdz+zip"
+		],
+		"referenceURL": "https://openusd.org"
+	},
+	{
+		"identifier": "com.pkware.zip-archive",
+		"conformsTo": [
+			"public.data",
+			"public.archive"
+		]
+	},
+	{
+		"identifier": "com.rsa.pkcs-12",
+		"conformsTo": [
+			"public.data"
+		],
+		"filenameExtension": [
+			"p12",
+			"pfx"
+		],
+		"mimeType": [
+			"application/x-pkcs12"
+		]
+	},
+	{
+		"identifier": "com.sun.java-archive",
+		"conformsTo": [
+			"public.zip-archive",
+			"public.executable"
+		],
+		"filenameExtension": [
+			"jar"
+		],
+		"mimeType": [
+			"application/java-archive"
+		]
+	},
+	{
+		"identifier": "com.sun.java-class",
+		"conformsTo": [
+			"public.data",
+			"public.executable"
+		],
+		"filenameExtension": [
+			"class"
+		]
+	},
+	{
+		"identifier": "com.sun.java-enterprise-archive",
+		"conformsTo": [
+			"com.sun.java-archive"
+		],
+		"filenameExtension": [
+			"ear"
+		]
+	},
+	{
+		"identifier": "com.sun.java-keystore",
+		"conformsTo": [
+			"public.archive"
+		],
+		"filenameExtension": [
+			"jks"
+		]
+	},
+	{
+		"identifier": "com.sun.java-properties",
+		"conformsTo": [
+			"public.key-value"
+		],
+		"filenameExtension": [
+			"properties"
+		],
+		"mimeType": [
+			"text/x-java-properties"
+		]
+	},
+	{
+		"identifier": "com.sun.java-source",
+		"conformsTo": [
+			"public.source-code"
+		],
+		"filenameExtension": [
+			"java",
+			"jav"
+		]
+	},
+	{
+		"identifier": "com.sun.java-web-archive",
+		"conformsTo": [
+			"com.sun.java-archive"
+		],
+		"filenameExtension": [
+			"war"
+		]
+	},
+	{
+		"identifier": "net.daringfireball.markdown",
+		"conformsTo": [
+			"public.utf8-plain-text"
+		],
+		"filenameExtension": [
+			"md",
+			"markdown",
+			"mdown",
+			"mkd",
+			"mkdn",
+			"markdn"
+		],
+		"mimeType": [
+			"text/markdown",
+			"text/x-markdown",
+			"text/x-web-markdown"
+		]
+	},
+	{
+		"identifier": "org.gnu.gnu-tar-archive",
+		"conformsTo": [
+			"public.data",
+			"public.archive"
+		],
+		"filenameExtension": [
+			"gtar"
+		],
+		"mimeType": [
+			"application/x-gtar"
+		]
+	},
+	{
+		"identifier": "org.gnu.gnu-zip-archive",
+		"conformsTo": [
+			"public.data",
+			"public.archive"
+		],
+		"filenameExtension": [
+			"gz",
+			"gzip"
+		],
+		"mimeType": [
+			"application/x-gzip",
+			"application/gzip"
+		]
+	},
+	{
+		"identifier": "org.gnu.gnu-zip-tar-archive",
+		"conformsTo": [
+			"org.gnu.gnu-zip-archive"
+		],
+		"filenameExtension": [
+			"tgz"
+		]
+	},
+	{
+		"identifier": "org.idpf.epub-container",
+		"conformsTo": [
+			"public.data",
+			"public.composite-content"
+		],
+		"filenameExtension": [
+			"epub"
+		],
+		"mimeType": [
+			"application/epub+zip"
+		],
+		"referenceURL": "http://www.apple.com/ipad/built-in-apps/ibooks.html"
+	},
+	{
+		"identifier": "org.webmproject.webp",
+		"conformsTo": [
+			"public.image"
+		],
+		"filenameExtension": [
+			"webp"
+		],
+		"mimeType": [
+			"image/webp"
+		],
+		"referenceURL": "https://developers.google.com/speed/webp"
+	},
+	{
+		"identifier": "public.3d-content",
+		"conformsTo": [
+			"public.content"
+		]
+	},
+	{
+		"identifier": "public.3gpp",
+		"conformsTo": [
+			"public.movie"
+		],
+		"filenameExtension": [
+			"3gp",
+			"3gpp",
+			"sdv"
+		],
+		"mimeType": [
+			"video/3gpp",
+			"audio/3gpp"
+		]
+	},
+	{
+		"identifier": "public.3gpp2",
+		"conformsTo": [
+			"public.movie"
+		],
+		"filenameExtension": [
+			"3g2",
+			"3gp2"
+		],
+		"mimeType": [
+			"video/3gpp2",
+			"audio/3gpp2"
+		]
+	},
+	{
+		"identifier": "public.7z-archive",
+		"conformsTo": [
+			"public.archive"
+		],
+		"filenameExtension": [
+			"7z"
+		],
+		"mimeType": [
+			"application/x-7z-compressed"
+		]
+	},
+	{
+		"identifier": "public.aac-audio",
+		"conformsTo": [
+			"public.audio"
+		],
+		"filenameExtension": [
+			"aac",
+			"adts"
+		],
+		"mimeType": [
+			"audio/aac",
+			"audio/x-aac"
+		]
+	},
+	{
+		"identifier": "public.ac3-audio",
+		"conformsTo": [
+			"public.audio"
+		],
+		"filenameExtension": [
+			"ac3"
+		],
+		"mimeType": [
+			"audio/ac3"
+		]
+	},
+	{
+		"identifier": "public.ada-source",
+		"conformsTo": [
+			"public.source-code"
+		],
+		"filenameExtension": [
+			"ada",
+			"adb",
+			"ads"
+		]
+	},
+	{
+		"identifier": "public.aifc-audio",
+		"conformsTo": [
+			"public.audio"
+		],
+		"filenameExtension": [
+			"aifc"
+		]
+	},
+	{
+		"identifier": "public.aiff-audio",
+		"conformsTo": [
+			"public.aifc-audio"
+		],
+		"filenameExtension": [
+			"aiff",
+			"aif"
+		],
+		"mimeType": [
+			"audio/aiff",
+			"audio/x-aiff"
+		]
+	},
+	{
+		"identifier": "public.alembic",
+		"conformsTo": [
+			"public.3d-content",
+			"public.data"
+		],
+		"filenameExtension": [
+			"abc"
+		]
+	},
+	{
+		"identifier": "public.app-category"
+	},
+	{
+		"identifier": "public.app-category.action-games",
+		"conformsTo": [
+			"public.app-category.games"
+		]
+	},
+	{
+		"identifier": "public.app-category.adventure-games",
+		"conformsTo": [
+			"public.app-category.games"
+		]
+	},
+	{
+		"identifier": "public.app-category.arcade-games",
+		"conformsTo": [
+			"public.app-category.games"
+		]
+	},
+	{
+		"identifier": "public.app-category.board-games",
+		"conformsTo": [
+			"public.app-category.games"
+		]
+	},
+	{
+		"identifier": "public.app-category.bookmarks",
+		"conformsTo": [
+			"public.app-category"
+		]
+	},
+	{
+		"identifier": "public.app-category.books",
+		"conformsTo": [
+			"public.app-category"
+		]
+	},
+	{
+		"identifier": "public.app-category.business",
+		"conformsTo": [
+			"public.app-category"
+		]
+	},
+	{
+		"identifier": "public.app-category.card-games",
+		"conformsTo": [
+			"public.app-category.games"
+		]
+	},
+	{
+		"identifier": "public.app-category.casino-games",
+		"conformsTo": [
+			"public.app-category.games"
+		]
+	},
+	{
+		"identifier": "public.app-category.developer-tools",
+		"conformsTo": [
+			"public.app-category"
+		]
+	},
+	{
+		"identifier": "public.app-category.dice-games",
+		"conformsTo": [
+			"public.app-category.games"
+		]
+	},
+	{
+		"identifier": "public.app-category.education",
+		"conformsTo": [
+			"public.app-category"
+		]
+	},
+	{
+		"identifier": "public.app-category.educational-games",
+		"conformsTo": [
+			"public.app-category.games"
+		]
+	},
+	{
+		"identifier": "public.app-category.entertainment",
+		"conformsTo": [
+			"public.app-category"
+		]
+	},
+	{
+		"identifier": "public.app-category.family-games",
+		"conformsTo": [
+			"public.app-category.games"
+		]
+	},
+	{
+		"identifier": "public.app-category.finance",
+		"conformsTo": [
+			"public.app-category"
+		]
+	},
+	{
+		"identifier": "public.app-category.food-and-drink",
+		"conformsTo": [
+			"public.app-category"
+		]
+	},
+	{
+		"identifier": "public.app-category.games",
+		"conformsTo": [
+			"public.app-category"
+		]
+	},
+	{
+		"identifier": "public.app-category.graphics-design",
+		"conformsTo": [
+			"public.app-category"
+		]
+	},
+	{
+		"identifier": "public.app-category.healthcare-fitness",
+		"conformsTo": [
+			"public.app-category"
+		]
+	},
+	{
+		"identifier": "public.app-category.kids-games",
+		"conformsTo": [
+			"public.app-category.games"
+		]
+	},
+	{
+		"identifier": "public.app-category.lifestyle",
+		"conformsTo": [
+			"public.app-category"
+		]
+	},
+	{
+		"identifier": "public.app-category.magazines-and-newspapers",
+		"conformsTo": [
+			"public.app-category"
+		]
+	},
+	{
+		"identifier": "public.app-category.medical",
+		"conformsTo": [
+			"public.app-category"
+		]
+	},
+	{
+		"identifier": "public.app-category.music",
+		"conformsTo": [
+			"public.app-category"
+		]
+	},
+	{
+		"identifier": "public.app-category.music-games",
+		"conformsTo": [
+			"public.app-category.games"
+		]
+	},
+	{
+		"identifier": "public.app-category.navigation",
+		"conformsTo": [
+			"public.app-category"
+		]
+	},
+	{
+		"identifier": "public.app-category.news",
+		"conformsTo": [
+			"public.app-category"
+		]
+	},
+	{
+		"identifier": "public.app-category.photography",
+		"conformsTo": [
+			"public.app-category"
+		]
+	},
+	{
+		"identifier": "public.app-category.photography-and-video",
+		"conformsTo": [
+			"public.app-category.photography",
+			"public.app-category.video"
+		]
+	},
+	{
+		"identifier": "public.app-category.productivity",
+		"conformsTo": [
+			"public.app-category"
+		]
+	},
+	{
+		"identifier": "public.app-category.puzzle-games",
+		"conformsTo": [
+			"public.app-category.games"
+		]
+	},
+	{
+		"identifier": "public.app-category.racing-games",
+		"conformsTo": [
+			"public.app-category.games"
+		]
+	},
+	{
+		"identifier": "public.app-category.reference",
+		"conformsTo": [
+			"public.app-category"
+		]
+	},
+	{
+		"identifier": "public.app-category.role-playing-games",
+		"conformsTo": [
+			"public.app-category.games"
+		]
+	},
+	{
+		"identifier": "public.app-category.shopping",
+		"conformsTo": [
+			"public.app-category"
+		]
+	},
+	{
+		"identifier": "public.app-category.simulation-games",
+		"conformsTo": [
+			"public.app-category.games"
+		]
+	},
+	{
+		"identifier": "public.app-category.social-networking",
+		"conformsTo": [
+			"public.app-category"
+		]
+	},
+	{
+		"identifier": "public.app-category.sports",
+		"conformsTo": [
+			"public.app-category"
+		]
+	},
+	{
+		"identifier": "public.app-category.sports-games",
+		"conformsTo": [
+			"public.app-category.games"
+		]
+	},
+	{
+		"identifier": "public.app-category.strategy-games",
+		"conformsTo": [
+			"public.app-category.games"
+		]
+	},
+	{
+		"identifier": "public.app-category.travel",
+		"conformsTo": [
+			"public.app-category"
+		]
+	},
+	{
+		"identifier": "public.app-category.trivia-games",
+		"conformsTo": [
+			"public.app-category.games"
+		]
+	},
+	{
+		"identifier": "public.app-category.utilities",
+		"conformsTo": [
+			"public.app-category"
+		]
+	},
+	{
+		"identifier": "public.app-category.video",
+		"conformsTo": [
+			"public.app-category"
+		]
+	},
+	{
+		"identifier": "public.app-category.weather",
+		"conformsTo": [
+			"public.app-category"
+		]
+	},
+	{
+		"identifier": "public.app-category.word-games",
+		"conformsTo": [
+			"public.app-category.games"
+		]
+	},
+	{
+		"identifier": "public.ar-archive",
+		"conformsTo": [
+			"public.data",
+			"public.executable"
+		],
+		"filenameExtension": [
+			"a"
+		]
+	},
+	{
+		"identifier": "public.arch-linux-archive",
+		"conformsTo": [
+			"public.archive"
+		]
+	},
+	{
+		"identifier": "public.arch-linux-archive.xz",
+		"conformsTo": [
+			"public.arch-linux-archive",
+			"public.xz-archive"
+		],
+		"filenameExtension": [
+			"pkg.tar.xz"
+		]
+	},
+	{
+		"identifier": "public.arch-linux-archive.zst",
+		"conformsTo": [
+			"public.arch-linux-archive",
+			"public.zst-archive"
+		],
+		"filenameExtension": [
+			"pkg.tar.zst"
+		]
+	},
+	{
+		"identifier": "public.archive"
+	},
+	{
+		"identifier": "public.asp-source",
+		"conformsTo": [
+			"public.source-code"
+		],
+		"filenameExtension": [
+			"asp",
+			"asa"
+		],
+		"referenceURL": "https://msdn.microsoft.com/en-us/library/aa286483.aspx"
+	},
+	{
+		"identifier": "public.aspx-source",
+		"conformsTo": [
+			"public.source-code"
+		],
+		"filenameExtension": [
+			"aspx",
+			"ascx",
+			"asmx",
+			"ashx"
+		],
+		"referenceURL": "https://asp.net"
+	},
+	{
+		"identifier": "public.assembly-source",
+		"conformsTo": [
+			"public.source-code"
+		],
+		"filenameExtension": [
+			"s",
+			"asm"
+		]
+	},
+	{
+		"identifier": "public.au-audio",
+		"conformsTo": [
+			"public.audio"
+		],
+		"filenameExtension": [
+			"au",
+			"snd"
+		],
+		"mimeType": [
+			"audio/basic"
+		]
+	},
+	{
+		"identifier": "public.audio",
+		"conformsTo": [
+			"public.audiovisual-content"
+		]
+	},
+	{
+		"identifier": "public.audiovisual-content",
+		"conformsTo": [
+			"public.data",
+			"public.content"
+		]
+	},
+	{
+		"identifier": "public.audiovisual-content-collection"
+	},
+	{
+		"identifier": "public.avchd-collection",
+		"conformsTo": [
+			"com.apple.package",
+			"public.audiovisual-content-collection"
+		],
+		"filenameExtension": [
+			"avchd"
+		]
+	},
+	{
+		"identifier": "public.avchd-content",
+		"conformsTo": [
+			"public.data",
+			"public.content"
+		],
+		"filenameExtension": [
+			"bdm",
+			"bdmv"
+		]
+	},
+	{
+		"identifier": "public.avchd-mpeg-2-transport-stream",
+		"conformsTo": [
+			"public.mpeg-2-transport-stream"
+		],
+		"filenameExtension": [
+			"mts",
+			"m2ts"
+		]
+	},
+	{
+		"identifier": "public.avci",
+		"conformsTo": [
+			"public.heif-standard"
+		],
+		"filenameExtension": [
+			"avci"
+		],
+		"mimeType": [
+			"image/avci"
+		]
+	},
+	{
+		"identifier": "public.avcs",
+		"conformsTo": [
+			"public.heif-standard"
+		],
+		"filenameExtension": [
+			"avcs"
+		],
+		"mimeType": [
+			"image/avcs"
+		]
+	},
+	{
+		"identifier": "public.avi",
+		"conformsTo": [
+			"public.movie"
+		],
+		"filenameExtension": [
+			"avi",
+			"vfw"
+		],
+		"mimeType": [
+			"video/avi",
+			"video/msvideo",
+			"video/x-msvideo"
+		]
+	},
+	{
+		"identifier": "public.avif",
+		"conformsTo": [
+			"public.heif-standard"
+		],
+		"filenameExtension": [
+			"avif"
+		],
+		"mimeType": [
+			"image/avif"
+		]
+	},
+	{
+		"identifier": "public.bare-dynamic-link-library",
+		"conformsTo": [
+			"public.executable",
+			"public.data"
+		],
+		"filenameExtension": [
+			"bare"
+		]
+	},
+	{
+		"identifier": "public.bash-script",
+		"conformsTo": [
+			"public.shell-script"
+		],
+		"filenameExtension": [
+			"bash"
+		]
+	},
+	{
+		"identifier": "public.block-special",
+		"conformsTo": [
+			"public.item"
+		]
+	},
+	{
+		"identifier": "public.bluetooth-vendor-product-id",
+		"conformsTo": [
+			"public.text"
+		]
+	},
+	{
+		"identifier": "public.bookmark"
+	},
+	{
+		"identifier": "public.brotli",
+		"conformsTo": [
+			"public.archive"
+		],
+		"filenameExtension": [
+			"br"
+		],
+		"mimeType": [
+			"application/brotli"
+		]
+	},
+	{
+		"identifier": "public.bzip2-archive",
+		"conformsTo": [
+			"public.data",
+			"public.archive"
+		],
+		"filenameExtension": [
+			"bz2",
+			"bz",
+			"bzip2"
+		],
+		"mimeType": [
+			"application/x-bzip2",
+			"application/x-bzip",
+			"application/bzip2",
+			"application/bzip",
+			"application/x-bz2"
+		]
+	},
+	{
+		"identifier": "public.c-header",
+		"conformsTo": [
+			"public.source-code"
+		],
+		"filenameExtension": [
+			"h"
+		]
+	},
+	{
+		"identifier": "public.c-plus-plus-header",
+		"conformsTo": [
+			"public.source-code"
+		],
+		"filenameExtension": [
+			"hh",
+			"hp",
+			"hpp",
+			"hxx",
+			"h++",
+			"ipp"
+		]
+	},
+	{
+		"identifier": "public.c-plus-plus-inline-header",
+		"conformsTo": [
+			"public.c-plus-plus-header"
+		],
+		"filenameExtension": [
+			"inl"
+		]
+	},
+	{
+		"identifier": "public.c-plus-plus-source",
+		"conformsTo": [
+			"public.source-code"
+		],
+		"filenameExtension": [
+			"cp",
+			"cpp",
+			"c++",
+			"cc",
+			"cxx"
+		]
+	},
+	{
+		"identifier": "public.c-plus-plus-source.preprocessed",
+		"conformsTo": [
+			"public.c-plus-plus-source",
+			"public.source-code.preprocessed"
+		],
+		"filenameExtension": [
+			"ii"
+		]
+	},
+	{
+		"identifier": "public.c-sharp-source",
+		"conformsTo": [
+			"public.source-code"
+		],
+		"filenameExtension": [
+			"cs"
+		],
+		"referenceURL": "https://learn.microsoft.com/en-us/dotnet/csharp/specification/"
+	},
+	{
+		"identifier": "public.c-source",
+		"conformsTo": [
+			"public.source-code"
+		],
+		"filenameExtension": [
+			"c"
+		]
+	},
+	{
+		"identifier": "public.c-source.preprocessed",
+		"conformsTo": [
+			"public.c-source",
+			"public.source-code.preprocessed"
+		],
+		"filenameExtension": [
+			"i"
+		]
+	},
+	{
+		"identifier": "public.calendar-event"
+	},
+	{
+		"identifier": "public.camera-raw-image",
+		"conformsTo": [
+			"public.image"
+		]
+	},
+	{
+		"identifier": "public.case-insensitive-text",
+		"conformsTo": [
+			"public.text"
+		]
+	},
+	{
+		"identifier": "public.cd-based-media",
+		"conformsTo": [
+			"public.optical-storage-media"
+		]
+	},
+	{
+		"identifier": "public.cd-media",
+		"conformsTo": [
+			"public.cd-based-media"
+		]
+	},
+	{
+		"identifier": "public.cd-r-media",
+		"conformsTo": [
+			"public.cd-based-media"
+		]
+	},
+	{
+		"identifier": "public.cd-rw-media",
+		"conformsTo": [
+			"public.cd-based-media"
+		]
+	},
+	{
+		"identifier": "public.cdda-audio",
+		"conformsTo": [
+			"public.aifc-audio"
+		],
+		"filenameExtension": [
+			"cdda"
+		]
+	},
+	{
+		"identifier": "public.character-special",
+		"conformsTo": [
+			"public.item"
+		]
+	},
+	{
+		"identifier": "public.coffeescript-source",
+		"conformsTo": [
+			"public.script"
+		],
+		"filenameExtension": [
+			"coffee"
+		],
+		"referenceURL": "http://coffeescript.org"
+	},
+	{
+		"identifier": "public.comma-separated-values-text",
+		"conformsTo": [
+			"public.plain-text",
+			"public.delimited-values-text"
+		],
+		"filenameExtension": [
+			"csv"
+		],
+		"mimeType": [
+			"text/csv",
+			"text/comma-separated-values"
+		],
+		"referenceURL": "http://www.ietf.org/rfc/rfc4180.txt"
+	},
+	{
+		"identifier": "public.communication-protocol"
+	},
+	{
+		"identifier": "public.composite-content",
+		"conformsTo": [
+			"public.content"
+		]
+	},
+	{
+		"identifier": "public.computer",
+		"conformsTo": [
+			"public.device"
+		]
+	},
+	{
+		"identifier": "public.conf",
+		"conformsTo": [
+			"public.plain-text"
+		],
+		"filenameExtension": [
+			"cfg",
+			"conf",
+			"config"
+		]
+	},
+	{
+		"identifier": "public.configuration"
+	},
+	{
+		"identifier": "public.contact"
+	},
+	{
+		"identifier": "public.content"
+	},
+	{
+		"identifier": "public.cpio-archive",
+		"conformsTo": [
+			"public.data",
+			"public.archive"
+		],
+		"filenameExtension": [
+			"cpio",
+			"pax"
+		]
+	},
+	{
+		"identifier": "public.csh-script",
+		"conformsTo": [
+			"public.shell-script"
+		],
+		"filenameExtension": [
+			"csh"
+		]
+	},
+	{
+		"identifier": "public.csp-report",
+		"conformsTo": [
+			"public.json"
+		],
+		"mimeType": [
+			"application/csp-report"
+		]
+	},
+	{
+		"identifier": "public.css",
+		"conformsTo": [
+			"public.text"
+		],
+		"filenameExtension": [
+			"css"
+		],
+		"mimeType": [
+			"text/css"
+		],
+		"referenceURL": "https://w3.org/Style/CSS/"
+	},
+	{
+		"identifier": "public.dart-source",
+		"conformsTo": [
+			"public.script"
+		],
+		"filenameExtension": [
+			"dart"
+		],
+		"referenceURL": "https://dart.dev"
+	},
+	{
+		"identifier": "public.data",
+		"conformsTo": [
+			"public.item"
+		],
+		"mimeType": [
+			"application/octet-stream"
+		]
+	},
+	{
+		"identifier": "public.database"
+	},
+	{
+		"identifier": "public.deb-archive",
+		"conformsTo": [
+			"public.ar-archive"
+		],
+		"filenameExtension": [
+			"deb"
+		],
+		"mimeType": [
+			"application/vnd.debian.binary-package",
+			"application/x-deb"
+		]
+	},
+	{
+		"identifier": "public.delimited-values-text",
+		"conformsTo": [
+			"public.text"
+		]
+	},
+	{
+		"identifier": "public.device"
+	},
+	{
+		"identifier": "public.directory",
+		"conformsTo": [
+			"public.item"
+		]
+	},
+	{
+		"identifier": "public.disk-image",
+		"conformsTo": [
+			"public.archive"
+		]
+	},
+	{
+		"identifier": "public.display"
+	},
+	{
+		"identifier": "public.downloadable-sound",
+		"conformsTo": [
+			"public.audio"
+		],
+		"filenameExtension": [
+			"dls"
+		],
+		"mimeType": [
+			"audio/dls"
+		]
+	},
+	{
+		"identifier": "public.dv-movie",
+		"conformsTo": [
+			"public.movie"
+		],
+		"filenameExtension": [
+			"dv",
+			"dif"
+		],
+		"mimeType": [
+			"video/x-dv"
+		]
+	},
+	{
+		"identifier": "public.dvd-based-media",
+		"conformsTo": [
+			"public.optical-storage-media"
+		]
+	},
+	{
+		"identifier": "public.dvd-media",
+		"conformsTo": [
+			"public.dvd-based-media"
+		]
+	},
+	{
+		"identifier": "public.dvd-plus-r-media",
+		"conformsTo": [
+			"public.dvd-based-media"
+		]
+	},
+	{
+		"identifier": "public.dvd-plus-rw-media",
+		"conformsTo": [
+			"public.dvd-based-media"
+		]
+	},
+	{
+		"identifier": "public.dvd-r-media",
+		"conformsTo": [
+			"public.dvd-based-media"
+		]
+	},
+	{
+		"identifier": "public.dvd-ram-media",
+		"conformsTo": [
+			"public.dvd-based-media"
+		]
+	},
+	{
+		"identifier": "public.dvd-rw-media",
+		"conformsTo": [
+			"public.dvd-based-media"
+		]
+	},
+	{
+		"identifier": "public.dylan-source",
+		"conformsTo": [
+			"public.source-code"
+		],
+		"filenameExtension": [
+			"dlyan",
+			"lid"
+		]
+	},
+	{
+		"identifier": "public.ejs-source",
+		"conformsTo": [
+			"public.text"
+		],
+		"filenameExtension": [
+			"ejs"
+		],
+		"referenceURL": "https://ejs.co"
+	},
+	{
+		"identifier": "public.elf-binary",
+		"conformsTo": [
+			"public.data",
+			"public.executable"
+		]
+	},
+	{
+		"identifier": "public.elixir-source",
+		"conformsTo": [
+			"public.source-code"
+		],
+		"filenameExtension": [
+			"ex"
+		],
+		"referenceURL": "https://elixir-lang.org"
+	},
+	{
+		"identifier": "public.email-message",
+		"conformsTo": [
+			"public.message"
+		]
+	},
+	{
+		"identifier": "public.enhanced-ac3-audio",
+		"conformsTo": [
+			"public.audio"
+		],
+		"filenameExtension": [
+			"eac3",
+			"ec3"
+		],
+		"mimeType": [
+			"audio/eac3"
+		]
+	},
+	{
+		"identifier": "public.erb-source",
+		"conformsTo": [
+			"public.text"
+		],
+		"filenameExtension": [
+			"erb",
+			"rhtml"
+		],
+		"referenceURL": "https://github.com/ruby/erb"
+	},
+	{
+		"identifier": "public.executable"
+	},
+	{
+		"identifier": "public.fax",
+		"conformsTo": [
+			"public.image",
+			"public.message"
+		]
+	},
+	{
+		"identifier": "public.file-sharepoint",
+		"conformsTo": [
+			"com.apple.folder-icon"
+		]
+	},
+	{
+		"identifier": "public.file-url",
+		"conformsTo": [
+			"public.url"
+		]
+	},
+	{
+		"identifier": "public.filename-extension",
+		"conformsTo": [
+			"public.case-insensitive-text"
+		]
+	},
+	{
+		"identifier": "public.flc-animation",
+		"conformsTo": [
+			"public.movie"
+		],
+		"filenameExtension": [
+			"flc",
+			"fli",
+			"cel"
+		],
+		"mimeType": [
+			"video/flc"
+		]
+	},
+	{
+		"identifier": "public.folder",
+		"conformsTo": [
+			"public.directory"
+		]
+	},
+	{
+		"identifier": "public.font",
+		"conformsTo": [
+			"public.data"
+		]
+	},
+	{
+		"identifier": "public.fortran-77-source",
+		"conformsTo": [
+			"public.fortran-source"
+		],
+		"filenameExtension": [
+			"f77"
+		]
+	},
+	{
+		"identifier": "public.fortran-90-source",
+		"conformsTo": [
+			"public.fortran-source"
+		],
+		"filenameExtension": [
+			"f90"
+		]
+	},
+	{
+		"identifier": "public.fortran-95-source",
+		"conformsTo": [
+			"public.fortran-source"
+		],
+		"filenameExtension": [
+			"f95"
+		]
+	},
+	{
+		"identifier": "public.fortran-source",
+		"conformsTo": [
+			"public.source-code"
+		],
+		"filenameExtension": [
+			"f",
+			"for"
+		]
+	},
+	{
+		"identifier": "public.fsharp-source",
+		"conformsTo": [
+			"public.source-code"
+		],
+		"filenameExtension": [
+			"fs"
+		],
+		"referenceURL": "https://fsharp.org"
+	},
+	{
+		"identifier": "public.generic-pc",
+		"conformsTo": [
+			"public.computer"
+		]
+	},
+	{
+		"identifier": "public.geojson",
+		"conformsTo": [
+			"public.json"
+		],
+		"filenameExtension": [
+			"geojson"
+		],
+		"mimeType": [
+			"application/geo+json"
+		]
+	},
+	{
+		"identifier": "public.geometry-definition-format",
+		"conformsTo": [
+			"public.3d-content",
+			"public.text"
+		],
+		"filenameExtension": [
+			"obj"
+		],
+		"mimeType": [
+			"model/obj"
+		]
+	},
+	{
+		"identifier": "public.go-source",
+		"conformsTo": [
+			"public.source-code"
+		],
+		"filenameExtension": [
+			"go"
+		],
+		"referenceURL": "https://go.dev"
+	},
+	{
+		"identifier": "public.haml",
+		"conformsTo": [
+			"public.text"
+		],
+		"filenameExtension": [
+			"haml"
+		],
+		"referenceURL": "https://haml.info"
+	},
+	{
+		"identifier": "public.haptics-content"
+	},
+	{
+		"identifier": "public.hd-dvd-based-media",
+		"conformsTo": [
+			"public.optical-storage-media"
+		]
+	},
+	{
+		"identifier": "public.hd-dvd-media",
+		"conformsTo": [
+			"public.hd-dvd-based-media"
+		]
+	},
+	{
+		"identifier": "public.hd-dvd-r-media",
+		"conformsTo": [
+			"public.hd-dvd-based-media"
+		]
+	},
+	{
+		"identifier": "public.hd-dvd-ram-media",
+		"conformsTo": [
+			"public.hd-dvd-based-media"
+		]
+	},
+	{
+		"identifier": "public.hd-dvd-rw-media",
+		"conformsTo": [
+			"public.hd-dvd-based-media"
+		]
+	},
+	{
+		"identifier": "public.headphones",
+		"conformsTo": [
+			"public.speaker"
+		]
+	},
+	{
+		"identifier": "public.heic",
+		"conformsTo": [
+			"public.heif-standard"
+		],
+		"filenameExtension": [
+			"heic"
+		],
+		"mimeType": [
+			"image/heic"
+		]
+	},
+	{
+		"identifier": "public.heics",
+		"conformsTo": [
+			"public.heif-standard"
+		],
+		"filenameExtension": [
+			"heics"
+		],
+		"mimeType": [
+			"image/heic-sequence"
+		]
+	},
+	{
+		"identifier": "public.heif",
+		"conformsTo": [
+			"public.heif-standard"
+		],
+		"filenameExtension": [
+			"heif",
+			"hif"
+		],
+		"mimeType": [
+			"image/heif"
+		]
+	},
+	{
+		"identifier": "public.heif-standard",
+		"conformsTo": [
+			"public.image"
+		]
+	},
+	{
+		"identifier": "public.heifs",
+		"conformsTo": [
+			"public.heif-standard"
+		],
+		"filenameExtension": [
+			"heifs"
+		],
+		"mimeType": [
+			"image/heif-sequence"
+		]
+	},
+	{
+		"identifier": "public.html",
+		"conformsTo": [
+			"public.text"
+		],
+		"filenameExtension": [
+			"html",
+			"htm",
+			"shtml",
+			"shtm"
+		],
+		"mimeType": [
+			"text/html"
+		]
+	},
+	{
+		"identifier": "public.image",
+		"conformsTo": [
+			"public.data",
+			"public.content"
+		]
+	},
+	{
+		"identifier": "public.ini",
+		"conformsTo": [
+			"public.text"
+		],
+		"filenameExtension": [
+			"ini"
+		]
+	},
+	{
+		"identifier": "public.iso-image",
+		"conformsTo": [
+			"com.apple.disk-image"
+		],
+		"filenameExtension": [
+			"iso"
+		]
+	},
+	{
+		"identifier": "public.item"
+	},
+	{
+		"identifier": "public.jinja-source",
+		"conformsTo": [
+			"public.text"
+		],
+		"filenameExtension": [
+			"jinja",
+			"jinja2",
+			"j2"
+		],
+		"referenceURL": "https://jinja.palletsprojects.com"
+	},
+	{
+		"identifier": "public.jpeg",
+		"conformsTo": [
+			"public.image"
+		],
+		"filenameExtension": [
+			"jpeg",
+			"jpg",
+			"jpe"
+		],
+		"mimeType": [
+			"image/jpeg",
+			"image/jpg"
+		]
+	},
+	{
+		"identifier": "public.jpeg-2000",
+		"conformsTo": [
+			"public.image"
+		],
+		"filenameExtension": [
+			"jp2",
+			"jpf",
+			"jpx",
+			"j2k",
+			"j2c"
+		],
+		"mimeType": [
+			"image/jp2"
+		]
+	},
+	{
+		"identifier": "public.jpeg-xl",
+		"conformsTo": [
+			"public.image"
+		],
+		"filenameExtension": [
+			"jxl"
+		],
+		"mimeType": [
+			"image/jxl"
+		],
+		"referenceURL": "https://jpeg.org/jpegxl/"
+	},
+	{
+		"identifier": "public.jpeg2000",
+		"conformsTo": [
+			"public.image"
+		],
+		"filenameExtension": [
+			"jk2"
+		],
+		"mimeType": [
+			"image/jp2",
+			"image/jpx",
+			"image/jpm"
+		]
+	},
+	{
+		"identifier": "public.json",
+		"conformsTo": [
+			"public.text"
+		],
+		"filenameExtension": [
+			"json"
+		],
+		"mimeType": [
+			"application/json"
+		]
+	},
+	{
+		"identifier": "public.jsx-source",
+		"conformsTo": [
+			"public.source-code"
+		],
+		"filenameExtension": [
+			"jsx",
+			"cjsx",
+			"mjsx"
+		]
+	},
+	{
+		"identifier": "public.key-value",
+		"conformsTo": [
+			"public.data"
+		]
+	},
+	{
+		"identifier": "public.ksh-script",
+		"conformsTo": [
+			"public.shell-script"
+		],
+		"filenameExtension": [
+			"ksh"
+		]
+	},
+	{
+		"identifier": "public.lex-source",
+		"conformsTo": [
+			"public.source-code"
+		],
+		"filenameExtension": [
+			"l",
+			"lm",
+			"lmm",
+			"lpp",
+			"lxx",
+			"ll"
+		]
+	},
+	{
+		"identifier": "public.log",
+		"conformsTo": [
+			"public.item"
+		]
+	},
+	{
+		"identifier": "public.lua-script",
+		"conformsTo": [
+			"public.script"
+		],
+		"filenameExtension": [
+			"lua"
+		],
+		"referenceURL": "http://lua.org"
+	},
+	{
+		"identifier": "public.m3u-playlist",
+		"conformsTo": [
+			"public.plain-text",
+			"public.playlist"
+		],
+		"filenameExtension": [
+			"m3u",
+			"m3u8"
+		],
+		"mimeType": [
+			"audio/mpegurl",
+			"application/vnd.apple.mpegurl",
+			"audio/x-mpegurl"
+		],
+		"referenceURL": "http://www.schworak.com/programming/music/playlist_m3u.asp"
+	},
+	{
+		"identifier": "public.make-source",
+		"conformsTo": [
+			"public.script"
+		],
+		"filenameExtension": [
+			"make",
+			"mak",
+			"gmk",
+			"mk"
+		]
+	},
+	{
+		"identifier": "public.mdx",
+		"conformsTo": [
+			"net.daringfireball.markdown",
+			"public.jsx-source"
+		],
+		"filenameExtension": [
+			"mdx"
+		],
+		"mimeType": [
+			"text/mdx"
+		]
+	},
+	{
+		"identifier": "public.media-sharing-protocol",
+		"conformsTo": [
+			"public.communication-protocol"
+		]
+	},
+	{
+		"identifier": "public.media-streaming-protocol"
+	},
+	{
+		"identifier": "public.message"
+	},
+	{
+		"identifier": "public.midi-audio",
+		"conformsTo": [
+			"public.audio"
+		],
+		"filenameExtension": [
+			"midi",
+			"mid",
+			"smf",
+			"kar"
+		],
+		"mimeType": [
+			"audio/midi",
+			"audio/x-midi"
+		]
+	},
+	{
+		"identifier": "public.mig-source",
+		"conformsTo": [
+			"public.source-code"
+		],
+		"filenameExtension": [
+			"defs",
+			"mig"
+		]
+	},
+	{
+		"identifier": "public.mime-type",
+		"conformsTo": [
+			"public.case-insensitive-text"
+		]
+	},
+	{
+		"identifier": "public.module-map",
+		"conformsTo": [
+			"public.source-code"
+		],
+		"filenameExtension": [
+			"modulemap"
+		]
+	},
+	{
+		"identifier": "public.movie",
+		"conformsTo": [
+			"public.audiovisual-content"
+		]
+	},
+	{
+		"identifier": "public.mp2",
+		"conformsTo": [
+			"public.audio"
+		],
+		"filenameExtension": [
+			"mp2"
+		]
+	},
+	{
+		"identifier": "public.mp3",
+		"conformsTo": [
+			"public.audio"
+		],
+		"filenameExtension": [
+			"mp3",
+			"mpga"
+		],
+		"mimeType": [
+			"audio/mpeg",
+			"audio/mpeg3",
+			"audio/mpg",
+			"audio/mp3",
+			"audio/x-mpeg",
+			"audio/x-mpeg3",
+			"audio/x-mpg",
+			"audio/x-mp3"
+		]
+	},
+	{
+		"identifier": "public.mp4a-latm",
+		"conformsTo": [
+			"public.audio"
+		],
+		"mimeType": [
+			"audio/mp4a-latm"
+		]
+	},
+	{
+		"identifier": "public.mp4a-loas",
+		"conformsTo": [
+			"public.audio"
+		],
+		"filenameExtension": [
+			"loas",
+			"latm"
+		]
+	},
+	{
+		"identifier": "public.mpeg",
+		"conformsTo": [
+			"public.movie"
+		],
+		"filenameExtension": [
+			"mpg",
+			"mpeg",
+			"mpe",
+			"m75",
+			"m15"
+		],
+		"mimeType": [
+			"video/mpeg",
+			"video/mpg",
+			"video/x-mpeg",
+			"video/x-mpg"
+		]
+	},
+	{
+		"identifier": "public.mpeg-2-transport-stream",
+		"conformsTo": [
+			"public.movie"
+		],
+		"filenameExtension": [
+			"ts"
+		]
+	},
+	{
+		"identifier": "public.mpeg-2-video",
+		"conformsTo": [
+			"public.video"
+		],
+		"filenameExtension": [
+			"m2v"
+		],
+		"mimeType": [
+			"video/mpeg2",
+			"video/mpeg2-video"
+		]
+	},
+	{
+		"identifier": "public.mpeg-4",
+		"conformsTo": [
+			"public.movie"
+		],
+		"filenameExtension": [
+			"mp4",
+			"mpg4"
+		],
+		"mimeType": [
+			"video/mp4",
+			"video/mp4v-es"
+		]
+	},
+	{
+		"identifier": "public.mpeg-4-audio",
+		"conformsTo": [
+			"public.audio"
+		],
+		"filenameExtension": [
+			"mp4",
+			"mpg4"
+		],
+		"mimeType": [
+			"audio/mp4",
+			"audio/mp4a-latm"
+		]
+	},
+	{
+		"identifier": "public.mpo-image",
+		"conformsTo": [
+			"public.image"
+		],
+		"filenameExtension": [
+			"mpo"
+		]
+	},
+	{
+		"identifier": "public.named-pipe",
+		"conformsTo": [
+			"public.item"
+		]
+	},
+	{
+		"identifier": "public.nasm-assembly-source",
+		"conformsTo": [
+			"public.source-code"
+		],
+		"filenameExtension": [
+			"nasm"
+		]
+	},
+	{
+		"identifier": "public.ndjson",
+		"conformsTo": [
+			"public.text"
+		],
+		"filenameExtension": [
+			"ndjson"
+		],
+		"mimeType": [
+			"application/x-ndjson"
+		],
+		"referenceURL": "http://ndjson.org"
+	},
+	{
+		"identifier": "public.node-dynamic-link-library",
+		"conformsTo": [
+			"public.executable",
+			"public.data"
+		],
+		"filenameExtension": [
+			"node"
+		]
+	},
+	{
+		"identifier": "public.object-code",
+		"conformsTo": [
+			"public.data",
+			"public.executable"
+		],
+		"filenameExtension": [
+			"o"
+		]
+	},
+	{
+		"identifier": "public.objective-c-plus-plus-source",
+		"conformsTo": [
+			"public.source-code"
+		],
+		"filenameExtension": [
+			"mm"
+		]
+	},
+	{
+		"identifier": "public.objective-c-plus-plus-source.preprocessed",
+		"conformsTo": [
+			"public.objective-c-plus-plus-source",
+			"public.source-code.preprocessed"
+		],
+		"filenameExtension": [
+			"mii"
+		]
+	},
+	{
+		"identifier": "public.objective-c-source",
+		"conformsTo": [
+			"public.source-code"
+		],
+		"filenameExtension": [
+			"m"
+		]
+	},
+	{
+		"identifier": "public.objective-c-source.preprocessed",
+		"conformsTo": [
+			"public.objective-c-source",
+			"public.source-code.preprocessed"
+		],
+		"filenameExtension": [
+			"mi"
+		]
+	},
+	{
+		"identifier": "public.oci.image.layer.v1",
+		"conformsTo": [
+			"public.data"
+		]
+	},
+	{
+		"identifier": "public.oci.image.layer.v1.tar.gzip",
+		"conformsTo": [
+			"public.oci.image.layer.v1"
+		],
+		"filenameExtension": [
+			"tar.gz"
+		],
+		"mimeType": [
+			"application/vnd.oci.image.layer.v1.tar+gzip"
+		]
+	},
+	{
+		"identifier": "public.oci.image.layer.v1.tar.zstd",
+		"conformsTo": [
+			"public.oci.image.layer.v1"
+		],
+		"filenameExtension": [
+			"tar.zstd"
+		],
+		"mimeType": [
+			"application/vnd.oci.image.layer.v1.tar+zstd"
+		]
+	},
+	{
+		"identifier": "public.ofd",
+		"conformsTo": [
+			"public.data",
+			"public.composite-content"
+		],
+		"filenameExtension": [
+			"ofd"
+		],
+		"mimeType": [
+			"application/ofd"
+		]
+	},
+	{
+		"identifier": "public.opencl-source",
+		"conformsTo": [
+			"public.source-code"
+		],
+		"filenameExtension": [
+			"cl"
+		]
+	},
+	{
+		"identifier": "public.opentype-collection-font",
+		"conformsTo": [
+			"public.opentype-font"
+		],
+		"filenameExtension": [
+			"otc"
+		]
+	},
+	{
+		"identifier": "public.opentype-font",
+		"conformsTo": [
+			"public.font"
+		],
+		"filenameExtension": [
+			"otf"
+		],
+		"mimeType": [
+			"font/otf"
+		]
+	},
+	{
+		"identifier": "public.optical-storage-media",
+		"conformsTo": [
+			"public.storage"
+		]
+	},
+	{
+		"identifier": "public.pascal-source",
+		"conformsTo": [
+			"public.source-code"
+		],
+		"filenameExtension": [
+			"pas"
+		]
+	},
+	{
+		"identifier": "public.patch-file",
+		"conformsTo": [
+			"public.plain-text"
+		],
+		"filenameExtension": [
+			"patch",
+			"diff"
+		]
+	},
+	{
+		"identifier": "public.pbm",
+		"conformsTo": [
+			"public.image"
+		],
+		"filenameExtension": [
+			"pbm",
+			"pgm",
+			"ppm",
+			"pfm"
+		]
+	},
+	{
+		"identifier": "public.perl-script",
+		"conformsTo": [
+			"public.shell-script"
+		],
+		"filenameExtension": [
+			"pl",
+			"pm"
+		],
+		"mimeType": [
+			"text/x-perl-script"
+		]
+	},
+	{
+		"identifier": "public.php-script",
+		"conformsTo": [
+			"public.shell-script"
+		],
+		"filenameExtension": [
+			"php",
+			"php3",
+			"php4",
+			"ph3",
+			"ph4",
+			"phtml"
+		],
+		"mimeType": [
+			"text/php",
+			"text/x-php-script",
+			"application/php"
+		]
+	},
+	{
+		"identifier": "public.pkcs10",
+		"conformsTo": [
+			"public.data"
+		],
+		"filenameExtension": [
+			"p10",
+			"csr"
+		],
+		"mimeType": [
+			"application/pkcs10"
+		]
+	},
+	{
+		"identifier": "public.pkcs7-mime",
+		"conformsTo": [
+			"public.data"
+		],
+		"filenameExtension": [
+			"p7c"
+		],
+		"mimeType": [
+			"application/pkcs7-mime"
+		]
+	},
+	{
+		"identifier": "public.pkcs8",
+		"conformsTo": [
+			"public.data"
+		],
+		"filenameExtension": [
+			"p8",
+			"key"
+		],
+		"mimeType": [
+			"application/pkcs8"
+		]
+	},
+	{
+		"identifier": "public.pkix-crl",
+		"conformsTo": [
+			"public.data"
+		],
+		"filenameExtension": [
+			"crl"
+		],
+		"mimeType": [
+			"application/pkix-crl"
+		]
+	},
+	{
+		"identifier": "public.pkl-source",
+		"conformsTo": [
+			"public.source-code"
+		],
+		"filenameExtension": [
+			"pkl",
+			"pcf"
+		]
+	},
+	{
+		"identifier": "public.plain-text",
+		"conformsTo": [
+			"public.text"
+		],
+		"filenameExtension": [
+			"txt",
+			"text"
+		],
+		"mimeType": [
+			"text/plain"
+		]
+	},
+	{
+		"identifier": "public.playlist"
+	},
+	{
+		"identifier": "public.pls-playlist",
+		"conformsTo": [
+			"public.text",
+			"public.playlist"
+		],
+		"filenameExtension": [
+			"pls"
+		],
+		"mimeType": [
+			"audio/x-scpls"
+		]
+	},
+	{
+		"identifier": "public.png",
+		"conformsTo": [
+			"public.image"
+		],
+		"filenameExtension": [
+			"png"
+		],
+		"mimeType": [
+			"image/png"
+		]
+	},
+	{
+		"identifier": "public.polkit.rules",
+		"conformsTo": [
+			"com.netscape.javascript-source",
+			"public.configuration"
+		],
+		"filenameExtension": [
+			"rules"
+		]
+	},
+	{
+		"identifier": "public.polygon-file-format",
+		"conformsTo": [
+			"public.3d-content",
+			"public.data"
+		],
+		"filenameExtension": [
+			"ply"
+		]
+	},
+	{
+		"identifier": "public.precompiled-c-header",
+		"conformsTo": [
+			"public.source-code"
+		],
+		"filenameExtension": [
+			"pch"
+		]
+	},
+	{
+		"identifier": "public.precompiled-c-plus-plus-header",
+		"conformsTo": [
+			"public.source-code"
+		],
+		"filenameExtension": [
+			"pch++"
+		]
+	},
+	{
+		"identifier": "public.presentation",
+		"conformsTo": [
+			"public.composite-content"
+		]
+	},
+	{
+		"identifier": "public.protobuf-source",
+		"conformsTo": [
+			"public.source-code"
+		],
+		"filenameExtension": [
+			"proto"
+		]
+	},
+	{
+		"identifier": "public.pvr",
+		"conformsTo": [
+			"public.image"
+		],
+		"filenameExtension": [
+			"pvr"
+		]
+	},
+	{
+		"identifier": "public.python-bytecode",
+		"conformsTo": [
+			"public.data",
+			"public.executable"
+		],
+		"filenameExtension": [
+			"pyc"
+		]
+	},
+	{
+		"identifier": "public.python-script",
+		"conformsTo": [
+			"public.shell-script"
+		],
+		"filenameExtension": [
+			"py"
+		],
+		"mimeType": [
+			"text/x-python-script"
+		]
+	},
+	{
+		"identifier": "public.radiance",
+		"conformsTo": [
+			"public.image",
+			"public.data"
+		],
+		"filenameExtension": [
+			"pic",
+			"hdr"
+		]
+	},
+	{
+		"identifier": "public.rake-script",
+		"conformsTo": [
+			"public.ruby-script"
+		],
+		"filenameExtension": [
+			"rake"
+		],
+		"referenceURL": "https://github.com/ruby/rake"
+	},
+	{
+		"identifier": "public.rar-archive",
+		"conformsTo": [
+			"public.archive"
+		],
+		"filenameExtension": [
+			"rar"
+		],
+		"mimeType": [
+			"application/x-rar-compressed",
+			"application/vnd.rar"
+		]
+	},
+	{
+		"identifier": "public.rpm-archive",
+		"conformsTo": [
+			"public.archive"
+		],
+		"filenameExtension": [
+			"rpm"
+		],
+		"mimeType": [
+			"application/x-rpm"
+		]
+	},
+	{
+		"identifier": "public.rss",
+		"conformsTo": [
+			"public.xml"
+		],
+		"filenameExtension": [
+			"rss"
+		],
+		"mimeType": [
+			"application/rss+xml"
+		]
+	},
+	{
+		"identifier": "public.rtf",
+		"conformsTo": [
+			"public.text"
+		],
+		"filenameExtension": [
+			"rtf"
+		],
+		"mimeType": [
+			"text/rtf"
+		]
+	},
+	{
+		"identifier": "public.ruby-script",
+		"conformsTo": [
+			"public.shell-script"
+		],
+		"filenameExtension": [
+			"rb",
+			"rbw"
+		],
+		"mimeType": [
+			"text/x-ruby-script"
+		]
+	},
+	{
+		"identifier": "public.rust-source",
+		"conformsTo": [
+			"public.source-code"
+		],
+		"filenameExtension": [
+			"rs",
+			"rlib"
+		],
+		"referenceURL": "https://rust-lang.org"
+	},
+	{
+		"identifier": "public.scheme-source",
+		"conformsTo": [
+			"public.source-code"
+		],
+		"filenameExtension": [
+			"scm",
+			"ss"
+		],
+		"referenceURL": "https://www.scheme.org"
+	},
+	{
+		"identifier": "public.script",
+		"conformsTo": [
+			"public.source-code"
+		]
+	},
+	{
+		"identifier": "public.sdp",
+		"conformsTo": [
+			"public.movie",
+			"public.text"
+		],
+		"filenameExtension": [
+			"sdp"
+		],
+		"mimeType": [
+			"application/sdp"
+		],
+		"referenceURL": "http://www.ietf.org/rfc/rfc4566.txt"
+	},
+	{
+		"identifier": "public.security.certificate",
+		"conformsTo": [
+			"public.data"
+		]
+	},
+	{
+		"identifier": "public.security.certificate.request",
+		"conformsTo": [
+			"public.data"
+		]
+	},
+	{
+		"identifier": "public.security.certificate.trust",
+		"conformsTo": [
+			"public.security.certificate"
+		]
+	},
+	{
+		"identifier": "public.security.private-key",
+		"conformsTo": [
+			"public.data"
+		]
+	},
+	{
+		"identifier": "public.shared-object-library",
+		"conformsTo": [
+			"public.data",
+			"public.executable"
+		],
+		"filenameExtension": [
+			"so"
+		]
+	},
+	{
+		"identifier": "public.shell-script",
+		"conformsTo": [
+			"public.script"
+		],
+		"filenameExtension": [
+			"sh"
+		]
+	},
+	{
+		"identifier": "public.socket",
+		"conformsTo": [
+			"public.item"
+		]
+	},
+	{
+		"identifier": "public.source-code",
+		"conformsTo": [
+			"public.plain-text"
+		]
+	},
+	{
+		"identifier": "public.source-code.preprocessed",
+		"conformsTo": [
+			"public.source-code"
+		]
+	},
+	{
+		"identifier": "public.sourcemap",
+		"conformsTo": [
+			"public.json"
+		],
+		"filenameExtension": [
+			"js.map",
+			"mjs.map"
+		]
+	},
+	{
+		"identifier": "public.speaker",
+		"conformsTo": [
+			"public.device"
+		]
+	},
+	{
+		"identifier": "public.spreadsheet",
+		"conformsTo": [
+			"public.content"
+		]
+	},
+	{
+		"identifier": "public.sql",
+		"conformsTo": [
+			"public.source-code"
+		],
+		"filenameExtension": [
+			"sql"
+		],
+		"referenceURL": "https://www.iso.org/standard/76583.html"
+	},
+	{
+		"identifier": "public.standard-tesselated-geometry-format",
+		"conformsTo": [
+			"public.3d-content",
+			"public.data"
+		],
+		"filenameExtension": [
+			"stl"
+		]
+	},
+	{
+		"identifier": "public.storage"
+	},
+	{
+		"identifier": "public.stored-url"
+	},
+	{
+		"identifier": "public.svg-image",
+		"conformsTo": [
+			"public.image",
+			"public.xml"
+		],
+		"filenameExtension": [
+			"svg",
+			"svgz"
+		],
+		"mimeType": [
+			"image/svg+xml"
+		]
+	},
+	{
+		"identifier": "public.swift-interface",
+		"conformsTo": [
+			"public.swift-source"
+		],
+		"filenameExtension": [
+			"swiftinterface"
+		],
+		"referenceURL": "https://swift.org"
+	},
+	{
+		"identifier": "public.swift-source",
+		"conformsTo": [
+			"public.source-code"
+		],
+		"filenameExtension": [
+			"swift"
+		]
+	},
+	{
+		"identifier": "public.symlink",
+		"conformsTo": [
+			"public.item",
+			"com.apple.resolvable"
+		]
+	},
+	{
+		"identifier": "public.systemd-device-unit",
+		"conformsTo": [
+			"public.text",
+			"public.configuration"
+		],
+		"filenameExtension": [
+			"device"
+		]
+	},
+	{
+		"identifier": "public.systemd-mount-unit",
+		"conformsTo": [
+			"public.text",
+			"public.configuration"
+		],
+		"filenameExtension": [
+			"mount"
+		]
+	},
+	{
+		"identifier": "public.systemd-path-unit",
+		"conformsTo": [
+			"public.text",
+			"public.configuration"
+		],
+		"filenameExtension": [
+			"socket"
+		]
+	},
+	{
+		"identifier": "public.systemd-scope-unit",
+		"conformsTo": [
+			"public.text",
+			"public.configuration"
+		],
+		"filenameExtension": [
+			"scope"
+		]
+	},
+	{
+		"identifier": "public.systemd-service-unit",
+		"conformsTo": [
+			"public.text",
+			"public.configuration"
+		],
+		"filenameExtension": [
+			"service"
+		]
+	},
+	{
+		"identifier": "public.systemd-slice-unit",
+		"conformsTo": [
+			"public.text",
+			"public.configuration"
+		],
+		"filenameExtension": [
+			"slice"
+		]
+	},
+	{
+		"identifier": "public.systemd-socket-unit",
+		"conformsTo": [
+			"public.text",
+			"public.configuration"
+		],
+		"filenameExtension": [
+			"socket"
+		]
+	},
+	{
+		"identifier": "public.systemd-swap-unit",
+		"conformsTo": [
+			"public.text",
+			"public.configuration"
+		],
+		"filenameExtension": [
+			"swap"
+		]
+	},
+	{
+		"identifier": "public.systemd-target-unit",
+		"conformsTo": [
+			"public.text",
+			"public.configuration"
+		],
+		"filenameExtension": [
+			"target"
+		]
+	},
+	{
+		"identifier": "public.systemd-timer-unit",
+		"conformsTo": [
+			"public.text",
+			"public.configuration"
+		],
+		"filenameExtension": [
+			"timer"
+		]
+	},
+	{
+		"identifier": "public.tab-separated-values-text",
+		"conformsTo": [
+			"public.plain-text",
+			"public.delimited-values-text"
+		],
+		"filenameExtension": [
+			"tsv"
+		],
+		"mimeType": [
+			"text/tab-separated-values"
+		]
+	},
+	{
+		"identifier": "public.tar-archive",
+		"conformsTo": [
+			"org.gnu.gnu-tar-archive"
+		],
+		"filenameExtension": [
+			"tar"
+		],
+		"mimeType": [
+			"application/x-tar",
+			"application/tar"
+		]
+	},
+	{
+		"identifier": "public.tar-bzip2-archive",
+		"conformsTo": [
+			"public.bzip2-archive"
+		],
+		"filenameExtension": [
+			"tbz2",
+			"tbz"
+		]
+	},
+	{
+		"identifier": "public.tcsh-script",
+		"conformsTo": [
+			"public.shell-script"
+		],
+		"filenameExtension": [
+			"tcsh"
+		]
+	},
+	{
+		"identifier": "public.text",
+		"conformsTo": [
+			"public.data",
+			"public.content"
+		]
+	},
+	{
+		"identifier": "public.tiff",
+		"conformsTo": [
+			"public.image"
+		],
+		"filenameExtension": [
+			"tiff",
+			"tif"
+		],
+		"mimeType": [
+			"image/tiff"
+		]
+	},
+	{
+		"identifier": "public.to-do-item"
+	},
+	{
+		"identifier": "public.toml",
+		"conformsTo": [
+			"public.text"
+		],
+		"filenameExtension": [
+			"cfg",
+			"config",
+			"toml"
+		],
+		"mimeType": [
+			"application/toml"
+		],
+		"referenceURL": "https://toml.io"
+	},
+	{
+		"identifier": "public.truetype-collection-font",
+		"conformsTo": [
+			"public.truetype-font"
+		],
+		"filenameExtension": [
+			"ttc"
+		]
+	},
+	{
+		"identifier": "public.truetype-font",
+		"conformsTo": [
+			"public.font"
+		],
+		"filenameExtension": [
+			"ttf"
+		]
+	},
+	{
+		"identifier": "public.truetype-ttf-font",
+		"conformsTo": [
+			"public.truetype-font"
+		],
+		"filenameExtension": [
+			"ttf"
+		],
+		"mimeType": [
+			"font/ttf"
+		]
+	},
+	{
+		"identifier": "public.tsx-source",
+		"conformsTo": [
+			"public.script"
+		],
+		"filenameExtension": [
+			"tsx",
+			"ctsx",
+			"mtsx"
+		],
+		"referenceURL": "https://typescriptlang.org"
+	},
+	{
+		"identifier": "public.ulaw-audio",
+		"conformsTo": [
+			"public.audio"
+		],
+		"filenameExtension": [
+			"ul",
+			"ulw",
+			"ulaw"
+		]
+	},
+	{
+		"identifier": "public.unix-executable",
+		"conformsTo": [
+			"com.apple.application-icon",
+			"public.data",
+			"public.executable"
+		]
+	},
+	{
+		"identifier": "public.url",
+		"conformsTo": [
+			"public.data"
+		]
+	},
+	{
+		"identifier": "public.url-name",
+		"conformsTo": [
+			"public.data"
+		]
+	},
+	{
+		"identifier": "public.usd",
+		"conformsTo": [
+			"public.data"
+		]
+	},
+	{
+		"identifier": "public.utf16-external-plain-text",
+		"conformsTo": [
+			"public.plain-text"
+		]
+	},
+	{
+		"identifier": "public.utf16-plain-text",
+		"conformsTo": [
+			"public.plain-text"
+		],
+		"mimeType": [
+			"text/plain;charset=utf-16",
+			"text/plain;charset=\"utf-16\""
+		]
+	},
+	{
+		"identifier": "public.utf8-plain-text",
+		"conformsTo": [
+			"public.plain-text"
+		],
+		"mimeType": [
+			"text/plain;charset=utf-8",
+			"text/plain;charset=\"utf-8\""
+		]
+	},
+	{
+		"identifier": "public.utf8-tab-separated-values-text",
+		"conformsTo": [
+			"public.tab-separated-values-text",
+			"public.utf8-plain-text"
+		]
+	},
+	{
+		"identifier": "public.uuencoded-archive",
+		"conformsTo": [
+			"public.data",
+			"public.archive"
+		],
+		"filenameExtension": [
+			"uu"
+		],
+		"mimeType": [
+			"text/x-uuencode"
+		]
+	},
+	{
+		"identifier": "public.vcard",
+		"conformsTo": [
+			"public.text",
+			"public.contact"
+		],
+		"filenameExtension": [
+			"vcf",
+			"vcard"
+		],
+		"mimeType": [
+			"text/vcard",
+			"text/directory",
+			"text/x-vcard"
+		],
+		"referenceURL": "https://tools.ietf.org/html/rfc6350"
+	},
+	{
+		"identifier": "public.video",
+		"conformsTo": [
+			"public.movie"
+		]
+	},
+	{
+		"identifier": "public.video-camera",
+		"conformsTo": [
+			"public.device"
+		]
+	},
+	{
+		"identifier": "public.voice-audio",
+		"conformsTo": [
+			"public.audio"
+		]
+	},
+	{
+		"identifier": "public.volume",
+		"conformsTo": [
+			"public.folder"
+		]
+	},
+	{
+		"identifier": "public.wasm",
+		"conformsTo": [
+			"public.data"
+		],
+		"filenameExtension": [
+			"wasm"
+		],
+		"mimeType": [
+			"application/wasm"
+		],
+		"referenceURL": "https://webassembly.org"
+	},
+	{
+		"identifier": "public.wasm-text",
+		"conformsTo": [
+			"public.text"
+		],
+		"filenameExtension": [
+			"wat"
+		]
+	},
+	{
+		"identifier": "public.webmanifest",
+		"conformsTo": [
+			"public.json",
+			"public.configuration"
+		],
+		"filenameExtension": [
+			"webmanifest"
+		],
+		"mimeType": [
+			"application/manifest+json"
+		]
+	},
+	{
+		"identifier": "public.webp",
+		"conformsTo": [
+			"public.image"
+		],
+		"filenameExtension": [
+			"webp"
+		]
+	},
+	{
+		"identifier": "public.woff-font",
+		"conformsTo": [
+			"public.data",
+			"public.font"
+		],
+		"filenameExtension": [
+			"woff"
+		],
+		"mimeType": [
+			"font/woff"
+		]
+	},
+	{
+		"identifier": "public.woff2-font",
+		"conformsTo": [
+			"public.data",
+			"public.font"
+		],
+		"filenameExtension": [
+			"woff2"
+		],
+		"mimeType": [
+			"font/woff2"
+		]
+	},
+	{
+		"identifier": "public.x-pkcs7-certificates",
+		"conformsTo": [
+			"public.security.certificate"
+		],
+		"filenameExtension": [
+			"p7b",
+			"spc"
+		],
+		"mimeType": [
+			"application/x-pkcs7-certificates"
+		]
+	},
+	{
+		"identifier": "public.x-pkcs7-certreqresp",
+		"conformsTo": [
+			"public.data"
+		],
+		"filenameExtension": [
+			"p7r"
+		],
+		"mimeType": [
+			"application/x-pkcs7-certreqresp"
+		]
+	},
+	{
+		"identifier": "public.x-pkcs7-crl",
+		"conformsTo": [
+			"public.data"
+		],
+		"filenameExtension": [
+			"crl"
+		],
+		"mimeType": [
+			"application/x-pkcs7-crl"
+		]
+	},
+	{
+		"identifier": "public.x509-certificate",
+		"conformsTo": [
+			"public.data"
+		],
+		"filenameExtension": [
+			"cer",
+			"der",
+			"crt",
+			"pem"
+		],
+		"mimeType": [
+			"application/x-x509-ca-cert"
+		]
+	},
+	{
+		"identifier": "public.xbitmap-image",
+		"conformsTo": [
+			"public.image"
+		],
+		"filenameExtension": [
+			"xbm"
+		],
+		"mimeType": [
+			"image/x-xbitmap"
+		]
+	},
+	{
+		"identifier": "public.xfd",
+		"conformsTo": [
+			"public.xml"
+		],
+		"filenameExtension": [
+			"xfd"
+		]
+	},
+	{
+		"identifier": "public.xhtml",
+		"conformsTo": [
+			"public.xml"
+		],
+		"filenameExtension": [
+			"xhtml",
+			"xhtm",
+			"xht"
+		],
+		"mimeType": [
+			"application/xhtml+xml"
+		]
+	},
+	{
+		"identifier": "public.xml",
+		"conformsTo": [
+			"public.text"
+		],
+		"filenameExtension": [
+			"xml"
+		],
+		"mimeType": [
+			"application/xml",
+			"text/xml"
+		]
+	},
+	{
+		"identifier": "public.xy-patch",
+		"conformsTo": [
+			"public.data",
+			"public.content"
+		],
+		"filenameExtension": [
+			".json"
+		]
+	},
+	{
+		"identifier": "public.xy-project",
+		"conformsTo": [
+			"public.data",
+			"public.content"
+		],
+		"filenameExtension": [
+			"xy"
+		]
+	},
+	{
+		"identifier": "public.xz-archive",
+		"conformsTo": [
+			"public.archive"
+		],
+		"filenameExtension": [
+			"xz"
+		],
+		"mimeType": [
+			"application/x-xz"
+		]
+	},
+	{
+		"identifier": "public.yacc-source",
+		"conformsTo": [
+			"public.source-code"
+		],
+		"filenameExtension": [
+			"y",
+			"ym",
+			"ymm",
+			"ypp",
+			"yxx",
+			"yy"
+		]
+	},
+	{
+		"identifier": "public.yaml",
+		"conformsTo": [
+			"public.text"
+		],
+		"filenameExtension": [
+			"yml",
+			"yaml"
+		],
+		"mimeType": [
+			"application/x-yaml"
+		],
+		"referenceURL": "https://yaml.org"
+	},
+	{
+		"identifier": "public.z-archive",
+		"conformsTo": [
+			"public.data",
+			"public.archive"
+		],
+		"filenameExtension": [
+			"z"
+		],
+		"mimeType": [
+			"application/x-compress",
+			"application/x-compressed"
+		]
+	},
+	{
+		"identifier": "public.zip-archive",
+		"conformsTo": [
+			"com.pkware.zip-archive"
+		],
+		"filenameExtension": [
+			"zip"
+		],
+		"mimeType": [
+			"application/zip",
+			"application/x-zip-compressed"
+		]
+	},
+	{
+		"identifier": "public.zip-archive.first-part",
+		"conformsTo": [
+			"public.zip-archive"
+		],
+		"filenameExtension": [
+			"z01"
+		]
+	},
+	{
+		"identifier": "public.zsh-script",
+		"conformsTo": [
+			"public.shell-script"
+		],
+		"filenameExtension": [
+			"zsh"
+		]
+	},
+	{
+		"identifier": "public.zst-archive",
+		"conformsTo": [
+			"public.archive"
+		],
+		"filenameExtension": [
+			"zst"
+		],
+		"mimeType": [
+			"application/zst"
+		]
+	},
+	{
+		"identifier": "systemd.journal",
+		"conformsTo": [
+			"public.log"
+		],
+		"mimeType": [
+			"application/vnd.fdo.journal"
+		]
+	}
 ]
