@@ -1,18 +1,21 @@
-// sites: where in the code a scope, computer or effect was made, so an inspector can show a memo
-// made at program.ts:12 inside a process started at host.ts:40
+// sites: where in the code a scope, computer, effect or frame was made, so an inspector can show a
+// memo made at program.ts:12 inside a process started at host.ts:40
 //
 //   const sited = createSites(scheduler, { ours })
 //   sited.createComputer(f, set)   // same signatures as the scheduler's createRootScope,
-//   sited.siteOf(computer)         // createScope, createComputer, createEffect; the site is the
-//   sited.sitesOf(computer)        // first frame outside sites.ts and ours (libraries, the api)
+//   sited.siteOf(computer)         // createScope, createComputer, createEffect, createFrame; the
+//   sited.sitesOf(computer)        // site is the first stack frame outside sites.ts and ours
+//   sited.note(frame, site)        // (libraries, the api); note: a site its maker knew
 //
-// sitesOf: its own site, then each parent's. held in a WeakMap by scope, so a site never keeps a
-// scope alive; made without the wrapper: no site of its own (siteOf: undefined)
+// held by frame (a scope's: its own frame), in a WeakMap, so a site never keeps a frame alive.
+// sitesOf: its own site, then each frame's it is under that has one. made without the wrapper and
+// never noted: no site of its own (siteOf: undefined)
 // the stack is captured at create and parsed only when asked: create 5.6-12 µs, siteOf +~40 µs once
-// core candidate: the scheduler keeping the site on the scope (no wrapper, no WeakMap)
+// core candidate: the scheduler keeping the site on the frame (no wrapper, no WeakMap)
 import {
 	type Computer,
 	type Equal,
+	type Frame,
 	type Info,
 	type PENDING,
 	type Scheduler,
@@ -29,20 +32,28 @@ export type SitesOptions = {
 	ours?: Iterable<string>
 	// the site known now without a stack (a build's, @ermine/unplugin, or a process's setup's): taken
 	// over a capture; none (or it gives undefined): captured. made says what is being made: a
-	// scope, or a computer (a memo or an effect)
-	given?: (made: "scope" | "computer") => FileLocation | undefined
+	// scope, a computer (a memo or an effect), or a frame alone
+	given?: (made: Made) => FileLocation | undefined
 }
+
+export type Made = "scope" | "computer" | "frame"
 
 export type Sited = {
 	createRootScope: Scheduler["createRootScope"]
 	createScope: Scheduler["createScope"]
 	createComputer: Scheduler["createComputer"]
 	createEffect: Scheduler["createEffect"]
-	// where the scope was made through this wrapper; none: made without it
-	siteOf: (scope: Scope) => FileLocation | undefined
-	// its own site if it has one, then each parent's that has one, up to the root
-	sitesOf: (scope: Scope) => FileLocation[]
+	createFrame: Scheduler["createFrame"]
+	// x's own site from now (a scope's: its frame's), over any it had
+	note: (x: Scope | Frame, site: FileLocation) => void
+	// where it was made through this wrapper, or noted; none: undefined
+	siteOf: (x: Scope | Frame) => FileLocation | undefined
+	// its own site if it has one, then each frame's it is under that has one, up to the top
+	sitesOf: (x: Scope | Frame) => FileLocation[]
 }
+
+// a scope's own frame; a frame itself
+const frameOf = (x: Scope | Frame): Frame => "frame" in x ? x.frame : x
 
 type Held = { stack?: string; site?: FileLocation | null }
 
@@ -75,23 +86,25 @@ export function createSites(
 	const ours = listed instanceof Set
 		? (listed as Set<string>).add(import.meta.url)
 		: new Set<string>([import.meta.url, ...(listed ?? [])])
-	const held = new WeakMap<Scope, Held>()
+	const held = new WeakMap<Frame, Held>()
 	const given = options.given
 	// the site given now, or the stack above entry
-	const at = (entry: unknown, made: "scope" | "computer"): Held => {
+	const at = (entry: unknown, made: Made): Held => {
 		const site = given?.(made)
 		return site === undefined ? hold(entry) : { site }
 	}
 
-	function note<S extends Scope>(scope: S, h: Held): S {
-		held.set(scope, h)
-		return scope
+	function keep<S extends Scope | Frame>(x: S, h: Held): S {
+		held.set(frameOf(x), h)
+		return x
 	}
 
 	const createRootScope: Sited["createRootScope"] = (info) =>
-		note(scheduler.createRootScope(info), at(createRootScope, "scope"))
+		keep(scheduler.createRootScope(info), at(createRootScope, "scope"))
 	const createScope: Sited["createScope"] = (info, parent) =>
-		note(scheduler.createScope(info, parent), at(createScope, "scope"))
+		keep(scheduler.createScope(info, parent), at(createScope, "scope"))
+	const createFrame: Sited["createFrame"] = (info, up) =>
+		keep(scheduler.createFrame(info, up), at(createFrame, "frame"))
 	const createComputer = <T>(
 		f: (previous: T | undefined) => T | PromiseLike<T> | typeof PENDING,
 		set: (value: T) => void,
@@ -99,7 +112,7 @@ export function createSites(
 		key?: unknown,
 		info?: Info,
 	): Computer =>
-		note(scheduler.createComputer(f, set, equal, key, info), at(createComputer, "computer"))
+		keep(scheduler.createComputer(f, set, equal, key, info), at(createComputer, "computer"))
 	const createEffect = <T>(
 		f: (previous: T | undefined) => T | PromiseLike<T> | typeof PENDING,
 		effect: (value: T, previous: T | undefined) => void,
@@ -108,11 +121,11 @@ export function createSites(
 		info?: Info,
 	): Computer => {
 		const site = at(createEffect, "computer")
-		return note(scheduler.createEffect(f, effect, equal, options, info), site)
+		return keep(scheduler.createEffect(f, effect, equal, options, info), site)
 	}
 
-	function siteOf(scope: Scope): FileLocation | undefined {
-		const h = held.get(scope)
+	function siteOf(x: Scope | Frame): FileLocation | undefined {
+		const h = held.get(frameOf(x))
 		if (h === undefined) return undefined
 		if (h.site === undefined) {
 			h.site = typeof h.stack === "string" ? outside(h.stack, ours) ?? null : null
@@ -122,10 +135,10 @@ export function createSites(
 		return h.site ?? undefined
 	}
 
-	function sitesOf(scope: Scope): FileLocation[] {
+	function sitesOf(x: Scope | Frame): FileLocation[] {
 		const out: FileLocation[] = []
-		for (let s: Scope | undefined = scope; s !== undefined; s = s.parent) {
-			const site = siteOf(s)
+		for (let f: Frame | undefined = frameOf(x); f !== undefined; f = f.parent) {
+			const site = siteOf(f)
 			if (site) out.push(site)
 		}
 		return out
@@ -136,6 +149,8 @@ export function createSites(
 		createScope,
 		createComputer,
 		createEffect,
+		createFrame,
+		note: (x, site) => void held.set(frameOf(x), { site }),
 		siteOf,
 		sitesOf,
 	}

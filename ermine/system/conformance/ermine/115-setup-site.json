@@ -1,5 +1,5 @@
 {
-	"title": "a write or make in a process's setup, given no build site, has the process's site, not the line that made it [chee 10-28: \"this is fine\"]: the first call's, the same for all it does there (its function \"setup\"). a node it ensured or patched, a memo it made and that memo's runs' writes: \"setup\". an action's call, a memo made in one and the host keep each call's line (\"program\"; \"computer\" for the line define made)",
+	"title": "a write or make in a process's setup, given no build site, has the process's site, not the line that made it [chee 10-28: \"this is fine\"]: the first call's, the same for all it does there (its function \"setup\"). a node it ensured or patched, a memo it made and that memo's runs' writes: \"setup\". an action placed there carries it too [chee 10-28: frames walked]: its calls' writes and what they make take the handler's site (\"setup\"), not each line in it. the host keeps each call's line (\"program\")",
 	"steps": [
 		{
 			"op": "ermine",
@@ -189,7 +189,7 @@
 			"part": "value",
 			"id": "n5",
 			"expect": {
-				"site": "program"
+				"site": "setup"
 			}
 		},
 		{
@@ -231,7 +231,7 @@
 			"part": "value",
 			"id": "n10",
 			"expect": {
-				"site": "program"
+				"site": "setup"
 			}
 		},
 		{
@@ -239,7 +239,7 @@
 			"part": "value",
 			"id": "n11",
 			"expect": {
-				"site": "computer"
+				"site": "setup"
 			}
 		},
 		{

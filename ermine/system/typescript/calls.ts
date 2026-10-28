@@ -8,6 +8,8 @@
 //             what a service acting for its caller resolves paths in and asks protect as
 //   handler   { id, change }: the handler's node, and its value's change as called (which code ran)
 //   args      as given, by reference (a big value lives as long as its record)
+//   site      where it was called (the click): the caller's build site, else its frame's walked up
+//             (a memo's, a setup's, a handler's), else captured; none: the engine gave no stack
 //   end       done | failed | pending: pending, the handler returned a promise (ended when it
 //             settles) or threw PENDING (ended then: it waits on what it read)
 //   returned  done: what it returned (a promise's: what it settled with)
@@ -29,6 +31,7 @@
 // not waiting there, or it goes; another's till a send from it there is answered, or its scope
 // goes. waits() tracked.
 import type { ChangeHeader } from "@ermine/core/node/entry"
+import type { FileLocation } from "@ermine/core/util/stacktrace"
 import type { Key as Step } from "@ermine/core/changeable/apply"
 import type { Fact, Id, Path, Places } from "@ermine/core/places"
 import type { Read, Write } from "@ermine/processes/runs"
@@ -50,6 +53,7 @@ export type Call = {
 	readonly context: ProcessContext
 	readonly handler: { readonly id: Id; readonly change: ChangeHeader | undefined }
 	readonly args: readonly unknown[]
+	readonly site?: FileLocation
 	readonly end: "done" | "failed" | "pending"
 	readonly returned?: unknown
 	readonly error?: unknown
@@ -88,6 +92,8 @@ export type Going = {
 	readonly seen: Set<string>
 	readonly writes: Write[]
 	readonly made: Made[]
+	// where it was called from, found when first read
+	readonly site?: () => FileLocation | undefined
 	// its handler gone while it went: told hold as it ends, never held
 	gone?: true
 }
@@ -95,8 +101,14 @@ export type Going = {
 export type Calls = {
 	// the next call's number, for its scope's info
 	next: () => number
-	// call n begins, frame its call's frame (its info { caller, handler, call: n })
-	begin: (n: number, frame: Frame, base: Omit<Going["base"], "n" | "started">) => Going
+	// call n begins, frame its call's frame (its info { caller, handler, call: n }); site where it
+	// was called from, found when its record's site is read
+	begin: (
+		n: number,
+		frame: Frame,
+		base: Omit<Going["base"], "n" | "started" | "site">,
+		site?: () => FileLocation | undefined,
+	) => Going
 	// it returned (a thenable: pending till it settles), threw, or threw PENDING
 	end: (g: Going, out: { returned: unknown } | { error: unknown } | { pending: true }) => void
 	// f run as call g's: it is the open call while f runs (a generator action's steps after the first
@@ -177,14 +189,16 @@ export function createCalls(setup: Setup): Calls {
 
 	function record(g: Going, end: Call["end"], more: Partial<Call>) {
 		if (end !== "pending" || "ended" in more) live.delete(g)
-		write(g.base.handler.id, {
+		const c = {
 			...g.base,
 			end,
 			...more,
 			reads: g.reads.slice(),
 			writes: g.writes.slice(),
 			...g.made.length ? { made: g.made.slice() } : {},
-		}, g.gone)
+		}
+		if (g.site !== undefined) Object.defineProperty(c, "site", { enumerable: true, get: g.site })
+		write(g.base.handler.id, c, g.gone)
 	}
 
 	// the innermost call, when what runs now is its: no run begun inside it since
@@ -214,7 +228,7 @@ export function createCalls(setup: Setup): Calls {
 
 	return {
 		next: () => ++n,
-		begin(k, frame, base) {
+		begin(k, frame, base, site) {
 			const r = s.getRun()
 			const g: Going = {
 				n: k,
@@ -224,6 +238,7 @@ export function createCalls(setup: Setup): Calls {
 				seen: new Set(),
 				writes: [],
 				made: [],
+				...site !== undefined && { site },
 			}
 			stack.push(g)
 			frames.set(frame, g)

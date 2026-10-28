@@ -519,10 +519,9 @@ export function createScheduler(): Scheduler {
 		return open?.frame.info
 	}
 
-	// a frame of its own, under up (none given: the frame open; nothing open: at the top). no keys:
-	// empty
+	// a frame of its own, under up (none given: the frame open; nothing open: at the top). its info
+	// may have no keys (a writer's frame says nothing: what is kept beside it, its site, is all)
 	function createFrame(info: Info, up?: Frame): Frame {
-		if (blank(info)) throw empty()
 		return { info, parent: up ?? open?.frame }
 	}
 

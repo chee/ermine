@@ -104,9 +104,9 @@
 // (an action's args, what it returned) is a stand-in of that kind; es_handle_in checks that it is
 // one of this ermine's.
 //
-// SITES. a writing call is a macro over its _at, which takes the caller's line (CH_HERE); a write
-// outside a run has it as its site; in a run, the running computer's own (st_site_of). the _at
-// calls set it for their duration (es_enter).
+// SITES. a writing call is a macro over its _at, which takes the caller's line (CH_HERE); a write's
+// site is the nearest a frame open has, walked up (es_site_up: a memo's, a handler's, a writer's, a
+// setup's, a process's), else that line. the _at calls set it for their duration (es_enter).
 //
 // MEMORY. values given are borrowed for the call, and held (op_ref) by a callee that holds on to
 // them. values given back are borrowed from the table, good until the node changes, unless the
@@ -754,6 +754,9 @@ typedef struct {
 	size_t nwrites;
 	es_made *made;
 	size_t nmade;
+	// where it was called from (the click): the caller's frame open walked up, else the call's line
+	int has_site;
+	ch_site site;
 } es_call;
 
 // a send to a node holding nothing, waiting: the caller, the path or id, since
@@ -986,7 +989,7 @@ struct es_ermine {
 	void *user_activated_ctx;
 	// the site of the call in progress (es_enter), for a write's header outside a run
 	const ch_site *site;
-	// the setup running now, the innermost (host.c's run_setup): the process's site, es_setup_site
+	// the setup running now, the innermost (host.c's run_setup): the process's site, es_site_up
 	struct es_setup *setup;
 	// every handle, by address → its es_handle_data (A's); handles last till es_close, one a name
 	// (es_mint)
@@ -1281,8 +1284,9 @@ int es_cleanup(es_context *c, es_teardown fn, void *ctx);
 // ES_GONE. what it runs is the owner's: it asks as it, makes what it makes the owner's, and its writes
 // carry the mark es_create_writer was called under (an action's call: call, handler, caller). while the host says a person just interacted
 // (options.user_activated) they say so
-int es_create_writer(es_context *c, op_value **writer);
-// f as the writer's owner, with nothing open, each write at its own line. ES_ALREADY_INSIDE with a scope or
+int es_create_writer_at(es_context *c, op_value **writer, const ch_site *site);
+#define es_create_writer(...) es_create_writer_at(__VA_ARGS__, CH_HERE)
+// f as the writer's owner, with nothing open, each write at the writer's site. ES_ALREADY_INSIDE with a scope or
 // run open; ES_GONE after the owner ended; f's code
 int es_with_writer(es_ermine *e, const op_value *writer, es_thunk f, void *ctx);
 // the program is done with a writer (a timer that fired, a listener taken off): its memory goes now, not
@@ -1478,16 +1482,18 @@ int es_held_at(es_ermine *e, const char *part, const char *id, es_held *out);
 int es_held_status(es_ermine *e, const char *id, es_held *out);
 int es_held_row(es_ermine *e, const char *id, es_held *out);
 void es_held_drop(es_ermine *e, const char *id);
-// a write's header now: the open scope's; its site the call's (es_enter) outside a run, the running
-// computer's own in one. *made: its block, for pl_hold on the entry written
+// a write's header now: the open scope's; its site found up the frame open (es_site_here), else the
+// call's (es_enter). *made: its block, for pl_hold on the entry written
 int es_header(es_ermine *e, ch_header *out, pl_made **made);
 // the site of the call in progress, set; gives the one before, to put back
 const ch_site *es_enter(es_ermine *e, const ch_site *site);
-// the site a write or a make has now: given, the call's, except with a process's setup's scope open
-// (the scope the setup runs in, not a call's or a run's): the process's, the first given there with
-// the function "setup", the same for all it does [chee 10-28: "this is fine"; system/index.ts]. NULL
-// given and none held yet: NULL
-const ch_site *es_setup_site(es_ermine *e, const ch_site *given);
+// the nearest site up from frame f: each frame's own (sites.h), or a running setup's (the first
+// given there, the function "setup", the same for all it does [chee 10-28: "this is fine";
+// system/index.ts]; noted on its frame once found). none found: given, the call's own (NULL: none).
+// *buf is where a site found is put; the result is buf, a setup's, or given
+const ch_site *es_site_up(es_ermine *e, sc_frame *f, const ch_site *given, ch_site *buf);
+// the same from the frame open now
+const ch_site *es_site_here(es_ermine *e, const ch_site *given, ch_site *buf);
 // ES_CLOSED once closed
 int es_alive(es_ermine *e);
 // one pulse soon, however many ask

@@ -147,7 +147,7 @@
 			"expect": {
 				"value": {
 					"writer": "outside",
-					"site": "program"
+					"site": "setup"
 				}
 			}
 		},

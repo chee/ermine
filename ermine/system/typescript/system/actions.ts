@@ -34,7 +34,7 @@ export function createActionAs(
 	// deno-lint-ignore no-explicit-any
 	fn: (...args: any[]) => unknown,
 ): Node {
-	const { parts, methods, places, inside, resolve, ask } = here(inner)
+	const { base, parts, methods, places, inside, resolve, ask } = here(inner)
 	const own = owner(inner)
 	notInAct(own, "createAction")
 	if (Object.prototype.toString.call(fn) === "[object AsyncGeneratorFunction]") {
@@ -51,8 +51,13 @@ export function createActionAs(
 		inner.put({ part: "value", id, path, patches: whole(fn) })
 		return id
 	})
-	// kept while own is: own going takes it out, unless a later placement took over
-	methods.set(made, { fn, scope: own })
+	// kept while own is: own going takes it out, unless a later placement took over. its frame:
+	// the handler's, under own's, its site this call's (in a setup: the process's)
+	methods.set(made, {
+		fn,
+		scope: own,
+		frame: base.sited.createFrame({ handler: made }, own.frame),
+	})
 	keepAction(inner, own, made)
 	const n: NodeData = { path, part: "value" }
 	parts.onCreateFunction?.({ kind: "method", node: n, id: made, process: inner.node })
@@ -160,11 +165,14 @@ export function executeActionAs(inner: Inner, p: Target, ...args: unknown[]): un
 	// the call's frame: the caller on the call's changes, its own field: its node, and the actor its
 	// writes carry (the handler's writes are the handler's: their actor its own). a frame owns
 	// nothing [marks-2026-10-27; scope and frame, 10-28]: what the action makes belongs to under,
-	// the scope it runs in
-	const under = placed !== undefined && placed.fn === fn ? placed.scope : scope
+	// the scope it runs in. it is under the handler's frame (placed: so its writes take the
+	// handler's site), else under's. where it was called from (the click): its record's site
+	const own = placed !== undefined && placed.fn === fn ? placed : undefined
+	const under = own?.scope ?? scope
+	const site = base.siteLater()
 	const call = s.createFrame(
 		{ caller: { node: inner.node, actor: actorHere(inner) }, handler: id, call: k },
-		under.frame,
+		own?.frame ?? under.frame,
 	)
 	s.runWith(under, call, () => ask("execute", aimed(id!, n.path, "value")))
 	const g = calls.begin(k, call, {
@@ -172,7 +180,7 @@ export function executeActionAs(inner: Inner, p: Target, ...args: unknown[]): un
 		context,
 		handler: { id: id!, change: table.get("value", id!)?.change },
 		args,
-	})
+	}, site)
 	// a pulse is asked for as it returns (go), and here as it throws and as a promise settles
 	let out: unknown
 	try {

@@ -1,0 +1,13 @@
+{
+	"title": "a frame made alone through the sites has a site of its own; one made without them has none, and a chain walks frames (each frame, then the frame it is under), skipping it",
+	"steps": [
+		{ "op": "root", "name": "r", "expect": {} },
+		{ "op": "frame", "name": "f", "parent": "r", "expect": {} },
+		{ "op": "frame", "name": "g", "parent": "f", "wrapped": false, "expect": {} },
+		{ "op": "frame", "name": "h", "parent": "g", "expect": {} },
+		{ "op": "site", "name": "f", "expect": { "site": true } },
+		{ "op": "site", "name": "g", "expect": { "site": false } },
+		{ "op": "chain", "name": "h", "expect": { "length": 3 } },
+		{ "op": "chain", "name": "g", "expect": { "length": 2 } }
+	]
+}

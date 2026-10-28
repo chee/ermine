@@ -150,7 +150,7 @@ Deno.test("site: a process's setup captures once, however many writes and makes 
 	assertEquals(captures(60), none + 1)
 })
 
-Deno.test("site: two processes have a site each; the host and an action's call keep each call's", () => {
+Deno.test("site: two processes have a site each; the host keeps each call's; an action's call, its handler's [chee 10-28: frames walked]", () => {
 	const e = createErmine({ features: [manual] })
 	e.start(() => void ensureNode("/a", 0), "/p")
 	e.start(() => {
@@ -168,10 +168,30 @@ Deno.test("site: two processes have a site each; the host and an action's call k
 	})
 	assertEquals(siteOf(e, "h1")!.function, undefined)
 	assertNotEquals(siteOf(e, "h1")!.line, siteOf(e, "h2")!.line)
-	// an action's call, called in a setup or after: its handler's own line
+	// an action's call, called in a setup or after: its handler's site, placed in q's setup: q's
 	e.start(() => executeAction("/q/on/put"), "/r")
-	assertEquals(siteOf(e, "b")!.function, undefined)
-	assertEquals(siteOf(e, "b")!.file, here)
+	assertEquals(siteOf(e, "b"), b)
+	// a handler the host made: the line createAction was called at, whoever calls it
+	let made = 0
+	e.within(() => {
+		made = nextLine()
+		createAction("/on/h", () => void patch("/h1", [{ path: [], value: 1 }]))
+	})
+	e.start(() => executeAction("/on/h"), "/s")
+	assertEquals([siteOf(e, "h1")!.line, siteOf(e, "h1")!.function], [made, undefined])
+	e.close()
+})
+
+Deno.test("site: a write's own build site comes first, in a run too [chee 10-28]", () => {
+	const e = createErmine({ features: [manual] })
+	const S = site("file:///program.ts", 4, 2)
+	e.start(() => {
+		ensureNode("/n", 1)
+		ensureNode("/m", 0)
+		createEffect("copy", () => read("/n"), (n) => at(S, patch)("/m", [{ path: [], value: n }]))
+	}, "/p")
+	e.within(() => pulse())
+	assertEquals(changeAt(e, "m").external, [{ file: "file:///program.ts", line: 4, column: 2 }])
 	e.close()
 })
 

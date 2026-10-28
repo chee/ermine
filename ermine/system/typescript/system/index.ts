@@ -35,14 +35,19 @@
 // last result until the pulse.
 // writes: patches only, never a recipe [chee 10-25]; under the open scope (nothing open: a
 // process's throws nothing-open, the host's falls back to its own scope); each value and attribute
-// write through onWrite. a write's site: in a run, the running memo's or effect's own; outside one,
-// the program's call into the api (a build site, @ermine/unplugin: site.ts, else found in the stack,
-// at each call), except in a process's setup [chee 10-28: "this is fine"]: the body start runs, with
-// the process's scope open, not a run, an action's call or a writer's function; a write or make
-// there given no build site takes the process's site: the line of the first such call in that setup,
-// found once, its function "setup" (explain says "this setup", not the line that made each). a memo
-// or effect made there has it as its site, so its runs' writes do. the whole trace text asked for
-// (trace.ts) is still captured at each call. the host's setup keeps each call's.
+// write through onWrite. a write's site [chee 10-28: "yeah that's the shape"]: its own build site
+// (@ermine/unplugin: site.ts); else the open frame's, walked up; else the program's call into the
+// api, found in the stack ("we capture a call if we have no site, but we try to make sure there's
+// always one"). frames with a site: a memo's or effect's (where it was made), a handler's (where
+// createAction was called: its calls' frames are under it, so each call's writes take it, whoever
+// calls), a writer's (where createWriter was called), a process's setup's [chee 10-28: "this is
+// fine"]: the line of the first call there given no build site, found once, its function "setup"
+// (explain says "this setup", not the line that made each), and after the setup the process's own
+// (the setup's, else its start's: what is written as it from outside, through within, takes it). each
+// of those is found the same way as it is made, so in a setup they are all the process's. a step's
+// frame is under its computer's. the host's frame has none: each call of the host's is found. a
+// call's record keeps where it was called from (the click), found the same way. the whole trace
+// text asked for (trace.ts) is still captured at each call outside a run.
 //
 //   read(x, key?)        the value at key, tracked; a node there with none: undefined; a node not
 //                        there, or a pending memo with no value: throws PENDING

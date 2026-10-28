@@ -1,7 +1,7 @@
 import type { ChangeHeader } from "@ermine/core/node/entry"
 import type { Id, Path, Places } from "@ermine/core/places"
 import type { Runs } from "@ermine/processes/runs"
-import type { Computer, Scope } from "@ermine/core/scheduler"
+import type { Computer, Frame, Scope } from "@ermine/core/scheduler"
 import type { Sited } from "@ermine/sites"
 import type { Key } from "@ermine/core/table"
 import type { FileLocation } from "@ermine/core/util/stacktrace"
@@ -15,7 +15,11 @@ import type { ChangeView, Held, Status, WriterAs } from "./shapes.ts"
 // what every api of one ermine shares, beside the context's parts
 export type Base = {
 	readonly parts: Parts
-	readonly sited: Pick<Sited, "createScope" | "createComputer" | "createEffect">
+	readonly sited: Pick<Sited, "createScope" | "createComputer" | "createEffect" | "createFrame">
+	// the site of what is called now: its build site; else the open frame's, walked up (each
+	// frame's own, a setup's found at its first call); else the call's stack, held and found when
+	// the site is first read
+	readonly siteLater: () => () => FileLocation | undefined
 	readonly statuses: { give: (c: Computer, id: Id) => void }
 	readonly runs: Runs
 	readonly calls: Calls
@@ -32,9 +36,11 @@ export type Base = {
 	>
 	// the processes whose setup is running now, by node
 	readonly setting: Set<Id>
-	// each method placed, by its node: the function, and the scope open when it was placed (one
-	// function placed by two owners: each placement its own). gone with that scope
-	readonly methods: Map<Id, { readonly fn: unknown; readonly scope: Scope }>
+	// each method placed, by its node: the function, the scope open when it was placed (one
+	// function placed by two owners: each placement its own), and the handler's frame (made then,
+	// under that scope's: its calls' frames are under it; its site where createAction was called).
+	// gone with that scope
+	readonly methods: Map<Id, { readonly fn: unknown; readonly scope: Scope; readonly frame: Frame }>
 	// why a process is stopping (by its node), said by stop before its scope goes
 	readonly whys: Map<Id, Why>
 	// a running process stopped, by its node's id (ermine's start sets it): unplace's and remove's

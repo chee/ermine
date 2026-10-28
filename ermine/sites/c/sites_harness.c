@@ -1,7 +1,7 @@
 // The C sites (sites.h) on the line protocol of typescript/sites_harness.ts, which documents it
 // (conformance/c/harness.h has the loop). One scheduler and its sites last for the process; scopes
 // by name. Only whether a site is there and how long a chain is are told: where in the code is the
-// language's own.
+// language's own. a frame alone is named like a scope; its parent may be either.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,6 +14,8 @@ static st_sites *sites;
 static struct {
 	char *name;
 	sc_scope *scope;
+	// the frame: a scope's own, or one made alone
+	sc_frame *frame;
 } *named;
 static size_t count, capacity;
 static const sc_pair info[] = {{"owner", "test"}};
@@ -24,6 +26,8 @@ void hh_start(void) {
 }
 
 void hh_finish(void) {
+	// frames alone first: a scope's own goes with the scheduler
+	for (size_t i = 0; i < count; i++) sc_free_frame(named[i].frame);
 	st_free(sites);
 	sc_free(scheduler);
 	for (size_t i = 0; i < count; i++) free(named[i].name);
@@ -36,15 +40,25 @@ static sc_scope *find(const char *name) {
 	return NULL;
 }
 
-static void keep(const char *name, sc_scope *scope) {
+// a scope's own frame or a frame alone
+static sc_frame *find_frame(const char *name) {
+	for (size_t i = 0; name != NULL && i < count; i++)
+		if (strcmp(named[i].name, name) == 0) return named[i].frame;
+	return NULL;
+}
+
+static void keep_frame(const char *name, sc_scope *scope, sc_frame *frame) {
 	if (count == capacity) {
 		capacity = capacity ? capacity * 2 : 16;
 		named = realloc(named, capacity * sizeof *named);
 		if (named == NULL) abort();
 	}
 	named[count].name = strdup(name);
-	named[count++].scope = scope;
+	named[count].scope = scope;
+	named[count++].frame = frame;
 }
+
+static void keep(const char *name, sc_scope *scope) { keep_frame(name, scope, sc_scope_frame(scope)); }
 
 static char *nothing_set(void *value, void *data) {
 	(void)value, (void)data;
@@ -114,6 +128,27 @@ void hh_answer(const op_value *r, FILE *out) {
 	}
 		keep(name, made);
 		fputs("{}", out);
+	} else if (strcmp(op, "frame") == 0) {
+		if (name == NULL) {
+			hh_error(out, "frame: no name");
+			return;
+		}
+		sc_frame *up = find_frame(hh_str(r, "parent"));
+		if (up == NULL) {
+			hh_error(out, "frame: no parent");
+			return;
+		}
+		sc_frame *made = wrapped ? st_create_frame(sites, info, 0, up) : sc_create_frame(scheduler, info, 0, up);
+		keep_frame(name, NULL, made);
+		fputs("{}", out);
+	} else if (strcmp(op, "note") == 0) {
+		sc_frame *f = find_frame(name);
+		if (f == NULL) {
+			hh_error(out, "note: no %s", name ? name : "");
+			return;
+		}
+		st_note_frame(sites, f, __FILE__, __LINE__, __func__);
+		fputs("{}", out);
 	} else if (strcmp(op, "rerun") == 0) {
 		sc_pulse(scheduler);
 		const void *keys[] = {&key};
@@ -121,19 +156,19 @@ void hh_answer(const op_value *r, FILE *out) {
 		sc_pulse(scheduler);
 		fputs("{}", out);
 	} else if (strcmp(op, "site") == 0) {
-		sc_scope *o = find(name);
+		sc_frame *o = find_frame(name);
 		if (o == NULL) {
-		hh_error(out, "site: no scope %s", name ? name : "");
-		return;
-	}
+			hh_error(out, "site: no %s", name ? name : "");
+			return;
+		}
 		const st_site *site = st_site_of(sites, o);
 		fprintf(out, "{\"site\":%s}", site != NULL && site->file != NULL && site->line > 0 ? "true" : "false");
 	} else if (strcmp(op, "chain") == 0) {
-		sc_scope *o = find(name);
+		sc_frame *o = find_frame(name);
 		if (o == NULL) {
-		hh_error(out, "chain: no scope %s", name ? name : "");
-		return;
-	}
+			hh_error(out, "chain: no %s", name ? name : "");
+			return;
+		}
 		fprintf(out, "{\"length\":%zu}", st_sites_of(sites, o, NULL, 0));
 	} else {
 		hh_unknown(out, r);

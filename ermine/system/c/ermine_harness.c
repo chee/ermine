@@ -579,12 +579,14 @@ static op_value *status_value(const es_status *st) {
 }
 
 // where a site is: "none", a process's setup's ("setup": the function it is given), the harness's own
-// ("computer" for the line define made, else "program"), ermine's files ("api"), any other ("other")
+// ("computer" for the line define made, "handler" for the line an action was made at, else "program"),
+// ermine's files ("api"), any other ("other")
 static const char *site_of(const ch_site *s) {
 	if (s == NULL) return "none";
 	if (s->function != NULL && strcmp(s->function, "setup") == 0) return "setup";
 	if (s->file != NULL && strcmp(s->file, __FILE__) == 0) {
-		return s->function != NULL && strcmp(s->function, "define") == 0 ? "computer" : "program";
+		if (s->function != NULL && strcmp(s->function, "define") == 0) return "computer";
+		return s->function != NULL && strcmp(s->function, "handler") == 0 ? "handler" : "program";
 	}
 	static const char *const ours[] = {"nodes.c", "computers.c", "actions.c", "host.c"};
 	const char *file = s->file != NULL ? s->file : "";
@@ -1666,6 +1668,12 @@ static int form_stopped(sys_t sys, env_t *env, const op_value *const *raw, size_
 	return code;
 }
 
+// an action made: the line its handler's site is, when none is known ("handler" to site_of). the steps
+// it runs are run as the call open then (act_run uses the call's frame, never the maker's scope)
+static int handler(es_context *c, es_at at, es_action fn, void *ctx, es_handle **h) {
+	return es_create_action(c, at, fn, ctx, h);
+}
+
 static int call_form(sys_t sys, env_t *env, const op_value *form, op_value **out) {
 	*out = NULL;
 	if (form == NULL || form->type != OP_LIST || form->count == 0 || !is_str(form->items[0])) {
@@ -1704,7 +1712,7 @@ static int call_form(sys_t sys, env_t *env, const op_value *form, op_value **out
 			act_t *k = owned_alloc(sizeof *k);
 			*k = (act_t){sys, env, R(1), nraw > 2 ? R(2) : NULL};
 			int gen = nraw > 3 && is_str(R(3)) && strcmp(R(3)->str, "gen") == 0;
-			TRY(es_create_action(c, at, gen ? gen_run : act_run, k, &h));
+			TRY(handler(c, at, gen ? gen_run : act_run, k, &h));
 		}
 		*out = es_handle_value(h);
 		return 0;
@@ -3323,6 +3331,32 @@ static int answer(const op_value *r, op_value **res) {
 		*res = op_map();
 		const ch_site *site = entry != NULL && entry->change.external_length > 0 ? &entry->change.external[0] : NULL;
 		op_set(*res, "site", op_str(site_of(site)));
+		return 0;
+	}
+	if (strcmp(op, "samesite") == 0) {
+		TRY(es_alive(e));
+		// whether the two changes' sites are one place: file, line, column
+		const op_value *ids = field(r, "ids");
+		const ch_site *at[2] = {NULL, NULL};
+		for (size_t i = 0; i < 2 && ids != NULL && ids->type == OP_LIST && i < ids->count; i++) {
+			if (!is_str(ids->items[i])) continue;
+			const nd_entry *entry = text(r, "part") == NULL ? NULL
+				: tb_get(W->e->table, tb_string(text(r, "part")), tb_string(ids->items[i]->str));
+			if (entry != NULL && entry->change.external_length > 0) at[i] = &entry->change.external[0];
+		}
+		int same = at[0] != NULL && at[1] != NULL && at[0]->file != NULL && at[1]->file != NULL &&
+			strcmp(at[0]->file, at[1]->file) == 0 && at[0]->line == at[1]->line &&
+			at[0]->column == at[1]->column;
+		*res = op_map();
+		op_set(*res, "same", op_bool(same));
+		return 0;
+	}
+	if (strcmp(op, "callsite") == 0) {
+		TRY(es_alive(e));
+		const char *id = text(r, "id");
+		const es_call *call = id != NULL ? es_calls_latest(e, id) : NULL;
+		*res = op_map();
+		op_set(*res, "site", op_str(site_of(call != NULL && call->has_site ? &call->site : NULL)));
 		return 0;
 	}
 	if (hx_op != NULL) {

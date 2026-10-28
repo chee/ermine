@@ -303,7 +303,7 @@ sc_scope *sc_frame_scope(const sc_frame *f);
 // step's number), not a host's value
 bool sc_frame_step(const sc_frame *f);
 // a frame alone: n pairs (borrowed as a scope's are: the caller keeps them alive as long as the
-// frame), under up, else under the frame open. NULL when n is 0. the caller's to free
+// frame), under up, else under the frame open. n may be 0: a frame that says nothing. the caller's to free
 sc_frame *sc_create_frame(sc_scheduler *s, const sc_pair *info, size_t n, sc_frame *up);
 // a frame made alone, let go; NULL and a scope's own are ignored
 void sc_free_frame(sc_frame *f);

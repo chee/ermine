@@ -4,8 +4,8 @@
 // outer (extra over all), up to and with the first scope whose own info holds the NODE key; none:
 // every level. time: now, whole seconds. site: the one given; none given, outside a run the call's
 // own, in a run none (a capture is ~50-70 µs: too dear per write in a run; a caller who knows the
-// site gives it: the running computer's own, a process's for its setup). no frame open: unscoped,
-// nothing written.
+// site gives it: a frame's, found up from the frame open). no frame open: unscoped, nothing
+// written.
 import type { ChangeHeader, Metadata } from "@ermine/core/node/entry"
 import { type Frame, type Info, type Scheduler, SchedulerError } from "@ermine/core/scheduler"
 import { capture, type FileLocation, outside, trace } from "@ermine/core/util/stacktrace"
@@ -57,7 +57,7 @@ export function createChangeBase(
 // skip: files a library calls through on the way here (its own, and what it wraps calls in), so the
 // site is the first frame outside them too. from: the function whose caller is the site, where the
 // engine allows (a removal's header made inside table.del's event: del); none, this one. site: the
-// write's, as the caller knows it (in a run: the running computer's own); none: see above
+// write's, as the caller knows it (a frame's, found up from the frame open); none: see above
 export function createChangeHeader(
 	scheduler: Pick<Scheduler, "getCurrentFrame" | "getRun">,
 	extra?: Info,

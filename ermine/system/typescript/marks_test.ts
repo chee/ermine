@@ -77,39 +77,37 @@ Deno.test("marks: createWriter in an action, the writer's changes carry the call
 	e.close()
 })
 
-Deno.test("marks: each write through a writer has its own line, not createWriter's (sites are core)", () => {
+// the line after the one calling this
+const nextLine = () => Number(new Error().stack!.split("\n")[2].match(/:(\d+):\d+\)?$/)![1]) + 1
+
+Deno.test("marks: each write through a writer has the writer's site [chee 10-28: frames walked]: made in setup, the process's", () => {
 	let withWriter: ReturnType<typeof createWriter> | undefined
 	const { e } = started(() => {
 		ensureNode("/a", 0)
 		ensureNode("/b", 0)
 		withWriter = createWriter()
 	})
-	const here = () => Number(new Error().stack!.split("\n")[2].match(/:(\d+):\d+\)?$/)![1])
-	let lines: number[] = []
 	withWriter!(() => {
-		lines = [here() + 1, here() + 2]
 		patch("/a", [{ path: [], value: 1 }])
 		patch("/b", [{ path: [], value: 1 }])
 	})
 	const at = (k: string) => e.within(() => explain(k))?.change?.site
-	assertEquals([at("/a")?.line, at("/b")?.line], lines)
-	assert(at("/a")?.file.endsWith("marks_test.ts"))
+	assertEquals(at("/a")?.function, "setup")
+	assertEquals(at("/a"), at("/b"))
 	e.close()
 })
 
-Deno.test("marks: a write through a writer in a timer has the program's own line as its site", async () => {
-	let withWriter: ReturnType<typeof createWriter> | undefined
-	const { e } = started(() => {
-		ensureNode("/t", 0)
-		withWriter = createWriter()
-	})
+Deno.test("marks: a writer the host made: its writes, in a timer too, have the line createWriter was called at", async () => {
+	const e = createErmine({ features: [manual] })
 	let line = 0
+	const withWriter = e.within(() => {
+		ensureNode("/t", 0)
+		line = nextLine()
+		return createWriter()
+	})
 	await new Promise<void>((done) =>
 		setTimeout(() => {
-			withWriter!(() => {
-				line = new Error().stack!.split("\n")[1].match(/:(\d+):\d+\)?$/)!.map(Number)[1] + 1
-				patch("/t", [{ path: [], value: 1 }])
-			})
+			withWriter(() => patch("/t", [{ path: [], value: 1 }]))
 			done()
 		}, 5)
 	)

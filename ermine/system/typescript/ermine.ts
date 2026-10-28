@@ -58,7 +58,7 @@ import { getStatus } from "./system/status.ts"
 import { enterScheduler, leaveScheduler, registerScheduler, registerScope } from "./registry.ts"
 import { isHandle, mint } from "./handles.ts"
 import { createChangeHeader, NODE } from "@ermine/core/places/header"
-import { capture, type FileLocation } from "@ermine/core/util/stacktrace"
+import { capture, type FileLocation, outside } from "@ermine/core/util/stacktrace"
 import { createStatus, STATUS, TABLE as STATUS_TABLE } from "@ermine/core/places/status"
 import type { Policy } from "@ermine/core/protect"
 import { idAt, PROCESS, processes as rows } from "@ermine/processes"
@@ -76,6 +76,7 @@ import {
 import {
 	createScheduler,
 	FILES as SCHEDULER_FILES,
+	type Frame,
 	type Info,
 	PENDING,
 	type Scheduler,
@@ -83,7 +84,7 @@ import {
 } from "@ermine/core/scheduler"
 import { isPromise } from "@ermine/core/scheduler/helpers"
 import { createPaths } from "@ermine/core/scheduler/paths"
-import { createSites } from "@ermine/sites"
+import { createSites, hold } from "@ermine/sites"
 import { createTable, type Key, type Table } from "@ermine/core/table"
 import { type Call, createCalls, type Wait } from "./calls.ts"
 import {
@@ -274,14 +275,20 @@ export function createErmine(options: Options = {}): Ermine {
 	// 2. sites: skipping ermine's files, the scheduler's and processes' start, and (added as the
 	// features are set up: the skip list is live) every feature's files
 	const ours = new Set<string>([...OURS, ...SYSTEM_FILES, ...SCHEDULER_FILES, ...START_FILES])
-	// the build site of the public function called innermost (enter's), if it was given one
+	// the build site of the public function called innermost (enter's), if it was given one, and the
+	// frame open as it was called: it is that call's own, so it stands only while that frame is the
+	// one open (a run, a call or a process's own writes begun inside it are not that call's)
 	let built: FileLocation | undefined
-	// the setups running now, by their scope: each process's site (setupSite)
-	const setups = new Map<Scope, { site?: FileLocation | null }>()
-	// a computer's site: a build site if given; made in a process's setup, the process's
+	let builtAt: Frame | undefined
+	const builtNow = () => built !== undefined && s.getCurrentFrame() === builtAt ? built : undefined
+	// the setups running now, by their scope's frame: a setup's site is found at its first call
+	const setups = new Map<Frame, { site?: FileLocation | null }>()
+	// a computer's or a frame's site: siteHere's (a build site; else the open frame's, walked up: in
+	// a process's setup, the process's; else captured from the public call). a scope's: a build
+	// site, else captured
 	const sites = createSites(s, {
 		ours,
-		given: (made) => built ?? (made === "computer" ? setupSite() : undefined),
+		given: (made) => made === "scope" ? builtNow() : siteNow(),
 	})
 
 	// 3. the table; each feature's setup; onTable's layers over it
@@ -396,57 +403,58 @@ export function createErmine(options: Options = {}): Ermine {
 	}
 	const offSettle = s.onSettle(queuePulse)
 
-	// a write's site (the rule is index.ts'): in a run, the running computer's own; outside one, a
-	// build site given (built), nothing captured; in a process's setup, the process's (setupSite);
-	// else the caller of the public function called innermost (entry), found in the nearest 10
-	// frames. what onTrace gives: the whole trace text kept beside it too (text), captured whatever
-	// else is known
+	// a write's site (the rule is index.ts'): its build site (built); else the open frame's, walked
+	// up (siteUp); else the caller of the public function called innermost (entry), found in the
+	// nearest 10 frames. what onTrace gives: the whole trace text kept beside it too (text),
+	// captured at each call outside a run whatever else is known
 	let entry: unknown
 	const header = (): ChangeHeader => {
-		const run = s.getRun()
-		if (run !== undefined) {
-			return createChangeHeader(s, undefined, undefined, undefined, sites.siteOf(run.computer))
+		if (s.getRun() !== undefined) {
+			return createChangeHeader(s, undefined, undefined, undefined, siteNow())
 		}
-		const t = traced({ text: false, ...built !== undefined && { built } })
+		const b = builtNow()
+		const t = traced({ text: false, ...b !== undefined && { built: b } })
 		if (t.built !== undefined && !t.text) {
 			return createChangeHeader(s, undefined, undefined, undefined, t.built)
 		}
-		const own = t.text ? undefined : setupSite()
+		const own = t.text ? undefined : siteUp(s.getCurrentFrame())
 		if (own !== undefined) return createChangeHeader(s, undefined, undefined, undefined, own)
 		const h = createChangeHeader(s, undefined, ours, entry, undefined, t.text)
 		if (t.built !== undefined) h.external = [t.built]
 		return h
 	}
-	// the site header() gives now without reading the stack: a run's computer's, a build's, a
-	// setup's; none: undefined (whoever writes finds it, once)
-	const siteNow = (): FileLocation | undefined => {
-		const run = s.getRun()
-		return run !== undefined ? sites.siteOf(run.computer) : built ?? setupSite()
-	}
-	// f, its writes given site as a build site's (none: f as it is): the base's own writes for a
-	// process, its status as setup settles, take the process's site
-	const sited = <T>(site: FileLocation | undefined, f: () => T): T => {
-		if (site === undefined) return f()
-		const had = built
-		built = site
-		try {
-			return f()
-		} finally {
-			built = had
+	// the site known now without reading the stack: a build's, the open frame's walked up; none:
+	// undefined
+	const siteNow = (): FileLocation | undefined => builtNow() ?? siteUp(s.getCurrentFrame())
+	// the site of what is called now (a call's record): known, else the stack held, found when read
+	const siteLater = (): () => FileLocation | undefined => {
+		const known = siteNow()
+		if (known !== undefined) return () => known
+		const h = hold(entry ?? siteLater)
+		let found: FileLocation | null | undefined
+		return () => {
+			if (found === undefined) {
+				found = h.stack === undefined ? null : outside(h.stack, ours) ?? null
+			}
+			return found ?? undefined
 		}
 	}
-	// the site of the setup the scope open is, none given (see index.ts): the line of the first
-	// write or computer made in it that was given none, found once, marked with the function
-	// "setup". no setup open: undefined
-	function setupSite(): FileLocation | undefined {
-		const open = s.getCurrentScope()
-		const m = open === undefined ? undefined : setups.get(open)
-		if (m === undefined) return undefined
-		if (m.site === undefined) {
-			const at = capture(ours, entry)
-			m.site = at === undefined ? null : { ...at, function: "setup" }
+	// the nearest site up from f: each frame's own (sites.ts'), or a setup's (see index.ts: the line
+	// of its first call, found once, marked with the function "setup"); none: undefined
+	function siteUp(f: Frame | undefined): FileLocation | undefined {
+		for (; f !== undefined; f = f.parent) {
+			const own = sites.siteOf(f)
+			if (own !== undefined) return own
+			const m = setups.get(f)
+			if (m === undefined) continue
+			if (m.site === undefined) {
+				const at = capture(ours, entry)
+				m.site = at === undefined ? null : { ...at, function: "setup" }
+				if (at !== undefined) sites.note(f, m.site!)
+			}
+			if (m.site !== null) return m.site
 		}
-		return m.site ?? undefined
+		return undefined
 	}
 	// f(inner, ...a) with enter as the entry: a write's site is found from enter's caller on, or is
 	// site, a build's
@@ -458,13 +466,16 @@ export function createErmine(options: Options = {}): Ermine {
 	): T {
 		const was = entry
 		const had = built
+		const hadAt = builtAt
 		entry = enter
 		built = site
+		builtAt = s.getCurrentFrame()
 		try {
 			return f(inner, ...a)
 		} finally {
 			entry = was
 			built = had
+			builtAt = hadAt
 		}
 	}
 
@@ -720,6 +731,7 @@ export function createErmine(options: Options = {}): Ermine {
 	const base: Base = {
 		parts,
 		sited: sites,
+		siteLater,
 		statuses,
 		runs,
 		calls,
@@ -859,32 +871,26 @@ export function createErmine(options: Options = {}): Ermine {
 						s.registerTeardown(inside.scope, () => {
 							contexts.delete(pid)
 						})
-						// the process's site: its setup's once found, else its start's
-						let own = startSite
 						// the process's status and value, written as it settles (its status in the status table)
 						const done = (v: unknown) => {
 							if (inside.scope.state !== "alive") return
-							// the base's own writes for the process: its scope opened (a promise settles with nothing open)
-							sited(
-								own ?? sites.siteOf(inside.scope),
-								() =>
-									s.runWithScope(inside.scope, () => {
-										if (v !== undefined) {
-											inner.put({ part: "value", id: pid, patches: whole(v) })
-										}
-										putStatus(inner, pid, [setKey(STATUS), setKey(WAITING)])
-									}),
-							)
+							// the base's own writes for the process: its scope opened (a promise settles with
+							// nothing open), so they take its frame's site
+							s.runWithScope(inside.scope, () => {
+								if (v !== undefined) {
+									inner.put({ part: "value", id: pid, patches: whole(v) })
+								}
+								putStatus(inner, pid, [setKey(STATUS), setKey(WAITING)])
+							})
 							queuePulse()
 						}
 						const failed = (e: unknown) => {
 							if (inside.scope.state !== "alive") return
 							const error = e === undefined ? new Error("undefined") : e
-							sited(own ?? sites.siteOf(inside.scope), () =>
-								s.runWithScope(
-									inside.scope,
-									() => putStatus(inner, pid, [setKey(STATUS, error), setKey(WAITING)]),
-								))
+							s.runWithScope(
+								inside.scope,
+								() => putStatus(inner, pid, [setKey(STATUS, error), setKey(WAITING)]),
+							)
 							queuePulse()
 						}
 						// setup run once, given nothing (its functions imported), untracked, in a scope of its own
@@ -899,12 +905,15 @@ export function createErmine(options: Options = {}): Ermine {
 							let out: unknown
 							// the nodes it reads that aren't there, kept while it runs (system/reading.ts waitFor)
 							base.setting.add(pid)
-							// its writes with no site given take the process's (setupSite)
-							setups.set(at, {})
+							// its writes with no build site take the process's (siteUp: found at the first call)
+							setups.set(at.frame, {})
 							const missed = () => {
-								own = setups.get(at)?.site ?? own
+								// the process's site from now: its setup's once found, else its start's (its scope's,
+								// made at the start)
+								const own = setups.get(at.frame)?.site
+								if (own) sites.note(inside.scope, own)
 								base.setting.delete(pid)
-								setups.delete(at)
+								setups.delete(at.frame)
 								const paths = base.missing.get(pid)?.paths ?? []
 								base.missing.delete(pid)
 								return paths

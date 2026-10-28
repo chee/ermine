@@ -703,8 +703,9 @@ static int create(es_context *c, int memo, es_names *path, char **key, es_comput
 	es_ermine *e = c->ermine;
 	struct es_computers *x = e->computers;
 	sc_scope *own = es_owner(c);
-	// made in a process's setup: its site is the process's (es_setup_site)
-	site = es_setup_site(e, site);
+	// its site: found up the frame open (in a process's setup, the process's), else the call's
+	ch_site found;
+	site = es_site_up(e, es_open_frame(c), site, &found);
 	char *id = es_new_id(e);
 	placing p = {c, path->names, path->n, id, node_above(sc_scope_frame(own))};
 	int code = es_inside(c, place_node, &p);

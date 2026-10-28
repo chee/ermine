@@ -122,6 +122,22 @@ int main(void) {
 	CHECK(sc_teardown(again) == NULL);
 	CHECK(st_count(sites) == 0);
 
+	// a frame alone: noted, its chain walks frames, forgotten by its owner
+	sc_scope *fr = st_create_root_scope(sites, info, 1);
+	sc_frame *up = st_create_frame(sites, NULL, 0, sc_scope_frame(fr));
+	sc_frame *bare_frame = sc_create_frame(s, NULL, 0, up);
+	CHECK(st_site_of(sites, up) != NULL && st_site_of(sites, bare_frame) == NULL);
+	CHECK(st_sites_of(sites, bare_frame, chain, 4) == 2 && chain[0] == st_site_of(sites, up));
+	st_note_frame(sites, bare_frame, __FILE__, __LINE__, __func__);
+	CHECK(st_sites_of(sites, bare_frame, chain, 4) == 3 && st_count(sites) == 3);
+	st_forget_frame(sites, bare_frame);
+	st_forget_frame(sites, up);
+	CHECK(st_count(sites) == 1 && st_site_of(sites, up) == NULL);
+	sc_free_frame(bare_frame);
+	sc_free_frame(up);
+	CHECK(sc_teardown(fr) == NULL);
+	CHECK(st_count(sites) == 0);
+
 	// not torn down: st_free lets go
 	CHECK(st_create_root_scope(sites, info, 1) != NULL);
 	st_free(sites);
