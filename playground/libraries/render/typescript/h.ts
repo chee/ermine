@@ -3,13 +3,17 @@
 // calls. plain objects, told apart by Symbol.for (ermine-h's keys, so its copies agree); a
 // renderer makes them real (@ermine/render/dom)
 //   targets   "n" under the process's node, "./n" from its cwd, "/n" from its root, a node
-//             handle, or [parent, name]: what is at name under parent
+//             handle, [parent, name]: what is at name under parent, or a getter: a function
+//             giving one, called in the binding's own run, so what it reads is the binding's and
+//             the binding follows it (as Solid's accessors, and pipe's). a plain target is fixed
+//             when the binding is first made: made again by its parent's next run the same, it
+//             runs only when what it read changes (ermine's nominal rule)
 //   kept      a node the program made (a canvas) as a child: placed as it is, never touched inside
 import type { getNode } from "@ermine/system"
 
 type Node = ReturnType<typeof getNode>
 export type Slot = readonly [parent: Target, name: string]
-export type Target = string | Node | Slot
+export type Target = string | Node | Slot | (() => Target)
 // a child under a node (under), or an entry a path reaches (each)
 export type Item = {
 	readonly name?: string
@@ -38,6 +42,10 @@ export type Bound = {
 	readonly fn?: (value: any) => unknown
 	// track's: what is read, tracked
 	readonly get?: () => unknown
+	// each's and under's: the function each item's view comes from
+	readonly row?: (item: never, index: number) => Child
+	// a row of a list: its item's name (or index)
+	readonly key?: string
 }
 export type Handler = {
 	readonly [HANDLER]: true
@@ -73,22 +81,25 @@ export function bind(target: Target, fn?: (value: any) => unknown): Bound {
 }
 // a view for each entry a path reaches (one, unless sync or a mount gives more), in order
 export function each(target: Target, fn: (item: Item, index: number) => Child): Bound {
-	return { [BOUND]: true, target, read: "each", fn: items(fn) }
+	return { [BOUND]: true, target, read: "each", fn: items(fn), row: fn }
 }
 // a view for each child of a node, by name, in order
-export function under(target: Target, fn: (item: Item, index: number) => Child): Bound {
-	return { [BOUND]: true, target, read: "under", fn: items(fn) }
+export function under(
+	target: Target,
+	fn: (item: Item & { readonly name: string }, index: number) => Child,
+): Bound {
+	return { [BOUND]: true, target, read: "under", fn: items(fn), row: fn }
 }
 // a view of anything read: get runs tracked (read, readAttributes, getStatus, explain, list…), and
 // what it gives is shown, or handed to fn. what: a word for what's said of it (none: "track")
 export function track<T>(get: () => T, fn?: (value: T) => Child, what = "track"): Bound {
 	return { [BOUND]: true, target: what, read: "track", get, fn: fn as (v: any) => unknown }
 }
-const items = (fn: (item: Item, index: number) => Child) => (all: readonly Item[]) =>
+const items = <I extends Item>(fn: (item: I, index: number) => Child) => (all: readonly I[]) =>
 	(all ?? []).map((item, i) => {
 		const v = fn(item, i)
 		const key = item.name ?? String(i)
-		return isView(v) && v.key === undefined ? { ...v, key } : v
+		return (isView(v) || isBound(v)) && v.key === undefined ? { ...v, key } : v
 	})
 
 // an event calling the action at a path (or a node). args: the call's arguments, or a function of
@@ -108,14 +119,19 @@ export function h(
 ): View {
 	return make(tag, { ...props, children: kids }, (props?.key as string) ?? undefined)
 }
-// a view from jsx's (tag, props, key), and where it was written (the jsx runtime's)
+// a view from jsx's (tag, props, key), and where it was written (the jsx runtime's). a
+// component's key is its view's (or binding's), unless that has its own
 export function make(
 	tag: string | Component,
 	props: Record<string, any>,
 	key?: unknown,
 	source?: string,
 ): View {
-	if (typeof tag === "function") return tag(props) as View
+	if (typeof tag === "function") {
+		const v = tag(props)
+		if (key == null || !(isView(v) || isBound(v)) || v.key !== undefined) return v as View
+		return { ...v, key: String(key) } as View
+	}
 	const { children, key: _key, ...rest } = props
 	return {
 		[VIEW]: true,
