@@ -1,6 +1,6 @@
 #!/bin/sh
 # builds encoding's C harness (cbor's test) with the root Makefile; CHECK=1: the harness-check,
-# with the address and undefined-behaviour sanitizers (pack, blop: playground/encoding/c/build.sh)
+# with the address and undefined-behaviour sanitizers (pack: playground/encoding/c/build.sh)
 set -e
 cd "$(dirname "$0")/../../.."
 bins="ermine/encoding/c/cbor-test"

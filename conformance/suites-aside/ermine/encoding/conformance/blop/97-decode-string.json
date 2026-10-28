@@ -1,7 +1,0 @@
-{
-	"title": "a string, not a map",
-	"bytes": "64626c6f70",
-	"expect": {
-		"code": "not-a-blop"
-	}
-}

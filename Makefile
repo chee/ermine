@@ -24,7 +24,6 @@ table_src = $(harness_src) core/table/c/table_harness.c core/table/c/table.c
 node_src = $(harness_src) conformance/c/protocol_harness.c core/node/c/node_harness.c core/node/c/node.c core/changeable/c/apply.c core/changeable/c/invert.c
 pack_src = core/node/c/node.c core/changeable/c/value.c core/changeable/c/apply.c core/changeable/c/invert.c playground/encoding/c/pack.c playground/encoding/c/pack_harness.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c
 cbor_src = ermine/encoding/c/cbor_test.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c
-blop_src = playground/encoding/c/blop.c playground/encoding/c/blop_harness.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c $(blake3_src)
 # Subduction's own BLAKE3 exports the same symbols as ermine/encoding/c/blake3: the C ones are renamed, in every file of the harness
 subduction_rename = $(foreach s,compress_in_place compress_in_place_portable compress_subtree_wide compress_xof compress_xof_portable hash_many hash_many_portable hasher_finalize hasher_finalize_seek hasher_init hasher_init_derive_key hasher_init_derive_key_raw hasher_reset hasher_update simd_degree version xof_many,-Dblake3_$(s)=ermc_blake3_$(s))
 subduction_lib = playground/together/stacks/subduction/c/subduction/lib/libsubduction_c.a
@@ -66,7 +65,6 @@ table = core/table/c/table-harness
 node = core/node/c/node-harness
 pack = playground/encoding/c/pack-harness
 cbor = ermine/encoding/c/cbor-test
-blop = playground/encoding/c/blop-harness
 squish = core/changeable/c/squish-harness
 changeable-apply = core/changeable/c/apply-harness
 paths = core/scheduler/c/paths-harness
@@ -89,7 +87,7 @@ presence_src = $(harness_src) playground/together/presence/c/presence_harness.c 
 presence = playground/together/presence/c/presence-harness
 presence_suite = presence
 presence_tests = $(wildcard playground/together/presence/typescript/presence_harness_test.ts)
-LIBS = tracker table node pack cbor blop squish changeable-apply paths places processes protect update guard scheduler names diag layout manifest store program sys
+LIBS = tracker table node pack cbor squish changeable-apply paths places processes protect update guard scheduler names diag layout manifest store program sys
 LIBS += presence
 # squish at the ends of a 64-bit whole number, what no scenario reaches: a test of its own
 squish-test_src = core/changeable/c/squish.c core/changeable/c/squish_test.c
@@ -337,7 +335,7 @@ LIBS += egwalker-merge-bench
 # JSON text (ermine/encoding/c/json_text.c): only what reads or writes it, the harnesses and the files store; program
 # has it through store
 json_text_src = ermine/encoding/c/json_text.c
-$(foreach l,blop cbor hash pack together-fragment together-packer names diag layout manifest store,$(eval $(l)_src += $(json_text_src)))
+$(foreach l,cbor hash pack together-fragment together-packer names diag layout manifest store,$(eval $(l)_src += $(json_text_src)))
 HARNESSES = $(foreach l,$(LIBS),$($(l)))
 CHECKS = $(addsuffix -check,$(HARNESSES))
 
@@ -476,7 +474,6 @@ guard_suite = guard
 guard_tests = $(wildcard core/places/typescript/guard_harness_test.ts)
 # the rest: env var, then the folders of their scenarios (conformance/<lib>/)
 pack_test = PACK_HARNESS conformance/pack/ conformance/cbor/
-blop_test = BLOP_HARNESS conformance/blop/
 # the files program's suites (playground/tools/files/conformance); the manifest's, the store's and the program's harnesses
 # work in temp folders of their own, the store's and the program's on real folders with extended attributes (macOS)
 names_suite = names

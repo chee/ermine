@@ -1,7 +1,0 @@
-{
-	"title": "a list, not a map",
-	"bytes": "80",
-	"expect": {
-		"code": "not-a-blop"
-	}
-}

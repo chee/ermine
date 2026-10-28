@@ -1,7 +1,0 @@
-{
-	"title": "bytes that are not CBOR",
-	"bytes": "1c",
-	"expect": {
-		"code": "not-a-blop"
-	}
-}
