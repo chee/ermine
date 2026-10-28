@@ -1,6 +1,7 @@
 /// <reference lib="dom" />
 // @ermine/render/dom: render(into, view, options) makes a view real inside a DOM element,
-// reusing what an earlier render put there (@ermine/render: the engine). a prop is a property when
+// reusing what an earlier render put there (@ermine/render: the engine); hydrate(into, view,
+// options) takes what into holds already (a server's html, @ermine/render/html's) as that. a prop is a property when
 // the element has one (value, checked, className…), else an attribute; a style object is merged
 // into style. says: data-ermine-<name> attributes (process, key, source, bind:<prop|text|children>,
 // on:<event>, waiting). tells: bubbling events ("ermine:change", "ermine:call", "ermine:called")
@@ -55,6 +56,25 @@ export const dom: Renderer<Node, Element> = {
 	},
 	tell: (el, name, detail) =>
 		void el.dispatchEvent(new CustomEvent(name, { bubbles: true, detail })),
+	kidsOf: (el) => [...el.childNodes],
+	kindOf,
 }
 
-export const { render } = createRenderer(dom)
+// what a node is matched as when a page's html is hydrated: an element its tag, and its key when it
+// says one; a span saying only what binds it, a binding among other kids; text. anything else (a
+// comment) is left as it is
+function kindOf(n: Node): string | undefined {
+	if (n.nodeType === Node.TEXT_NODE) return "#text"
+	if (n.nodeType !== Node.ELEMENT_NODE) return undefined
+	const el = n as Element, tag = el.localName, key = el.getAttribute("data-ermine-key")
+	const names = el.getAttributeNames()
+	const said = names.every((a) => a.startsWith("data-ermine-"))
+	if (tag === "span" && said && names.some((a) => a.startsWith("data-ermine-bind:"))) {
+		return "#bind"
+	}
+	return key === null ? tag : `${tag}#${key}`
+}
+
+// render: the view made real inside into, reusing what an earlier render put there. hydrate: the
+// same, taking what into holds already (the server's html) as that
+export const { render, hydrate } = createRenderer(dom)

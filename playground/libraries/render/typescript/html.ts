@@ -398,5 +398,11 @@ export function html(kid: Kid): string {
 	for (const [k, v] of kid.attrs) s += v === "" ? ` ${k}` : ` ${k}="${quoted(v)}"`
 	return VOID.has(kid.tag) ? s + ">" : `${s}>${inner(kid)}</${kid.tag}>`
 }
-// an element's kids as html
-export const inner = (el: Element): string => el.kids.map(html).join("")
+// an element's kids as html, two texts side by side kept apart (<!---->): a page parsing it has
+// each text a render made, for hydrate (@ermine/render/dom) to take over one for one
+export const inner = (el: Element): string =>
+	el.kids.map((k, i) => {
+		const before = el.kids[i - 1]
+		const apart = "text" in k && k.text && before !== undefined && "text" in before && before.text
+		return (apart ? "<!---->" : "") + html(k)
+	}).join("")
