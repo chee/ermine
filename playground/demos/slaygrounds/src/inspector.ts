@@ -679,7 +679,8 @@ export function createInspector(
 		cell(changeBox, () => at()?.change, (c: Any) => {
 			const out: Node[] = [h("h3", "", "change")]
 			if (!c) return [...out, h("p", "empty", "none")]
-			const site = (c.external ?? []).slice(0, 3)
+			// its sites, oldest first: the nearest three
+			const site = (c.external ?? []).slice(-3)
 			out.push(sheet([
 				["who", c.actor],
 				...(c.reader !== undefined ? [["reader", c.reader] as [string, unknown]] : []),

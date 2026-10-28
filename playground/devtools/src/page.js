@@ -665,7 +665,8 @@
 	function meta(g, change, from) {
 		const tick = g.face.tick(change);
 		const w = whoOf(change);
-		const site = change?.external?.[0] ?? from?.where?.[0];
+		// of its sites (oldest first), the last: the nearest
+		const site = change?.external?.at(-1) ?? from?.where?.at(-1);
 		const when = change?.time ?? from?.when;
 		return [
 			tick !== undefined ? `t${tick}` : when !== undefined ? clock(when) : "",
