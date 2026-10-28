@@ -1,6 +1,6 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import { createAction, createMemo, patch, peep, PENDING, read } from "@ermine/system"
-import { bind, handler } from "ermine-h"
+import { bind, handler } from "@ermine/render/h"
 
 // a fake fetch: 900ms, then a name
 const fetchUser = (id: number) =>

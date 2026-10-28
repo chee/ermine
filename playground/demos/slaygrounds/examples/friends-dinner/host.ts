@@ -2,7 +2,7 @@
 // dinner: default; the post: its export, with a folder of its own for what it saves). who is
 // calling: @ermine/system's getCaller
 import { createWorld } from "@ermine/slaygrounds/world"
-import { render } from "ermine-h"
+import { render } from "@ermine/render/dom"
 
 const world = createWorld({
 	render,

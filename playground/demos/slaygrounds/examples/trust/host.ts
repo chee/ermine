@@ -3,7 +3,7 @@
 // the native getter it kept before any program ran, and a send carries it as "trusted-event". the
 // program reads it with the world's who and change
 import { createWorld } from "@ermine/slaygrounds/world"
-import { render } from "ermine-h"
+import { render } from "@ermine/render/dom"
 
 const world = createWorld({ render, processes: [{ name: "vault" }] })
 

@@ -1,4 +1,4 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import {
 	addTeardown,
 	createAction,
@@ -15,7 +15,7 @@ import {
 	unplace,
 } from "@ermine/system"
 import { up } from "@ermine/slaygrounds/tools"
-import { bind, handler, under } from "ermine-h"
+import { bind, handler, under } from "@ermine/render/h"
 
 // fancy-lisp: a small lisp where environments are places. every frame is a folder node: base
 // (the builtins) holds global, global holds what you define and the frames of the calls of
@@ -770,7 +770,7 @@ export default function program() {
 	)
 
 	// a frame, drawn: its bindings, then the frames placed in it (nested: lexical)
-	const P = (path: string[]) => ["base", ...path].join("/")
+	const P = (path: string[]) => "./" + ["base", ...path].join("/")
 	function frameClass(id: string, v, w) {
 		let c = `frame ${v.frame}`
 		if (v.active) c += " active"
@@ -793,11 +793,12 @@ export default function program() {
 	}
 	function frameBox(path: string[], id: string, v) {
 		const at = P(path)
+		// its class reads the frame itself, not v: made again the same, a binding keeps what it closed over
 		return (
-			<div class={bind("now", (w) => frameClass(id, v, w))} data-path={path.join("/")}>
+			<div class={bind("./now", (w) => frameClass(id, read(at), w))} data-path={path.join("/")}>
 				<header>
 					<strong class="tag">{v.label}</strong>
-					{bind("now", badge(id))}
+					{bind("./now", badge(id))}
 					{v.returned !== undefined && <em class="ret">↩ {v.returned}</em>}
 					{v.kept && v.frame !== "global" && v.frame !== "base" && (
 						<em class="kept" title="a closure remembers this frame">📌 kept</em>
@@ -810,8 +811,10 @@ export default function program() {
 								m.name === "global" ? null : (
 									<code
 										class={bind(
-											"now",
-											(w) => (w?.var === String(m.id) ? "b hit" : "b"),
+											"./now",
+											(w) => (w?.var === String(idAt(["base", ...path, m.name]))
+												? "b hit"
+												: "b"),
 										)}
 									>
 										{unslot(m.name)}
@@ -824,7 +827,9 @@ export default function program() {
 							{under(at, (m) =>
 								bind(
 									`${at}/${m.name}`,
-									(mv) => (isFrame(mv) ? null : varRow(String(m.id), m.name, mv)),
+									(mv) => (isFrame(mv)
+										? null
+										: varRow(String(idAt(["base", ...path, m.name])), m.name, mv)),
 								))}
 						</div>
 					)}
@@ -833,14 +838,20 @@ export default function program() {
 						at,
 						(m) =>
 							bind(`${at}/${m.name}`, (mv) =>
-								isFrame(mv) ? frameBox([...path, m.name], String(m.id), mv) : null),
+								isFrame(mv)
+									? frameBox(
+										[...path, m.name],
+										String(idAt(["base", ...path, m.name])),
+										mv,
+									)
+									: null),
 					)}
 				</div>
 			</div>
 		)
 	}
 	const varRow = (id: string, name: string, v) => (
-		<div class={bind("now", (w) => (w?.var === id ? `var hit ${w.kind}` : "var"))}>
+		<div class={bind("./now", (w) => (w?.var === id ? `var hit ${w.kind}` : "var"))}>
 			<span class="vname">{unslot(name)}</span>
 			<span class="val">{value(v)}</span>
 		</div>
@@ -909,7 +920,7 @@ export default function program() {
 				}}
 			>
 				{bind(
-					`watching/${w.id}`,
+					`./watching/${w.id}`,
 					(r) => (r?.error ? <span class="werr">{r.error}</span> : r?.out),
 				)}
 			</span>
@@ -927,7 +938,7 @@ export default function program() {
 				</span>
 				<span class="fill" />
 				<span class="speeds">
-					{bind("speed", (s) =>
+					{bind("./speed", (s) =>
 						Object.keys(SPEEDS).map((k) => (
 							<button class={k === s ? "on" : ""} onClick={handler("on/speed", [k])}>
 								{k}
@@ -942,7 +953,7 @@ export default function program() {
 			<div class="panes">
 				<section class="repl">
 					<div class="log" ref={(e) => (logBox = e)}>
-						{bind("log", (list: any[]) => {
+						{bind("./log", (list: any[]) => {
 							queueMicrotask(() =>
 								logBox && (logBox.scrollTop = logBox.scrollHeight)
 							)
@@ -973,12 +984,12 @@ export default function program() {
 					</div>
 				</section>
 				<section class="world" ref={(e) => (world = e)}>
-					{bind("now", nowLine)}
-					{bind("now", stack)}
-					<div class="tree">{bind("base", (v) => frameBox([], baseId, v))}</div>
+					{bind("./now", nowLine)}
+					{bind("./now", stack)}
+					<div class="tree">{bind("./base", (v) => frameBox([], baseId, v))}</div>
 					<div class="watches">
 						<b class="tag mint">watching</b>
-						{bind("watches", (list: any[]) =>
+						{bind("./watches", (list: any[]) =>
 							list?.length ? list.map(tile) : (
 								<span class="hint">
 									(watch expr) makes a part that reads through lookup: set! what it reads

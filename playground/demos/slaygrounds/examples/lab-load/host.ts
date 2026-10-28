@@ -4,7 +4,7 @@
 import { unpack } from "@ermine/formats/pack"
 import { createWorld } from "@ermine/slaygrounds/world"
 import { createAction, ensureNode, list, patch, place } from "@ermine/system"
-import { render } from "ermine-h"
+import { render } from "@ermine/render/dom"
 
 const world = createWorld({ render, processes: [{ name: "loader" }] })
 

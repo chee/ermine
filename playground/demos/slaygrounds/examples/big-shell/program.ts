@@ -1,4 +1,4 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import { ATTRIBUTES } from "@ermine/programs"
 import {
 	addTeardown,
@@ -22,7 +22,7 @@ import {
 	unplace,
 } from "@ermine/system"
 import { change, host, inspect, who } from "@ermine/slaygrounds/tools"
-import { bind, handler } from "ermine-h"
+import { bind, handler } from "@ermine/render/h"
 
 // big-shell: a shell over the graph. it's a filesystem: ls, cd, cat, echo > a path, mkdir, mv
 // (places' move: the same node, the same id), ln (one node at two places), rm (an unplace),

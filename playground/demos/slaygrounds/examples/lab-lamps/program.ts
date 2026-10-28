@@ -1,7 +1,6 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import {
 	createAction,
-	createEffect,
 	createMemo,
 	ensureNode,
 	hasNode,
@@ -13,7 +12,7 @@ import {
 	unplace,
 } from "@ermine/system"
 import { up } from "@ermine/slaygrounds/tools"
-import { bind, handler, type Item, under } from "ermine-h"
+import { bind, handler, track, under } from "@ermine/render/h"
 
 // program.ts: lamps. a house is a tree of nodes: rooms hold rooms, lamps (lampN) and maybe a
 // power node (a list of colours). a lamp is lit if the NEAREST power node walking up from where
@@ -146,31 +145,29 @@ export default function program() {
 		}
 	}
 
-	// a lamp: its colour is bound; lit is one tracked walk up from where it stands, so its own
-	// effect draws it, made as the element is (ref)
-	const light = (el: Element, where: string[]) =>
-		createEffect(`lit-${where.join("-")}`, () => {
-			const colour = read(abs(where)) as string
-			const up = nearest(where)
-			return { lit: up.list.includes(colour), from: up.from }
-		}, (v: { lit: boolean; from: string }) => {
-			el.toggleAttribute("data-lit", v.lit)
-			el.lastElementChild!.textContent = (v.lit ? "lit by " : "dark: ") + v.from
-		}, { equal: (a: any, b: any) => a?.lit === b?.lit && a?.from === b?.from })
-	const Lamp = ({ lamp }: { lamp: Item }) => (
+	// a lamp: its colour is bound; lit is one tracked walk up from where it stands, bound as its
+	// data-lit and its words (an effect can't be made as the element is: that's the list's act)
+	const light = (where: string[]) => () => {
+		const colour = read(abs(where)) as string
+		const up = nearest(where)
+		return { lit: up.list.includes(colour), from: up.from }
+	}
+	const Lamp = ({ where }: { where: string[] }) => (
 		<span
 			class="lamp"
-			style={bind(lamp, (c: string) => `--c: ${COLOUR[c]}`)}
-			ref={(el) => light(el, lamp.path as string[])}
+			style={bind(abs(where), (c: string) => `--c: ${COLOUR[c]}`)}
+			data-lit={track(light(where), (v) => v.lit)}
 		>
 			<span class="bulb" />
-			<span class="dim" />
+			<span class="dim">
+				{track(light(where), (v) => (v.lit ? "lit by " : "dark: ") + v.from)}
+			</span>
 		</span>
 	)
 
 	// a room: its name, a chip per colour (on when its own power node holds it), then its lamps
 	// and its rooms, each a list of its members
-	const Room = ({ where, target }: { where: string[]; target: Item | string }): any => {
+	const Room = ({ where }: { where: string[] }): any => {
 		const power = abs(where, "power")
 		return (
 			<div
@@ -196,12 +193,13 @@ export default function program() {
 					<button class="x" onClick={handler("on/inherit", [where])}>inherit</button>
 				</div>
 				<div class="lamps">
-					{under(target, (k) => isLamp(k.name) ? <Lamp lamp={k} /> : null)}
+					{under(abs(where), (k) =>
+						isLamp(k.name) ? <Lamp where={[...where, k.name]} /> : null)}
 				</div>
 				<div class="rooms">
 					{under(
-						target,
-						(k) => isRoom(k.name) ? <Room where={k.path as string[]} target={k} /> : null,
+						abs(where),
+						(k) => isRoom(k.name) ? <Room where={[...where, k.name]} /> : null,
 					)}
 				</div>
 			</div>
@@ -222,7 +220,7 @@ export default function program() {
 				</span>
 			</div>
 			<div class="card">
-				<Room where={["house"]} target="house" />
+				<Room where={["house"]} />
 			</div>
 		</div>
 	)

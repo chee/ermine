@@ -1,4 +1,4 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import apply, { type Patch } from "@ermine/core/changeable/apply"
 import {
 	addTeardown,
@@ -18,7 +18,7 @@ import {
 	unplace,
 } from "@ermine/system"
 import { change, who } from "@ermine/slaygrounds/tools"
-import { handler } from "ermine-h"
+import { handler } from "@ermine/render/h"
 
 // big-trello: a board. lists are nodes under board/lists, cards nodes under each list's cards,
 // each named by its own id; the order is a value of its own: board/lists and every cards node

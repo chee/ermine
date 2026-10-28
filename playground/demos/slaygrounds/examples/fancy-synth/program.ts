@@ -1,4 +1,4 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import {
 	addTeardown,
 	createAction,
@@ -15,7 +15,7 @@ import {
 	ref,
 	unplace,
 } from "@ermine/system"
-import { bind, handler, under } from "ermine-h"
+import { bind, handler, under } from "@ermine/render/h"
 
 // fancy-synth: a little eurorack. every module is a process, /<name>, its args its name and its
 // first values; what it keeps is saved at /rack/<name> (a reload finds it again):
@@ -1070,8 +1070,8 @@ export function patchbay() {
 				<ul>
 					{under("/patch", (c) => (
 						<li>
-							<i class="swatch" style={bind(c, (v) => ({ background: v.color }))} />
-							<code>{bind(c, (v) => v.from)}</code> → <code>{c.name}</code>
+							<i class="swatch" style={bind(c.at, (v) => ({ background: v.color }))} />
+							<code>{bind(c.at, (v) => v.from)}</code> → <code>{c.name}</code>
 							<button class="x" onClick={handler("on/unplug", [c.name])}>×</button>
 						</li>
 					))}

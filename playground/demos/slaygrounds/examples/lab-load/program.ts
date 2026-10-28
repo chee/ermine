@@ -1,5 +1,5 @@
-/** @jsxImportSource ermine-h */
-import { bind, handler, under } from "ermine-h"
+/** @jsxImportSource @ermine */
+import { bind, handler, under } from "@ermine/render/h"
 
 // program.ts: a place to drop a graph. any example's 💾 save graph (in the header) makes a .ermine
 // file: everything its root reached, packed, a live value (a view, a handler) as a stand-in that

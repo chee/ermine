@@ -1,4 +1,4 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import {
 	addTeardown,
 	createAction,
@@ -9,7 +9,7 @@ import {
 	read,
 } from "@ermine/system"
 import { host } from "@ermine/slaygrounds/tools"
-import { bind, handler } from "ermine-h"
+import { bind, handler } from "@ermine/render/h"
 
 // piece-cursors: presence, two devices in one page. the laptop and the phone each have their own
 // world; a pair of channels joins them (and a BroadcastChannel joins this tab to others). a
@@ -176,11 +176,11 @@ export default function program() {
 					{pad}
 					<div class="row">
 						<button
-							class={bind("beat", (b: Record<string, boolean>) => (b[name] ? "on" : ""))}
+							class={bind("./beat", (b: Record<string, boolean>) => (b[name] ? "on" : ""))}
 							onClick={handler("on/beat", [name])}
 						>
 							{bind(
-								"beat",
+								"./beat",
 								(
 									b: Record<string, boolean>,
 								) => (b[name] ? "💓 heartbeat on" : "🩶 heartbeat off"),

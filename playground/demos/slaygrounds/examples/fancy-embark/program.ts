@@ -1,4 +1,4 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import {
 	addTeardown,
 	createAction,
@@ -17,7 +17,7 @@ import {
 	unplace,
 } from "@ermine/system"
 import { host } from "@ermine/slaygrounds/tools"
-import { bind, each, handler, under } from "ermine-h"
+import { bind, each, handler, under } from "@ermine/render/h"
 
 // fancy-embark: a trip plan as a dynamic document, after Ink & Switch's Embark essay. you write an
 // outline; @ mentions a place or a date; a line "name: =Formula(…)" computes (routes, weather,

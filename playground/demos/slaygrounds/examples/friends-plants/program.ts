@@ -1,4 +1,4 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import {
 	createAction,
 	createEffect,
@@ -11,7 +11,7 @@ import {
 	read,
 } from "@ermine/system"
 import { change, who } from "@ermine/slaygrounds/tools"
-import { bind, handler } from "ermine-h"
+import { bind, handler } from "@ermine/render/h"
 
 // friends-plants: the windowsill rota. a day goes by every couple of seconds (the clock, a process
 // of its own). each day the plants drink, and it's somebody's turn: yours, the fox's, the frog's.
@@ -192,7 +192,9 @@ export default function sill() {
 							: "send on holiday (or bring back)"}
 					>
 						{MATE[m]} {m}
-						{m === "you" ? null : bind("away", (a: string[]) => (a.includes(m) ? " 🏖" : ""))}
+						{m === "you"
+							? null
+							: bind("./away", (a: string[]) => (a.includes(m) ? " 🏖" : ""))}
 					</button>
 				))}
 				<span class="fill" />
@@ -202,14 +204,14 @@ export default function sill() {
 			</div>
 			<div class="room">
 				<div class="window">
-					{bind("day", (d) => <span class="sun" key={`d${d}`} style={`--day:${DAY}ms`} />)}
+					{bind("./day", (d) => <span class="sun" key={`d${d}`} style={`--day:${DAY}ms`} />)}
 				</div>
-				<span class="daynum">day {bind("day")}</span>
+				<span class="daynum">day {bind("./day")}</span>
 				<div class="sill" />
 				<div class="pots">
 					{NAMES.map((name) => {
 						const p = PLANTS[name]
-						const at = `plants/${name}/level`
+						const at = `./plants/${name}/level`
 						return (
 							<div
 								class={bind(at, (v: Plant) => `pot ${mood(name, v)}`)}
@@ -233,7 +235,7 @@ export default function sill() {
 								)}
 								<div class="clay">{bind(at, (v: Plant) => FACES[mood(name, v)])}</div>
 								{bind(
-									`plants/${name}/poured`,
+									`./plants/${name}/poured`,
 									(d: Pour | null) =>
 										d === null ? null : <span class="splash" key={`s${d.at}`}>💧</span>,
 								)}

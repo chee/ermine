@@ -1,4 +1,4 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import {
 	addTeardown,
 	createAction,
@@ -12,7 +12,7 @@ import {
 	read,
 	ref,
 } from "@ermine/system"
-import { bind, handler } from "ermine-h"
+import { bind, handler } from "@ermine/render/h"
 
 // toy-drums: three drums, eight steps. the pattern is one node (three strings, x = hit), the
 // playhead is another. the grid and the little text pattern under it are two views of those nodes.
@@ -127,7 +127,7 @@ export default function program() {
 	const cell = (r: number, i: number) => (
 		<b
 			style={`grid-row:${r + 1};grid-column:${i + 2}`}
-			class={bind("pattern", (p: string[]) => (p[r][i] === "x" ? "hit" : ""))}
+			class={bind("./pattern", (p: string[]) => (p[r][i] === "x" ? "hit" : ""))}
 			onClick={handler("on/toggle", [r, i])}
 		/>
 	)
@@ -149,7 +149,7 @@ export default function program() {
 			</div>
 			<div class="row">
 				<button onClick={handler("on/play", wake)}>
-					{bind("playing", (p) => (p ? "⏸ stop" : "▶ play"))}
+					{bind("./playing", (p) => (p ? "⏸ stop" : "▶ play"))}
 				</button>
 				<button onClick={handler("on/step", wake)}>⏭ step</button>
 				<button onClick={handler("on/clear")}>🧽 clear</button>

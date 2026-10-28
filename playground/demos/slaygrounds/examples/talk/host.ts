@@ -4,7 +4,7 @@
 // the worker is no process of the module's: boss starts it. so the host writes its program node
 // (/code/worker, the world's code) as reload does for the others
 import { createWorld } from "@ermine/slaygrounds/world"
-import { render as h } from "ermine-h"
+import { render as h } from "@ermine/render/dom"
 
 export type { Tools, Who } from "@ermine/slaygrounds/world"
 

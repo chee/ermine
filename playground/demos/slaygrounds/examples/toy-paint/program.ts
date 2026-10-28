@@ -1,4 +1,4 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import {
 	createAction,
 	createEffect,
@@ -9,7 +9,7 @@ import {
 	read,
 	ref,
 } from "@ermine/system"
-import { bind, handler } from "ermine-h"
+import { bind, handler } from "@ermine/render/h"
 
 // toy-paint: a 12x12 pixel pad. the picture is ONE node (a list of 144 colours). the big pad and
 // the little thumbnail are two views of it; change the palette below and save to repaint the page.
@@ -111,14 +111,14 @@ export default function program() {
 				{palette.map((c) => (
 					<b
 						style={{ background: c }}
-						class={bind("ink", (v) => (v === c ? "on" : ""))}
+						class={bind("./ink", (v) => (v === c ? "on" : ""))}
 						onClick={handler("on/ink", [c])}
 					/>
 				))}
 			</div>
 			<div class="row">
 				<button
-					style={bind("mirror", (m) => ({ background: m ? "#40dcba" : "#fff" }))}
+					style={bind("./mirror", (m) => ({ background: m ? "#40dcba" : "#fff" }))}
 					onClick={handler("on/mirror")}
 				>
 					🪞 mirror

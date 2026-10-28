@@ -14,7 +14,7 @@ import {
 	read,
 } from "@ermine/system"
 import pully, { provide } from "@ermine/pully"
-import { render } from "ermine-h"
+import { render } from "@ermine/render/dom"
 
 const world = createWorld({ render, processes: [{ name: "lazy" }], features: [pully] })
 const e = world.ermine

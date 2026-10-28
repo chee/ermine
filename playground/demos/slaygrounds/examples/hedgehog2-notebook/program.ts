@@ -1,4 +1,4 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import {
 	createAction,
 	createMemo,
@@ -14,7 +14,7 @@ import {
 	remove,
 	rename,
 } from "@ermine/system"
-import { bind, handler } from "ermine-h"
+import { bind, handler } from "@ermine/render/h"
 
 // program.ts: a reactive notebook, on the process api alone.
 //   the cells live at /nb (seeded by host.ts): /nb/order is the list [{ name, kind }], /nb/cells/<name>

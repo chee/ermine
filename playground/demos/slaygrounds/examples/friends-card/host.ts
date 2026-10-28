@@ -2,7 +2,7 @@
 // card: default; the frog, the hedgehog and the snail: friend, each in a folder of its own). who
 // wrote a thing: the world's who and change
 import { createWorld } from "@ermine/slaygrounds/world"
-import { render } from "ermine-h"
+import { render } from "@ermine/render/dom"
 
 const world = createWorld({
 	render,

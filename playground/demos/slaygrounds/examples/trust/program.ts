@@ -1,4 +1,4 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import {
 	addTeardown,
 	createAction,
@@ -11,7 +11,7 @@ import {
 	read,
 } from "@ermine/system"
 import { change, who } from "@ermine/slaygrounds/tools"
-import { bind, handler } from "ermine-h"
+import { bind, handler } from "@ermine/render/h"
 
 // trust: a vault that opens only for a person. the world decides trusted by itself, from the
 // event the window is dispatching right now (read through the native getter it kept before this

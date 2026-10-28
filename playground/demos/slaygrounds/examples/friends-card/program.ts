@@ -1,4 +1,4 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import {
 	createAction,
 	createEffect,
@@ -13,7 +13,7 @@ import {
 	unplace,
 } from "@ermine/system"
 import { change, type Who, who } from "@ermine/slaygrounds/tools"
-import { bind, handler, under } from "ermine-h"
+import { bind, handler, under } from "@ermine/render/h"
 
 // friends-card: a birthday card going round. sign it, or pass it to a friend: the frog, the hedgehog
 // and the snail are processes of their own, and each signs from its own timer a while later.
@@ -211,14 +211,14 @@ export default function card() {
 							(n) => (n ? "a flower for every name" : "the front is bare: sign it"),
 						)}
 					</div>
-					{under("names", (item, i) => {
+					{under("./names", (item, i) => {
 						// spread by when it came, wobbled by its name
 						const h = hash(item.name!)
 						const x = 5 + ((i * 0.618 + (h % 13) / 100) % 1) * 82
 						return (
 							<div
 								class="fl"
-								style={bind(item, (v: Sig) => {
+								style={bind(item.at, (v: Sig) => {
 									const s = Math.min(70, 34 + v.text.length * 1.2)
 									return `left:${x}%;--s:${s}px;--h:${50 + (h % 80)}px;--r:${
 										h % 72
@@ -259,9 +259,9 @@ export default function card() {
 						"count",
 						(n) => (n ? null : <div class="empty">nobody has signed yet. be first!</div>),
 					)}
-					{under("names", (item) => (
-						<p style={bind(item, (v: Sig) => `transform:rotate(${v.tilt * 0.4}deg)`)}>
-							{bind(item, (v: Sig) =>
+					{under("./names", (item) => (
+						<p style={bind(item.at, (v: Sig) => `transform:rotate(${v.tilt * 0.4}deg)`)}>
+							{bind(item.at, (v: Sig) =>
 								`“${v.text}”`)}
 							<small>
 								{bind("who", (w) => <b style={`background:${ink(w[item.name!])}`} />)}

@@ -20,7 +20,7 @@ import {
 	startSweeper,
 } from "@ermine/together/presence"
 import { type Channel, createBroadcast, createPair } from "@ermine/together/presence/channel"
-import { render } from "ermine-h"
+import { render } from "@ermine/render/dom"
 
 const TOPIC = "pad:7f3a" // what the channels call the pad: each world's own id for it differs
 const TTL = 3000 // ms a row lives unless renewed

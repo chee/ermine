@@ -1,4 +1,4 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import {
 	createAction,
 	createEffect,
@@ -16,7 +16,7 @@ import {
 import { pipe, type Told as Watched } from "@ermine/pipe"
 import { host, inspect } from "@ermine/slaygrounds/tools"
 import type { Extra } from "./host.ts"
-import { bind, handler } from "ermine-h"
+import { bind, handler } from "@ermine/render/h"
 
 // program.ts: a small neural network whose state is the graph. grain "weight": every weight and
 // bias is a node (net/L1/n0/w0, net/L1/n0/b), and each neuron's activation is a compute part
@@ -1232,10 +1232,10 @@ export default function program() {
 			<div class="card">
 				<div class="row">
 					<button
-						aria-pressed={bind("playing", String)}
+						aria-pressed={bind("./playing", String)}
 						onClick={handler("on/play", () => [!cur.playing])}
 					>
-						{bind("playing", (v) => (v ? "pause" : "play"))}
+						{bind("./playing", (v) => (v ? "pause" : "play"))}
 					</button>
 					<button onClick={handler("on/step")}>step</button>
 					<button onClick={handler("on/reset")}>reset</button>
@@ -1248,7 +1248,7 @@ export default function program() {
 					{[1, 0].map((k) => (
 						<button
 							class="small pen"
-							aria-pressed={bind("pen", (p) => String(p === k))}
+							aria-pressed={bind("./pen", (p) => String(p === k))}
 							onClick={handler("on/set", ["pen", k])}
 						>
 							<span class={`dot c${k}`} />
@@ -1275,23 +1275,23 @@ export default function program() {
 						"10 a frame",
 					]], Number)}
 					<button onClick={handler("/host/on/measure")}>
-						{bind("measuring", (m) => (m ? "measuring…" : "measure"))}
+						{bind("./measuring", (m) => (m ? "measuring…" : "measure"))}
 					</button>
 				</div>
 			</div>
 			<div class="row">
 				<span class="tag">
-					steps <b>{bind("steps")}</b>
+					steps <b>{bind("./steps")}</b>
 				</span>
 				{measured("steps/s")}
 				<span class="tag">
-					loss <b>{bind("loss", (l) => (typeof l === "number" ? l.toFixed(3) : "–"))}</b>
+					loss <b>{bind("./loss", (l) => (typeof l === "number" ? l.toFixed(3) : "–"))}</b>
 				</span>
 				<span class="tag">
 					accuracy{" "}
 					<b>
 						{bind(
-							"accuracy",
+							"./accuracy",
 							(a) => (typeof a === "number" ? Math.round(a * 100) + "%" : "–"),
 						)}
 					</b>
@@ -1319,7 +1319,7 @@ export default function program() {
 				<div class="card netcard">
 					<div class="net">
 						{layer}
-						{bind("hidden", (h: number[]) =>
+						{bind("./hidden", (h: number[]) =>
 							heads(sizesOf(h)))}
 					</div>
 					<div class="weight">
@@ -1332,10 +1332,10 @@ export default function program() {
 			<div class="card curve">{curve}</div>
 			<div
 				class="card"
-				hidden={bind("speeds", (rows) =>
+				hidden={bind("./speeds", (rows) =>
 					!rows?.length)}
 			>
-				{bind("speeds", (rows) => (rows?.length ? table(rows) : null))}
+				{bind("./speeds", (rows) => (rows?.length ? table(rows) : null))}
 			</div>
 		</div>
 	)

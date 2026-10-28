@@ -1,4 +1,4 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import { count } from "@ermine/core/util/walk-string"
 import {
 	addTeardown,
@@ -14,7 +14,7 @@ import {
 	read,
 } from "@ermine/system"
 import { change, who } from "@ermine/slaygrounds/tools"
-import { bind, handler } from "ermine-h"
+import { bind, handler } from "@ermine/render/h"
 
 // big-duet: two people, one text. /text is one string node; duet owns it and its one handler,
 // type(a, b, text): a range patch, positions in code points. cherry and mint are two processes,
@@ -131,7 +131,7 @@ export default function duet() {
 			<div class="top">
 				<span class="tag title">✍️ big-duet</span>
 				<span class="tag words">
-					{bind("text", (v: string) =>
+					{bind("./text", (v: string) =>
 						`${count(v)} characters · ${v.split(/\s+/).filter(Boolean).length} words`)}
 				</span>
 				<span class="fill" />

@@ -12,7 +12,7 @@ import update from "@ermine/core/changeable/update"
 import { get } from "@ermine/core/places/lib"
 import { createChangeHeader } from "@ermine/core/places/header"
 import { trace } from "@ermine/core/scheduler/trace"
-import { render } from "ermine-h"
+import { render } from "@ermine/render/dom"
 
 type Node = ReturnType<Ermine["ensureNode"]>
 

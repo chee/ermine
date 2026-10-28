@@ -1,11 +1,11 @@
 /// <reference lib="dom" />
 // inspect element, over the render: what an element says it does (the data-ermine-* attributes
-// ermine-h writes) drawn on a layer above the iframe, never inside the program's document.
+// @ermine/render writes) drawn on a layer above the iframe, never inside the program's document.
 //   picking    the crosshair: hovering outlines the element under the pointer with a tag of what
 //              it says; a click picks it (the program never hears that click), escape stops
 //   marks      a node picked in the graph: every element bound to it, or whose node it is, ringed
 //   explain    badges on every bound element (🪝 a handler, 🔗 a bound node), and a flash when a
-//              bound element's node changes ("ermine:change", told by ermine-h)
+//              bound element's node changes ("ermine:change", told by @ermine/render)
 // the layer is drawn again on the next frame after the document, its scroll or its size changes
 
 // what an element says: its own data-ermine-* attributes, and the process it is drawn by
@@ -231,7 +231,7 @@ export function createLook(opts: {
 		if (s.key !== undefined) t.append(div("look-chip key", `🔑 ${s.key}`))
 		if (s.source) t.append(div("look-chip src", s.source))
 		if (!s.binds.length && !s.ons.length && !s.source && !s.process) {
-			t.append(div("look-chip none", "not drawn by ermine-h"))
+			t.append(div("look-chip none", "not drawn by @ermine/render"))
 		}
 		return t
 	}

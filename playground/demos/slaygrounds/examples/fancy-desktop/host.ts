@@ -12,7 +12,7 @@ import { ensureNode, hasNode, patch, patchAttributes, place } from "@ermine/syst
 import { get } from "@ermine/core/places/lib"
 import { plan as steps } from "@ermine/core/places/path"
 import { ATTRIBUTES, openwith, type Way, type Why } from "@ermine/programs"
-import { render } from "ermine-h"
+import { render } from "@ermine/render/dom"
 
 // ---- seed: the root, then the folders a person keeps things in ----
 // a picture: 16 rows of 16, each letter a colour of the palette

@@ -1,6 +1,6 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import { createAction, createMemo, ensureNode, patch, peep, PENDING, read } from "@ermine/system"
-import { bind, handler } from "ermine-h"
+import { bind, handler } from "@ermine/render/h"
 
 // program.ts: edit me while it runs. count is ./count, beside the process (in the folder it runs in),
 // so a reload finds it again. n reads /data/n (waiting while there is none), double reads n: both
@@ -21,7 +21,7 @@ export default function program() {
 	return (
 		<div>
 			<p>
-				n is {bind("n")}, double {bind("double")}, count {bind("count")}
+				n is {bind("n")}, double {bind("double")}, count {bind(count)}
 			</p>
 			<button onClick={handler("on/press")}>+1</button>
 		</div>

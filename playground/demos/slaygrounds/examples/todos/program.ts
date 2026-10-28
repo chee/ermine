@@ -1,6 +1,6 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import { createAction, ensureNode, patch, peep, read, unplace } from "@ermine/system"
-import { bind, handler } from "ermine-h"
+import { bind, handler } from "@ermine/render/h"
 
 // program.ts: todos are nodes under ./todos/items, their order a list of ids in ./todos/order. ensureNode
 // makes each only the first time, so a reload finds them as they were. the list is bound to the
@@ -38,10 +38,10 @@ export default function program() {
 	return (
 		<div>
 			<ul>
-				{bind("todos/order", (list: string[]) =>
+				{bind("./todos/order", (list: string[]) =>
 					list.map((id) => (
 						<li key={id}>
-							{bind(`todos/items/${id}`)} <button onClick={handler("on/up", [id])}>↑</button>
+							{bind(`./todos/items/${id}`)} <button onClick={handler("on/up", [id])}>↑</button>
 							<button onClick={handler("on/remove", [id])}>×</button>
 						</li>
 					)))}

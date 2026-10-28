@@ -1,4 +1,4 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import {
 	createAction,
 	createEffect,
@@ -15,7 +15,7 @@ import {
 	remove,
 	start,
 } from "@ermine/system"
-import { bind, handler } from "ermine-h"
+import { bind, handler } from "@ermine/render/h"
 
 // hedgehog-notebook: a reactive notebook on the process api alone.
 // the notebook is nodes beside the process: /nb/order (the ids, in order), /nb/cell/<id> (one record

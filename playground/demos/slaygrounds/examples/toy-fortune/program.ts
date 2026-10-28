@@ -1,4 +1,4 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import {
 	createAction,
 	createEffect,
@@ -8,7 +8,7 @@ import {
 	peep,
 	read,
 } from "@ermine/system"
-import { bind, handler } from "ermine-h"
+import { bind, handler } from "@ermine/render/h"
 
 // toy-fortune: ask a yes/no question, shake the ball. the answer is an async compute: it reads the
 // question, then thinks (a random wait) before it answers, pending in its place meanwhile. every
@@ -121,7 +121,7 @@ export default function program() {
 				{bind("tally")} · <button onClick={handler("on/forget")}>🧽 forget all</button>
 			</div>
 			<ol>
-				{bind("diary", (d: Said[]) =>
+				{bind("./diary", (d: Said[]) =>
 					d.slice(-6).reverse().map((x, i) => <li key={d.length - i}>{x.q} → {x.a}</li>))}
 			</ol>
 		</div>

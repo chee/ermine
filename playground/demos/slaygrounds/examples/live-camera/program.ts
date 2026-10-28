@@ -1,4 +1,4 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import {
 	addTeardown,
 	createAction,
@@ -14,7 +14,7 @@ import {
 	ref,
 } from "@ermine/system"
 import { host } from "@ermine/slaygrounds/tools"
-import { bind, type Child, handler } from "ermine-h"
+import { bind, type Child, handler } from "@ermine/render/h"
 
 // live-camera: three processes on a board, wired by the addresses in their `in` nodes.
 //   source    holds a live MediaStream in a node and writes its `frame` (an ImageData) every frame
@@ -233,7 +233,7 @@ export function source() {
 			<Stat />
 			<div class="row">
 				<button onClick={handler("on/rate")}>
-					{bind("board/source/rate", (r) => (r ? `${r} fps cap` : "no cap"))}
+					{bind("./board/source/rate", (r) => (r ? `${r} fps cap` : "no cap"))}
 				</button>
 				<button onClick={handler("on/ask")}>ask for camera</button>
 			</div>

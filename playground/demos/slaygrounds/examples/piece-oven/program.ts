@@ -1,4 +1,4 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import {
 	createAction,
 	createMemo,
@@ -10,7 +10,7 @@ import {
 	readEntries,
 } from "@ermine/system"
 import { pipe } from "@ermine/pipe"
-import { bind, handler } from "ermine-h"
+import { bind, handler } from "@ermine/render/h"
 
 // piece-oven: each oven is a compute that awaits a bake. while the promise is out its run is
 // pending; a bake too hot rejects, and the run failed. neither is in the oven's own value: they are
@@ -196,7 +196,7 @@ export default function program() {
 						isPending <code>{bind("doors", (d) => String(!!d?.[o.name]?.pending))}</code>
 					</span>
 				</div>
-				{bind("oven/settings", (all: Record<string, Setting>) => {
+				{bind("./oven/settings", (all: Record<string, Setting>) => {
 					const s = all?.[o.name]
 					if (!s) {
 						return (
@@ -259,7 +259,7 @@ export default function program() {
 					receipts<em>what each write to /oven/settings wrote</em>
 				</h2>
 				<ol>
-					{bind("oven/receipts", (rs: Receipt[]) =>
+					{bind("./oven/receipts", (rs: Receipt[]) =>
 						rs.length === 0
 							? <li class="empty">move a knob…</li>
 							: rs.map((r) => (

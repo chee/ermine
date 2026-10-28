@@ -382,7 +382,7 @@ export function createInspector(
 		if (s.key !== undefined) rows.push(["🔑 key", s.key])
 		if (s.waiting) rows.push(["waiting", true])
 		if (s.source) rows.push(["made at", s.source])
-		if (!rows.length) rows.push(["says", "nothing: not drawn by ermine-h"])
+		if (!rows.length) rows.push(["says", "nothing: not drawn by @ermine/render"])
 		const mine: Link = (v) => {
 			if (v === s.source && s.source) {
 				return {
@@ -787,7 +787,7 @@ export function createInspector(
 
 	// ---- the scheduler, in words ----
 	function say(w: Any, m: Any): [string, string] {
-		// a part by its name, an ermine-h binding by what it binds (the host's binds map)
+		// a part by its name, a binding by what it binds (the host's binds map)
 		const name = (c: Any) => w.parts.get(c)?.at[1] ?? w.binds?.get(c) ?? `an ${c.kind}`
 		if (m.starts) return ["start", `${name(m.starts)} runs (run ${m.run}, rank ${m.rank})`]
 		if (m.ends) {

@@ -1,4 +1,4 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import {
 	createAction,
 	createEffect,
@@ -10,7 +10,7 @@ import {
 	ref,
 	unplace,
 } from "@ermine/system"
-import { bind, handler } from "ermine-h"
+import { bind, handler } from "@ermine/render/h"
 
 // program.ts: a drawing whose strokes are nodes. strokes/s<id> holds {color, width, points};
 // strokes/order is the list of ids; pen is the colour and width of the next one. a point is added
@@ -161,18 +161,18 @@ export default function program() {
 				{COLORS.map((c) => (
 					<button
 						style={{ background: c }}
-						class={bind("pen", (p) => lit(p.color === c, "sw"))}
+						class={bind("./pen", (p) => lit(p.color === c, "sw"))}
 						onClick={handler("on/pen", ["color", c])}
 					/>
 				))}
 				<button
-					class={bind("pen", (p) => lit(p.width === 2))}
+					class={bind("./pen", (p) => lit(p.width === 2))}
 					onClick={handler("on/pen", ["width", 2])}
 				>
 					thin
 				</button>
 				<button
-					class={bind("pen", (p) => lit(p.width === 12))}
+					class={bind("./pen", (p) => lit(p.width === 12))}
 					onClick={handler("on/pen", ["width", 12])}
 				>
 					thick

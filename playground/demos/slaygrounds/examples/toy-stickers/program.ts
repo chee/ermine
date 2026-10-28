@@ -1,6 +1,6 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import { createAction, createMemo, ensureNode, patch, peep, read, unplace } from "@ermine/system"
-import { bind, handler } from "ermine-h"
+import { bind, handler } from "@ermine/render/h"
 
 // toy-stickers: pick a sticker, click the page to stick it, click a sticker to peel it. every
 // sticker is its own node under stickers/items (an emoji, x, y, a tilt), their order is a list of
@@ -86,7 +86,7 @@ export default function program() {
 			<div class="pal">
 				{emoji.map((e) => (
 					<button
-						class={bind("sheet/pick", (p) => (p === e ? "on" : ""))}
+						class={bind("./sheet/pick", (p) => (p === e ? "on" : ""))}
 						onClick={handler("on/pick", [e])}
 					>
 						{e}
@@ -94,14 +94,14 @@ export default function program() {
 				))}
 			</div>
 			<div class="page" onClick={handler("on/stick", spot)}>
-				{bind("sheet/order", (list: string[]) =>
+				{bind("./sheet/order", (list: string[]) =>
 					list.map((id) => (
 						<span
 							key={id}
-							style={bind(`sheet/items/${id}`, placed)}
+							style={bind(`./sheet/items/${id}`, placed)}
 							onClick={handler("on/peel", peel(id))}
 						>
-							{bind(`sheet/items/${id}`, (v: Sticker) => v.e)}
+							{bind(`./sheet/items/${id}`, (v: Sticker) => v.e)}
 						</span>
 					)))}
 			</div>

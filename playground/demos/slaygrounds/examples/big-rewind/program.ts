@@ -1,4 +1,4 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import type { Patch } from "@ermine/core/changeable/apply"
 import {
 	addTeardown,
@@ -15,7 +15,7 @@ import {
 } from "@ermine/system"
 import { pipe } from "@ermine/pipe"
 import { change } from "@ermine/slaygrounds/tools"
-import { bind, handler } from "ermine-h"
+import { bind, handler } from "@ermine/render/h"
 
 // the handle of a node: what ensureNode gives
 type Node = ReturnType<typeof ensureNode>
@@ -479,7 +479,7 @@ export default function game() {
 			}"></canvas><div class="glass"></div>`
 		return p
 	})
-	// a cover a button: ringed while it is the one on (bound to /game/cover), pressed: a call
+	// a cover a button: ringed while it is the one on (bound to ./snake/cover, which it holds), pressed: a call
 	const covers = (
 		<div class="covers">
 			<span class="tag">covers</span>
@@ -491,7 +491,7 @@ export default function game() {
 					style={`background:${
 						k === "lemon" ? `linear-gradient(135deg, #ffff88 50%, #ff2284 50%)` : c.body
 					}`}
-					class={bind("cover", (name) => (name === k ? "on" : ""))}
+					class={bind(cover, (name) => (name === k ? "on" : ""))}
 					onClick={handler("on/cover", () => (hear(), [k]))}
 				/>
 			))}

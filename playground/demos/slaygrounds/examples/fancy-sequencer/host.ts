@@ -5,7 +5,7 @@
 // at a second name, unplace takes it out without taking the node away, move takes a note from one
 // step to another
 import { createWorld } from "@ermine/slaygrounds/world"
-import { render } from "ermine-h"
+import { render } from "@ermine/render/dom"
 
 const world = createWorld({
 	render,

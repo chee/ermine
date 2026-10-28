@@ -7,7 +7,7 @@
 //   /spin       its target is a mount, placed here; "spin this" places another object there
 import { createWorld } from "@ermine/slaygrounds/world"
 import { ensureNode, place } from "@ermine/system"
-import { render } from "ermine-h"
+import { render } from "@ermine/render/dom"
 
 const world = createWorld({
 	render,

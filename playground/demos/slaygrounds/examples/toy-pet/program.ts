@@ -1,4 +1,4 @@
-/** @jsxImportSource ermine-h */
+/** @jsxImportSource @ermine */
 import {
 	addTeardown,
 	createAction,
@@ -10,7 +10,7 @@ import {
 	peep,
 	read,
 } from "@ermine/system"
-import { bind, handler } from "ermine-h"
+import { bind, handler } from "@ermine/render/h"
 
 // toy-pet: a pet that gets hungry (every few seconds, or when you let a while pass). everything it is lives in nodes (name, hunger, fed, loved).
 // the big face and the little widget are two views of the same nodes: each binding is its own,
@@ -89,7 +89,7 @@ export default function program() {
 	return (
 		<div class="pet">
 			<style>{css}</style>
-			<h2>{bind("name")}</h2>
+			<h2>{bind("./name")}</h2>
 			<span class="tag">a pet that needs you</span>
 			<div class="face" title="pet me" ref={(e) => (face = e)} onClick={handler("on/pet")}>
 				{bind("mood")}

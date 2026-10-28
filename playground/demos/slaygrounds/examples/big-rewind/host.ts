@@ -3,7 +3,7 @@
 // metronome
 import { createWorld } from "@ermine/slaygrounds/world"
 import pipes from "@ermine/pipe"
-import { render } from "ermine-h"
+import { render } from "@ermine/render/dom"
 
 const world = createWorld({
 	render,
