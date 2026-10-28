@@ -9,8 +9,9 @@ const URL = "http://here"
 async function visitor(live: ReturnType<typeof createLive>) {
 	const page = await (await live.fetch(new Request(`${URL}/?poll`))).text()
 	const p = page.split('data-ermine-process="')[1].split('"')[0]
+	// the handler for the action at (under the visitor's process)
 	const handler = (at: string) =>
-		page.slice(page.indexOf(`="${at}" data-ermine-handler:`)).split('"')[3]
+		page.slice(page.indexOf(`="${p}/${at}" data-ermine-handler:`)).split('"')[3]
 	const post = (h: string) =>
 		live.fetch(
 			new Request(`${URL}/event`, {
@@ -35,13 +36,10 @@ Deno.test("a post's answer is what the page missed, its own change with it", asy
 	const a = await visitor(live)
 	const b = await visitor(live)
 	assertEquals(a.page.includes(`src="/live-poll.js"`), true)
-	// b's process placed in /visitors re-runs a's list binding (a path read tracks the folder's
-	// children), so a has missed its list, sent whole: what that costs is in the write-up
-	assertEquals(await (await a.missed()).json(), { n: 1, updates: [["view/3", "children", ""]] })
 
 	const answer = await a.post(a.handler("on/inc"))
 	assertEquals(await answer.json(), {
-		n: 2,
+		n: 1,
 		updates: [["view/1", "text", "1"], ["view/2", "text", "1"]],
 	})
 	// b missed the shared count: its GET has it at once

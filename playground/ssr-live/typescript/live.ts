@@ -1,7 +1,7 @@
 // ermine live: a page kept as the server's view of it. LLM generated: a prototype. each visitor
-// is a process of its own (folder/<uuid>), its view rendered on the server (./h.ts); the first
-// load is the html, then a stream of what its bindings show, and the page's events come back as
-// posts, each called as the visitor's process
+// is a process of its own (folder/<uuid>), its view rendered on the server (@ermine/render/html);
+// the first load is the html, then a stream of what its bindings show, and the page's events come
+// back as posts, each called as the visitor's process
 //   GET  /           a new visitor: its process started, its page
 //   GET  /live?p=…   its updates, as server-sent events: data: [[binding, prop, value], …]
 //   POST /event      { p, h, t, value?, checked?, key?, form?, tv?, at? }: the handler h, called
@@ -10,25 +10,25 @@
 // missed, its own change and anyone's since its last answer: { n, updates }, numbered so the page
 // applies them in order; GET /missed?p=… is held till there is something, or HOLD ms. or with no
 // script at all (GET /?plain): the page is a document that never ends, its view in a declarative
-// shadow root with each unit a slot (h.ts: plain); a unit that changes is sent again into the
+// shadow root with each unit a slot (plain.ts); a unit that changes is sent again into the
 // document, in a tag of its own, and CSS shows only the last of each tag; its events are forms,
 // posted into a hidden iframe and answered 204
 // a visitor whose stream is gone for linger ms is stopped; a page it had is told 410 and reloads.
 // options.away, back and gone are told as a visitor's stream drops, comes back, and it is stopped
 import { type Ermine, executeAction, pulse } from "@ermine/system"
+import type { Options } from "@ermine/render"
 import {
+	createRoot,
 	type Element,
-	element,
 	fire,
 	html,
-	inner,
-	type Options,
-	plain,
+	quoted,
 	render,
-	unitName,
-	units,
+	sent,
+	take,
 	type Update,
-} from "./h.ts"
+} from "@ermine/render/html"
+import { plain, unitName, units } from "./plain.ts"
 
 export { render }
 // what a program is given: where to render, and the options to render with
@@ -39,7 +39,7 @@ type Visitor = {
 	readonly path: string
 	readonly into: Element
 	readonly stop: () => void
-	// told and not yet sent; a flush asked for
+	// taken and not yet sent; a flush asked for
 	told: Update[]
 	asked: boolean
 	// the stream open now (none: what is told waits for the next)
@@ -119,17 +119,16 @@ export function createLive(ermine: Ermine, program: Program, options: LiveOption
 
 	function visit(mode: Mode): Visitor | Response {
 		const path = `${folder}/${crypto.randomUUID()}`
-		const into = element("main")
-		// nothing is told till the page is out: the first render is in its html
 		// deno-lint-ignore prefer-const
 		let v: Visitor | undefined
+		// nothing is told till the page is out: the first render is in its html
+		const into = createRoot({ changed: () => v && ask(v) })
 		// the process's context, to call its actions as it (an event has nothing open)
 		// deno-lint-ignore prefer-const
 		let context: ReturnType<Ermine["getProcessContext"]>
 		const page: Options = {
 			name: path,
 			call: (action, ...args) => context!.within(() => executeAction(action, ...args)),
-			tell: (update) => v && tell(v, update),
 		}
 		const started = ermine.start(program({ into, options: page }), path)
 		if ("refused" in started) {
@@ -143,6 +142,7 @@ export function createLive(ermine: Ermine, program: Program, options: LiveOption
 		context = ermine.getProcessContext(started.process)
 		// the pulse setup asked for, now: what it acts is in the html, not told after
 		ermine.within(() => pulse())
+		sent(into)
 		v = {
 			path,
 			into,
@@ -192,40 +192,48 @@ export function createLive(ermine: Ermine, program: Program, options: LiveOption
 		}, wait)
 	}
 
-	function tell(v: Visitor, update: Update) {
-		v.told.push(update)
+	// something changed in the page: a flush, after the pulse (every act done, so a binding's new
+	// kids are written out whole)
+	function ask(v: Visitor) {
 		if (v.asked) return
 		v.asked = true
-		// after the pulse: every act told, so a binding's new kids are written out whole
 		queueMicrotask(() => flush(v))
+	}
+
+	// what the page hasn't been told, taken
+	function told(v: Visitor): Update[] {
+		v.told.push(...take(v.into))
+		return v.told
 	}
 
 	function flush(v: Visitor) {
 		v.asked = false
 		// with GET and POST: a post being answered takes it; else a GET held does
-		if (v.mode === "poll") return void (v.posting === 0 && v.told.length && v.held[0]?.())
-		if (v.stream === undefined || v.told.length === 0) return
-		const sent = v.mode === "plain" ? again(v) : `data: ${JSON.stringify(said(v.told))}\n\n`
+		if (v.mode === "poll") return void (v.posting === 0 && told(v).length && v.held[0]?.())
+		if (v.stream === undefined || told(v).length === 0) return
+		const out = v.mode === "plain" ? again(v) : `data: ${JSON.stringify(v.told)}\n\n`
 		v.told = []
-		v.stream.enqueue(encoder.encode(sent))
+		v.stream.enqueue(encoder.encode(out))
 	}
 
 	// with no script: each unit something told is in, sent again whole in a tag of its own
 	function again(v: Visitor): string {
 		const all = units(v.into)
-		const sent = new Set<Element>()
+		const done = new Set<Element>()
 		let out = ""
 		for (const [b] of v.told) {
 			const unit = all.get(b)
-			if (unit === undefined || sent.has(unit)) continue
-			sent.add(unit)
+			if (unit === undefined || done.has(unit)) continue
+			done.add(unit)
 			const name = unitName(unit)
 			const tag = tagOf(name)
 			// the first time: its rule, an older copy hidden by a newer one after it (not :last-of-type:
 			// an element is not last while its parent is still being parsed, and this one always is)
 			if (!v.sentAgain.has(tag)) out += `<style>${tag}:has(~ ${tag}) { display: none }</style>`
 			v.sentAgain.add(tag)
-			out += `<${tag} slot="${name}">${plain(unit, { process: v.path, slots: false })}</${tag}>`
+			out += `<${tag} slot="${quoted(name)}">${
+				plain(unit, { process: v.path, slots: false })
+			}</${tag}>`
 		}
 		return out
 	}
@@ -282,8 +290,8 @@ export function createLive(ermine: Ermine, program: Program, options: LiveOption
 
 	// what the page missed, numbered; nothing: 204
 	function answer(v: Visitor): Response {
-		if (v.told.length === 0) return new Response(null, { status: DONE })
-		const updates = said(v.told)
+		if (told(v).length === 0) return new Response(null, { status: DONE })
+		const updates = v.told
 		v.told = []
 		return Response.json({ n: ++v.answered, updates })
 	}
@@ -292,7 +300,7 @@ export function createLive(ermine: Ermine, program: Program, options: LiveOption
 	// page goes, or HOLD
 	function missed(v: Visitor, request: Request): Response | Promise<Response> {
 		arrive(v)
-		if (v.told.length) {
+		if (told(v).length) {
 			depart(v, QUIET)
 			return answer(v)
 		}
@@ -401,9 +409,6 @@ export function createLive(ermine: Ermine, program: Program, options: LiveOption
 	}
 }
 
-// what is sent of what was told: a binding whose kids are new is sent whole, as html written now
-// (what the bindings inside it showed since is in it), and nothing told inside it is; of the rest,
-// each binding's prop once, its last
 // the versions of a page, each with its words, simplest first (the edge's, edge.ts, is GET and
 // POST, and no script held open a while)
 export type Version = Mode
@@ -429,24 +434,30 @@ export const PICKER = ".ermine-versions { display: flex; justify-content: flex-e
 	" border-bottom: 1px solid #cde8f6; background: #f9fcff }" +
 	".ermine-versions select, .ermine-versions button { font: inherit; min-height: 28px }"
 
-export function said(told: readonly Update[]): Update[] {
-	const whole = told.filter(([, prop]) => prop === "children").map(([b]) => b)
-	const last = new Map<string, Update>()
-	for (const u of told) {
-		const [b, prop, value] = u
-		if (whole.some((w) => b.startsWith(w + "/"))) continue
-		const k = `${b} ${prop}`
-		last.delete(k)
-		last.set(k, prop === "children" ? [b, prop, inner(value as Element)] : u)
-	}
-	return [...last.values()]
+// what the page's element says: its value, checked, a form's named elements, its size
+type Target = {
+	readonly value?: string
+	readonly checked?: boolean
+	readonly elements: Record<string, { name: string; value: string }>
+	readonly clientWidth?: number
+	readonly clientHeight?: number
 }
-
+export type StandIn = {
+	readonly type: string
+	readonly key?: string
+	readonly target: Target | { readonly value: string }
+	readonly currentTarget: Target
+	readonly offsetX?: number
+	readonly offsetY?: number
+	readonly isTrusted: true
+	preventDefault(): void
+	stopPropagation(): void
+}
 // the page's event as a handler's args function sees it: its type and key; currentTarget the
 // handler's element (its value, checked, a form's named elements' values, its size); target the
 // element clicked inside it (its value), or the same; offsetX and offsetY inside the handler's
 // element (the page's own are inside target)
-export function standIn(e: Said) {
+export function standIn(e: Said): StandIn {
 	const elements = Object.fromEntries(
 		Object.entries(e.form ?? {}).map(([name, value]) => [name, { name, value }]),
 	)
@@ -473,7 +484,7 @@ export const PLAIN = ":where(#ermine > [slot]) { display: contents }" +
 	" cursor: crosshair }"
 
 // a unit's tag: its name as a custom element's ("view/3/1" is x-view-3-1)
-export const tagOf = (name: string) => "x-" + name.toLowerCase().replace(/[^a-z0-9]+/g, "-")
+export const tagOf = (name: string): string => "x-" + name.toLowerCase().replace(/[^a-z0-9]+/g, "-")
 
 // a form's post, as a page with a script says it: p; e, a button's handler (and, after a space, the
 // value of the button clicked inside the handler's element); s, a form's handler, the rest its

@@ -1,4 +1,4 @@
-/** @jsxImportSource @ermine/ssr-live */
+/** @jsxImportSource @ermine */
 // the party: one long page everyone is on at once. LLM generated: a prototype. every piece is
 // nodes under /shared that every visitor's page binds, written by the visitors' actions (each a
 // process of its own); the clocks are processes of their own, writing on a timer. ideas from the
@@ -27,7 +27,8 @@ import {
 	remove,
 	rename,
 } from "@ermine/system"
-import { bind, type Child, handler, render, track, under } from "@ermine/ssr-live"
+import { bind, type Child, handler, track, under } from "@ermine/render/h"
+import { render } from "@ermine/render/html"
 import type { Page } from "./live.ts"
 
 const ANIMALS = [
@@ -490,7 +491,7 @@ function card(): Child {
 				class="row"
 				onSubmit={handler("on/sign", (e: Ev) => [e.target.elements?.name?.value])}
 			>
-				<input name="name" autocomplete="off" maxlength="24" placeholder="your name" />{" "}
+				<input name="name" autocomplete="off" maxLength={24} placeholder="your name" />{" "}
 				<button type="submit">sign</button>
 			</form>
 		</section>

@@ -11,8 +11,8 @@
 //          here/<id>      { at }: when a visitor's page last asked (who's here: not a version)
 //   time   no clocks: the playhead and the pet's hunger are worked out from the time; life is
 //          stepped when a request comes, the steps due (at most STEPS)
-//   ids    handler ids by place (h.ts): a click is found in the page as it was when clicked, then
-//          done once the page has caught up
+//   ids    handler ids by place (@ermine/render/html): a click is found in the page as it was
+//          when clicked, then done once the page has caught up
 //   pages  GET  /?v=poll (the default)   a page, GET and POST: client/live-edge.js
 //          GET  /?v=plain                no script: a document held open HOLD ms, sent each unit
 //                                        that changes, then a refresh to carry on
@@ -31,18 +31,10 @@ import {
 	read,
 	remove,
 } from "@ermine/system"
-import {
-	type Element,
-	element,
-	html,
-	type Options,
-	plain,
-	prepare,
-	unitName,
-	units,
-	type Update,
-} from "./h.ts"
-import { PICKER, picker, PLAIN, posted, type Said, said, standIn, tagOf } from "./live.ts"
+import type { Options } from "@ermine/render"
+import { createRoot, type Element, fire, html, quoted, sent, take } from "@ermine/render/html"
+import { plain, unitName, units } from "./plain.ts"
+import { PICKER, picker, PLAIN, posted, type Said, standIn, tagOf } from "./live.ts"
 import { party, setupShared, stepLife } from "./party.tsx"
 
 // what is kept, on Netlify Blobs or (run here) in a Map
@@ -222,7 +214,7 @@ async function presence(store: Kept, now: number): Promise<Map<string, boolean>>
 }
 
 // ---- a turn: one request's ermine ----
-type Turn = { to: number; told: Update[]; into: Element; path: string; close: () => void }
+type Turn = { to: number; into: Element; path: string; close: () => void }
 
 // what the visitor at id missed since seen; asked: an event to do. a version taken by another
 // request meanwhile: again from the start (at most AGAIN times)
@@ -235,16 +227,19 @@ async function turn(store: Kept, id: string, seen: number, asked?: Said, again =
 	const atSeen = over(base.values, after.slice(0, from - base.v))
 	const path = `/visitors/${id}`
 	const e = createErmine({ host: { setup: () => restore(only(atSeen, shared)) } })
-	const into = element("main")
-	const told: Update[] = []
-	let telling = false
+	const into = createRoot({ ids: "place" })
 	// deno-lint-ignore prefer-const
 	let context: ReturnType<typeof e.getProcessContext>
+	// the click asked, while it is found: its call kept for later
+	let asking = false
+	let call: (() => unknown) | undefined
 	const options: Options = {
 		name: path,
-		ids: "place",
-		call: (action, ...args) => context!.within(() => executeAction(action, ...args)),
-		tell: (u) => telling && told.push(u),
+		call: (action, ...args) => {
+			const go = () => context!.within(() => executeAction(action, ...args))
+			if (!asking) return go()
+			call = go
+		},
 	}
 	// what time works out, unknown as the page was: so always sent
 	e.within(() => {
@@ -260,8 +255,12 @@ async function turn(store: Kept, id: string, seen: number, asked?: Said, again =
 	})
 	// what setup made (a new visitor's name, its own nodes), kept with this turn's change
 	const made = diff(only(atSeen, (p) => kept(p, id)), e.within(() => dump(id)))
-	const call = asked ? prepare(into, asked.h, standIn(asked)) : undefined
-	telling = true
+	// the page as it was at seen: what changes from here, it is told; the click found in it, its
+	// args made now
+	sent(into)
+	asking = true
+	if (asked) fire(into, asked.h, standIn(asked))
+	asking = false
 	e.within(() => {
 		for (const entry of after.slice(from - base.v)) replay(entry, (p) => kept(p, id))
 		pulse()
@@ -323,7 +322,7 @@ async function turn(store: Kept, id: string, seen: number, asked?: Said, again =
 		set("/shared/beat-step", Math.floor(now / BEAT_MS) % STEPS_IN_BEAT)
 		pulse()
 	})
-	return { to, told, into, path, close: () => e.close() }
+	return { to, into, path, close: () => e.close() }
 }
 
 // ---- the server ----
@@ -346,10 +345,11 @@ export function createEdge(options: EdgeOptions) {
 	const idOf = (p: string | null) =>
 		p?.startsWith("/visitors/") ? p.slice("/visitors/".length) : undefined
 	const json = (t: Turn, seen: number) =>
-		Response.json({ from: seen, to: t.to, updates: said(t.told) })
+		Response.json({ from: seen, to: t.to, updates: take(t.into) })
 
 	async function page(store: Kept, id: string): Promise<Response> {
 		const t = await turn(store, id, Number.MAX_SAFE_INTEGER)
+		sent(t.into)
 		const root = t.into.kids[0]
 		if (root && "tag" in root) root.attrs.set("data-ermine-seen", String(t.to))
 		const body = top() + `<body>${picker("poll", offered)}${html(t.into)}` +
@@ -370,6 +370,7 @@ export function createEdge(options: EdgeOptions) {
 			async start(c) {
 				const send = (s: string) => open && c.enqueue(encoder.encode(s))
 				const t = await turn(store, id, Number.MAX_SAFE_INTEGER)
+				sent(t.into)
 				let seen = t.to
 				const form = `<form id="f" method="post" action="/event" target="ermine-sink">` +
 					`<input type="hidden" name="p" value="${t.path}"></form>`
@@ -403,20 +404,22 @@ export function createEdge(options: EdgeOptions) {
 		})
 	}
 
-	// each unit something told is in, sent again whole in a tag of its own (live.ts's again)
+	// each unit something changed in, sent again whole in a tag of its own (live.ts's again)
 	function again(t: Turn, sentAgain: Set<string>): string {
 		const all = units(t.into)
-		const sent = new Set<Element>()
+		const done = new Set<Element>()
 		let out = ""
-		for (const [b] of t.told) {
+		for (const [b] of take(t.into)) {
 			const unit = all.get(b)
-			if (unit === undefined || sent.has(unit)) continue
-			sent.add(unit)
+			if (unit === undefined || done.has(unit)) continue
+			done.add(unit)
 			const name = unitName(unit)
 			const tag = tagOf(name)
 			if (!sentAgain.has(tag)) out += `<style>${tag}:has(~ ${tag}) { display: none }</style>`
 			sentAgain.add(tag)
-			out += `<${tag} slot="${name}">${plain(unit, { process: t.path, slots: false })}</${tag}>`
+			out += `<${tag} slot="${quoted(name)}">${
+				plain(unit, { process: t.path, slots: false })
+			}</${tag}>`
 		}
 		return out
 	}
