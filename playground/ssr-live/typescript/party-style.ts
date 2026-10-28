@@ -54,6 +54,12 @@ button:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
 .hamster { font-size: 2rem; vertical-align: -6px; }
 .bar { font-family: "IBM Plex Mono", ui-monospace, monospace; letter-spacing: 1px; color: var(--peach); }
 .hearts { color: var(--pink); letter-spacing: 1px; }
+.ball { width: 160px; height: 160px; border-radius: 50%; margin: 0 0 8px; display: grid; place-items: center;
+	background: radial-gradient(circle at 35% 30%, #555, #000 60%); box-shadow: 0 6px 0 var(--pink); }
+.window { width: 84px; height: 84px; border-radius: 50%; background: var(--blue); display: grid; place-items: center;
+	padding: 6px; text-align: center; font-size: .8rem; line-height: 1.15; }
+.ball:has([data-ermine-waiting]) { animation: think .45s ease-in-out infinite alternate; }
+@keyframes think { from { transform: rotate(-7deg); } to { transform: rotate(7deg); } }
 .card { background: var(--lychee); border-left: 6px solid var(--sunglow); padding: 8px 12px; border-radius: 3px;
 	margin: 0 0 8px; }
 .to { margin: 0 0 4px; font-size: 1.1rem; }
