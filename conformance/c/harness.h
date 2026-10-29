@@ -1,5 +1,5 @@
 // the loop of every suite's C harness (harness.c): one JSON request per line in, one answer per
-// line out, in order, read and written with op's JSON codec (core/changeable/c/json.h). a suite's binary is
+// line out, in order, read and written with op's JSON codec (changeable/c/json.h). a suite's binary is
 // this, its adapter (<package>/c/<suite>_harness.c) and the library it speaks for. a line that is
 // not JSON, or not an object, is answered { "error": "text" } and the loop goes on
 #ifndef HARNESS_H
@@ -8,8 +8,8 @@
 #include <stddef.h>
 #include <stdio.h>
 
-#include "../../core/changeable/c/json.h"
-#include "../../core/changeable/c/value.h"
+#include "../../changeable/c/json.h"
+#include "../../changeable/c/value.h"
 
 // --- what the adapter has ---
 

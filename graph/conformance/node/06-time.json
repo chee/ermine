@@ -1,0 +1,59 @@
+{
+	"title": "a header with no time: the time now added, the rest as given; a time given, kept",
+	"steps": [
+		{
+			"op": "entry",
+			"value": 1,
+			"header": {
+				"actor": "me",
+				"frame": [
+					{
+						"why": "a test"
+					}
+				]
+			},
+			"expect": {
+				"entry": {
+					"value": 1,
+					"change": {
+						"time": "now",
+						"actor": "me",
+						"frame": [
+							{
+								"why": "a test"
+							}
+						]
+					}
+				}
+			}
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 0,
+				"actor": "me"
+			},
+			"expect": {
+				"entry": {
+					"change": {
+						"time": 0,
+						"actor": "me"
+					}
+				}
+			}
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": -5
+			},
+			"expect": {
+				"entry": {
+					"change": {
+						"time": -5
+					}
+				}
+			}
+		}
+	]
+}

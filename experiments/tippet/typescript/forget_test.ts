@@ -2,12 +2,12 @@
 // snapshot and has passed on, its own only once a keeper holds them; a reload keeps what it let go
 // let go; a late step older than the newest it holds is passed over
 import { assert, assertEquals } from "@std/assert"
-import createEntry from "@ermine/core/node/entry"
-import { createScheduler } from "@ermine/core/scheduler"
-import { createPaths } from "@ermine/core/scheduler/paths"
-import { createTable, type Key } from "@ermine/core/table"
-import { children, createPlaces } from "@ermine/core/places"
-import { createChangeHeader } from "@ermine/core/places/header"
+import createEntry from "@ermine/graph/entry"
+import { createScheduler } from "@ermine/reactivity"
+import { createPaths } from "@ermine/reactivity/paths"
+import { createTable, type Key } from "@ermine/graph/table"
+import { children, createPlaces } from "@ermine/places"
+import { createChangeHeader } from "@ermine/places/header"
 import { createLog, type Log, type Store } from "./log.ts"
 import { createHistory } from "./history.ts"
 import { createSync, type Link } from "./sync.ts"

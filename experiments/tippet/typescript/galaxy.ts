@@ -19,7 +19,7 @@ import { fileStore } from "./store_file.ts"
 import { socket } from "./carriers/websocket.ts"
 import { httpLinks } from "./carriers/http.ts"
 import { hex } from "./step.ts"
-import { blake3 } from "@ermine/core/blake3"
+import { blake3 } from "@ermine/encoding/blake3"
 
 // written: when it last kept a run, 0 never
 type Room = {

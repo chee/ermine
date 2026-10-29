@@ -1,7 +1,7 @@
 # tippet wire
 
-What a C implementation sends and checks. cbor: canonical, as `ermine/encoding/typescript/cbor.ts`'s
-header says (vectors in `ermine/encoding/conformance/cbor`). Whole numbers below: integers, 0 to
+What a C implementation sends and checks. cbor: canonical, as `encoding/typescript/cbor.ts`'s
+header says (vectors in `encoding/conformance/cbor`). Whole numbers below: integers, 0 to
 2^53 - 1.
 
 ## step
@@ -17,7 +17,7 @@ One kept write. Bytes: a cbor array.
 - n: whole, from 1, per device, one more each step
 - before: bstr, 32 bytes, the hash of this device's step n - 1; null at n = 1
 - node: tstr, the node's id; or [rest]: relative to the writer, the id `ermine:ed01` + device's hex
-  (ermine/ids: key) then rest, rest a tstr, empty or from `/`. a writer writes a node that is its
+  (ids: key) then rest, rest a tstr, empty or from `/`. a writer writes a node that is its
   own id or under it so; read back to the same id. an old step's tstr stays as it was
 - part: tstr. `value`, `attributes`, `children`, …
 - patches: array of patch maps
@@ -130,7 +130,7 @@ else held but not to be read (forgotten), refused, never guessed.
 
 ## columns
 
-squish's (`core/changeable/typescript/squish.ts`): a map.
+squish's (`changeable/typescript/squish.ts`): a map.
 
 - paths: array, each distinct path once, in first-seen order
 - path: runs: per patch, its index in paths

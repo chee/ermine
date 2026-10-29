@@ -1,0 +1,462 @@
+{
+	"title": "a write or make in a process's setup has the process's frames, nothing captured at it [chee 10-29: \"we only need filenames captured with new Error when the thing comes from outside the graph\"]: a node it ensured or patched, a memo it made and that memo's runs' writes: setup's frame, then the process's, which holds where it was started. an action placed there: its calls' frames under its handler's, under the setup's. the host keeps each call's locations",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"./a",
+						{
+							"n": 0
+						}
+					],
+					"as": "a"
+				},
+				{
+					"do": [
+						"ensureNode",
+						"./b",
+						0
+					],
+					"as": "b"
+				},
+				{
+					"do": [
+						"patch",
+						"$a",
+						[
+							{
+								"path": [
+									"n"
+								],
+								"value": 1
+							}
+						]
+					]
+				},
+				{
+					"do": [
+						"createMemo",
+						"m",
+						{},
+						[
+							"read",
+							"$a",
+							[
+								"n"
+							]
+						]
+					]
+				},
+				{
+					"do": [
+						"createAction",
+						"on/put",
+						[
+							{
+								"do": [
+									"patch",
+									"$b",
+									[
+										{
+											"path": [],
+											"value": "$0"
+										}
+									]
+								]
+							}
+						]
+					]
+				},
+				{
+					"do": [
+						"createAction",
+						"on/make",
+						[
+							{
+								"do": [
+									"ensureNode",
+									"./c",
+									0
+								]
+							},
+							{
+								"do": [
+									"createMemo",
+									"later",
+									{},
+									[
+										"read",
+										"$a",
+										[
+											"n"
+										]
+									]
+								]
+							}
+						]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"a"
+			],
+			"expect": {
+				"id": "n4"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"b"
+			],
+			"expect": {
+				"id": "n5"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"p",
+				"m"
+			],
+			"expect": {
+				"id": "n6"
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "frame",
+			"part": "value",
+			"id": "n4",
+			"expect": {
+				"frame": [
+					{
+						"process": [
+							"code",
+							"p"
+						]
+					},
+					{
+						"process": [
+							"code",
+							"p"
+						],
+						"node": "proc:p",
+						"locations": [
+							"program"
+						]
+					},
+					{
+						"processes": "start"
+					},
+					{
+						"actor": "test",
+						"node": "n1"
+					}
+				]
+			}
+		},
+		{
+			"op": "frame",
+			"part": "value",
+			"id": "n5",
+			"expect": {
+				"frame": [
+					{
+						"process": [
+							"code",
+							"p"
+						]
+					},
+					{
+						"process": [
+							"code",
+							"p"
+						],
+						"node": "proc:p",
+						"locations": [
+							"program"
+						]
+					},
+					{
+						"processes": "start"
+					},
+					{
+						"actor": "test",
+						"node": "n1"
+					}
+				]
+			}
+		},
+		{
+			"op": "frame",
+			"part": "value",
+			"id": "n6",
+			"expect": {
+				"frame": [
+					{
+						"run": 1,
+						"mark": 5
+					},
+					{
+						"node": "n6",
+						"mark": 5
+					},
+					{
+						"process": [
+							"code",
+							"p"
+						]
+					},
+					{
+						"process": [
+							"code",
+							"p"
+						],
+						"node": "proc:p",
+						"locations": [
+							"program"
+						]
+					},
+					{
+						"processes": "start"
+					},
+					{
+						"actor": "test",
+						"node": "n1"
+					}
+				]
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"executeAction",
+				"on/put",
+				5
+			],
+			"expect": {}
+		},
+		{
+			"op": "frame",
+			"part": "value",
+			"id": "n5",
+			"expect": {
+				"frame": [
+					{
+						"caller": {
+							"node": "proc:p",
+							"actor": "test"
+						},
+						"handler": "n7",
+						"call": 1
+					},
+					{
+						"handler": "n7"
+					},
+					{
+						"process": [
+							"code",
+							"p"
+						]
+					},
+					{
+						"process": [
+							"code",
+							"p"
+						],
+						"node": "proc:p",
+						"locations": [
+							"program"
+						]
+					},
+					{
+						"processes": "start"
+					},
+					{
+						"actor": "test",
+						"node": "n1"
+					}
+				]
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"executeAction",
+				"on/make"
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"c"
+			],
+			"expect": {
+				"id": "n10"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"p",
+				"later"
+			],
+			"expect": {
+				"id": "n11"
+			}
+		},
+		{
+			"op": "frame",
+			"part": "value",
+			"id": "n10",
+			"expect": {
+				"frame": [
+					{
+						"caller": {
+							"node": "proc:p",
+							"actor": "test"
+						},
+						"handler": "n9",
+						"call": 2
+					},
+					{
+						"handler": "n9"
+					},
+					{
+						"process": [
+							"code",
+							"p"
+						]
+					},
+					{
+						"process": [
+							"code",
+							"p"
+						],
+						"node": "proc:p",
+						"locations": [
+							"program"
+						]
+					},
+					{
+						"processes": "start"
+					},
+					{
+						"actor": "test",
+						"node": "n1"
+					}
+				]
+			}
+		},
+		{
+			"op": "frame",
+			"part": "value",
+			"id": "n11",
+			"expect": {
+				"frame": [
+					{
+						"run": 1,
+						"mark": 10
+					},
+					{
+						"node": "n11",
+						"mark": 10
+					},
+					{
+						"process": [
+							"code",
+							"p"
+						]
+					},
+					{
+						"process": [
+							"code",
+							"p"
+						],
+						"node": "proc:p",
+						"locations": [
+							"program"
+						]
+					},
+					{
+						"processes": "start"
+					},
+					{
+						"actor": "test",
+						"node": "n1"
+					}
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/code/a",
+				[
+					{
+						"path": [
+							"n"
+						],
+						"value": 2
+					}
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "frame",
+			"part": "value",
+			"id": "n4",
+			"expect": {
+				"frame": [
+					{
+						"locations": [
+							"program"
+						]
+					},
+					{
+						"actor": "test",
+						"node": "n1"
+					}
+				]
+			}
+		}
+	]
+}

@@ -23,8 +23,8 @@
 //   {"$add":[a,b]}  {"$eq":[a,b]}  {"$not":e}  {"$len":e}
 //   {"$steps":[..]}     a handler function
 //   {"$quote":x}        x as it is
-import type { Code } from "@ermine/core/scheduler"
-import { PENDING } from "@ermine/core/scheduler"
+import type { Code } from "@ermine/reactivity"
+import { PENDING } from "@ermine/reactivity"
 import { json, operate } from "./normal.ts"
 
 export class Thrown extends Error {

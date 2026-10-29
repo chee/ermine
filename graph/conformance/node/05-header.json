@@ -1,0 +1,71 @@
+{
+	"title": "the header as the entry's change, as given",
+	"steps": [
+		{
+			"op": "entry",
+			"value": 1,
+			"header": {
+				"time": 9007199254740991,
+				"actor": {
+					"name": "me"
+				},
+				"reader": "p",
+				"frame": [
+					{
+						"note": "hello",
+						"locations": [
+							{
+								"file": "file:///old.ts",
+								"line": 3,
+								"column": 4,
+								"function": "f",
+								"external": true
+							}
+						]
+					}
+				]
+			},
+			"expect": {
+				"entry": {
+					"value": 1,
+					"change": {
+						"time": 9007199254740991,
+						"actor": {
+							"name": "me"
+						},
+						"reader": "p",
+						"frame": [
+							{
+								"note": "hello",
+								"locations": [
+									{
+										"file": "file:///old.ts",
+										"line": 3,
+										"column": 4,
+										"function": "f",
+										"external": true
+									}
+								]
+							}
+						]
+					}
+				}
+			}
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 0,
+				"actor": "me"
+			},
+			"expect": {
+				"entry": {
+					"change": {
+						"time": 0,
+						"actor": "me"
+					}
+				}
+			}
+		}
+	]
+}

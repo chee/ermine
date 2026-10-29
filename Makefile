@@ -10,342 +10,124 @@
 CC ?= cc
 CFLAGS = -std=c11 -O2 -Wall -Wextra -Wpedantic
 # glibc declares arc4random_buf, clock_gettime and open_memstream only in its default set, which
-# -std=c11 turns off (ermine/processes/c/platform.h: what a platform supplies)
+# -std=c11 turns off (processes/c/platform.h: what a platform supplies)
 SOURCE = $(if $(filter Linux,$(shell uname -s)),-D_DEFAULT_SOURCE,)
 CFLAGS += $(SOURCE)
 CHECKFLAGS = -std=c11 -g -O1 -Wall -Wextra -Wpedantic -fsanitize=address,undefined -fno-omit-frame-pointer $(SOURCE)
 DENO = deno test --quiet --allow-run --allow-read --allow-env
 
 # the shared loop of every harness on the one runner: it and changeable's value and JSON
-harness_src = conformance/c/harness.c core/changeable/c/value.c core/changeable/c/json.c
+harness_src = conformance/c/harness.c changeable/c/value.c changeable/c/json.c changeable/c/frame.c
 
-tracker_src = $(harness_src) core/scheduler/c/tracker_harness.c core/scheduler/c/tracker.c
-table_src = $(harness_src) core/table/c/table_harness.c core/table/c/table.c
-node_src = $(harness_src) conformance/c/protocol_harness.c core/node/c/node_harness.c core/node/c/node.c core/changeable/c/apply.c core/changeable/c/invert.c
-pack_src = core/node/c/node.c core/changeable/c/value.c core/changeable/c/apply.c core/changeable/c/invert.c playground/encoding/c/pack.c playground/encoding/c/pack_harness.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c
-cbor_src = ermine/encoding/c/cbor_test.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c
-# Subduction's own BLAKE3 exports the same symbols as ermine/encoding/c/blake3: the C ones are renamed, in every file of the harness
-subduction_rename = $(foreach s,compress_in_place compress_in_place_portable compress_subtree_wide compress_xof compress_xof_portable hash_many hash_many_portable hasher_finalize hasher_finalize_seek hasher_init hasher_init_derive_key hasher_init_derive_key_raw hasher_reset hasher_update simd_degree version xof_many,-Dblake3_$(s)=ermc_blake3_$(s))
-subduction_lib = playground/together/stacks/subduction/c/subduction/lib/libsubduction_c.a
-transport_libs = $(subduction_lib) $(filter-out -lm,$(shell tr -d '\033' < playground/together/stacks/subduction/c/subduction/lib/link.txt | sed 's/\[[0-9;]*m//g'))
-squish_src = $(harness_src) core/changeable/c/squish.c core/changeable/c/squish_harness.c
-changeable-apply_src = $(harness_src) conformance/c/protocol_harness.c core/changeable/c/apply_harness.c core/changeable/c/apply.c core/changeable/c/invert.c core/node/c/node.c
-paths_src = $(harness_src) conformance/c/protocol_harness.c core/scheduler/c/paths_harness.c core/scheduler/c/paths.c core/node/c/node.c core/changeable/c/apply.c core/changeable/c/invert.c
-places_src = $(harness_src) core/places/c/places_harness.c conformance/c/protocol_harness.c core/places/c/places.c core/unread/c/unread.c core/places/c/cache.c core/clingy/c/clingy.c core/scheduler/c/selector.c core/places/c/status.c core/places/c/world_harness.c core/table/c/table.c core/node/c/node.c core/changeable/c/update.c core/changeable/c/value.c core/changeable/c/apply.c core/changeable/c/invert.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
-processes_src = $(filter-out core/places/c/places_harness.c,$(places_src)) ermine/processes/c/processes_harness.c ermine/processes/c/processes.c ermine/processes/c/scopes.c
-protect_src = core/protect/c/protect.c core/protect/c/protect_harness.c $(harness_src)
-update_src = $(harness_src) conformance/c/protocol_harness.c core/changeable/c/update_harness.c core/changeable/c/update.c core/node/c/node.c core/changeable/c/apply.c core/changeable/c/invert.c
-guard_src = $(harness_src) core/places/c/guard_harness.c core/places/c/guard.c core/protect/c/protect.c conformance/c/protocol_harness.c core/places/c/places.c core/unread/c/unread.c core/places/c/cache.c core/clingy/c/clingy.c core/scheduler/c/selector.c core/places/c/status.c core/places/c/world_harness.c core/table/c/table.c core/node/c/node.c core/changeable/c/update.c core/changeable/c/value.c core/changeable/c/apply.c core/changeable/c/invert.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
-scheduler_src = $(harness_src) core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c core/scheduler/c/scheduler_harness.c
-names_src = playground/tools/files/c/names.c playground/tools/files/c/names_harness.c ermine/encoding/c/json.c
-diag_src = playground/tools/files/c/diag.c playground/tools/files/c/diag_harness.c ermine/encoding/c/json.c
-layout_src = playground/tools/files/c/layout.c playground/tools/files/c/layout_harness.c playground/tools/files/c/names.c ermine/encoding/c/json.c
-store_src = playground/tools/files/c/store.c playground/tools/files/c/store_harness.c playground/tools/files/c/disk_harness.c playground/tools/files/c/sys.c playground/tools/files/c/manifest.c playground/tools/files/c/layout.c playground/tools/files/c/names.c playground/tools/files/c/diag.c \
-	playground/tools/files/c/external.c playground/tools/files/c/foundation.c \
-	playground/tools/files/c/saved.c playground/tools/files/c/saved_shown_harness.c playground/tools/files/c/saved_pack.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c $(blake3_src)
-# the files graph (playground/tools/files/c/graph.c): core's table, places and guard under a scheduler, and the policy they ask
-graph_src = core/places/c/places.c core/unread/c/unread.c core/places/c/guard.c core/protect/c/protect.c core/table/c/table.c core/node/c/node.c core/changeable/c/update.c \
-	core/changeable/c/value.c core/changeable/c/apply.c core/changeable/c/invert.c core/changeable/c/json.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
-# the files program: its watcher and harness, on the C store and the C scheduler (and the graph under it)
-# sys.c's Trash against homes of its own, no suite
-sys_src = playground/tools/files/c/sys.c playground/tools/files/c/foundation.c playground/tools/files/c/sys_harness.c
-program_src = playground/tools/files/c/program.c playground/tools/files/c/watch.c playground/tools/files/c/graph.c playground/tools/files/c/program_harness.c $(filter-out playground/tools/files/c/store_harness.c,$(store_src)) \
-	$(graph_src)
-program_libs = $(if $(filter Darwin,$(shell uname -s)),-framework CoreServices -framework CoreFoundation,) -lpthread
-manifest_src = playground/tools/files/c/manifest.c playground/tools/files/c/manifest_harness.c playground/tools/files/c/diag.c playground/tools/files/c/saved.c playground/tools/files/c/saved_shown_harness.c \
-	playground/tools/files/c/saved_pack.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c $(blake3_src)
+tracker_src = $(harness_src) reactivity/c/tracker_harness.c reactivity/c/tracker.c
+table_src = $(harness_src) graph/c/table_harness.c graph/c/table.c
+node_src = $(harness_src) conformance/c/protocol_harness.c graph/c/node_harness.c graph/c/node.c changeable/c/apply.c changeable/c/invert.c
+cbor_src = encoding/c/cbor_test.c encoding/c/cbor.c encoding/c/json.c
+squish_src = $(harness_src) changeable/c/squish.c changeable/c/squish_harness.c
+changeable-apply_src = $(harness_src) conformance/c/protocol_harness.c changeable/c/apply_harness.c changeable/c/apply.c changeable/c/invert.c graph/c/node.c
+paths_src = $(harness_src) conformance/c/protocol_harness.c reactivity/c/paths_harness.c reactivity/c/paths.c graph/c/node.c changeable/c/apply.c changeable/c/invert.c
+places_src = $(harness_src) places/c/places_harness.c conformance/c/protocol_harness.c places/c/places.c crow/c/crow.c places/c/crowify.c places/c/world_harness.c graph/c/table.c graph/c/node.c graph/c/update.c changeable/c/value.c changeable/c/apply.c changeable/c/invert.c reactivity/c/paths.c reactivity/c/scheduler.c reactivity/c/order.c reactivity/c/rank.c reactivity/c/causes.c changeable/c/ptrmap.c reactivity/c/tracker.c
+processes_src = $(filter-out places/c/places_harness.c,$(places_src)) processes/c/processes_harness.c processes/c/processes.c processes/c/scopes.c
+protect_src = protect/c/protect.c protect/c/protect_harness.c $(harness_src)
+update_src = $(harness_src) conformance/c/protocol_harness.c graph/c/update_harness.c graph/c/update.c graph/c/node.c changeable/c/apply.c changeable/c/invert.c
+guard_src = $(harness_src) processes/c/guard_harness.c processes/c/guard.c protect/c/protect.c conformance/c/protocol_harness.c places/c/places.c crow/c/crow.c places/c/crowify.c places/c/world_harness.c graph/c/table.c graph/c/node.c graph/c/update.c changeable/c/value.c changeable/c/apply.c changeable/c/invert.c reactivity/c/paths.c reactivity/c/scheduler.c reactivity/c/order.c reactivity/c/rank.c reactivity/c/causes.c changeable/c/ptrmap.c reactivity/c/tracker.c
+scheduler_src = $(harness_src) reactivity/c/scheduler.c reactivity/c/order.c reactivity/c/rank.c reactivity/c/causes.c changeable/c/ptrmap.c reactivity/c/tracker.c reactivity/c/scheduler_harness.c
 
-# upsert (playground/libraries/upsert): a value made or patched at a path in a part's entry, for the libraries that write so
-upsert_src = playground/libraries/upsert/c/upsert.c
-
-# BLAKE3 portable only: no SIMD dispatch, no NEON (ermine/encoding/c/blake3 has no such files)
-blake3_src = ermine/encoding/c/blake3/blake3.c ermine/encoding/c/blake3/blake3_dispatch.c ermine/encoding/c/blake3/blake3_portable.c
+# BLAKE3 portable only: no SIMD dispatch, no NEON (encoding/c/blake3 has no such files)
+blake3_src = encoding/c/blake3/blake3.c encoding/c/blake3/blake3_dispatch.c encoding/c/blake3/blake3_portable.c
 BLAKE3FLAGS = -DBLAKE3_NO_SSE2 -DBLAKE3_NO_SSE41 -DBLAKE3_NO_AVX2 -DBLAKE3_NO_AVX512 -DBLAKE3_USE_NEON=0
 
 # name: binary, sources, the suite, its env var, and what C skips
-tracker = core/scheduler/c/tracker-harness
-table = core/table/c/table-harness
-node = core/node/c/node-harness
-pack = playground/encoding/c/pack-harness
-cbor = ermine/encoding/c/cbor-test
-squish = core/changeable/c/squish-harness
-changeable-apply = core/changeable/c/apply-harness
-paths = core/scheduler/c/paths-harness
-places = core/places/c/places-harness
-processes = ermine/processes/c/processes-harness
-protect = core/protect/c/protect-harness
-update = core/changeable/c/update-harness
-guard = core/places/c/guard-harness
-scheduler = core/scheduler/c/scheduler-harness
-names = playground/tools/files/c/names-harness
-diag = playground/tools/files/c/diag-harness
-layout = playground/tools/files/c/layout-harness
-manifest = playground/tools/files/c/manifest-harness
-store = playground/tools/files/c/store-harness
-program = playground/tools/files/c/program-harness
-sys = playground/tools/files/c/sys-harness
+tracker = reactivity/c/tracker-harness
+table = graph/c/table-harness
+node = graph/c/node-harness
+cbor = encoding/c/cbor-test
+squish = changeable/c/squish-harness
+changeable-apply = changeable/c/apply-harness
+paths = reactivity/c/paths-harness
+places = places/c/places-harness
+processes = processes/c/processes-harness
+protect = protect/c/protect-harness
+update = graph/c/update-harness
+guard = processes/c/guard-harness
+scheduler = reactivity/c/scheduler-harness
 
-# presence (playground/together/presence): its harness on places, the table and the scheduler (the C harness has no BroadcastChannel)
-presence_src = $(harness_src) playground/together/presence/c/presence_harness.c playground/together/presence/c/presence.c playground/together/presence/c/channel.c $(upsert_src) core/places/c/places.c core/unread/c/unread.c core/table/c/table.c core/node/c/node.c core/changeable/c/update.c core/changeable/c/value.c core/changeable/c/apply.c core/changeable/c/invert.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c playground/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c
-presence = playground/together/presence/c/presence-harness
-presence_suite = presence
-presence_tests = $(wildcard playground/together/presence/typescript/presence_harness_test.ts)
-LIBS = tracker table node pack cbor squish changeable-apply paths places processes protect update guard scheduler names diag layout manifest store program sys
-LIBS += presence
+LIBS = tracker table node cbor squish changeable-apply paths places processes protect update guard scheduler
 # squish at the ends of a 64-bit whole number, what no scenario reaches: a test of its own
-squish-test_src = core/changeable/c/squish.c core/changeable/c/squish_test.c
-squish-test = core/changeable/c/squish-test
+squish-test_src = changeable/c/squish.c changeable/c/squish_test.c
+squish-test = changeable/c/squish-test
 LIBS += squish-test
 # the JSON writer (changeable's json.c) on a value far deeper than the C stack holds by recursion
-json-test_src = core/changeable/c/json.c core/changeable/c/value.c core/changeable/c/json_test.c
-json-test = core/changeable/c/json-test
+json-test_src = changeable/c/json.c changeable/c/value.c changeable/c/json_test.c
+json-test = changeable/c/json-test
 LIBS += json-test
-# Ed25519 (core/ed25519): RFC 8032's first test vector and what a strict check refuses
-ed25519-test_src = core/ed25519/c/ed25519.c core/ed25519/c/sha2.c core/ed25519/c/ed25519_test.c
-ed25519-test = core/ed25519/c/ed25519-test
+# Ed25519 (encoding/ed25519): RFC 8032's first test vector and what a strict check refuses
+ed25519-test_src = encoding/ed25519/c/ed25519.c encoding/ed25519/c/sha2.c encoding/ed25519/c/ed25519_test.c
+ed25519-test = encoding/ed25519/c/ed25519-test
 LIBS += ed25519-test
-# hash (playground/encoding): a value's name, BLAKE3 of its canonical CBOR, against conformance/hash/vectors.json
-hash_src = playground/encoding/c/hash_test.c playground/encoding/c/hash.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c $(blake3_src)
-hash = playground/encoding/c/hash-test
-LIBS += hash
-# deflate (playground/encoding): the deterministic raw deflate and its inflater, on the one runner (pack.c includes deflate.c)
-deflate_src = $(harness_src) playground/encoding/c/deflate_harness.c playground/encoding/c/deflate.c $(blake3_src)
-deflate = playground/encoding/c/deflate-harness
-deflate_suite = deflate
-LIBS += deflate
-# cbor on the line protocol (ermine/encoding/c/cbor_harness.c): its vectors (conformance/cbor/encoding_test.ts; the
-# cbor suite has no scenarios of its own) and the fuzz against the TypeScript (cbor_fuzz_test.ts), both through HARNESS
-cbor-lines_src = ermine/encoding/c/cbor_harness.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c ermine/encoding/c/json_text.c
-cbor-lines = ermine/encoding/c/cbor-harness
-cbor-lines_test = HARNESS ermine/encoding/typescript/cbor_fuzz_test.ts conformance/cbor/encoding_test.ts
+# cbor on the line protocol (encoding/c/cbor_harness.c): the fuzz against the TypeScript (cbor_fuzz_test.ts),
+# through HARNESS (the cbor suite has no scenarios of its own)
+cbor-lines_src = encoding/c/cbor_harness.c encoding/c/cbor.c encoding/c/json.c encoding/c/json_text.c
+cbor-lines = encoding/c/cbor-harness
+cbor-lines_test = HARNESS encoding/typescript/cbor_fuzz_test.ts
 LIBS += cbor-lines
-# patch nodes (extensions/patchy): the overlay and its harness, on the places harness's world
-patch_src = $(filter-out core/places/c/places_harness.c,$(places_src)) extensions/patchy/c/patch.c extensions/patchy/c/patch_harness.c
-patch = extensions/patchy/c/patch-harness
-patch_suite = patch
-patch_tests = $(wildcard extensions/patchy/typescript/patch_harness_test.ts)
-LIBS += patch
-# unread (core/unread): an entry's writes change in place what its own earlier writes copied, until it is read
-unread_src = $(harness_src) conformance/c/protocol_harness.c core/unread/c/unread.c core/unread/c/unread_harness.c core/node/c/node.c core/changeable/c/apply.c core/changeable/c/invert.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
-unread = core/unread/c/unread-harness
-unread_flags = -DCONFORMANCE_HOOK
-unread_suite = unread
-unread_tests = $(wildcard core/unread/typescript/unread_harness_test.ts)
-LIBS += unread
-# ermine (ermine/system): the process api and createErmine, over core's scheduler, table, places, guard, protect and status, ermine's processes (rows, start, scopes), runs and sites. five files (ermine.h says each's job), the last the line protocol; no places or world harness
-system_src = $(filter-out core/places/c/places_harness.c core/places/c/world_harness.c,$(places_src)) core/places/c/guard.c core/protect/c/protect.c ermine/processes/c/processes.c ermine/processes/c/scopes.c ermine/processes/c/start.c ermine/processes/c/runs.c ermine/sites/c/sites.c extensions/patchy/c/patch.c ermine/system/c/nodes.c ermine/system/c/computers.c ermine/system/c/actions.c ermine/system/c/host.c ermine/system/c/ermine_harness.c
-system = ermine/system/c/ermine-harness
+# crow (crow): a root's writes change in place what its own earlier writes copied, until someone else has the value
+crow_src = $(harness_src) conformance/c/protocol_harness.c crow/c/crow.c places/c/crowify.c crow/c/crow_harness.c graph/c/node.c changeable/c/apply.c changeable/c/invert.c reactivity/c/scheduler.c reactivity/c/order.c reactivity/c/rank.c reactivity/c/causes.c changeable/c/ptrmap.c reactivity/c/tracker.c
+crow = crow/c/crow-harness
+crow_suite = crow
+crow_tests = $(wildcard crow/typescript/crow_harness_test.ts)
+LIBS += crow
+# ermine (system): the process api and createErmine, over core's scheduler, table, places, guard, protect and status, ermine's processes (rows, start, scopes), and runs. five files (ermine.h says each's job), the last the line protocol; no places or world harness
+system_src = $(filter-out places/c/places_harness.c places/c/world_harness.c,$(places_src)) processes/c/guard.c processes/c/status.c protect/c/protect.c processes/c/processes.c processes/c/scopes.c processes/c/start.c processes/c/runs.c system/c/nodes.c system/c/computers.c system/c/actions.c system/c/host.c system/c/ermine_harness.c
+system = system/c/ermine-harness
 system_suite = ermine
 LIBS += system
-# boxes (extensions/boxes): another namespace over the same store. the ermine harness (ermine_harness.c, whose hooks the constructor in
-# boxes_harness.c fills) with boxes' ops beside, and the library
-boxes_src = $(system_src) extensions/boxes/c/boxes.c extensions/boxes/c/boxes_harness.c
-boxes = extensions/boxes/c/boxes-harness
-boxes_suite = boxes
-LIBS += boxes
-# sites (ermine/sites): where a scope, computer or effect was made, noted by a macro on the create call; the scheduler alone under it
-sites_src = $(harness_src) core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c ermine/sites/c/sites.c ermine/sites/c/sites_harness.c
-sites = ermine/sites/c/sites-harness
-sites_suite = sites
-sites_tests = $(wildcard ermine/sites/typescript/sites_harness_test.ts)
-sites-test_src = core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c ermine/sites/c/sites.c ermine/sites/c/sites_test.c
-sites-test = ermine/sites/c/sites-test
-LIBS += sites sites-test
-# ids (ermine/ids): ermine ids, their text and tree ids, on ermine/encoding's BLAKE3
-ids_src = $(harness_src) ermine/ids/c/ids.c ermine/ids/c/ids_harness.c $(blake3_src)
-ids = ermine/ids/c/ids-harness
+# ids (ids): ermine ids, their text and tree ids, on encoding's BLAKE3
+ids_src = $(harness_src) ids/c/ids.c ids/c/ids_harness.c $(blake3_src)
+ids = ids/c/ids-harness
 ids_suite = ids
 LIBS += ids
-# the scheduler's frees (core/scheduler/c/free_test.c): what holds a scope, and when it goes; no suite
-scheduler-free-test_src = core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c core/scheduler/c/free_test.c
-scheduler-free-test = core/scheduler/c/free-test
+# the scheduler's frees (reactivity/c/free_test.c): what holds a scope, and when it goes; no suite
+scheduler-free-test_src = changeable/c/value.c changeable/c/frame.c reactivity/c/scheduler.c reactivity/c/order.c reactivity/c/rank.c reactivity/c/causes.c changeable/c/ptrmap.c reactivity/c/tracker.c reactivity/c/free_test.c
+scheduler-free-test = reactivity/c/free-test
 LIBS += scheduler-free-test
-# what comes out for sc_escaped, two before it is read (core/scheduler/c/escaped_test.c): the first; no suite
-scheduler-escaped-test_src = core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c core/scheduler/c/escaped_test.c
-scheduler-escaped-test = core/scheduler/c/escaped-test
+# what comes out for sc_escaped, two before it is read (reactivity/c/escaped_test.c): the first; no suite
+scheduler-escaped-test_src = changeable/c/value.c changeable/c/frame.c reactivity/c/scheduler.c reactivity/c/order.c reactivity/c/rank.c reactivity/c/causes.c changeable/c/ptrmap.c reactivity/c/tracker.c reactivity/c/escaped_test.c
+scheduler-escaped-test = reactivity/c/escaped-test
 LIBS += scheduler-escaped-test
-# clingy (core/clingy): keys known tracked or not, told when their last tracker goes; no suite
-clingy-test_src = core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c core/clingy/c/clingy.c core/clingy/c/clingy_test.c
-clingy-test = core/clingy/c/clingy-test
-LIBS += clingy-test
-# places (core/places): a watch that writes, the watches after it told what landed first; no suite
-places-test_src = $(filter-out conformance/c/harness.c core/changeable/c/json.c conformance/c/protocol_harness.c core/places/c/places_harness.c core/places/c/world_harness.c,$(places_src)) core/places/c/places_test.c
-places-test = core/places/c/places-test
+# places (places): a watch that writes, the watches after it told what landed first; no suite
+places-test_src = $(filter-out conformance/c/harness.c changeable/c/json.c conformance/c/protocol_harness.c places/c/places_harness.c places/c/world_harness.c,$(places_src)) places/c/places_test.c
+places-test = places/c/places-test
 LIBS += places-test
-# types (ermine/types): which name of a folder claims an extension first; no suite
-types-test_src = $(filter-out conformance/c/harness.c core/changeable/c/json.c conformance/c/protocol_harness.c core/places/c/places_harness.c core/places/c/world_harness.c,$(places_src)) ermine/encoding/c/json.c ermine/encoding/c/cbor.c ermine/types/c/types.c ermine/types/c/utis.c ermine/types/c/types_test.c
-types-test = ermine/types/c/types-test
-LIBS += types-test
-# programs (playground/programs): satisfy and open (programs) and start, over ermine/types, experiments/software (its processes ermine/processes' start) and
-# the compilers library and host functions; compilers (playground/compilers) on its own.
-# compilers (no boxes) keeps places' own world (world_harness.h); programs and start run on the ermine (ermine/system) and boxes (extensions/boxes),
-# their world playground/programs/c/pw.c
-compilers_base = $(filter-out core/places/c/places_harness.c,$(places_src)) ermine/processes/c/processes.c playground/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c playground/encoding/c/hash.c $(blake3_src)
-programs_base = $(filter-out ermine/system/c/ermine_harness.c,$(system_src)) playground/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c playground/encoding/c/hash.c $(blake3_src) extensions/boxes/c/boxes.c playground/programs/c/pw.c
-programs_lib = ermine/types/c/types.c ermine/types/c/utis.c playground/programs/c/programs.c playground/programs/c/programs_json.c
-# software's own files (experiments/software): start runs its processes on it
-
-programs_src = $(programs_base) $(programs_lib) $(upsert_src) playground/programs/c/programs_harness.c
-programs = playground/programs/c/programs-harness
-programs_suite = programs
-programs_tests = $(wildcard playground/programs/typescript/programs_harness_test.ts)
-compilers_src = $(compilers_base) $(upsert_src) playground/compilers/c/compilers.c playground/compilers/c/compilers_harness.c
-compilers = playground/compilers/c/compilers-harness
-compilers_suite = compilers
-programs-start_src = $(programs_base) $(programs_lib) $(upsert_src) playground/compilers/c/compilers.c $(software_lib) playground/programs/c/start.c playground/programs/c/start_harness.c playground/programs/c/dlopen.c
-programs-start = playground/programs/c/start-harness
-programs-start_suite = start
-programs-start_flags = -DPG_FIXTURES='"$(CURDIR)/playground/programs/c/fixtures/"'
-LIBS += programs compilers programs-start
-# native fixtures (playground/programs/c/fixtures): libraries for this machine (native.h) the start harnesses
-# load through the dlopen runner (conformance/native); built here with the harness, never checked in.
-# unsigned.so: runner.c with no ad hoc signature (macOS), for the runner to sign
-native_fixtures = playground/programs/c/fixtures/reverse.so playground/programs/c/fixtures/runner.so playground/programs/c/fixtures/unsigned.so
-native_darwin = $(filter Darwin,$(shell uname -s))
-native_shared = $(if $(native_darwin),-dynamiclib,-shared -fPIC)
-playground/programs/c/fixtures/%.so: playground/programs/c/fixtures/%.c playground/programs/c/native.h
-	$(CC) $(CFLAGS) $(native_shared) -o $@ $<
-playground/programs/c/fixtures/unsigned.so: playground/programs/c/fixtures/runner.c playground/programs/c/native.h
-	$(CC) $(CFLAGS) $(native_shared) $(if $(native_darwin),-Wl$(comma)-no_adhoc_codesign) -o $@ $<
-comma = ,
-$(programs-start) $(programs-start)-check: $(native_fixtures)
-clean: clean-native
-clean-native:
-	rm -f $(native_fixtures)
-# runs (ermine/processes): each computer's latest run, on a table of its own; places' harness's world, programs and requests, and the runs'
-runs_src = $(places_src) core/places/c/guard.c core/protect/c/protect.c ermine/processes/c/runs.c ermine/processes/c/runs_harness.c
-runs = ermine/processes/c/runs-harness
-runs_flags = -DPH_LIB
+# runs (processes): each computer's latest run, on a table of its own; places' harness's world, programs and requests, and the runs'
+runs_src = $(places_src) processes/c/guard.c processes/c/status.c processes/c/status_harness.c protect/c/protect.c processes/c/runs.c processes/c/runs_harness.c
+runs = processes/c/runs-harness
+runs_flags = -DPH_LIB -DSH_LIB
 runs_suite = runs
-runs_tests = $(wildcard ermine/processes/typescript/runs_harness_test.ts)
+runs_tests = $(wildcard processes/typescript/runs_harness_test.ts)
 LIBS += runs
-# pully (extensions/pully): the C is still the library pully was before it became a feature
-# (pul_); its rules are c/library-suite/, which the runner doesn't find. not ported yet: out of
-# LIBS, so make and test-c skip it. make extensions/pully/c/pullynode-harness builds it alone
-pullynode_src = $(places_src) extensions/pully/c/pullynode.c extensions/pully/c/pullynode_harness.c
-pullynode = extensions/pully/c/pullynode-harness
-pullynode_flags = -DPH_LIB
-# installs (playground/installs): who an install is, over a store and a key handed in; the harness's key is the repo's Ed25519
-installs_src = $(harness_src) ermine/ids/c/ids.c $(blake3_src) playground/installs/c/installs.c playground/installs/c/installs_harness.c core/ed25519/c/ed25519.c core/ed25519/c/sha2.c
-installs = playground/installs/c/installs-harness
-installs_suite = installs
-LIBS += installs
-# sessions (playground/sessions): the "online" part, a session's entry at a node; places' harness's world, without its harnesses
-sessions_src = $(filter-out core/places/c/places_harness.c core/places/c/world_harness.c,$(places_src)) ermine/ids/c/ids.c $(blake3_src) playground/sessions/c/sessions.c playground/sessions/c/sessions_harness.c $(upsert_src) core/ed25519/c/ed25519.c core/ed25519/c/sha2.c
-sessions = playground/sessions/c/sessions-harness
-sessions_suite = sessions
-LIBS += sessions
-# trust (playground/trust): whether to believe what a session signed; sessions' world, and its Ed25519 the repo's
-trust_src = $(filter-out playground/sessions/c/sessions_harness.c,$(sessions_src)) playground/trust/c/trust.c playground/trust/c/trust_harness.c
-trust = playground/trust/c/trust-harness
-trust_suite = trust
-LIBS += trust
-# software (experiments/software): run a program through a loader, on the ermine (ermine/system). its harness runs the suite;
+# status (processes): a computer's status on its own node; the places harness's world and programs (PH_LIB), and status's requests
+status_src = $(places_src) processes/c/status.c processes/c/status_harness.c
+status = processes/c/status-harness
+status_flags = -DPH_LIB
+status_suite = status
+LIBS += status
+# software (experiments/software): run a program through a loader, on the ermine (system). its harness runs the suite;
 # ermine-run is the terminal program: make experiments/software/c/ermine-run, and hello.so beside it
 software_lib = experiments/software/c/software.c
-software_src = $(filter-out ermine/system/c/ermine_harness.c,$(system_src)) $(software_lib) experiments/software/c/software_harness.c
+software_src = $(filter-out system/c/ermine_harness.c,$(system_src)) $(software_lib) experiments/software/c/software_harness.c
 software = experiments/software/c/software-harness
 software_suite = software
 LIBS += software
-ermine-run_src = $(filter-out ermine/system/c/ermine_harness.c conformance/c/harness.c conformance/c/protocol_harness.c,$(system_src)) $(software_lib) experiments/software/c/ermine-run.c
+ermine-run_src = $(filter-out system/c/ermine_harness.c conformance/c/harness.c conformance/c/protocol_harness.c,$(system_src)) $(software_lib) experiments/software/c/ermine-run.c
 ermine-run = experiments/software/c/ermine-run
 ermine-run_flags = -rdynamic
 $(ermine-run) $(ermine-run)-check: $(wildcard */*/c/*.h)
 experiments/software/c/hello.so: experiments/software/c/hello.c experiments/software/c/software.h
 	$(CC) $(CFLAGS) -shared -fPIC $(if $(filter Darwin,$(shell uname -s)),-undefined dynamic_lookup,) -o $@ experiments/software/c/hello.c
-# sync's pieces for the new commit shape (playground/encoding commit, playground/together): their own loop (lines_harness.c is conformance/c/harness.c
-# reading a symbol as a string no one can carry), against the suites in playground/encoding/conformance and playground/together/conformance.
-# commit_form_harness.c (a commit's forms on the line) and commits_harness.c (the commits a harness makes by label) are the harnesses', never
-# the libraries'
-together_harness_src = playground/encoding/c/lines_harness.c core/changeable/c/value.c core/changeable/c/json.c playground/encoding/c/commit_form_harness.c
-together_commits_src = playground/together/c/commits_harness.c
-together_commit_src = playground/encoding/c/commit.c playground/encoding/c/pack.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c $(blake3_src) core/node/c/node.c core/changeable/c/apply.c core/changeable/c/invert.c
-together-commit_src = $(together_harness_src) playground/encoding/c/commit_harness.c $(together_commit_src)
-together-commit = playground/encoding/c/commit-harness
-together-commit_suite = commit
-LIBS += together-commit
-together-seal_src = $(together_harness_src) playground/together/c/seal_harness.c playground/together/c/seal.c core/ed25519/c/ed25519.c core/ed25519/c/sha2.c $(together_commit_src)
-together-seal = playground/together/c/seal-harness
-together-seal_suite = seal
-LIBS += together-seal
-together_signed_src = playground/together/c/seal.c core/ed25519/c/ed25519.c core/ed25519/c/sha2.c $(together_commit_src)
-together-packer_src = $(together_harness_src) $(together_commits_src) playground/together/c/packer_harness.c playground/together/c/packer.c $(together_signed_src)
-together-packer = playground/together/c/packer-harness
-together-packer_suite = packer
-LIBS += together-packer
-# history, replay and snapshot: one harness, three suites (replay's and snapshot's suite.json name history's). The merge
-# rules it knows: rules_harness.c's (a rule for testing); playground/egwalker links its own (egwalker-history)
-together_history_src = $(together_harness_src) $(together_commits_src) conformance/c/protocol_harness.c playground/together/c/history_harness.c playground/together/c/history.c playground/together/c/replay.c playground/together/c/lists.c playground/together/c/ids.c playground/together/c/snapshot.c $(together_signed_src)
-together-history_src = $(together_history_src) playground/together/c/rules_harness.c
-together-history = playground/together/c/history-harness
-together-history_suite = history replay snapshot lists
-LIBS += together-history
-# the subduction stack's fragments (stacks/subduction/c/fragment.c), and their fuzz against Subduction's own code (the oracle,
-# playground/together/conformance/fragment_oracle/)
-together-fragment_src = playground/together/stacks/subduction/c/fragment.c playground/together/c/fragment_harness.c ermine/encoding/c/json.c
-together-fragment = playground/together/c/fragment-harness
-together-fragment_suite = fragment
-together-fragment_tests = playground/together/conformance/fragment_fuzz_test.ts
-LIBS += together-fragment
-# the transport (devices over Subduction for C) and the integration with the table: Subduction's BLAKE3 and ermine/encoding's
-# are both linked, the C ones renamed (subduction_rename). Fragments are the subduction stack's, as in the TypeScript
-# (the mailroom names its documents by ermine ids: ermine/ids/c/ids.c)
-together_transport_src = playground/together/c/transport.c playground/together/c/mailroom.c playground/together/stacks/subduction/c/subduction.c playground/together/c/ids.c ermine/ids/c/ids.c playground/together/c/history.c playground/together/c/replay.c playground/together/c/lists.c playground/together/c/snapshot.c \
-	playground/together/c/packer.c playground/together/stacks/subduction/c/fragment.c playground/together/stacks/subduction/c/subduction/platform_posix.c $(together_signed_src)
-together-transport_src = $(together_harness_src) $(together_commits_src) conformance/c/protocol_harness.c playground/together/c/transport_harness.c playground/together/c/wires_harness.c \
-	playground/together/stacks/subduction/c/subduction/store_memory.c $(together_transport_src) $(subduction_lib)
-together-transport = playground/together/c/transport-harness
-together-transport_suite = transport
-together-transport_flags = $(subduction_rename) -DCONFORMANCE_HOOK
-together-transport_libs = $(transport_libs)
-LIBS += together-transport
-# the lock's suite: transport's devices and harness, built as a library (-DTRANSPORT_LIBRARY: its loop is tph_*), under
-# lock_harness.c's loop with the test lock
-together-lock_src = $(together-transport_src) playground/together/c/lock_harness.c
-together-lock = playground/together/c/lock-harness
-together-lock_suite = lock
-together-lock_flags = $(subduction_rename) -DCONFORMANCE_HOOK -DTRANSPORT_LIBRARY
-together-lock_libs = $(transport_libs)
-LIBS += together-lock
-together_sync_src = $(together_harness_src) $(together_commits_src) conformance/c/protocol_harness.c playground/together/c/sync_harness.c playground/together/c/sync.c playground/together/c/wires_harness.c \
-	playground/together/stacks/subduction/c/subduction/store_memory.c core/table/c/table.c core/changeable/c/update.c $(together_transport_src) $(subduction_lib)
-together-sync_src = $(together_sync_src) playground/together/c/rules_harness.c
-together-sync = playground/together/c/sync-harness
-together-sync_suite = sync
-together-sync_flags = $(subduction_rename) -DCONFORMANCE_HOOK
-together-sync_libs = $(transport_libs)
-LIBS += together-sync
-# the presence channel over a device's ephemeral messages: two devices on a pipe, as channel_test.ts tries it; no suite
-together-channel-test_src = playground/together/c/channel_test.c playground/together/c/channel.c playground/together/c/wires_harness.c core/changeable/c/value.c \
-	playground/together/stacks/subduction/c/subduction/store_memory.c $(together_transport_src) $(subduction_lib)
-together-channel-test = playground/together/c/channel-test
-together-channel-test_flags = $(subduction_rename)
-together-channel-test_libs = $(transport_libs)
-LIBS += together-channel-test
-# playground/egwalker: the merge rule eg-walker, on together's history and sync harnesses with its own rules_harness.c
-# (eg-walker) in place of together's; their suites egwalker and egwalker-sync (playground/egwalker/README.md)
-egwalker-history_src = $(together_history_src) playground/egwalker/c/egwalker.c playground/egwalker/c/rules_harness.c
-egwalker-history = playground/egwalker/c/history-harness
-egwalker-history_suite = egwalker
-LIBS += egwalker-history
-egwalker-sync_src = $(together_sync_src) playground/egwalker/c/egwalker.c playground/egwalker/c/rules_harness.c
-egwalker-sync = playground/egwalker/c/sync-harness
-egwalker-sync_suite = egwalker-sync
-egwalker-sync_flags = $(subduction_rename)
-egwalker-sync_libs = $(transport_libs)
-LIBS += egwalker-sync
-# two hosts typing into one text, merging by eg-walker (merge_bench.ts in C): merge-bench [keys] [pure]; no suite
-egwalker-merge-bench_src = playground/egwalker/c/merge_bench.c playground/together/c/sync.c playground/egwalker/c/egwalker.c playground/together/c/wires_harness.c \
-	core/changeable/c/value.c core/changeable/c/json.c playground/together/stacks/subduction/c/subduction/store_memory.c core/table/c/table.c core/changeable/c/update.c \
-	$(together_transport_src) $(subduction_lib)
-egwalker-merge-bench = playground/egwalker/c/merge-bench
-egwalker-merge-bench_flags = $(subduction_rename)
-egwalker-merge-bench_libs = $(transport_libs)
-LIBS += egwalker-merge-bench
-# JSON text (ermine/encoding/c/json_text.c): only what reads or writes it, the harnesses and the files store; program
-# has it through store
-json_text_src = ermine/encoding/c/json_text.c
-$(foreach l,cbor hash pack together-fragment together-packer names diag layout manifest store,$(eval $(l)_src += $(json_text_src)))
+# JSON text (encoding/c/json_text.c): only what reads or writes it, the harnesses
+json_text_src = encoding/c/json_text.c
+$(foreach l,cbor,$(eval $(l)_src += $(json_text_src)))
 HARNESSES = $(foreach l,$(LIBS),$($(l)))
 CHECKS = $(addsuffix -check,$(HARNESSES))
 
@@ -359,13 +141,11 @@ $($(1))-check: $($(1)_src)
 	$$(CC) $$(CHECKFLAGS) $$(BLAKE3FLAGS) $$($(1)_flags) -Isync/c -o $$@ $$(filter %.c,$$^) $$($(1)_libs) -lm
 endef
 $(foreach l,$(LIBS),$(eval $(call harness,$(l))))
-# pully's C, not in LIBS (its section above): a rule to build it alone
-$(eval $(call harness,pullynode))
 # software's terminal program (its section above)
 $(eval $(call harness,ermine-run))
-# start's stop (ermine/processes/c/start_test.c): what its scope's teardown threw is given back. make test-start-processes, test-check-start-processes (the sanitizers)
-processes-start_src = $(filter-out core/places/c/places_harness.c conformance/c/harness.c conformance/c/protocol_harness.c core/places/c/world_harness.c,$(places_src)) ermine/processes/c/processes.c ermine/processes/c/scopes.c ermine/processes/c/start.c ermine/processes/c/runs.c ermine/sites/c/sites.c ermine/processes/c/start_test.c
-processes-start = ermine/processes/c/start-test
+# start's stop (processes/c/start_test.c): what its scope's teardown threw is given back. make test-start-processes, test-check-start-processes (the sanitizers)
+processes-start_src = $(filter-out places/c/places_harness.c conformance/c/harness.c conformance/c/protocol_harness.c places/c/world_harness.c,$(places_src)) processes/c/processes.c processes/c/scopes.c processes/c/start.c processes/c/runs.c processes/c/start_test.c processes/c/status.c
+processes-start = processes/c/start-test
 $(eval $(call harness,processes-start))
 $(processes-start): $(wildcard */*/c/*.h)
 test-start-processes: $(processes-start)
@@ -374,10 +154,10 @@ test-start-processes: $(processes-start)
 test-check-start-processes: $(processes-start)-check
 	@echo "== processes (start, sanitizers)"
 	@$(processes-start)-check
-# promises (ermine/system/c/promise_test.c): a then on a settled promise, its callback letting go
+# promises (system/c/promise_test.c): a then on a settled promise, its callback letting go
 # of the maker's hold. make test-promise-system, test-check-promise-system (the sanitizers)
-system-promise_src = $(filter-out conformance/c/harness.c conformance/c/protocol_harness.c ermine/system/c/ermine_harness.c,$(system_src)) ermine/system/c/promise_test.c
-system-promise = ermine/system/c/promise-test
+system-promise_src = $(filter-out conformance/c/harness.c conformance/c/protocol_harness.c system/c/ermine_harness.c,$(system_src)) system/c/promise_test.c
+system-promise = system/c/promise-test
 $(eval $(call harness,system-promise))
 $(system-promise): $(wildcard */*/c/*.h)
 test-promise-system: $(system-promise)
@@ -387,9 +167,9 @@ test-check-promise-system: $(system-promise)-check
 	@echo "== system (promise, sanitizers)"
 	@$(system-promise)-check
 
-# refused starts (ermine/system/c/refuse_test.c): the scope a refused start made is freed. make test-refuse-system, test-check-refuse-system (the sanitizers)
-system-refuse_src = $(filter-out conformance/c/harness.c conformance/c/protocol_harness.c ermine/system/c/ermine_harness.c,$(system_src)) ermine/system/c/refuse_test.c
-system-refuse = ermine/system/c/refuse-test
+# refused starts (system/c/refuse_test.c): the scope a refused start made is freed. make test-refuse-system, test-check-refuse-system (the sanitizers)
+system-refuse_src = $(filter-out conformance/c/harness.c conformance/c/protocol_harness.c system/c/ermine_harness.c,$(system_src)) system/c/refuse_test.c
+system-refuse = system/c/refuse-test
 $(eval $(call harness,system-refuse))
 $(system-refuse): $(wildcard */*/c/*.h)
 test-refuse-system: $(system-refuse)
@@ -398,11 +178,11 @@ test-refuse-system: $(system-refuse)
 test-check-refuse-system: $(system-refuse)-check
 	@echo "== system (refuse, sanitizers)"
 	@$(system-refuse)-check
-# what a review found that the harness cannot show (ermine/system/c/review_test.c): a wait made as its
+# what a review found that the harness cannot show (system/c/review_test.c): a wait made as its
 # scope goes, a hook calling next twice, a handler failing with no text.
 # make test-review-system, test-check-review-system (the sanitizers)
-system-review_src = $(filter-out conformance/c/harness.c conformance/c/protocol_harness.c ermine/system/c/ermine_harness.c,$(system_src)) ermine/system/c/review_test.c
-system-review = ermine/system/c/review-test
+system-review_src = $(filter-out conformance/c/harness.c conformance/c/protocol_harness.c system/c/ermine_harness.c,$(system_src)) system/c/review_test.c
+system-review = system/c/review-test
 $(eval $(call harness,system-review))
 $(system-review): $(wildcard */*/c/*.h)
 test-review-system: $(system-review)
@@ -412,10 +192,10 @@ test-check-review-system: $(system-review)-check
 	@echo "== system (review, sanitizers)"
 	@$(system-review)-check
 
-# what a review of marks proved (ermine/system/c/marks_test.c): writers and started children used after
+# what a review of marks proved (system/c/marks_test.c): writers and started children used after
 # they were freed, and who may stop or ask a child. make test-marks-system, test-check-marks-system (the sanitizers)
-system-marks_src = $(filter-out conformance/c/harness.c conformance/c/protocol_harness.c ermine/system/c/ermine_harness.c,$(system_src)) ermine/system/c/marks_test.c
-system-marks = ermine/system/c/marks-test
+system-marks_src = $(filter-out conformance/c/harness.c conformance/c/protocol_harness.c system/c/ermine_harness.c,$(system_src)) system/c/marks_test.c
+system-marks = system/c/marks-test
 $(eval $(call harness,system-marks))
 $(system-marks): $(wildcard */*/c/*.h)
 test-marks-system: $(system-marks)
@@ -425,24 +205,11 @@ test-check-marks-system: $(system-marks)-check
 	@echo "== system (marks, sanitizers)"
 	@$(system-marks)-check
 
-# what a review of boxes proved (extensions/boxes/c/boxes_test.c): the box keeps no pointer the caller may free.
-# make test-boxes-marks, test-check-boxes-marks (the sanitizers)
-boxes-test_src = $(filter-out conformance/c/harness.c conformance/c/protocol_harness.c ermine/system/c/ermine_harness.c,$(system_src)) extensions/boxes/c/boxes_test.c
-boxes-test = extensions/boxes/c/boxes-test
-$(eval $(call harness,boxes-test))
-$(boxes-test): $(wildcard */*/c/*.h)
-test-boxes-marks: $(boxes-test)
-	@echo "== boxes"
-	@$(boxes-test)
-test-check-boxes-marks: $(boxes-test)-check
-	@echo "== boxes (sanitizers)"
-	@$(boxes-test)-check
-
-# steady use (ermine/system/c/steady_test.c): each thing a program does, again and again, held
+# steady use (system/c/steady_test.c): each thing a program does, again and again, held
 # memory levelling off (leaks sees only what is lost at close). not in LIBS: its counts are the
 # allocator's, no sanitizer's. make test-steady-system
-system-steady_src = $(filter-out conformance/c/harness.c conformance/c/protocol_harness.c ermine/system/c/ermine_harness.c,$(system_src)) ermine/system/c/steady_test.c
-system-steady = ermine/system/c/steady-test
+system-steady_src = $(filter-out conformance/c/harness.c conformance/c/protocol_harness.c system/c/ermine_harness.c,$(system_src)) system/c/steady_test.c
+system-steady = system/c/steady-test
 $(eval $(call harness,system-steady))
 $(system-steady): $(wildcard */*/c/*.h)
 test-steady-system: $(system-steady)
@@ -450,7 +217,7 @@ test-steady-system: $(system-steady)
 	@$(system-steady)
 
 # headers: any change rebuilds what includes them
-$(HARNESSES) $(CHECKS): $(wildcard */*/c/*.h */*/stacks/*/c/*.h conformance/c/*.h playground/libraries/*/c/*.h)
+$(HARNESSES) $(CHECKS): $(wildcard */*/c/*.h */*/stacks/*/c/*.h conformance/c/*.h)
 
 # a suite on the one runner (conformance/run.ts): its scenarios (<package>/conformance/<suite>/), and
 # the package's tests of its harness (<package>/typescript/<suite>_harness_test.ts), both asked of
@@ -459,122 +226,75 @@ define conformance
 HARNESS="$(2)" $(DENO) $($(1)_deno) conformance/run.ts $($(1)_tests) -- $($(1)_suite)
 endef
 tracker_suite = tracker
-tracker_tests = $(wildcard core/scheduler/typescript/tracker_harness_test.ts)
+tracker_tests = $(wildcard reactivity/typescript/tracker_harness_test.ts)
 table_suite = table
-table_tests = $(wildcard core/table/typescript/table_harness_test.ts)
+table_tests = $(wildcard graph/typescript/table_harness_test.ts)
 node_suite = node
-node_tests = $(wildcard core/node/typescript/node_harness_test.ts)
+node_tests = $(wildcard graph/typescript/node_harness_test.ts)
 update_suite = update
-update_tests = $(wildcard core/changeable/typescript/update_harness_test.ts)
+update_tests = $(wildcard changeable/typescript/update_harness_test.ts)
 squish_suite = squish
-squish_tests = $(wildcard core/changeable/typescript/squish_harness_test.ts)
+squish_tests = $(wildcard changeable/typescript/squish_harness_test.ts)
 changeable-apply_suite = apply
-changeable-apply_tests = $(wildcard core/changeable/typescript/apply_harness_test.ts)
+changeable-apply_tests = $(wildcard changeable/typescript/apply_harness_test.ts)
 changeable-invert_suite = invert
-changeable-invert_tests = $(wildcard core/changeable/typescript/invert_harness_test.ts)
+changeable-invert_tests = $(wildcard changeable/typescript/invert_harness_test.ts)
 paths_suite = paths
-paths_tests = $(wildcard core/scheduler/typescript/paths_harness_test.ts)
+paths_tests = $(wildcard reactivity/typescript/paths_harness_test.ts)
 scheduler_suite = scheduler
-scheduler_tests = $(wildcard core/scheduler/typescript/scheduler_harness_test.ts)
+scheduler_tests = $(wildcard reactivity/typescript/scheduler_harness_test.ts)
 places_suite = places
-places_tests = $(wildcard core/places/typescript/places_harness_test.ts)
+places_tests = $(wildcard places/typescript/places_harness_test.ts)
 processes_suite = processes
-processes_tests = $(wildcard ermine/processes/typescript/processes_harness_test.ts)
+processes_tests = $(wildcard processes/typescript/processes_harness_test.ts)
 protect_suite = protect
-protect_tests = $(wildcard core/protect/typescript/protect_harness_test.ts)
+protect_tests = $(wildcard protect/typescript/protect_harness_test.ts)
 guard_suite = guard
-guard_tests = $(wildcard core/places/typescript/guard_harness_test.ts)
+guard_tests = $(wildcard processes/typescript/guard_harness_test.ts)
 # the rest: env var, then the folders of their scenarios (conformance/<lib>/)
-pack_test = PACK_HARNESS conformance/pack/ conformance/cbor/
-# the files program's suites (playground/tools/files/conformance); the manifest's, the store's and the program's harnesses
-# work in temp folders of their own, the store's and the program's on real folders with extended attributes (macOS)
-names_suite = names
-diag_suite = diag
-layout_suite = layout
-manifest_suite = manifest
-store_suite = store
-program_suite = program
 
 # per library: test-c-<lib> against its harness, test-check-<lib> against its harness-check,
 # test-leaks-<lib> its harness under leaks
 define run
 test-c-$(1): $($(1))
 	@echo "== $(1)"
-	@$(if $($(1)_suite),$$(call conformance,$(1),$(CURDIR)/$($(1))),$(if $($(1)_test),$(skips) $(firstword $($(1)_test))="$(CURDIR)/$($(1))" $(DENO) $($(1)_deno) $(wordlist 2,9,$($(1)_test)),$($(1)) $(CURDIR)/ermine/encoding/conformance/cbor/vectors.json))
+	@$(if $($(1)_suite),$$(call conformance,$(1),$(CURDIR)/$($(1))),$(if $($(1)_test),$(skips) $(firstword $($(1)_test))="$(CURDIR)/$($(1))" $(DENO) $($(1)_deno) $(wordlist 2,9,$($(1)_test)),$($(1)) $(CURDIR)/encoding/conformance/cbor/vectors.json))
 test-check-$(1): $($(1))-check
 	@echo "== $(1) (sanitizers)"
-	@$(if $($(1)_suite),$$(call conformance,$(1),$(CURDIR)/$($(1))-check),$(if $($(1)_test),$(skips) $(firstword $($(1)_test))="$(CURDIR)/$($(1))-check" $(DENO) $($(1)_deno) $(wordlist 2,9,$($(1)_test)),$($(1))-check $(CURDIR)/ermine/encoding/conformance/cbor/vectors.json))
+	@$(if $($(1)_suite),$$(call conformance,$(1),$(CURDIR)/$($(1))-check),$(if $($(1)_test),$(skips) $(firstword $($(1)_test))="$(CURDIR)/$($(1))-check" $(DENO) $($(1)_deno) $(wordlist 2,9,$($(1)_test)),$($(1))-check $(CURDIR)/encoding/conformance/cbor/vectors.json))
 test-leaks-$(1): $($(1))
 	@echo "== $(1) (leaks)"
-	@log=$$$$(mktemp); $(if $($(1)_suite),LEAKS_LOG=$$$$log $$(call conformance,$(1),sh $(CURDIR)/conformance/leaks.sh $(CURDIR)/$($(1))),$(if $($(1)_test),LEAKS_LOG=$$$$log $(skips) $(firstword $($(1)_test))="sh $(CURDIR)/conformance/leaks.sh $(CURDIR)/$($(1))" $(DENO) $($(1)_deno) $(wordlist 2,9,$($(1)_test)),LEAKS_LOG=$$$$log sh $(CURDIR)/conformance/leaks.sh $(CURDIR)/$($(1)) $(CURDIR)/ermine/encoding/conformance/cbor/vectors.json)); \
+	@log=$$$$(mktemp); $(if $($(1)_suite),LEAKS_LOG=$$$$log $$(call conformance,$(1),sh $(CURDIR)/conformance/leaks.sh $(CURDIR)/$($(1))),$(if $($(1)_test),LEAKS_LOG=$$$$log $(skips) $(firstword $($(1)_test))="sh $(CURDIR)/conformance/leaks.sh $(CURDIR)/$($(1))" $(DENO) $($(1)_deno) $(wordlist 2,9,$($(1)_test)),LEAKS_LOG=$$$$log sh $(CURDIR)/conformance/leaks.sh $(CURDIR)/$($(1)) $(CURDIR)/encoding/conformance/cbor/vectors.json)); \
 	if [ -s $$$$log ]; then cat $$$$log; rm -f $$$$log; echo "== $(1): leaked"; exit 1; fi; rm -f $$$$log
 endef
 $(foreach l,$(LIBS),$(eval $(call run,$(l))))
 # invert's suite alone, on changeable-apply's harness (the same protocol)
 changeable-invert = $(changeable-apply)
 $(eval $(call run,changeable-invert))
-# open's suite alone, on programs' harness (the same protocol)
-programs-open = $(programs)
-programs-open_suite = open
-$(eval $(call run,programs-open))
-# types' suite (a node's type by its name) alone, on programs' harness
-programs-types = $(programs)
-programs-types_suite = types
-$(eval $(call run,programs-types))
-# native's suite alone, on start's harness (the same protocol, and the dlopen runner)
-programs-native = $(programs-start)
-programs-native_suite = native
-$(eval $(call run,programs-native))
 
 test:
 	$(DENO)
 	deno task conformance
 
 TESTED = $(LIBS) changeable-invert
-TESTED += programs-open
-TESTED += programs-types
-TESTED += programs-native
 test-c: $(addprefix test-c-,$(TESTED))
 test-check: $(addprefix test-check-,$(TESTED))
 # the harnesses under macOS's leaks (conformance/leaks.sh): the sanitizers find no leaks there
 test-leaks: $(addprefix test-leaks-,$(TESTED))
 
 # benches, -O2, not part of all
-BENCHES = playground/encoding/c/pack-bench core/scheduler/c/paths-bench core/changeable/c/squish-bench core/changeable/c/apply-bench extensions/patchy/c/patch-bench core/unread/c/unread-bench
+BENCHES = reactivity/c/paths-bench changeable/c/squish-bench changeable/c/apply-bench crow/c/crow-bench
 bench: $(BENCHES)
-playground/encoding/c/pack-bench: core/node/c/node.c core/changeable/c/value.c core/changeable/c/apply.c core/changeable/c/invert.c playground/encoding/c/pack.c playground/encoding/c/pack_bench.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c
+reactivity/c/paths-bench: reactivity/c/paths.c changeable/c/value.c reactivity/c/paths_bench.c
 	$(CC) $(CFLAGS) -o $@ $^ -lm
-core/scheduler/c/paths-bench: core/scheduler/c/paths.c core/changeable/c/value.c core/scheduler/c/paths_bench.c
+changeable/c/squish-bench: changeable/c/squish.c changeable/c/squish_bench.c
 	$(CC) $(CFLAGS) -o $@ $^ -lm
-core/changeable/c/squish-bench: core/changeable/c/squish.c core/changeable/c/squish_bench.c
+changeable/c/apply-bench: changeable/c/apply.c changeable/c/value.c changeable/c/apply_bench.c
 	$(CC) $(CFLAGS) -o $@ $^ -lm
-core/changeable/c/apply-bench: core/changeable/c/apply.c core/changeable/c/value.c core/changeable/c/apply_bench.c
+crow/c/crow-bench: changeable/c/frame.c graph/c/node.c graph/c/update.c changeable/c/value.c changeable/c/apply.c changeable/c/invert.c crow/c/crow.c places/c/crowify.c crow/c/crow_bench.c reactivity/c/scheduler.c reactivity/c/order.c reactivity/c/rank.c reactivity/c/causes.c changeable/c/ptrmap.c reactivity/c/tracker.c
 	$(CC) $(CFLAGS) -o $@ $^ -lm
-extensions/patchy/c/patch-bench: $(filter-out core/places/c/places_harness.c core/places/c/world_harness.c core/places/c/status.c conformance/c/harness.c conformance/c/protocol_harness.c core/changeable/c/json.c,$(places_src)) extensions/patchy/c/patch.c extensions/patchy/c/patch_bench.c
-	$(CC) $(CFLAGS) -o $@ $^ -lm
-core/unread/c/unread-bench: core/node/c/node.c core/changeable/c/update.c core/changeable/c/value.c core/changeable/c/apply.c core/changeable/c/invert.c core/unread/c/unread.c core/unread/c/unread_bench.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
-	$(CC) $(CFLAGS) -o $@ $^ -lm
-
-# the files tool: a command line over the C store (playground/tools/files/c/files.c). Its synced document (host.c: the files program and
-# watcher, the scheduler, the wiring and transport, Subduction over a WebSocket) is left out until sync is rewritten for today's graph:
-# host.c is a stub that says so. No suite, not part of all; playground/tools/files/c/test/cli.sh tries it. playground/tools/files/c/files-check:
-# the same with the sanitizers
-# the files tool, and its host (host.c): the store, the files program and its watcher on the files graph, synced by
-# playground/together over Subduction (its files store, a WebSocket over OpenSSL)
-OPENSSL ?= $(shell brew --prefix openssl@3 2>/dev/null || echo /usr)
-files_src = $(sort playground/tools/files/c/files.c playground/tools/files/c/host.c playground/tools/files/c/program.c playground/tools/files/c/watch.c playground/tools/files/c/graph.c \
-	$(filter-out playground/tools/files/c/store_harness.c playground/tools/files/c/disk_harness.c,$(store_src)) $(graph_src) \
-	playground/together/c/sync.c $(together_transport_src) playground/together/stacks/subduction/c/subduction/store_files.c \
-	playground/together/stacks/subduction/c/subduction/websocket.c playground/together/stacks/subduction/c/subduction/transport_openssl.c)
-files_flags = $(subduction_rename) -I$(OPENSSL)/include
-files_libs = $(transport_libs) $(program_libs) -L$(OPENSSL)/lib -lssl -lcrypto
-playground/tools/files/c/files: $(files_src) $(wildcard */*/c/*.h */*/stacks/*/c/*.h)
-	$(CC) $(CFLAGS) $(BLAKE3FLAGS) $(files_flags) -o $@ $(filter %.c,$^) $(files_libs) -lm
-playground/tools/files/c/files-check: $(files_src) $(wildcard */*/c/*.h */*/stacks/*/c/*.h)
-	$(CC) $(CHECKFLAGS) $(BLAKE3FLAGS) $(files_flags) -o $@ $(filter %.c,$^) $(files_libs) -lm
 
 clean:
-	rm -rf playground/tools/files/c/files playground/tools/files/c/files-check playground/tools/files/c/files-check.dSYM
 	rm -rf $(HARNESSES) $(CHECKS) $(BENCHES) $(addsuffix .dSYM,$(HARNESSES) $(CHECKS))
 	rm -rf $(ermine-run) $(ermine-run)-check $(ermine-run).dSYM $(ermine-run)-check.dSYM experiments/software/c/hello.so
 	rm -rf $(system-steady) $(system-steady)-check $(system-steady).dSYM

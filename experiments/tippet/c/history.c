@@ -6,7 +6,7 @@
 #include <string.h>
 #include <time.h>
 
-#include "../../../ermine/encoding/c/cbor.h"
+#include "../../../encoding/c/cbor.h"
 #include "wire.h"
 
 // a step, as an entry's frontier holds it: device, its place in the history's devices; head: no
@@ -237,13 +237,14 @@ typedef struct {
 	op_patch *patches;
 	size_t count;
 	op_key *keys;
-	ch_entry metadata[3];
+	ch_frame *frame;
 	ch_header header;
 } block;
 
 static void block_free(void *p) {
 	block *b = p;
 	op_free(b->step), op_free(b->actor), op_free(b->device), op_free(b->whole);
+	ch_frame_free(b->frame);
 	free(b->patches), free(b->keys), free(b);
 }
 
@@ -267,7 +268,7 @@ static void target_of(const op_value *m, op_target *t, op_key **keys) {
 }
 
 // a step's bytes (one the log holds: a step) as a block. its header, as history.ts makes it:
-// time its when, actor its who or else its device, metadata {device, n, lamport}
+// time its when, actor its who or else its device, a frame of {device, n, lamport}
 static block *block_of(const uint8_t *bytes, size_t length) {
 	op_value *s = cborRead(bytes, length, &maker, NULL, NULL);
 	if (!s) return NULL;
@@ -309,11 +310,10 @@ static block *block_of(const uint8_t *bytes, size_t length) {
 	// who: the last item, when a string past the eighth (an on is an array)
 	op_value *last = s->items[s->count - 1];
 	b->actor = op_ref(s->count > 8 && last->type == OP_STR ? last : b->device);
-	b->metadata[0] = (ch_entry){"device", b->device};
-	b->metadata[1] = (ch_entry){"n", s->items[1]};
-	b->metadata[2] = (ch_entry){"lamport", s->items[6]};
+	ch_pair info[3] = {{"device", b->device}, {"n", s->items[1]}, {"lamport", s->items[6]}};
+	b->frame = ch_frame_make(info, 3, NULL);
 	b->header = (ch_header){.has_time = 1, .time = int_of(s->items[7]), .actor = b->actor,
-		.metadata = b->metadata, .metadata_length = 3};
+		.frame = b->frame};
 	return b;
 }
 

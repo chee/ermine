@@ -1,0 +1,17 @@
+{
+	"name": "@ermine/changeable",
+	"version": "0.0.0",
+	"license": "AGPL-3.0-or-later",
+	"exports": {
+		".": "./typescript/changeable.ts",
+		"./apply": "./typescript/apply.ts",
+		"./invert": "./typescript/invert.ts",
+		"./squish": "./typescript/squish.ts",
+		"./edit": "./typescript/edit.ts",
+		"./update": "./typescript/update.ts",
+		"./stacktrace": "./typescript/stacktrace.ts",
+		"./kinds": "./typescript/kinds.ts",
+		"./keyorder": "./typescript/keyorder.ts",
+		"./walk-string": "./typescript/walk-string.ts"
+	}
+}

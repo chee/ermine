@@ -34,9 +34,9 @@ import {
 	pulse,
 	read,
 } from "@ermine/system"
-import { get } from "@ermine/core/places/lib"
+import { get } from "@ermine/places/lib"
 import { type Request, serve } from "../../../conformance/typescript/harness.ts"
-import { manual } from "../../../ermine/system/typescript/manual_fixture.ts"
+import { manual } from "../../../system/typescript/manual_fixture.ts"
 import { createLoader, run, type Setup } from "./software.ts"
 
 const e = createErmine({ features: [manual] })

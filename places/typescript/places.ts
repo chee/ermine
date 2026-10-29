@@ -1,0 +1,734 @@
+// places: the filesystem made real. walks names from a root through the children table, reads
+// values, and ties them to tracked paths and the scheduler. it makes none of them; writes are plain
+// functions on a children entry, said written here with commit.
+//
+//   createTable((part, id) => places.onTableChange(part, id))
+//   scheduler.onTrackingEnd((key) => places.release(key))
+//   const places = createPlaces({ root, table, paths, scheduler, contributors: [other, children] })
+//   places.commit(place(table.get("children", id)!, name, entry, createChangeHeader(scheduler)))
+//   const inside = places.view(folder, [processes(folder), children])   // nothing above folder
+//
+// a name: any string but "", ".", ".." and "/". a read is told to the scheduler as a spot; after an
+// await it counts for nothing; outside a run it is never let go. a write marks the spots its
+// patches touch, by the run open. contributors (default: children alone) are asked in order each
+// step: the first answer is where get goes, names are all of theirs. pruning: one may answer none
+// for a whole subtree, and is not asked again under there (that read is tracked, so something
+// arriving reruns the walk). describe(key): a held spot as a place, else undefined.
+// watchAll(fn): every fact as it lands (processes' runs.ts). a cache records reads outside runs:
+// commit right after update. namesOf(id): the names a node has now, every children entry's (the
+// reverse of children, kept up from table events and commits: an entry already in the table when
+// places is made is not in it).
+import type { ChangeHeader, Entry } from "@ermine/graph/entry"
+import { createCrow } from "@ermine/crow"
+import { updateEntry } from "./crowify.ts"
+import type { Key as Step, Patch } from "@ermine/changeable/apply"
+import type { Scheduler } from "@ermine/reactivity"
+import { createChangeHeader } from "./header.ts"
+import { keyorder } from "@ermine/changeable/keyorder"
+import { isPojo, isTyped } from "@ermine/changeable/kinds"
+import type { createPaths, Spot } from "@ermine/reactivity/paths"
+import type { Id, Key, Table } from "@ermine/graph/table"
+
+export type { Id }
+
+export type Paths = ReturnType<typeof createPaths<unknown>>
+
+// names from the root, each looked up as it is
+export type Path = readonly string[]
+
+export type Setup = {
+	// where names start
+	root: Id
+	table: Pick<Table, "get" | "who"> & Partial<Pick<Table, "del">>
+	paths: Paths
+	// getCurrentFrame, when given: a removal's change is made from the frame open
+	scheduler:
+		& Pick<Scheduler, "track" | "mark" | "getRun">
+		& Partial<Pick<Scheduler, "getCurrentFrame">>
+	// what answers each step, in order; none: children alone
+	contributors?: readonly Contributor[]
+}
+
+// what here gives for a map: that a map is there, not what is in it
+export const map: unique symbol = /* @__PURE__ */ Symbol("map")
+
+// the id a walk is at on a level (a contributor's level, with no id of its own): not an id of any
+// entry, so it is never given as an answer (lib's get: nothing there)
+export const level: Id = /* @__PURE__ */ Symbol("level")
+
+// a contributor's answer: nothing at here + name, nor anywhere under it (step); no names under
+// here, nor anywhere deeper (names). a symbol, as level is, so it is one return and costs nothing
+export const none: unique symbol = /* @__PURE__ */ Symbol("none")
+
+// where a walk has got to: the id it is at, its path (the names from the root to it), and gone:
+// the contributors that said none at it or above, never asked under it: a bit each, by its place in
+// the asker's list (the first 32; any after are always asked). no path: a walk from an id alone,
+// where it is from the root not known. no gone: none
+export type Here = { readonly id: Id; readonly path?: Path; readonly gone?: number }
+
+// a contributor's bit in gone; past the 32nd: none
+const bit = (i: number) => i < 32 ? 1 << i : 0
+
+// what a contributor reads through: places' reads, told as places tells its own (in a run, the
+// run tracks them), and track for a key of its own (which it marks itself when it changes)
+export type Reads = {
+	// what is at path in the value under (part, id), told as a read of all under path
+	read(part: Key, id: Id, path?: readonly Step[]): unknown
+	// the names at path, told as a read of which names there are: a name coming, going or put over
+	// tells it, a change deeper under a name does not. ids: only the names holding an id (whether a
+	// name holds one changes only when it is put over, so the read is the same)
+	keys(part: Key, id: Id, path?: readonly Step[], ids?: boolean): string[]
+	// what is at path itself: a map as map (nothing of what is in it), anything else as it is;
+	// told as a read of that alone, so a change deeper in a map tells it nothing
+	here(part: Key, id: Id, path?: readonly Step[]): unknown
+	track(key: unknown): void
+}
+
+export type Contributor = {
+	// what it is called: the from of each answer it gives
+	readonly from: string
+	// the id it has at here + name; nothing there (maybe deeper): undefined; nothing there or
+	// anywhere under it: none
+	step(here: Here, name: string, reads: Reads): Id | undefined | typeof none
+	// the names it has directly under here, in its order: each one step answers, or a level of its
+	// own. none: no names, here or anywhere deeper
+	names(here: Here, reads: Reads): string[] | typeof none
+	// whether here + name is a level of its own: no id, but names under it, so a walk goes on through
+	// it as if it were a folder (see places' walk). none: never
+	level?(here: Here, name: string, reads: Reads): boolean
+}
+
+// a name a node has: the folder whose children entry holds it, and the name there
+export type Slot = { readonly folder: Id; readonly name: string }
+
+// an answer at a path, and the contributor that gave it
+export type Answer = { readonly id: Id; readonly from: string }
+
+// a name at a path, and the first contributor that gives it
+export type Named = { readonly name: string; readonly from: string }
+
+// every answer at here + name; gone: the contributors gone under it (here's, and those that said
+// none), for a walk on from there
+export type Answers = Answer[] & { readonly gone: number }
+
+// every name under here; gone: the contributors gone under it (here's, and those whose names said
+// none), for a walk of each name from there
+export type Names = Named[] & { readonly gone: number }
+
+// where a spot reads: the entry under (part, id), and the path in its value (held by paths, never
+// change it); null: the change spot, reads of the change itself. keys: a read of which names
+// there are at path, not what is under them (readKeys)
+export type Where = {
+	readonly part: Key
+	readonly id: Id
+	readonly path: readonly Step[] | null
+	readonly keys?: true
+}
+
+// a name in a children entry, and the id under it (a contributor's level: the id level, no id of
+// its own). from: the contributor that gave it (none: a places given no contributors, children alone)
+export type Member = { readonly name: string; readonly id: Id; readonly from?: string }
+
+// what landed at one key: the patches a write put there (a table event: one at the root, the value
+// whole; taken out, one at the root with no value), the change (taken out: one made then from the
+// scope open; none open, none), and the entry now (none: taken out)
+export type Fact = {
+	readonly part: Key
+	readonly id: Id
+	readonly patches: readonly Patch[]
+	readonly change: ChangeHeader | undefined
+	readonly entry: Entry<unknown> | undefined
+}
+
+export type Code = "not-a-name" | "nothing-there" | "already-there"
+
+export class PlacesError extends Error {
+	// the name asked about, when there was one
+	constructor(readonly code: Code, readonly at?: string) {
+		super(at === undefined ? code : `${code} (${at})`)
+	}
+}
+
+const isId = (v: unknown): v is Id => typeof v === "string" || typeof v === "symbol"
+
+// v when it is an id; else undefined
+export const asId = (v: unknown): Id | undefined => isId(v) ? v : undefined
+
+// the children table: goes by the id, never the path (a level has none: nothing, nothing read). the
+// default contributor
+export const children: Contributor = {
+	from: "children",
+	step: ({ id }, name, r) => id === level ? undefined : asId(r.read("children", id, [name])),
+	names: ({ id }, r) => id === level ? [] : r.keys("children", id),
+}
+
+// what is at path in a value: a number into a list or a typed array, a name into a map; nothing
+// there: undefined
+export function at(v: unknown, path: readonly Step[]): unknown {
+	for (const k of path) {
+		if (typeof k === "number") {
+			if (!Array.isArray(v) && !isTyped(v)) return undefined
+			v = v[k]
+		} else {
+			if (!isPojo(v) || !Object.hasOwn(v, k)) return undefined
+			v = v[k]
+		}
+	}
+	return v
+}
+
+// the id under name in a children entry; none, or something that is not an id: undefined
+function child(children: Entry<unknown> | undefined, name: string): Id | undefined {
+	const v = children?.value
+	if (!isPojo(v) || !Object.hasOwn(v, name)) return undefined
+	const id = v[name]
+	return isId(id) ? id : undefined
+}
+
+export function createPlaces(setup: Setup): Places {
+	const { table, paths, scheduler } = setup
+
+	// everything below but view is shared by every view: spots, holds, record, commit, watchAll
+
+	const firsts = new Map<Key, { part: Key }>()
+	// the one key object of a part
+	function first(part: Key) {
+		let p = firsts.get(part)
+		if (p === undefined) firsts.set(part, p = { part })
+		return p
+	}
+
+	// this places' spots: their owner, so forget knows them
+	const mine = {}
+	// where reads go while record runs, and the spots it made (none held before); none: the scheduler
+	let into: Set<unknown> | undefined
+	let made: Set<unknown> | undefined
+	// while peep runs: reads tell no one and make no spot (nothing would rerun from them)
+	let peeping = 0
+	function tell(s: Spot<unknown>) {
+		const known = s.owner === mine
+		s.owner = mine
+		if (into === undefined) scheduler.track(s)
+		else {
+			into.add(s)
+			if (!known) made?.add(s)
+		}
+	}
+
+	// f, with every read it makes (a spot, or a contributor's track) put into reads and told to no
+	// one: what a cache works out outside any run. inside another record or a peep, apart from it. made: the
+	// spots f read that were not this places' before (so nothing else tracks or holds them)
+	function record<T>(f: () => T, reads: Set<unknown>, fresh?: Set<unknown>): T {
+		const was = into, wasMade = made, wasPeeping = peeping
+		into = reads
+		made = fresh
+		peeping = 0
+		try {
+			return f()
+		} finally {
+			into = was
+			made = wasMade
+			peeping = wasPeeping
+		}
+	}
+
+	// f, with every read it makes untracked: no spot made, nothing told, the value only (a peep)
+	function peep<T>(f: () => T): T {
+		peeping++
+		try {
+			return f()
+		} finally {
+			peeping--
+		}
+	}
+
+	const held = (key: unknown): key is Spot<unknown> =>
+		typeof key === "object" && key !== null && (key as Spot<unknown>).owner === mine
+
+	// spots something outside the scheduler reads (a cache's entries), and how many holds each
+	const holds = new Map<unknown, number>()
+
+	// a hold on one of this places' spots taken (n 1) or given back (n -1): the holds left. a held
+	// spot is not let go by release; the holder calls release once its last hold is given back and
+	// no run tracks the spot. anything else: 0, nothing held
+	function hold(key: unknown, n: number): number {
+		if (!held(key)) return 0
+		const left = (holds.get(key) ?? 0) + n
+		if (left > 0) holds.set(key, left)
+		else holds.delete(key)
+		return Math.max(left, 0)
+	}
+
+	// a key the scheduler stopped tracking: one of this places' spots is released, and is not
+	// this places' any more. a spot held: stays
+	function release(key: unknown) {
+		if (!held(key) || (holds.size && holds.has(key))) return
+		paths.release(key)
+		key.owner = undefined
+	}
+
+	// where a key reads, when it is one of this places' spots, held; else undefined
+	function describe(key: unknown): Where | undefined {
+		if (!held(key)) return undefined
+		const { part } = key.source as { part: Key }
+		return key.keys
+			? { part, id: key.id as Id, path: key.path, keys: true }
+			: { part, id: key.id as Id, path: key.path }
+	}
+
+	// spots said changed, in one call, by the writer open; none: nothing said
+	function say(spots: readonly unknown[]) {
+		if (spots.length) scheduler.mark(spots, scheduler.getRun())
+	}
+
+	// the reverse of every children entry: each node's names (Slot), the latest placed last; and what
+	// was indexed of each folder (name → id), so a name put over or taken out is known after its
+	// entry changed in place
+	const indexed = new Map<Id, Map<string, Id>>()
+	const named = new Map<Id, Slot[]>()
+	function unindex(folder: Id, name: string) {
+		const k = indexed.get(folder)
+		const id = k?.get(name)
+		if (id === undefined) return
+		k!.delete(name)
+		if (k!.size === 0) indexed.delete(folder)
+		const list = named.get(id)!
+		list.splice(list.findIndex((n) => n.folder === folder && n.name === name), 1)
+		if (list.length === 0) named.delete(id)
+	}
+	function index(folder: Id, name: string, entry: Entry<unknown> | undefined) {
+		const now = child(entry, name)
+		if (indexed.get(folder)?.get(name) === now) return
+		unindex(folder, name)
+		if (now === undefined) return
+		let k = indexed.get(folder)
+		if (k === undefined) indexed.set(folder, k = new Map())
+		k.set(name, now)
+		let list = named.get(now)
+		if (list === undefined) named.set(now, list = [])
+		list.push({ folder, name })
+	}
+	// a folder's names indexed again: those given (none: every name it had or has)
+	function reindex(folder: Id, names?: Iterable<string>) {
+		const entry = table.get("children", folder) as Entry<unknown> | undefined
+		if (names !== undefined) {
+			for (const name of names) index(folder, name, entry)
+			return
+		}
+		const v = entry?.value
+		const all = new Set([
+			...indexed.get(folder)?.keys() ?? [],
+			...isPojo(v) ? Object.keys(v) : [],
+		])
+		for (const name of all) index(folder, name, entry)
+	}
+	// the names the patches on a children entry touched: none, the whole entry
+	function touched(patches: readonly Patch[]): string[] | undefined {
+		const out: string[] = []
+		for (const p of patches) {
+			if (p.path.length === 0 || (p.move !== undefined && p.move.path.length === 0)) {
+				return undefined
+			}
+			if (typeof p.path[0] === "string") out.push(p.path[0])
+			if (typeof p.move?.path[0] === "string") out.push(p.move.path[0])
+		}
+		return out
+	}
+	const namesOf = (id: Id): readonly Slot[] => named.get(id) ?? []
+
+	// the table's hook: a table event, every spot of its key; what watchAll was given told the value whole
+	function onTableChange(part: Key, id: Id) {
+		if (part === "children") reindex(id)
+		say(paths.event(first(part), id))
+		if (alls.length === 0) return
+		const entry = table.get(part, id)
+		const patch: Patch = entry?.value === undefined
+			? { path: [] }
+			: { path: [], value: entry.value }
+		const change = entry !== undefined ? entry.change : removal()
+		const facts = [{ part, id, patches: [patch], change, entry }]
+		tellAll(facts)
+	}
+
+	// an entry taken out leaves no change: one made now, as a write's is, from the frame open (none
+	// open: none)
+	function removal(): ChangeHeader | undefined {
+		if (scheduler.getCurrentFrame?.() === undefined) return undefined
+		const s = {
+			getCurrentFrame: () => scheduler.getCurrentFrame!(),
+			getRun: () => scheduler.getRun(),
+		}
+		return createChangeHeader(s)
+	}
+
+	// what watchAll was given, in the order given
+	let alls: ((fact: Fact) => void)[] = []
+	function watchAll(fn: (fact: Fact) => void): () => void {
+		alls = [...alls, fn]
+		return () => void (alls = alls.filter((g) => g !== fn))
+	}
+	function tellAll(facts: readonly Fact[]) {
+		if (alls.length === 0) return
+		const told = alls
+		for (const f of facts) for (const fn of told) fn(f)
+	}
+
+	// what a write changed: a fact for each entry with a latest op, at every key it is under
+	function* eachEntryChange(changed: readonly Entry<unknown>[]): Generator<Fact> {
+		for (const entry of changed) {
+			const op = entry.change.op
+			if (op === undefined) continue
+			for (const [part, id] of table.who(entry)) {
+				yield { part: part as Key, id, patches: op.patches, change: entry.change, entry }
+			}
+		}
+	}
+
+	// a write landed: the spots its patches mark said changed, in one call, by the run open; then
+	// each function watchAll was given told what landed. one that writes commits in turn, in the same run
+	function commit(changed: readonly Entry<unknown>[]) {
+		const facts = [...eachEntryChange(changed)]
+		for (const f of facts) if (f.part === "children") reindex(f.id, touched(f.patches))
+		const out: unknown[] = []
+		for (const f of facts) out.push(...paths.mark(first(f.part), f.id, f.patches))
+		say(out)
+		tellAll(facts)
+	}
+
+	// what is at path in the value of the entry under (part, id), the read told. path: held by
+	// paths, never change it
+	function readValue(part: Key, id: Id, path: readonly Step[] = []): unknown {
+		if (!peeping) tell(paths.spot(first(part), id, path))
+		return at(table.get(part, id)?.value, path)
+	}
+
+	// the change of the entry under (part, id), the read told at its change spot: any write to the
+	// entry reruns it. none there: undefined
+	function readChange(part: Key, id: Id): ChangeHeader | undefined {
+		if (!peeping) tell(paths.change(first(part), id))
+		return table.get(part, id)?.change
+	}
+
+	// which names there are in the value of the entry under (part, id), at path: the read told as a
+	// read of names, not of what is under them. no map there: none
+	function readKeys(part: Key, id: Id, path: readonly Step[] = [], ids = false): string[] {
+		if (!peeping) tell(paths.spot(first(part), id, path, true))
+		const v = at(table.get(part, id)?.value, path)
+		if (!isPojo(v)) return []
+		return ids ? Object.keys(v).filter((k) => isId(v[k])) : Object.keys(v)
+	}
+
+	// what is at path in the value of the entry under (part, id), itself: a map as map, told as a
+	// read of what is there and not what is in it
+	function readHere(part: Key, id: Id, path: readonly Step[] = []): unknown {
+		if (!peeping) tell(paths.spot(first(part), id, path, false, true))
+		const v = at(table.get(part, id)?.value, path)
+		return isPojo(v) ? map : v
+	}
+
+	// what contributors read through
+	const reads: Reads = {
+		read: readValue,
+		keys: readKeys,
+		here: readHere,
+		track: (key) =>
+			peeping ? undefined : into === undefined ? scheduler.track(key) : void into.add(key),
+	}
+
+	// a places from root, asked by its own contributors (none: children alone), sharing all of the above
+	function view(root: Id, given?: readonly Contributor[]): Places {
+		const asked = given ?? [children]
+
+		// the contributors that said none at the latest go's step, with its here's gone
+		let said = 0
+
+		// the first answer at here + name, each contributor asked in order (but here's gone); none:
+		// undefined. said: here's gone, and the contributors that said none
+		function go(here: Here, name: string): Member | undefined {
+			const gone = here.gone ?? 0
+			let under = gone
+			for (let i = 0; i < asked.length; i++) {
+				const b = bit(i)
+				if (gone & b) continue
+				const id = asked[i].step(here, name, reads)
+				if (id === none) under |= b
+				else if (id !== undefined) {
+					said = under
+					return { name, id, from: asked[i].from }
+				}
+			}
+			// might be fishy. TODO is this fishy?
+			// no id anywhere, but a contributor has a level there (processes at /dev/clock, with no /dev
+			// saved): the walk goes on through it as if it were a folder
+			for (let i = 0; i < asked.length; i++) {
+				if (under & bit(i)) continue
+				const c = asked[i]
+				if (c.level?.(here, name, reads)) {
+					said = under
+					return { name, id: level, from: c.from }
+				}
+			}
+			said = under
+		}
+
+		// the steps of a path from an id or a here (none given: the root), each a name and the id under
+		// it, one at a time as they are taken. nothing under a name: the walk stops there. children
+		// alone: each step the read of its name in the children of the id before. contributors given:
+		// each asked in order (but the gone), the first answer taken, with its from; from an id alone
+		// (not the root), the path is not known, so a contributor going by path has nothing. its
+		// return: the here it got to, with the gone under it; stopped short: undefined
+		function* walk(path: Path, from: Id | Here = root): Generator<Member, Here | undefined> {
+			if (given === undefined) {
+				let at = typeof from === "object" ? from.id : from
+				for (const name of path) {
+					if (!peeping) tell(paths.spot(first("children"), at, [name]))
+					const id = child(table.get("children", at), name)
+					if (id === undefined) return undefined
+					yield { name, id }
+					at = id
+				}
+				const base = typeof from === "object" ? from.path : from === root ? [] : undefined
+				return { id: at, path: base && (path.length ? [...base, ...path] : base) }
+			}
+			let here: Here = typeof from === "object"
+				? from
+				: from === root
+				? { id: root, path: [] }
+				: { id: from }
+			for (const name of path) {
+				const m = go(here, name)
+				if (m === undefined) return undefined
+				// taken before the yield: whoever reads it may walk again
+				const gone = said
+				yield m
+				here = { id: m.id, path: here.path && [...here.path, name], gone }
+			}
+			return here
+		}
+
+		// every answer at here + name, in the contributors' order (but here's gone)
+		function answers(here: Here, name: string): Answers {
+			const gone = here.gone ?? 0
+			let out: Answer[] = [], under = gone
+			for (let i = 0; i < asked.length; i++) {
+				const b = bit(i)
+				if (gone & b) continue
+				const id = asked[i].step(here, name, reads)
+				if (id === none) under |= b
+				else if (id !== undefined) out.push({ id, from: asked[i].from })
+			}
+			// none: a level there, if a contributor has one (go's, as the walk takes it)
+			if (out.length === 0) {
+				for (let i = 0; i < asked.length; i++) {
+					if (under & bit(i)) continue
+					const c = asked[i]
+					if (c.level?.(here, name, reads)) {
+						out = [{ id: level, from: c.from }]
+						break
+					}
+				}
+			}
+			return Object.assign(out, { gone: under })
+		}
+
+		// the names under here, every contributor's (but here's gone), each name once (from the first
+		// that gives it); when there are several contributors, in the order canonical CBOR gives a
+		// map's keys (encoding)
+		function names(here: Here): Names {
+			const gone = here.gone ?? 0
+			let under = gone
+			const out: Named[] = []
+			const seen = new Set<string>()
+			for (let i = 0; i < asked.length; i++) {
+				const b = bit(i)
+				if (gone & b) continue
+				const c = asked[i]
+				const got = c.names(here, reads)
+				if (got === none) {
+					under |= b
+					continue
+				}
+				for (const name of got) {
+					if (seen.has(name)) continue
+					seen.add(name)
+					out.push({ name, from: c.from })
+				}
+			}
+			if (asked.length > 1) out.sort((a, b) => keyorder(a.name, b.name))
+			return Object.assign(out, { gone: under })
+		}
+
+		return {
+			root,
+			contributors: given,
+			view,
+			onTableChange,
+			release,
+			describe,
+			commit,
+			eachEntryChange,
+			watchAll,
+			readValue,
+			readKeys,
+			readChange,
+			namesOf,
+			walk,
+			answers,
+			names,
+			record,
+			peep,
+			hold,
+		}
+	}
+
+	return view(setup.root, setup.contributors)
+}
+
+export type Places = {
+	// where names start
+	readonly root: Id
+
+	// hooks, handed to the table and the scheduler once
+	onTableChange: (part: Key, id: Id) => void
+	release: (key: unknown) => void
+	describe: (key: unknown) => Where | undefined
+
+	// after a write: say it landed. eachEntryChange: what it landed, as facts (what commit and watchAll go by)
+	commit: (changed: readonly Entry<unknown>[]) => void
+	eachEntryChange: (changed: readonly Entry<unknown>[]) => Generator<Fact>
+	// fn told every fact, anywhere, as it lands (after the marks); gives back the stop
+	watchAll: (fn: (fact: Fact) => void) => () => void
+
+	// the contributors given; none: children alone
+	readonly contributors: readonly Contributor[] | undefined
+	// the same places from root, asked by contributors of its own (none: children alone): one set
+	// of spots, holds and watchAll's functions, one commit and one table hook with this one
+	view: (root: Id, contributors?: readonly Contributor[]) => Places
+
+	// tracked reads
+	readValue: (part: Key, id: Id, path?: readonly Step[]) => unknown
+	readKeys: (part: Key, id: Id, path?: readonly Step[], ids?: boolean) => string[]
+	readChange: (part: Key, id: Id) => ChangeHeader | undefined
+	// the names a node has now in children entries (the folder, the name), the latest placed last:
+	// read untracked (who needs it to rerun reads the children entries on the way)
+	namesOf: (id: Id) => readonly Slot[]
+	// its return: the here it got to (gone carried); stopped short: undefined
+	walk: (path: Path, from?: Id | Here) => Generator<Member, Here | undefined>
+	// every contributor's answer at one step (a level, with no id, as one answer with the id level, when none has an id); every contributor's names under a place, each once. both skip here's gone
+	answers: (here: Here, name: string) => Answers
+	names: (here: Here) => Names
+
+	// for a cache: f's reads put into reads, told to no one; a hold on a spot taken or given back
+	record: <T>(f: () => T, reads: Set<unknown>, fresh?: Set<unknown>) => T
+	// f with its reads untracked: no spot, nothing told, the values only
+	peep: <T>(f: () => T) => T
+	hold: (key: unknown, n: number) => number
+}
+
+// the one crow every children entry is written through: a place into a folder of n names costs
+// one step, not n (a copy each place: 10k names in one folder 12.6 s, in place 8 ms). it lets go
+// only of what it is told is held: a host wires crowify(scheduler, crow, subtreeOf) (crowify.ts);
+// unwired, a folder held past a run changes under its holder. one handed on: crow.letGo(entry)
+export const crow = /* @__PURE__ */ createCrow()
+
+// writing: a parent's children entry, given as it is, changed through crow (crowify.ts' updateEntry). each gives back the
+// entries it changed, in order, for commit: their change has the patches that landed. refused: it
+// throws, and nothing changes
+
+const bad = (name: string) => name === "" || name === "." || name === ".." || name === "/"
+
+// a name holding anything, an id or not: never written over
+const taken = (children: Entry<unknown> | undefined, name: string) =>
+	isPojo(children?.value) && Object.hasOwn(children!.value as object, name)
+
+// the patches that make sure the value is a map, first
+const base = (children: Entry<unknown> | undefined): Patch[] =>
+	isPojo(children?.value) ? [] : [{ path: [], value: {} }]
+
+function write(children: Entry<unknown>, patches: Patch[], header: ChangeHeader) {
+	updateEntry(crow, children, patches, header)
+	return [children]
+}
+
+// a write for whoever is given it to do: patches on (part, id) under header, done (or held back)
+// and said by the writer; an entry not there, made from nothing with them. what place, unplace,
+// rename and move would write, by placing, unplacing and moving, so a writer can do it instead
+export type Writer = (part: Key, id: Id, patches: readonly Patch[], header: ChangeHeader) => void
+
+// place's patches, checked as place checks: children may be none (made by them)
+export function placing(children: Entry<unknown> | undefined, name: string, id: Id): Patch[] {
+	if (bad(name)) throw new PlacesError("not-a-name", name)
+	if (taken(children, name)) throw new PlacesError("already-there", name)
+	return [...base(children), { path: [name], value: id }]
+}
+
+// unplace's patches, checked as unplace checks
+export function unplacing(children: Entry<unknown> | undefined, name: string): Patch[] {
+	if (child(children, name) === undefined) throw new PlacesError("nothing-there", name)
+	return [{ path: [name] }]
+}
+
+// move's patches, checked as move checks: each entry's, the one it goes into first; to the same
+// name: none
+export function moving(
+	[from, name]: readonly [Entry<unknown>, string],
+	[into, to]: readonly [Entry<unknown> | undefined, string],
+): { entry: "from" | "into"; patches: Patch[] }[] {
+	if (bad(to)) throw new PlacesError("not-a-name", to)
+	const id = child(from, name)
+	if (id === undefined) throw new PlacesError("nothing-there", name)
+	if (from === into) {
+		if (name === to) return []
+		if (taken(from, to)) throw new PlacesError("already-there", to)
+		return [{ entry: "from", patches: [{ path: [to], move: { path: [name] } }] }]
+	}
+	return [
+		{ entry: "into", patches: placing(into, to, id) },
+		{ entry: "from", patches: unplacing(from, name) },
+	]
+}
+
+// id placed under name, a name holding nothing: one change
+export function place(
+	children: Entry<unknown>,
+	name: string,
+	id: Id,
+	header: ChangeHeader,
+): Entry<unknown>[] {
+	return write(children, placing(children, name, id), header)
+}
+
+// the id under name taken out, and the name with it: one change
+export function unplace(
+	children: Entry<unknown>,
+	name: string,
+	header: ChangeHeader,
+): Entry<unknown>[] {
+	return write(children, unplacing(children, name), header)
+}
+
+// the id under name moved to the name to: one change; to the same name: none
+export function rename(
+	children: Entry<unknown>,
+	name: string,
+	to: string,
+	header: ChangeHeader,
+): Entry<unknown>[] {
+	if (bad(to)) throw new PlacesError("not-a-name", to)
+	if (child(children, name) === undefined) throw new PlacesError("nothing-there", name)
+	if (to === name) return []
+	if (taken(children, to)) throw new PlacesError("already-there", to)
+	return write(children, [{ path: [to], move: { path: [name] } }], header)
+}
+
+// the id under a name in one children entry put under a name in another: the same entry, one
+// change (to the same name: none); two entries, a change on each, the one it goes into first
+export function move(
+	[from, name]: readonly [Entry<unknown>, string],
+	[into, to]: readonly [Entry<unknown>, string],
+	header: ChangeHeader,
+): Entry<unknown>[] {
+	return moving([from, name], [into, to]).flatMap((m) =>
+		write(m.entry === "from" ? from : into, m.patches, header)
+	)
+}

@@ -1,5 +1,5 @@
 // tippet's own cbor: heads read and written, items passed over, bytes held in a buffer that grows
-// through tp_mem to a bound. canonical form is checked once, by ermine/encoding's cborCheck;
+// through tp_mem to a bound. canonical form is checked once, by encoding's cborCheck;
 // what reads here reads what it took
 #ifndef TIPPET_WIRE_H
 #define TIPPET_WIRE_H
@@ -31,7 +31,7 @@ int tp_map(tp_in *in, uint64_t *count);
 int tp_null(tp_in *in);
 // whether a text span is the C string s
 int tp_is(tp_span t, const char *s);
-// the bytes are one canonical cbor item (ermine/encoding/c/cbor.h)
+// the bytes are one canonical cbor item (encoding/c/cbor.h)
 int tp_canonical(const uint8_t *p, size_t n);
 
 // writing: into p, growing through mem (NULL: p is fixed, cap long) up to max. len counts every

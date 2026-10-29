@@ -14,11 +14,11 @@ core/zig/.zig-cache/
 demos/core-web/dist/
 
 # C build outputs and the agents' scratch runs (generated, hundreds of MB)
-core/table/c/ermine
-core/table/c/ermine-asan
-core/table/c/json_test
+graph/c/ermine
+graph/c/ermine-asan
+graph/c/json_test
 *.dSYM/
-core/table/c/scratch/
+graph/c/scratch/
 
 # compiled C test/bench binaries
 *_test
@@ -34,10 +34,10 @@ core/table/c/scratch/
 **/c/*-test
 **/c/*-test-check
 **/c/*-bench
-# libFuzzer (core/table/c/fuzz.sh)
-core/table/c/fuzz
-core/table/c/corpus/
-core/table/c/crash-*
+# libFuzzer (graph/c/fuzz.sh)
+graph/c/fuzz
+graph/c/corpus/
+graph/c/crash-*
 # libFuzzer (core/*/c/*_fuzz.sh): binaries, corpora, finds
 **/c/*-fuzz
 **/c/*-corpus/
@@ -59,17 +59,9 @@ __pycache__/
 .graveyard/core/graph/c/ermine-asan
 **/benchmarks/results/
 .vite/
-# the native fixtures the root Makefile builds (playground/programs/c/fixtures)
-**/c/fixtures/*.so
 
 # local only (removed from history 2026-10-16)
 .claude/
-playground/files/c/files
-playground/files/c/files-check
-playground/term/memory-test
-playground/together/c/merge-bench-check
-playground/experimental_os/mac-archive/ermineOS
-playground/experimental_os/mac-archive/ermineOS-newos
 .tmp*
 .littlesync-state
 

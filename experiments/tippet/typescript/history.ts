@@ -39,12 +39,12 @@
 //   await h.load()
 //   await h.snapshot()
 //   h.versions(node, "value")   // [{ value, from: { heads } }, …]
-import createEntry, { type ChangeHeader } from "@ermine/core/node/entry"
-import update from "@ermine/core/changeable/update"
-import apply, { type Patch } from "@ermine/core/changeable/apply"
+import createEntry, { type ChangeHeader } from "@ermine/graph/entry"
+import update from "@ermine/changeable/update"
+import apply, { type Patch } from "@ermine/changeable/apply"
 import { decode, encode, type Value } from "@ermine/encoding/cbor"
-import type { Places } from "@ermine/core/places"
-import type { Key, Table } from "@ermine/core/table"
+import type { Places } from "@ermine/places"
+import type { Key, Table } from "@ermine/graph/table"
 import { decodeStep, type On, same, type Step } from "./step.ts"
 import type { Log } from "./log.ts"
 import type { Sync } from "./sync.ts"
@@ -139,7 +139,8 @@ export function createHistory(o: {
 	const header = (s: Step): ChangeHeader => ({
 		time: s.when,
 		actor: s.who ?? s.device,
-		metadata: { device: s.device, n: s.n, lamport: s.lamport },
+		// what the step carried is its frame's info; it has no parent (a change from sync began elsewhere)
+		frame: { info: { device: s.device, n: s.n, lamport: s.lamport }, parent: undefined },
 	})
 
 	// a step into its entry's list; true: it went last. forgets: the list is the newest alone, and
@@ -411,7 +412,11 @@ export function createHistory(o: {
 						table.sub(
 							part as Key,
 							node,
-							createEntry(v as never, { time: 0, actor: "snapshot" }),
+							createEntry(v as never, {
+								time: 0,
+								actor: "snapshot",
+								frame: { info: {}, parent: undefined },
+							}),
 						)
 					}
 				})

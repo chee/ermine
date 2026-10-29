@@ -1,0 +1,292 @@
+{
+	"title": "a call's mark lasts as its record does [marks 10-27], but owns nothing: a handler returning a promise keeps its record pending till it settles; the memo it made (inside the process, by a bare name: inside-only 10-28) belongs to the scope that placed the action, so it is still there when the promise settles and the call ends, and goes when that scope does. a handler returning at once: nothing goes at the call's end either. a second call that makes the same memo again: already-there (it is the scope's, made once). (a teardown added in an action throws: scenario 95)",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/svc",
+			"program": [
+				{
+					"do": [
+						"createAction",
+						"/svc/slow",
+						[
+							{
+								"do": [
+									"createMemo",
+									"made",
+									{},
+									42
+								]
+							}
+						],
+						[
+							"later",
+							"$0"
+						]
+					]
+				},
+				{
+					"do": [
+						"createAction",
+						"/svc/quick",
+						[],
+						"$0"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "svc",
+			"at": "/code/svc",
+			"expect": {
+				"id": "proc:svc"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"svc",
+				"slow"
+			],
+			"expect": {
+				"id": "n4"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"executeAction",
+				"/svc/slow",
+				1
+			]
+		},
+		{
+			"op": "record",
+			"kind": "call",
+			"id": "n4",
+			"expect": {
+				"record": {
+					"n": 1,
+					"frame": [
+						{
+							"caller": {
+								"node": "n1",
+								"actor": "test"
+							},
+							"handler": "n4",
+							"call": 1,
+							"locations": [
+								"program"
+							]
+						},
+						{
+							"handler": "n4"
+						},
+						{
+							"process": [
+								"code",
+								"svc"
+							]
+						},
+						{
+							"process": [
+								"code",
+								"svc"
+							],
+							"node": "proc:svc",
+							"locations": [
+								"program"
+							]
+						},
+						{
+							"processes": "start"
+						},
+						{
+							"actor": "test",
+							"node": "n1"
+						}
+					],
+					"caller": "n1",
+					"handler": "n4",
+					"args": [
+						1
+					],
+					"end": "pending",
+					"reads": [],
+					"writes": [
+						[
+							"children",
+							"proc:svc"
+						],
+						[
+							"attributes",
+							"n7"
+						]
+					],
+					"made": [
+						[
+							"memo",
+							"n7"
+						]
+					]
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/code/svc/made"
+			],
+			"expect": {
+				"value": 42
+			}
+		},
+		{
+			"op": "settle",
+			"expect": {}
+		},
+		{
+			"op": "record",
+			"kind": "call",
+			"id": "n4",
+			"expect": {
+				"record": {
+					"n": 1,
+					"frame": [
+						{
+							"caller": {
+								"node": "n1",
+								"actor": "test"
+							},
+							"handler": "n4",
+							"call": 1,
+							"locations": [
+								"program"
+							]
+						},
+						{
+							"handler": "n4"
+						},
+						{
+							"process": [
+								"code",
+								"svc"
+							]
+						},
+						{
+							"process": [
+								"code",
+								"svc"
+							],
+							"node": "proc:svc",
+							"locations": [
+								"program"
+							]
+						},
+						{
+							"processes": "start"
+						},
+						{
+							"actor": "test",
+							"node": "n1"
+						}
+					],
+					"caller": "n1",
+					"handler": "n4",
+					"args": [
+						1
+					],
+					"end": "done",
+					"returned": 1,
+					"reads": [],
+					"writes": [
+						[
+							"children",
+							"proc:svc"
+						],
+						[
+							"attributes",
+							"n7"
+						]
+					],
+					"made": [
+						[
+							"memo",
+							"n7"
+						]
+					]
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"hasNode",
+				"/code/svc/made"
+			],
+			"expect": {
+				"value": true
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"executeAction",
+				"/svc/quick",
+				2
+			],
+			"expect": {
+				"value": 2
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"executeAction",
+				"/svc/slow",
+				3
+			],
+			"expect": {
+				"error": "already-there"
+			},
+			"fails": false
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/code/svc/made"
+			],
+			"expect": {
+				"value": 42
+			}
+		},
+		{
+			"op": "stop",
+			"name": "svc",
+			"why": "bye",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"hasNode",
+				"/code/svc/made"
+			],
+			"expect": {
+				"value": false
+			}
+		},
+		{
+			"op": "settle",
+			"expect": {}
+		}
+	]
+}

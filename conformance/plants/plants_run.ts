@@ -17,10 +17,19 @@ const JOBS = Number(arg("--jobs") ?? 4)
 const ONLY = arg("--only")
 const TIMEOUT = 180_000
 
-// the tree a catcher imports: core, conformance, and the ermine package it
-// uses; no node_modules, no c binaries outside core (the differ's c impl runs core's)
-const copied = ["core", "conformance", "ermine/encoding"]
-const only = (dir: string) => dir.startsWith("ermine/") ? ["--exclude", "c"] : []
+// the tree a catcher imports: the packages up to places, conformance, and encoding; no
+// node_modules, no encoding c (the differ's c impl runs the others')
+const copied = [
+	"changeable",
+	"crow",
+	"graph",
+	"protect",
+	"reactivity",
+	"places",
+	"conformance",
+	"encoding",
+]
+const only = (dir: string) => dir === "encoding" ? ["--exclude", "c"] : []
 
 async function sh(cmd: string[], cwd?: string, timeout = TIMEOUT) {
 	const r = await new Deno.Command(cmd[0], {
@@ -54,16 +63,10 @@ async function makeTree(): Promise<string> {
 		])
 		if (r.code !== 0) throw new Error(`copy ${d}: ${r.out}`)
 	}
-	// differ reads these groups, empty ones are fine
-	for (const d of ["extensions", "playground", "ermine"]) {
-		await Deno.mkdir(`${dir}/${d}`, { recursive: true })
-	}
 	await Deno.symlink(`${root}node_modules`, `${dir}/node_modules`).catch(() => {})
 	// the workspace: only what was copied
 	const deno = JSON.parse(await Deno.readTextFile(`${root}deno.json`))
-	deno.workspace = deno.workspace.filter((w: string) =>
-		/^\.\/(core|ermine\/encoding)(\/|$)/.test(w)
-	)
+	deno.workspace = deno.workspace.filter((w: string) => copied.includes(w.replace(/^\.\//, "")))
 	await Deno.writeTextFile(`${dir}/deno.json`, JSON.stringify(deno))
 	await Deno.copyFile(`${root}deno.lock`, `${dir}/deno.lock`).catch(() => {})
 	return dir

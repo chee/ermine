@@ -13,9 +13,9 @@
 // twice is squishing once, for a list with no lone surrogate in it (fouling outlives the patch
 // that put the lone surrogate, when a put above kills it: squished again, more merges)
 // typing makes backspace runs that start past what was typed and reach back into it
-import type { Patch } from "@ermine/core/changeable/apply"
-import { encode } from "@ermine/core/changeable/squish"
-import { apply, at, type V } from "../../core/changeable/typescript/squish_model.ts"
+import type { Patch } from "@ermine/changeable/apply"
+import { encode } from "@ermine/changeable/squish"
+import { apply, at, type V } from "../../changeable/typescript/squish_model.ts"
 import {
 	type Answer,
 	content,

@@ -1,0 +1,58 @@
+{
+	"title": "a request missing what it needs, or with a frame that is not a list of objects, is an error, and the next line is answered",
+	"steps": [
+		{
+			"op": "node",
+			"fails": true
+		},
+		{
+			"op": "node",
+			"values": [],
+			"fails": true
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 1,
+				"frame": [
+					[
+						"k",
+						1
+					]
+				]
+			},
+			"fails": true
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 1,
+				"frame": "k"
+			},
+			"fails": true
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 1,
+				"frame": null
+			},
+			"fails": true
+		},
+		{
+			"op": "entry",
+			"value": 1,
+			"header": {
+				"time": 1
+			},
+			"expect": {
+				"entry": {
+					"value": 1,
+					"change": {
+						"time": 1
+					}
+				}
+			}
+		}
+	]
+}

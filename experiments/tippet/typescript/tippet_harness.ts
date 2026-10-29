@@ -82,13 +82,13 @@
 //
 // after each request every device is idle: no take or run going on
 import { decode, encode, type Value } from "@ermine/encoding/cbor"
-import createEntry from "@ermine/core/node/entry"
-import update from "@ermine/core/changeable/update"
-import type { Patch } from "@ermine/core/changeable/apply"
-import { createScheduler } from "@ermine/core/scheduler"
-import { createPaths } from "@ermine/core/scheduler/paths"
-import { createTable, type Key, type Table } from "@ermine/core/table"
-import { children, createPlaces } from "@ermine/core/places"
+import createEntry from "@ermine/graph/entry"
+import update from "@ermine/changeable/update"
+import type { Patch } from "@ermine/changeable/apply"
+import { createScheduler } from "@ermine/reactivity"
+import { createPaths } from "@ermine/reactivity/paths"
+import { createTable, type Key, type Table } from "@ermine/graph/table"
+import { children, createPlaces } from "@ermine/places"
 import { revive, toJson } from "../../../conformance/typescript/form.ts"
 import { type Answer, type Request, serve } from "../../../conformance/typescript/harness.ts"
 import { createLog, isRun, type Log, type Store } from "./log.ts"
@@ -189,7 +189,8 @@ async function createDevice(seed: Uint8Array): Promise<Device> {
 		table,
 		history,
 		write(node, part, patches, when, who) {
-			const change = { time: when, actor: who ?? null }, unkept = history.unkept.length
+			const change = { time: when, actor: who ?? null, frame: { info: {}, parent: undefined } },
+				unkept = history.unkept.length
 			run(() => {
 				const e = table.get(part as Key, node)
 				if (e) return void (update(e, patches, change), places.commit([e]))

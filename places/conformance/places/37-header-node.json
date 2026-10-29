@@ -1,0 +1,151 @@
+{
+	"title": "a write's header in a scope under a scope whose own info holds the node key: its frames are all the scopes up to the root, none dropped or merged (a lookup stops at the node key, the header does not); the actor and reader still found above it",
+	"steps": [
+		{
+			"op": "root",
+			"name": "chee",
+			"info": {
+				"actor": "chee",
+				"reader": "juno"
+			},
+			"expect": {}
+		},
+		{
+			"op": "scope",
+			"name": "proc",
+			"parent": "chee",
+			"info": {
+				"why": "process",
+				"node": "P"
+			},
+			"expect": {}
+		},
+		{
+			"op": "scope",
+			"name": "click",
+			"parent": "proc",
+			"info": {
+				"event": "click"
+			},
+			"expect": {}
+		},
+		{
+			"op": "header",
+			"scope": "click",
+			"extra": {
+				"then": "y"
+			},
+			"expect": {
+				"actor": "chee",
+				"reader": "juno",
+				"frame": [
+					{
+						"locations": [
+							"program"
+						]
+					},
+					{
+						"then": "y"
+					},
+					{
+						"event": "click"
+					},
+					{
+						"why": "process",
+						"node": "P"
+					},
+					{
+						"actor": "chee",
+						"reader": "juno"
+					}
+				],
+				"timely": true
+			}
+		},
+		{
+			"op": "header",
+			"scope": "proc",
+			"expect": {
+				"actor": "chee",
+				"reader": "juno",
+				"frame": [
+					{
+						"locations": [
+							"program"
+						]
+					},
+					{
+						"why": "process",
+						"node": "P"
+					},
+					{
+						"actor": "chee",
+						"reader": "juno"
+					}
+				],
+				"timely": true
+			}
+		},
+		{
+			"op": "scope",
+			"name": "inner",
+			"parent": "click",
+			"info": {
+				"node": "I",
+				"actor": "inner"
+			},
+			"expect": {}
+		},
+		{
+			"op": "header",
+			"scope": "inner",
+			"expect": {
+				"actor": "inner",
+				"reader": "juno",
+				"frame": [
+					{
+						"locations": [
+							"program"
+						]
+					},
+					{
+						"node": "I",
+						"actor": "inner"
+					},
+					{
+						"event": "click"
+					},
+					{
+						"why": "process",
+						"node": "P"
+					},
+					{
+						"actor": "chee",
+						"reader": "juno"
+					}
+				],
+				"timely": true
+			}
+		},
+		{
+			"op": "header",
+			"scope": "chee",
+			"expect": {
+				"actor": "chee",
+				"reader": "juno",
+				"frame": [
+					{
+						"locations": [
+							"program"
+						]
+					},
+					{
+						"actor": "chee",
+						"reader": "juno"
+					}
+				],
+				"timely": true
+			}
+		}
+	]
+}

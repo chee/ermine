@@ -11,7 +11,7 @@
 #ifndef SOFTWARE_H
 #define SOFTWARE_H
 
-#include "../../../ermine/system/c/ermine.h"
+#include "../../../system/c/ermine.h"
 
 // on a program's node, written by whoever placed it: what it needs to run
 #define SW_NEEDS "love.ermine.software.needs"

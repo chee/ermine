@@ -1,0 +1,448 @@
+{
+	"title": "what a hook holds back doesn't happen, every table write alike (the ermine decision: one rule, reads show what the table holds): a placement held back, the node made but not placed; a remove's (the host's) entries held back, unplaced but its value kept; a status write held back (the status table's, 10-25) [chee: \"Held, with a trace\"]: status shows the table's (done, though its run is pending), and says it was held, naming the feature, as the computer's run record and why of its attributes do. processes' rows: an add held back, the process runs with no place (its code shows at the path, it stops as any, a second may start there); a row's removal held back [chee: \"Held, and shown\"]: the stopped process's row stays, and a start at its path is refused taken, naming the stopped process and the feature that held its row; that process's status says so too",
+	"steps": [
+		{
+			"op": "ermine",
+			"features": [
+				{
+					"name": "h",
+					"onWrite": "drop",
+					"parts": [
+						"children"
+					],
+					"ids": [
+						"n5"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"./a",
+						1
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/work/p",
+			"expect": {
+				"id": "proc:p"
+			},
+			"program": "/code/p"
+		},
+		{
+			"op": "id",
+			"path": [
+				"work"
+			],
+			"expect": {
+				"id": "n5"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"work",
+				"a"
+			],
+			"expect": {}
+		},
+		{
+			"op": "saved",
+			"part": "value",
+			"id": "n4",
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "status",
+			"name": "p",
+			"expect": {
+				"status": {
+					"state": "done"
+				}
+			}
+		},
+		{
+			"op": "ermine",
+			"features": [
+				{
+					"name": "h",
+					"onWrite": "drop",
+					"parts": [
+						"value"
+					],
+					"takes": true
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"./b",
+						1
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"remove",
+				"/code/b"
+			]
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"b"
+			],
+			"expect": {}
+		},
+		{
+			"op": "saved",
+			"part": "value",
+			"id": "n4",
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "log",
+			"name": "hooks",
+			"expect": {
+				"values": [
+					[
+						"h",
+						"onWrite",
+						"value",
+						"n4",
+						"gone"
+					]
+				]
+			}
+		},
+		{
+			"op": "ermine",
+			"features": [
+				{
+					"name": "h",
+					"onWrite": "drop",
+					"parts": [
+						"status"
+					],
+					"ids": [
+						"n4"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"createMemo",
+						"slow",
+						{},
+						[
+							"later",
+							1
+						]
+					],
+					"as": "slow"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"p",
+				"slow"
+			],
+			"expect": {
+				"id": "n4"
+			}
+		},
+		{
+			"op": "record",
+			"kind": "run",
+			"id": "n4",
+			"expect": {
+				"record": {
+					"n": 1,
+					"frame": [
+						{
+							"run": 1,
+							"mark": 3
+						},
+						{
+							"node": "n4",
+							"mark": 3
+						},
+						{
+							"process": [
+								"code",
+								"p"
+							]
+						},
+						{
+							"process": [
+								"code",
+								"p"
+							],
+							"node": "proc:p",
+							"locations": [
+								"program"
+							]
+						},
+						{
+							"processes": "start"
+						},
+						{
+							"actor": "test",
+							"node": "n1"
+						}
+					],
+					"end": "pending",
+					"writes": [],
+					"held": {
+						"feature": "h",
+						"write": "status"
+					}
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"getStatus",
+				"$slow"
+			],
+			"expect": {
+				"value": {
+					"state": "done",
+					"n": 1,
+					"held": {
+						"feature": "h",
+						"write": "status"
+					}
+				}
+			}
+		},
+		{
+			"op": "saved",
+			"part": "status",
+			"id": "n4",
+			"expect": {}
+		},
+		{
+			"op": "ermine",
+			"features": [
+				{
+					"name": "h",
+					"onWrite": "drop",
+					"parts": [
+						"process"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"./x",
+						1
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"p"
+			],
+			"expect": {
+				"id": "n2"
+			}
+		},
+		{
+			"op": "status",
+			"name": "p",
+			"expect": {
+				"status": {
+					"state": "done"
+				}
+			}
+		},
+		{
+			"op": "context",
+			"process": "p",
+			"expect": {
+				"at": [
+					"code",
+					"p"
+				],
+				"folder": [
+					"code"
+				],
+				"args": [],
+				"process": "proc:p",
+				"scope": "process"
+			}
+		},
+		{
+			"op": "stop",
+			"name": "p",
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "q",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:q"
+			}
+		},
+		{
+			"op": "ermine",
+			"features": [
+				{
+					"name": "h",
+					"onWrite": "drop",
+					"parts": [
+						"process"
+					],
+					"takes": true
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"./x",
+						1
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"p"
+			],
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "stop",
+			"name": "p",
+			"expect": {}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"p"
+			],
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "start",
+			"name": "q",
+			"at": "/code/p",
+			"expect": {
+				"refused": "taken",
+				"held": {
+					"process": "proc:p",
+					"feature": "h"
+				}
+			}
+		},
+		{
+			"op": "status",
+			"name": "p",
+			"expect": {
+				"status": {
+					"state": "done",
+					"held": {
+						"feature": "h",
+						"write": "row"
+					}
+				}
+			}
+		}
+	]
+}

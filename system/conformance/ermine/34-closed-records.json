@@ -1,0 +1,103 @@
+{
+	"title": "closed, ermine's records throw closed, as its functions and other parts do",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"createAction",
+				"/svc",
+				[],
+				1
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"executeAction",
+				"/svc"
+			],
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"svc"
+			],
+			"expect": {
+				"id": "n2"
+			}
+		},
+		{
+			"op": "record",
+			"kind": "call",
+			"id": "n2",
+			"expect": {
+				"record": {
+					"n": 1,
+					"frame": [
+						{
+							"caller": {
+								"node": "n1",
+								"actor": "test"
+							},
+							"handler": "n2",
+							"call": 1,
+							"locations": [
+								"program"
+							]
+						},
+						{
+							"handler": "n2"
+						},
+						{
+							"actor": "test",
+							"node": "n1"
+						}
+					],
+					"caller": "n1",
+					"handler": "n2",
+					"args": [],
+					"end": "done",
+					"returned": 1,
+					"reads": [],
+					"writes": []
+				}
+			}
+		},
+		{
+			"op": "close",
+			"expect": {}
+		},
+		{
+			"op": "record",
+			"kind": "call",
+			"id": "n2",
+			"fails": true,
+			"expect": {
+				"error": "closed"
+			}
+		},
+		{
+			"op": "record",
+			"kind": "run",
+			"id": "n2",
+			"fails": true,
+			"expect": {
+				"error": "closed"
+			}
+		},
+		{
+			"op": "waits",
+			"fails": true,
+			"expect": {
+				"error": "closed"
+			}
+		}
+	]
+}

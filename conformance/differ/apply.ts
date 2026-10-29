@@ -1,4 +1,4 @@
-// apply's streams: a start value and a batch of patches (core/fuzz/gen_harness.ts), asked as one call,
+// apply's streams: a start value and a batch of patches (places/fuzz/gen_harness.ts), asked as one call,
 // then each patch alone on what the ones before it left, then each refused patch put in where it
 // fell; some again with cow: false. every line stands alone (nothing lasts between lines). half
 // the seeds have the generator's keys made tricky (kit.ts: "2", "01", "__proto__", "", NUL, ...).
@@ -10,8 +10,8 @@
 // place gives what it gives in one (the same value; refused: the same code, its
 // index counted in the half it fell in)
 // deno-lint-ignore-file no-explicit-any
-import apply, { type Patch } from "@ermine/core/changeable/apply"
-import { batch, KEYS, start } from "../../core/fuzz/gen_harness.ts"
+import apply, { type Patch } from "@ermine/changeable/apply"
+import { batch, KEYS, start } from "../../places/fuzz/gen_harness.ts"
 import {
 	type Answer,
 	content,

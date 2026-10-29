@@ -7,15 +7,18 @@
 #include <stdio.h>
 
 #include "harness.h"
-#include "../../core/node/c/node.h"
+#include "../../graph/c/node.h"
 
 // a patch: path, range, value, move. anything malformed is a place no patch can be (a negative
 // key: not-a-patch). it points into the request, and into memory of the line
 void hh_patch(const op_value *p, op_patch *out);
-// a change header's fields (never an op). external, metadata and the pieces are the line's; actor
-// and the metadata values are the request's own values, opaque to node
+// why a header is no header (a frame that is not a non-empty list of objects), else NULL
+const char *hh_bad_header(const op_value *header);
+// a change header's fields (never an op). its frame is made from the line's list of infos, innermost
+// first: the caller's hold, to ch_frame_free once the entry has taken its own; reader is the
+// line's, actor the request's own value, opaque to node
 ch_header hh_header(const op_value *h);
-// an entry made of {value?, header?}; nd_free_entry it. the value is held (op_ref) by the entry
+// an entry made of {value?, header?} (hh_bad_header checked first); nd_free_entry it. the value is held (op_ref) by the entry
 nd_entry *hh_entry(const op_value *entry);
 
 // a patch as {path, range?, value?, move?}

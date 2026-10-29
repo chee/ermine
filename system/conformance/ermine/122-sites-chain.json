@@ -1,0 +1,229 @@
+{
+	"title": "a write's frames walk up to where it began [chee 10-28: \"wait, can't you see the parent frame somehow?\" / \"yes\"]: a process's frame holds where it was started (from outside); its setup's frame is under it. a process started in another's setup: its frames, then the starter's setup and start, nothing of its own captured. the host's writes: a frame of locations on top",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/q",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"./y",
+						0
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"./x",
+						0
+					]
+				},
+				{
+					"do": [
+						"start",
+						"q",
+						"/code/q"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"x"
+			],
+			"expect": {
+				"id": "n5"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"y"
+			],
+			"expect": {
+				"id": "n6"
+			}
+		},
+		{
+			"op": "frame",
+			"part": "value",
+			"id": "n5",
+			"expect": {
+				"frame": [
+					{
+						"process": [
+							"code",
+							"p"
+						]
+					},
+					{
+						"process": [
+							"code",
+							"p"
+						],
+						"node": "proc:p",
+						"locations": [
+							"program"
+						]
+					},
+					{
+						"processes": "start"
+					},
+					{
+						"actor": "test",
+						"node": "n1"
+					}
+				]
+			}
+		},
+		{
+			"op": "frame",
+			"part": "value",
+			"id": "n6",
+			"expect": {
+				"frame": [
+					{
+						"process": [
+							"code",
+							"q"
+						]
+					},
+					{
+						"process": [
+							"code",
+							"q"
+						],
+						"node": "proc:q"
+					},
+					{
+						"process": [
+							"code",
+							"p"
+						]
+					},
+					{
+						"process": [
+							"code",
+							"p"
+						],
+						"node": "proc:p",
+						"locations": [
+							"program"
+						]
+					},
+					{
+						"processes": "start"
+					},
+					{
+						"actor": "test",
+						"node": "n1"
+					}
+				]
+			}
+		},
+		{
+			"op": "frame",
+			"part": "value",
+			"id": "n6",
+			"expect": {
+				"frame": [
+					{
+						"process": [
+							"code",
+							"q"
+						]
+					},
+					{
+						"process": [
+							"code",
+							"q"
+						],
+						"node": "proc:q"
+					},
+					{
+						"process": [
+							"code",
+							"p"
+						]
+					},
+					{
+						"process": [
+							"code",
+							"p"
+						],
+						"node": "proc:p",
+						"locations": [
+							"program"
+						]
+					},
+					{
+						"processes": "start"
+					},
+					{
+						"actor": "test",
+						"node": "n1"
+					}
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/h",
+				0
+			]
+		},
+		{
+			"op": "id",
+			"path": [
+				"h"
+			],
+			"expect": {
+				"id": "n7"
+			}
+		},
+		{
+			"op": "frame",
+			"part": "value",
+			"id": "n7",
+			"expect": {
+				"frame": [
+					{
+						"locations": [
+							"program"
+						]
+					},
+					{
+						"actor": "test",
+						"node": "n1"
+					}
+				]
+			}
+		}
+	]
+}

@@ -1,0 +1,442 @@
+{
+	"title": "the change: the header given, the patches as given and their undo; the next update replaces them, a failed one leaves them",
+	"steps": [
+		{
+			"op": "start",
+			"value": {
+				"a": 1,
+				"l": [
+					1,
+					2,
+					3
+				]
+			},
+			"header": {
+				"time": 0,
+				"actor": "host",
+				"frame": [
+					{
+						"note": "first"
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"a": 1,
+						"l": [
+							1,
+							2,
+							3
+						]
+					},
+					"change": {
+						"time": 0,
+						"actor": "host",
+						"frame": [
+							{
+								"note": "first"
+							}
+						]
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"a"
+					],
+					"value": 10
+				},
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						1,
+						2
+					]
+				}
+			],
+			"header": {
+				"time": 7,
+				"actor": {
+					"person": "p",
+					"code": [
+						"c"
+					]
+				},
+				"reader": "pid3",
+				"frame": [
+					{
+						"note": "edit",
+						"tag": {
+							"n": [
+								1,
+								2
+							]
+						},
+						"locations": [
+							{
+								"file": "x.c",
+								"line": 4,
+								"external": true
+							}
+						]
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"a": 10,
+						"l": [
+							1,
+							3
+						]
+					},
+					"change": {
+						"time": 7,
+						"actor": {
+							"person": "p",
+							"code": [
+								"c"
+							]
+						},
+						"reader": "pid3",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"a"
+									],
+									"value": 10
+								},
+								{
+									"path": [
+										"l"
+									],
+									"range": [
+										1,
+										2
+									]
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"l"
+									],
+									"range": [
+										1,
+										1
+									],
+									"value": [
+										2
+									]
+								},
+								{
+									"path": [
+										"a"
+									],
+									"value": 1
+								}
+							]
+						},
+						"frame": [
+							{
+								"note": "edit",
+								"tag": {
+									"n": [
+										1,
+										2
+									]
+								},
+								"locations": [
+									{
+										"file": "x.c",
+										"line": 4,
+										"external": true
+									}
+								]
+							}
+						]
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"b"
+					],
+					"value": 1
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"a": 10,
+						"l": [
+							1,
+							3
+						],
+						"b": 1
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"b"
+									],
+									"value": 1
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"b"
+									]
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"z",
+						"y"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"a": 10,
+						"l": [
+							1,
+							3
+						],
+						"b": 1
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"b"
+									],
+									"value": 1
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"b"
+									]
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [],
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"a": 10,
+						"l": [
+							1,
+							3
+						],
+						"b": 1
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [],
+							"undo": []
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"b"
+					]
+				},
+				{
+					"path": [
+						"b"
+					]
+				}
+			],
+			"header": {
+				"time": 9
+			},
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"a": 10,
+						"l": [
+							1,
+							3
+						]
+					},
+					"change": {
+						"time": 9,
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"b"
+									]
+								},
+								{
+									"path": [
+										"b"
+									]
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"b"
+									],
+									"value": 1
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"a"
+					],
+					"value": 10
+				},
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						0,
+						0
+					],
+					"move": {
+						"path": [
+							"l"
+						],
+						"range": [
+							2,
+							3
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 1
+				}
+			}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"a": 10,
+						"l": [
+							1,
+							3
+						]
+					},
+					"change": {
+						"time": 9,
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"b"
+									]
+								},
+								{
+									"path": [
+										"b"
+									]
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"b"
+									],
+									"value": 1
+								}
+							]
+						}
+					}
+				}
+			}
+		}
+	]
+}
