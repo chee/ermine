@@ -10,7 +10,7 @@ const root = new URL("../../", import.meta.url).pathname
 
 export type Suite = {
 	name: string
-	// the package it is in, as a path from the root: core/protect
+	// the package it is in, as a path from the root: protect
 	package: string
 	// its scenarios: <package>/conformance/<name>/
 	fixtures: string
@@ -50,8 +50,8 @@ export type Options = {
 // every suite there is: a folder in <package>/conformance/ with an adapter in <package>/typescript/
 export function suites(): Suite[] {
 	const found: Suite[] = []
-	// a package is a folder of a group with conformance/ in it, and any one folder further down
-	// (playground/tools/files, playground/together/presence)
+	// a package is a folder of the root deno.json's workspace with conformance/ in it, and any one
+	// folder further down
 	const packages: string[] = []
 	const has = (path: string) => {
 		try {
@@ -60,17 +60,12 @@ export function suites(): Suite[] {
 			return false
 		}
 	}
-	for (
-		const group of ["core", "ermine", "extensions", "playground", "experiments"]
-	) {
-		for (const p of Deno.readDirSync(`${root}${group}`)) {
-			if (!p.isDirectory) continue
-			if (has(`${group}/${p.name}`)) packages.push(`${group}/${p.name}`)
-			for (const q of Deno.readDirSync(`${root}${group}/${p.name}`)) {
-				if (q.isDirectory && has(`${group}/${p.name}/${q.name}`)) {
-					packages.push(`${group}/${p.name}/${q.name}`)
-				}
-			}
+	const workspace: string[] = JSON.parse(Deno.readTextFileSync(`${root}deno.json`)).workspace
+	for (const w of workspace) {
+		const p = w.replace(/^\.\//, "")
+		if (has(p)) packages.push(p)
+		for (const q of Deno.readDirSync(`${root}${p}`)) {
+			if (q.isDirectory && has(`${p}/${q.name}`)) packages.push(`${p}/${q.name}`)
 		}
 	}
 	const claimed: Record<string, Record<string, string>> = JSON.parse(
@@ -119,7 +114,8 @@ export function suites(): Suite[] {
 				package: path,
 				fixtures,
 				typescript,
-				binary: `${pkg}/c/${shared}-harness`,
+				// implementations.json's c binary, else beside the suite
+				binary: claimed.c?.[d.name] ?? `${pkg}/c/${shared}-harness`,
 				options,
 			})
 		}

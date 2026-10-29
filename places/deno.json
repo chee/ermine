@@ -1,0 +1,12 @@
+{
+	"name": "@ermine/places",
+	"version": "0.0.0",
+	"license": "AGPL-3.0-or-later",
+	"exports": {
+		".": "./typescript/places.ts",
+		"./lib": "./typescript/lib.ts",
+		"./crowify": "./typescript/crowify.ts",
+		"./header": "./typescript/header.ts",
+		"./path": "./typescript/path.ts"
+	}
+}

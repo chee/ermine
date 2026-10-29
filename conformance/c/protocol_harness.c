@@ -65,43 +65,37 @@ void hh_patch(const op_value *m, op_patch *out) {
 
 // --- headers ---
 
-// past what a long holds: the nearest it does
-static long whole_of(const op_value *x) {
-	if (x == NULL || x->type != OP_NUM) return 0;
-	return x->num >= (double)LONG_MAX ? LONG_MAX : x->num <= (double)LONG_MIN ? LONG_MIN : (long)x->num;
+const char *hh_bad_header(const op_value *header) {
+	const op_value *frame = header && header->type == OP_MAP ? op_get(header, "frame") : NULL;
+	if (frame == NULL) return NULL;
+	if (frame->type != OP_LIST || frame->count == 0) return "frame is not a list of objects";
+	for (size_t i = 0; i < frame->count; i++) {
+		if (frame->items[i]->type != OP_MAP) return "frame is not a list of objects";
+	}
+	return NULL;
 }
-static ch_site site_of(const op_value *p) {
-	const op_value *column = op_get(p, "column"), *function = op_get(p, "function");
-	const char *file = hh_str(p, "file");
-	return (ch_site){
-		file ? file : "",
-		whole_of(op_get(p, "line")),
-		whole_of(column),
-		function && function->type == OP_STR ? function->str : NULL,
-		column != NULL,
-	};
+
+// a list of infos, innermost first, as frames (the outermost made first, each under the next out)
+static ch_frame *frame_of(const op_value *list) {
+	ch_frame *up = NULL;
+	for (size_t i = list->count; i > 0; i--) {
+		const op_value *info = list->items[i - 1];
+		ch_pair *pairs = hh_take((info->count ? info->count : 1) * sizeof *pairs);
+		for (size_t k = 0; k < info->count; k++) pairs[k] = (ch_pair){info->keys[k], info->items[k]};
+		ch_frame *f = ch_frame_make(pairs, info->count, up);
+		ch_frame_free(up);
+		up = f;
+	}
+	return up;
 }
 
 ch_header hh_header(const op_value *p) {
 	ch_header h = {0};
-	const op_value *time = op_get(p, "time"), *actor = op_get(p, "actor"),
-		       *at = op_get(p, "external"), *meta = op_get(p, "metadata");
+	const op_value *time = op_get(p, "time"), *actor = op_get(p, "actor"), *frame = op_get(p, "frame");
 	if (time) h.has_time = 1, h.time = (int64_t)time->num;
 	h.actor = actor;
 	h.reader = hh_str(p, "reader");
-	if (at && at->type == OP_LIST) {
-		ch_site *ss = hh_take((at->count ? at->count : 1) * sizeof *ss);
-		for (size_t i = 0; i < at->count; i++) ss[i] = site_of(at->items[i]);
-		h.external = ss;
-		h.external_length = at->count;
-	}
-	if (meta) {
-		if (meta->type != OP_MAP) hh_fail("metadata is not an object");
-		ch_entry *es = hh_take((meta->count ? meta->count : 1) * sizeof *es);
-		for (size_t i = 0; i < meta->count; i++) es[i] = (ch_entry){meta->keys[i], meta->items[i]};
-		h.metadata = es;
-		h.metadata_length = meta->count;
-	}
+	if (frame) h.frame = frame_of(frame);
 	return h;
 }
 
@@ -110,6 +104,7 @@ nd_entry *hh_entry(const op_value *p) {
 	ch_header h = given ? hh_header(given) : (ch_header){0};
 	nd_entry *e = nd_make_entry((op_value *)op_get(p, "value"), &h);
 	if (e == NULL) hh_fail("out of memory");
+	ch_frame_free(h.frame);
 	return e;
 }
 
@@ -160,30 +155,20 @@ void hh_put_header(FILE *out, const ch_header *h) {
 		comma = ",";
 	}
 	if (h->reader) fprintf(out, "%s\"reader\":", comma), op_json_string(out, h->reader), comma = ",";
-	if (h->external) {
-		fprintf(out, "%s\"external\":[", comma);
-		for (size_t i = 0; i < h->external_length; i++) {
-			const ch_site *s = &h->external[i];
-			if (i) putc(',', out);
-			fputs("{\"file\":", out);
-			op_json_string(out, s->file ? s->file : "");
-			fprintf(out, ",\"line\":%ld", s->line);
-			if (s->has_column) fprintf(out, ",\"column\":%ld", s->column);
-			if (s->function) fputs(",\"function\":", out), op_json_string(out, s->function);
+	if (h->frame) {
+		fprintf(out, "%s\"frame\":[", comma);
+		for (const ch_frame *f = h->frame; f != NULL; f = f->parent) {
+			if (f != h->frame) putc(',', out);
+			putc('{', out);
+			for (size_t i = 0; i < f->n; i++) {
+				if (i) putc(',', out);
+				op_json_string(out, f->pairs[i].key);
+				putc(':', out);
+				op_json_write(out, f->pairs[i].value);
+			}
 			putc('}', out);
 		}
 		putc(']', out);
-		comma = ",";
-	}
-	if (h->metadata) {
-		fprintf(out, "%s\"metadata\":{", comma);
-		for (size_t i = 0; i < h->metadata_length; i++) {
-			if (i) putc(',', out);
-			op_json_string(out, h->metadata[i].key);
-			putc(':', out);
-			op_json_write(out, h->metadata[i].value);
-		}
-		putc('}', out);
 		comma = ",";
 	}
 	if (h->has_op) {

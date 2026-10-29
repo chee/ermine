@@ -1,0 +1,198 @@
+{
+	"title": "a run that goes pending and then lands done keeps the change it first read: the node was written by another between (not the key it read, so the run is not due again), and the done record names the change the pending one did, not the node's current one",
+	"steps": [
+		{
+			"op": "runs",
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "a",
+			"value": {
+				"x": 0,
+				"y": 0
+			},
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "o",
+			"info": {
+				"actor": "o"
+			},
+			"expect": {}
+		},
+		{
+			"op": "effect",
+			"name": "e",
+			"scope": "o",
+			"f": [
+				{
+					"read": [
+						"value",
+						"a",
+						[
+							"x"
+						]
+					]
+				}
+			],
+			"act": 0,
+			"wait": "p",
+			"expect": {}
+		},
+		{
+			"op": "giveRun",
+			"name": "e",
+			"id": "E",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "runOf",
+			"id": "E",
+			"expect": {
+				"run": {
+					"n": 1,
+					"frame": [
+						{
+							"run": 1,
+							"mark": 1
+						},
+						{
+							"mark": 1
+						},
+						{
+							"actor": "o"
+						}
+					],
+					"end": "pending",
+					"timed": true,
+					"reads": [
+						{
+							"part": "value",
+							"id": "a",
+							"path": [
+								"x"
+							],
+							"actor": "test"
+						}
+					],
+					"writes": []
+				}
+			}
+		},
+		{
+			"op": "watch",
+			"name": "w",
+			"scope": "o",
+			"f": {
+				"do": [
+					{
+						"write": {
+							"op": "edit",
+							"part": "value",
+							"id": "a",
+							"patches": [
+								{
+									"path": [
+										"y"
+									],
+									"value": 1
+								}
+							]
+						}
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "runOf",
+			"id": "E",
+			"expect": {
+				"run": {
+					"n": 1,
+					"frame": [
+						{
+							"run": 1,
+							"mark": 1
+						},
+						{
+							"mark": 1
+						},
+						{
+							"actor": "o"
+						}
+					],
+					"end": "pending",
+					"timed": true,
+					"reads": [
+						{
+							"part": "value",
+							"id": "a",
+							"path": [
+								"x"
+							],
+							"actor": "test"
+						}
+					],
+					"writes": []
+				}
+			}
+		},
+		{
+			"op": "settle",
+			"promise": "p",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "runOf",
+			"id": "E",
+			"expect": {
+				"run": {
+					"n": 1,
+					"frame": [
+						{
+							"run": 1,
+							"mark": 1
+						},
+						{
+							"mark": 1
+						},
+						{
+							"actor": "o"
+						}
+					],
+					"end": "done",
+					"act": {
+						"end": "done"
+					},
+					"timed": true,
+					"reads": [
+						{
+							"part": "value",
+							"id": "a",
+							"path": [
+								"x"
+							],
+							"actor": "test"
+						}
+					],
+					"writes": []
+				}
+			}
+		}
+	]
+}

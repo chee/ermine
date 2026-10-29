@@ -1,0 +1,893 @@
+{
+	"title": "a send's record, the latest per handler: its number, the caller (the sending process; the host's node for the host), the handler, its args and what it returned, by reference; end done, failed with what it threw, or pending on a promise till it settles; the reads and writes made in the call; the memos made in it (they belong to the scope that placed the action, and stay: the record says made, not owned). calls never: none held",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"./n",
+						0
+					],
+					"as": "n"
+				},
+				{
+					"do": [
+						"createAction",
+						"on/echo",
+						[
+							{
+								"do": [
+									"read",
+									"$n"
+								]
+							}
+						],
+						"$0"
+					]
+				},
+				{
+					"do": [
+						"createAction",
+						"on/bump",
+						[
+							{
+								"do": [
+									"patch",
+									"$n",
+									[
+										{
+											"path": [],
+											"value": "$0"
+										}
+									]
+								]
+							}
+						],
+						"$0"
+					]
+				},
+				{
+					"do": [
+						"createAction",
+						"on/fail",
+						[],
+						[
+							"throw",
+							"nope"
+						]
+					]
+				},
+				{
+					"do": [
+						"createAction",
+						"on/slow",
+						[],
+						[
+							"later",
+							"$0"
+						]
+					]
+				},
+				{
+					"do": [
+						"createAction",
+						"on/make",
+						[
+							{
+								"do": [
+									"createMemo",
+									"inner",
+									{},
+									[
+										"read",
+										"$n"
+									]
+								]
+							}
+						],
+						[
+							"read",
+							"inner"
+						]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/q",
+			"program": [],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "start",
+			"name": "q",
+			"at": "/code/q",
+			"expect": {
+				"id": "proc:q"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"n"
+			],
+			"expect": {
+				"id": "n5"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"p",
+				"on",
+				"echo"
+			],
+			"expect": {
+				"id": "n6"
+			}
+		},
+		{
+			"op": "do",
+			"process": "q",
+			"call": [
+				"executeAction",
+				"./p/on/echo",
+				"hi"
+			],
+			"expect": {
+				"value": "hi"
+			}
+		},
+		{
+			"op": "record",
+			"kind": "call",
+			"path": [
+				"code",
+				"p",
+				"on",
+				"echo"
+			],
+			"expect": {
+				"record": {
+					"n": 1,
+					"frame": [
+						{
+							"caller": {
+								"node": "proc:q",
+								"actor": "test"
+							},
+							"handler": "n6",
+							"call": 1
+						},
+						{
+							"handler": "n6"
+						},
+						{
+							"process": [
+								"code",
+								"p"
+							]
+						},
+						{
+							"process": [
+								"code",
+								"p"
+							],
+							"node": "proc:p",
+							"locations": [
+								"program"
+							]
+						},
+						{
+							"processes": "start"
+						},
+						{
+							"actor": "test",
+							"node": "n1"
+						}
+					],
+					"caller": "proc:q",
+					"handler": "n6",
+					"args": [
+						"hi"
+					],
+					"end": "done",
+					"returned": "hi",
+					"reads": [
+						[
+							"value",
+							"n5"
+						]
+					],
+					"writes": []
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "q",
+			"call": [
+				"executeAction",
+				"./p/on/echo",
+				"yo"
+			],
+			"expect": {
+				"value": "yo"
+			}
+		},
+		{
+			"op": "record",
+			"kind": "call",
+			"path": [
+				"code",
+				"p",
+				"on",
+				"echo"
+			],
+			"expect": {
+				"record": {
+					"n": 2,
+					"frame": [
+						{
+							"caller": {
+								"node": "proc:q",
+								"actor": "test"
+							},
+							"handler": "n6",
+							"call": 2
+						},
+						{
+							"handler": "n6"
+						},
+						{
+							"process": [
+								"code",
+								"p"
+							]
+						},
+						{
+							"process": [
+								"code",
+								"p"
+							],
+							"node": "proc:p",
+							"locations": [
+								"program"
+							]
+						},
+						{
+							"processes": "start"
+						},
+						{
+							"actor": "test",
+							"node": "n1"
+						}
+					],
+					"caller": "proc:q",
+					"handler": "n6",
+					"args": [
+						"yo"
+					],
+					"end": "done",
+					"returned": "yo",
+					"reads": [
+						[
+							"value",
+							"n5"
+						]
+					],
+					"writes": []
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "q",
+			"call": [
+				"executeAction",
+				"./p/on/bump",
+				7
+			],
+			"expect": {
+				"value": 7
+			}
+		},
+		{
+			"op": "record",
+			"kind": "call",
+			"path": [
+				"code",
+				"p",
+				"on",
+				"bump"
+			],
+			"expect": {
+				"record": {
+					"n": 3,
+					"frame": [
+						{
+							"caller": {
+								"node": "proc:q",
+								"actor": "test"
+							},
+							"handler": "n8",
+							"call": 3
+						},
+						{
+							"handler": "n8"
+						},
+						{
+							"process": [
+								"code",
+								"p"
+							]
+						},
+						{
+							"process": [
+								"code",
+								"p"
+							],
+							"node": "proc:p",
+							"locations": [
+								"program"
+							]
+						},
+						{
+							"processes": "start"
+						},
+						{
+							"actor": "test",
+							"node": "n1"
+						}
+					],
+					"caller": "proc:q",
+					"handler": "n8",
+					"args": [
+						7
+					],
+					"end": "done",
+					"returned": 7,
+					"reads": [],
+					"writes": [
+						[
+							"value",
+							"n5"
+						]
+					]
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "q",
+			"call": [
+				"executeAction",
+				"./p/on/fail"
+			],
+			"fails": true,
+			"expect": {
+				"error": "Error: nope"
+			}
+		},
+		{
+			"op": "record",
+			"kind": "call",
+			"path": [
+				"code",
+				"p",
+				"on",
+				"fail"
+			],
+			"expect": {
+				"record": {
+					"n": 4,
+					"frame": [
+						{
+							"caller": {
+								"node": "proc:q",
+								"actor": "test"
+							},
+							"handler": "n9",
+							"call": 4
+						},
+						{
+							"handler": "n9"
+						},
+						{
+							"process": [
+								"code",
+								"p"
+							]
+						},
+						{
+							"process": [
+								"code",
+								"p"
+							],
+							"node": "proc:p",
+							"locations": [
+								"program"
+							]
+						},
+						{
+							"processes": "start"
+						},
+						{
+							"actor": "test",
+							"node": "n1"
+						}
+					],
+					"caller": "proc:q",
+					"handler": "n9",
+					"args": [],
+					"end": "failed",
+					"error": "nope",
+					"reads": [],
+					"writes": []
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "q",
+			"call": [
+				"executeAction",
+				"./p/on/slow",
+				3
+			],
+			"expect": {
+				"value": {}
+			}
+		},
+		{
+			"op": "record",
+			"kind": "call",
+			"path": [
+				"code",
+				"p",
+				"on",
+				"slow"
+			],
+			"expect": {
+				"record": {
+					"n": 5,
+					"frame": [
+						{
+							"caller": {
+								"node": "proc:q",
+								"actor": "test"
+							},
+							"handler": "n10",
+							"call": 5
+						},
+						{
+							"handler": "n10"
+						},
+						{
+							"process": [
+								"code",
+								"p"
+							]
+						},
+						{
+							"process": [
+								"code",
+								"p"
+							],
+							"node": "proc:p",
+							"locations": [
+								"program"
+							]
+						},
+						{
+							"processes": "start"
+						},
+						{
+							"actor": "test",
+							"node": "n1"
+						}
+					],
+					"caller": "proc:q",
+					"handler": "n10",
+					"args": [
+						3
+					],
+					"end": "pending",
+					"reads": [],
+					"writes": []
+				}
+			}
+		},
+		{
+			"op": "settle",
+			"expect": {}
+		},
+		{
+			"op": "record",
+			"kind": "call",
+			"path": [
+				"code",
+				"p",
+				"on",
+				"slow"
+			],
+			"expect": {
+				"record": {
+					"n": 5,
+					"frame": [
+						{
+							"caller": {
+								"node": "proc:q",
+								"actor": "test"
+							},
+							"handler": "n10",
+							"call": 5
+						},
+						{
+							"handler": "n10"
+						},
+						{
+							"process": [
+								"code",
+								"p"
+							]
+						},
+						{
+							"process": [
+								"code",
+								"p"
+							],
+							"node": "proc:p",
+							"locations": [
+								"program"
+							]
+						},
+						{
+							"processes": "start"
+						},
+						{
+							"actor": "test",
+							"node": "n1"
+						}
+					],
+					"caller": "proc:q",
+					"handler": "n10",
+					"args": [
+						3
+					],
+					"end": "done",
+					"returned": 3,
+					"reads": [],
+					"writes": []
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "q",
+			"call": [
+				"executeAction",
+				"./p/on/make"
+			],
+			"expect": {}
+		},
+		{
+			"op": "record",
+			"kind": "call",
+			"path": [
+				"code",
+				"p",
+				"on",
+				"make"
+			],
+			"expect": {
+				"record": {
+					"n": 6,
+					"frame": [
+						{
+							"caller": {
+								"node": "proc:q",
+								"actor": "test"
+							},
+							"handler": "n11",
+							"call": 6
+						},
+						{
+							"handler": "n11"
+						},
+						{
+							"process": [
+								"code",
+								"p"
+							]
+						},
+						{
+							"process": [
+								"code",
+								"p"
+							],
+							"node": "proc:p",
+							"locations": [
+								"program"
+							]
+						},
+						{
+							"processes": "start"
+						},
+						{
+							"actor": "test",
+							"node": "n1"
+						}
+					],
+					"caller": "proc:q",
+					"handler": "n11",
+					"args": [],
+					"end": "done",
+					"reads": [
+						[
+							"value",
+							"n12"
+						]
+					],
+					"writes": [
+						[
+							"children",
+							"proc:p"
+						],
+						[
+							"attributes",
+							"n12"
+						]
+					],
+					"made": [
+						[
+							"memo",
+							"n12"
+						]
+					]
+				}
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"p",
+				"inner"
+			],
+			"expect": {
+				"id": "n12"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"executeAction",
+				"/code/p/on/echo",
+				"host"
+			],
+			"expect": {
+				"value": "host"
+			}
+		},
+		{
+			"op": "record",
+			"kind": "call",
+			"path": [
+				"code",
+				"p",
+				"on",
+				"echo"
+			],
+			"expect": {
+				"record": {
+					"n": 7,
+					"frame": [
+						{
+							"caller": {
+								"node": "n1",
+								"actor": "test"
+							},
+							"handler": "n6",
+							"call": 7,
+							"locations": [
+								"program"
+							]
+						},
+						{
+							"handler": "n6"
+						},
+						{
+							"process": [
+								"code",
+								"p"
+							]
+						},
+						{
+							"process": [
+								"code",
+								"p"
+							],
+							"node": "proc:p",
+							"locations": [
+								"program"
+							]
+						},
+						{
+							"processes": "start"
+						},
+						{
+							"actor": "test",
+							"node": "n1"
+						}
+					],
+					"caller": "n1",
+					"handler": "n6",
+					"args": [
+						"host"
+					],
+					"end": "done",
+					"returned": "host",
+					"reads": [
+						[
+							"value",
+							"n5"
+						]
+					],
+					"writes": []
+				}
+			}
+		},
+		{
+			"op": "ermine",
+			"calls": "never",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"./n",
+						0
+					],
+					"as": "n"
+				},
+				{
+					"do": [
+						"createAction",
+						"on/echo",
+						[
+							{
+								"do": [
+									"read",
+									"$n"
+								]
+							}
+						],
+						"$0"
+					]
+				},
+				{
+					"do": [
+						"createAction",
+						"on/bump",
+						[
+							{
+								"do": [
+									"patch",
+									"$n",
+									[
+										{
+											"path": [],
+											"value": "$0"
+										}
+									]
+								]
+							}
+						],
+						"$0"
+					]
+				},
+				{
+					"do": [
+						"createAction",
+						"on/fail",
+						[],
+						[
+							"throw",
+							"nope"
+						]
+					]
+				},
+				{
+					"do": [
+						"createAction",
+						"on/slow",
+						[],
+						[
+							"later",
+							"$0"
+						]
+					]
+				},
+				{
+					"do": [
+						"createAction",
+						"on/make",
+						[
+							{
+								"do": [
+									"createMemo",
+									"inner",
+									{},
+									[
+										"read",
+										"$n"
+									]
+								]
+							}
+						],
+						[
+							"read",
+							"inner"
+						]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"executeAction",
+				"on/echo",
+				"hi"
+			],
+			"expect": {
+				"value": "hi"
+			}
+		},
+		{
+			"op": "record",
+			"kind": "call",
+			"path": [
+				"code",
+				"p",
+				"on",
+				"echo"
+			],
+			"expect": {}
+		}
+	]
+}

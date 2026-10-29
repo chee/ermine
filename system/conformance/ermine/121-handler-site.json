@@ -1,0 +1,272 @@
+{
+	"title": "a handler the host made: a call from outside has locations of its own, in its frame (the click), under the handler's, under the host's; the handler's own placement is a write from outside. a call from a process's setup (inside) has none: its frame is under the handler's alone",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/x",
+				0
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"createAction",
+				"/on/put",
+				[
+					{
+						"do": [
+							"patch",
+							"/x",
+							[
+								{
+									"path": [],
+									"value": "$0"
+								}
+							]
+						]
+					}
+				]
+			]
+		},
+		{
+			"op": "id",
+			"path": [
+				"x"
+			],
+			"expect": {
+				"id": "n2"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"on",
+				"put"
+			],
+			"expect": {
+				"id": "n3"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"executeAction",
+				"/on/put",
+				1
+			]
+		},
+		{
+			"op": "frame",
+			"part": "value",
+			"id": "n2",
+			"expect": {
+				"frame": [
+					{
+						"caller": {
+							"node": "n1",
+							"actor": "test"
+						},
+						"handler": "n3",
+						"call": 1,
+						"locations": [
+							"program"
+						]
+					},
+					{
+						"handler": "n3"
+					},
+					{
+						"actor": "test",
+						"node": "n1"
+					}
+				]
+			}
+		},
+		{
+			"op": "frame",
+			"part": "value",
+			"id": "n2",
+			"expect": {
+				"frame": [
+					{
+						"caller": {
+							"node": "n1",
+							"actor": "test"
+						},
+						"handler": "n3",
+						"call": 1,
+						"locations": [
+							"program"
+						]
+					},
+					{
+						"handler": "n3"
+					},
+					{
+						"actor": "test",
+						"node": "n1"
+					}
+				]
+			}
+		},
+		{
+			"op": "frame",
+			"part": "value",
+			"id": "n3",
+			"expect": {
+				"frame": [
+					{
+						"locations": [
+							"handler"
+						]
+					},
+					{
+						"actor": "test",
+						"node": "n1"
+					}
+				]
+			}
+		},
+		{
+			"op": "callframe",
+			"id": "n3",
+			"expect": {
+				"frame": [
+					{
+						"caller": {
+							"node": "n1",
+							"actor": "test"
+						},
+						"handler": "n3",
+						"call": 1,
+						"locations": [
+							"program"
+						]
+					},
+					{
+						"handler": "n3"
+					},
+					{
+						"actor": "test",
+						"node": "n1"
+					}
+				]
+			}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"./doc",
+						0
+					]
+				},
+				{
+					"do": [
+						"executeAction",
+						"/on/put",
+						2
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/x"
+			],
+			"expect": {
+				"value": 2
+			}
+		},
+		{
+			"op": "frame",
+			"part": "value",
+			"id": "n2",
+			"expect": {
+				"frame": [
+					{
+						"locations": [
+							"program"
+						]
+					},
+					{
+						"caller": {
+							"node": "proc:p",
+							"actor": "test"
+						},
+						"handler": "n3",
+						"call": 2
+					},
+					{
+						"handler": "n3"
+					},
+					{
+						"actor": "test",
+						"node": "n1"
+					}
+				]
+			}
+		},
+		{
+			"op": "frame",
+			"part": "value",
+			"id": "n3",
+			"expect": {
+				"frame": [
+					{
+						"locations": [
+							"handler"
+						]
+					},
+					{
+						"actor": "test",
+						"node": "n1"
+					}
+				]
+			}
+		},
+		{
+			"op": "callframe",
+			"id": "n3",
+			"expect": {
+				"frame": [
+					{
+						"caller": {
+							"node": "proc:p",
+							"actor": "test"
+						},
+						"handler": "n3",
+						"call": 2
+					},
+					{
+						"handler": "n3"
+					},
+					{
+						"actor": "test",
+						"node": "n1"
+					}
+				]
+			}
+		}
+	]
+}

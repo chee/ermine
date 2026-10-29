@@ -1,0 +1,346 @@
+{
+	"title": "an effect's act that throws shows on its run record (act: failed with its message; done when it did not throw) and on its node's status (failed with the message); a run done leaves it, the next act that succeeds takes it away; a failed act again shows again",
+	"steps": [
+		{
+			"op": "runs",
+			"expect": {}
+		},
+		{
+			"op": "status",
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "k",
+			"value": {
+				"n": 0,
+				"bad": true
+			},
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "o",
+			"info": {
+				"actor": "o"
+			},
+			"expect": {}
+		},
+		{
+			"op": "effect",
+			"name": "e",
+			"scope": "o",
+			"f": [
+				{
+					"read": [
+						"value",
+						"k",
+						[
+							"n"
+						]
+					]
+				}
+			],
+			"act": {
+				"if": [
+					{
+						"read": [
+							"value",
+							"k",
+							[
+								"bad"
+							]
+						]
+					},
+					{
+						"throw": "act boom"
+					},
+					0
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "giveRun",
+			"name": "e",
+			"id": "E",
+			"expect": {}
+		},
+		{
+			"op": "give",
+			"name": "e",
+			"id": "E",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "runOf",
+			"id": "E",
+			"expect": {
+				"run": {
+					"n": 1,
+					"frame": [
+						{
+							"run": 1,
+							"mark": 1
+						},
+						{
+							"mark": 1
+						},
+						{
+							"actor": "o"
+						}
+					],
+					"end": "done",
+					"act": {
+						"end": "failed",
+						"error": "act boom"
+					},
+					"timed": true,
+					"reads": [
+						{
+							"part": "value",
+							"id": "k",
+							"path": [
+								"n"
+							],
+							"actor": "test"
+						}
+					],
+					"writes": []
+				}
+			}
+		},
+		{
+			"op": "statusOf",
+			"id": "E",
+			"expect": {
+				"status": {
+					"error": "act boom"
+				}
+			}
+		},
+		{
+			"op": "edit",
+			"part": "value",
+			"id": "k",
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 1
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "runOf",
+			"id": "E",
+			"expect": {
+				"run": {
+					"n": 2,
+					"frame": [
+						{
+							"run": 2,
+							"mark": 2
+						},
+						{
+							"mark": 1
+						},
+						{
+							"actor": "o"
+						}
+					],
+					"end": "done",
+					"act": {
+						"end": "failed",
+						"error": "act boom"
+					},
+					"timed": true,
+					"reads": [
+						{
+							"part": "value",
+							"id": "k",
+							"path": [
+								"n"
+							],
+							"actor": "test"
+						}
+					],
+					"writes": []
+				}
+			}
+		},
+		{
+			"op": "statusOf",
+			"id": "E",
+			"expect": {
+				"status": {
+					"error": "act boom"
+				}
+			}
+		},
+		{
+			"op": "edit",
+			"part": "value",
+			"id": "k",
+			"patches": [
+				{
+					"path": [
+						"bad"
+					],
+					"value": false
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "edit",
+			"part": "value",
+			"id": "k",
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 2
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "runOf",
+			"id": "E",
+			"expect": {
+				"run": {
+					"n": 3,
+					"frame": [
+						{
+							"run": 3,
+							"mark": 7
+						},
+						{
+							"mark": 1
+						},
+						{
+							"actor": "o"
+						}
+					],
+					"end": "done",
+					"act": {
+						"end": "done"
+					},
+					"timed": true,
+					"reads": [
+						{
+							"part": "value",
+							"id": "k",
+							"path": [
+								"n"
+							],
+							"actor": "test"
+						}
+					],
+					"writes": []
+				}
+			}
+		},
+		{
+			"op": "statusOf",
+			"id": "E",
+			"expect": {
+				"status": null
+			}
+		},
+		{
+			"op": "watch",
+			"name": "actor",
+			"scope": "o",
+			"f": {
+				"run": [
+					"E",
+					"act"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "actor",
+			"expect": {
+				"runs": 1,
+				"value": {
+					"end": "done"
+				}
+			}
+		},
+		{
+			"op": "edit",
+			"part": "value",
+			"id": "k",
+			"patches": [
+				{
+					"path": [
+						"bad"
+					],
+					"value": true
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "edit",
+			"part": "value",
+			"id": "k",
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 3
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "actor",
+			"expect": {
+				"runs": 3,
+				"value": {
+					"end": "failed",
+					"error": "act boom"
+				}
+			}
+		},
+		{
+			"op": "statusOf",
+			"id": "E",
+			"expect": {
+				"status": {
+					"error": "act boom"
+				}
+			}
+		}
+	]
+}

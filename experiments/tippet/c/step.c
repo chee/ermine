@@ -2,7 +2,7 @@
 // never encoded twice
 #include <string.h>
 
-#include "../../../ermine/encoding/c/blake3/blake3.h"
+#include "../../../encoding/c/blake3/blake3.h"
 #include "wire.h"
 
 const char *tp_why(int code) {

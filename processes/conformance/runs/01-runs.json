@@ -1,0 +1,806 @@
+{
+	"title": "a computer's latest run is in the runs' own table, by its node id (not in the graph's table): its number, how it ended (an error with its message), and its reads in the order first read, each once, as places names them, each with the change it saw (whose: the actor), a key places can't name as null; its writes, each with its change. a rerun reading the same writes nothing to its reads, so a reader of them does not rerun; a rerun reading differently replaces them; a pending run keeps what it read; a computer given no node has none",
+	"steps": [
+		{
+			"op": "runs",
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "a",
+			"value": {
+				"x": 0,
+				"y": 0
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "b",
+			"value": {
+				"x": 0,
+				"y": 0
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "k",
+			"value": {
+				"go": false
+			},
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "o",
+			"info": {
+				"actor": "o"
+			},
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "two",
+			"scope": "o",
+			"f": {
+				"do": [
+					{
+						"read": [
+							"value",
+							"b",
+							[
+								"x"
+							]
+						]
+					},
+					{
+						"read": [
+							"value",
+							"a"
+						]
+					},
+					{
+						"read": [
+							"value",
+							"b",
+							[
+								"x"
+							]
+						]
+					},
+					{
+						"names": []
+					},
+					1
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "same",
+			"scope": "o",
+			"f": {
+				"do": [
+					{
+						"track": "t"
+					},
+					{
+						"read": [
+							"value",
+							"a",
+							[
+								"y"
+							]
+						]
+					},
+					1
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "diff",
+			"scope": "o",
+			"f": {
+				"if": [
+					{
+						"read": [
+							"value",
+							"a",
+							[
+								"x"
+							]
+						]
+					},
+					{
+						"read": [
+							"value",
+							"b",
+							[
+								"y"
+							]
+						]
+					},
+					0
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "pend",
+			"scope": "o",
+			"f": {
+				"do": [
+					{
+						"read": [
+							"value",
+							"b",
+							[
+								"y"
+							]
+						]
+					},
+					{
+						"wait": null
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "fail",
+			"scope": "o",
+			"f": {
+				"do": [
+					{
+						"read": [
+							"value",
+							"k",
+							[
+								"go"
+							]
+						]
+					},
+					{
+						"throw": "boom"
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "writer",
+			"scope": "o",
+			"f": {
+				"if": [
+					{
+						"read": [
+							"value",
+							"k",
+							[
+								"go"
+							]
+						]
+					},
+					{
+						"write": {
+							"op": "edit",
+							"part": "value",
+							"id": "a",
+							"patches": [
+								{
+									"path": [
+										"x"
+									],
+									"value": 1
+								}
+							]
+						}
+					},
+					0
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "alone",
+			"scope": "o",
+			"f": {
+				"read": [
+					"value",
+					"a",
+					[
+						"y"
+					]
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "giveRun",
+			"name": "two",
+			"id": "T",
+			"expect": {}
+		},
+		{
+			"op": "giveRun",
+			"name": "same",
+			"id": "S",
+			"expect": {}
+		},
+		{
+			"op": "giveRun",
+			"name": "diff",
+			"id": "D",
+			"expect": {}
+		},
+		{
+			"op": "giveRun",
+			"name": "pend",
+			"id": "P",
+			"expect": {}
+		},
+		{
+			"op": "giveRun",
+			"name": "fail",
+			"id": "F",
+			"expect": {}
+		},
+		{
+			"op": "giveRun",
+			"name": "writer",
+			"id": "W",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "runOf",
+			"id": "T",
+			"expect": {
+				"run": {
+					"n": 1,
+					"frame": [
+						{
+							"run": 1,
+							"mark": 1
+						},
+						{
+							"mark": 1
+						},
+						{
+							"actor": "o"
+						}
+					],
+					"end": "done",
+					"timed": true,
+					"reads": [
+						{
+							"part": "value",
+							"id": "b",
+							"path": [
+								"x"
+							],
+							"actor": "test"
+						},
+						{
+							"part": "value",
+							"id": "a",
+							"path": [],
+							"actor": "test"
+						},
+						{
+							"part": "children",
+							"id": "R",
+							"path": [],
+							"keys": true,
+							"actor": null
+						}
+					],
+					"writes": []
+				}
+			}
+		},
+		{
+			"op": "runOf",
+			"id": "S",
+			"expect": {
+				"run": {
+					"n": 1,
+					"frame": [
+						{
+							"run": 1,
+							"mark": 2
+						},
+						{
+							"mark": 2
+						},
+						{
+							"actor": "o"
+						}
+					],
+					"end": "done",
+					"timed": true,
+					"reads": [
+						null,
+						{
+							"part": "value",
+							"id": "a",
+							"path": [
+								"y"
+							],
+							"actor": "test"
+						}
+					],
+					"writes": []
+				}
+			}
+		},
+		{
+			"op": "runOf",
+			"id": "D",
+			"expect": {
+				"run": {
+					"n": 1,
+					"frame": [
+						{
+							"run": 1,
+							"mark": 3
+						},
+						{
+							"mark": 3
+						},
+						{
+							"actor": "o"
+						}
+					],
+					"end": "done",
+					"timed": true,
+					"reads": [
+						{
+							"part": "value",
+							"id": "a",
+							"path": [
+								"x"
+							],
+							"actor": "test"
+						}
+					],
+					"writes": []
+				}
+			}
+		},
+		{
+			"op": "runOf",
+			"id": "P",
+			"expect": {
+				"run": {
+					"n": 1,
+					"frame": [
+						{
+							"run": 1,
+							"mark": 4
+						},
+						{
+							"mark": 4
+						},
+						{
+							"actor": "o"
+						}
+					],
+					"end": "pending",
+					"timed": true,
+					"reads": [
+						{
+							"part": "value",
+							"id": "b",
+							"path": [
+								"y"
+							],
+							"actor": "test"
+						}
+					],
+					"writes": []
+				}
+			}
+		},
+		{
+			"op": "runOf",
+			"id": "F",
+			"expect": {
+				"run": {
+					"n": 1,
+					"frame": [
+						{
+							"run": 1,
+							"mark": 5
+						},
+						{
+							"mark": 5
+						},
+						{
+							"actor": "o"
+						}
+					],
+					"end": "failed",
+					"error": "boom",
+					"timed": true,
+					"reads": [
+						{
+							"part": "value",
+							"id": "k",
+							"path": [
+								"go"
+							],
+							"actor": "test"
+						}
+					],
+					"writes": []
+				}
+			}
+		},
+		{
+			"op": "runOf",
+			"id": "W",
+			"expect": {
+				"run": {
+					"n": 1,
+					"frame": [
+						{
+							"run": 1,
+							"mark": 6
+						},
+						{
+							"mark": 6
+						},
+						{
+							"actor": "o"
+						}
+					],
+					"end": "done",
+					"timed": true,
+					"reads": [
+						{
+							"part": "value",
+							"id": "k",
+							"path": [
+								"go"
+							],
+							"actor": "test"
+						}
+					],
+					"writes": []
+				}
+			}
+		},
+		{
+			"op": "runOf",
+			"id": "alone",
+			"expect": {
+				"run": null
+			}
+		},
+		{
+			"op": "node",
+			"part": "attributes",
+			"id": "S",
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "reader",
+			"scope": "o",
+			"f": {
+				"if": [
+					{
+						"run": [
+							"S",
+							"reads"
+						]
+					},
+					{
+						"count": {
+							"run": [
+								"S",
+								"reads"
+							]
+						}
+					},
+					0
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "reader",
+			"expect": {
+				"runs": 1,
+				"value": 2
+			}
+		},
+		{
+			"op": "mark",
+			"keys": [
+				"t"
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "runOf",
+			"id": "S",
+			"expect": {
+				"run": {
+					"n": 2,
+					"frame": [
+						{
+							"run": 2,
+							"mark": 9
+						},
+						{
+							"mark": 2
+						},
+						{
+							"actor": "o"
+						}
+					],
+					"end": "done",
+					"timed": true,
+					"reads": [
+						null,
+						{
+							"part": "value",
+							"id": "a",
+							"path": [
+								"y"
+							],
+							"actor": "test"
+						}
+					],
+					"writes": []
+				}
+			}
+		},
+		{
+			"op": "state",
+			"name": "reader",
+			"expect": {
+				"runs": 1,
+				"value": 2
+			}
+		},
+		{
+			"op": "edit",
+			"part": "value",
+			"id": "k",
+			"patches": [
+				{
+					"path": [
+						"go"
+					],
+					"value": true
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "runOf",
+			"id": "W",
+			"expect": {
+				"run": {
+					"n": 2,
+					"frame": [
+						{
+							"run": 2,
+							"mark": 11
+						},
+						{
+							"mark": 6
+						},
+						{
+							"actor": "o"
+						}
+					],
+					"end": "done",
+					"timed": true,
+					"reads": [
+						{
+							"part": "value",
+							"id": "k",
+							"path": [
+								"go"
+							],
+							"actor": "test"
+						}
+					],
+					"writes": [
+						{
+							"part": "value",
+							"id": "a",
+							"actor": "o"
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "runOf",
+			"id": "D",
+			"expect": {
+				"run": {
+					"n": 2,
+					"frame": [
+						{
+							"run": 2,
+							"mark": 13
+						},
+						{
+							"mark": 3
+						},
+						{
+							"actor": "o"
+						}
+					],
+					"end": "done",
+					"timed": true,
+					"reads": [
+						{
+							"part": "value",
+							"id": "a",
+							"path": [
+								"x"
+							],
+							"actor": "o"
+						},
+						{
+							"part": "value",
+							"id": "b",
+							"path": [
+								"y"
+							],
+							"actor": "test"
+						}
+					],
+					"writes": []
+				}
+			}
+		},
+		{
+			"op": "runOf",
+			"id": "T",
+			"expect": {
+				"run": {
+					"n": 2,
+					"frame": [
+						{
+							"run": 2,
+							"mark": 13
+						},
+						{
+							"mark": 1
+						},
+						{
+							"actor": "o"
+						}
+					],
+					"end": "done",
+					"timed": true,
+					"reads": [
+						{
+							"part": "value",
+							"id": "b",
+							"path": [
+								"x"
+							],
+							"actor": "test"
+						},
+						{
+							"part": "value",
+							"id": "a",
+							"path": [],
+							"actor": "o"
+						},
+						{
+							"part": "children",
+							"id": "R",
+							"path": [],
+							"keys": true,
+							"actor": null
+						}
+					],
+					"writes": []
+				}
+			}
+		},
+		{
+			"op": "runOf",
+			"id": "F",
+			"expect": {
+				"run": {
+					"n": 2,
+					"frame": [
+						{
+							"run": 2,
+							"mark": 11
+						},
+						{
+							"mark": 5
+						},
+						{
+							"actor": "o"
+						}
+					],
+					"end": "failed",
+					"error": "boom",
+					"timed": true,
+					"reads": [
+						{
+							"part": "value",
+							"id": "k",
+							"path": [
+								"go"
+							],
+							"actor": "test"
+						}
+					],
+					"writes": []
+				}
+			}
+		},
+		{
+			"op": "runOf",
+			"id": "P",
+			"expect": {
+				"run": {
+					"n": 1,
+					"frame": [
+						{
+							"run": 1,
+							"mark": 4
+						},
+						{
+							"mark": 4
+						},
+						{
+							"actor": "o"
+						}
+					],
+					"end": "pending",
+					"timed": true,
+					"reads": [
+						{
+							"part": "value",
+							"id": "b",
+							"path": [
+								"y"
+							],
+							"actor": "test"
+						}
+					],
+					"writes": []
+				}
+			}
+		}
+	]
+}

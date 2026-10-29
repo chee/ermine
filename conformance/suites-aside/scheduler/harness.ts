@@ -17,15 +17,15 @@
 // program: as steps.ts, or a path (list) read from the process's place; none there: pending.
 // moment: as SCHEDULER.tex's, reads without items, errors as codes.
 // error: {"error": code} (normal.ts); the harness goes on.
-import createNode from "@ermine/core/node"
-import { rules } from "@ermine/core/protect"
+import createNode from "@ermine/graph/node"
+import { rules } from "@ermine/protect"
 import {
 	type Api,
 	createScheduler as reference,
 	type Finder,
 	type Moment,
 	PENDING,
-} from "@ermine/core/scheduler"
+} from "@ermine/reactivity"
 import { code, json, operate, version } from "./normal.ts"
 import { load, program } from "./steps.ts"
 

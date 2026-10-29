@@ -1,0 +1,251 @@
+{
+	"title": "a generator action that never yields gives a promise already settled (its return, or the error it failed with), and its record ends at once: the maker's hold on the promise is let go either way, the call's promise as data",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/a",
+				0
+			]
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"createAction",
+						"on/quick",
+						[
+							{
+								"do": [
+									"patch",
+									"/a",
+									[
+										{
+											"path": [],
+											"value": 1
+										}
+									]
+								]
+							}
+						],
+						[
+							"inc",
+							"$0"
+						],
+						"gen"
+					]
+				},
+				{
+					"do": [
+						"createAction",
+						"on/bad",
+						[
+							{
+								"do": [
+									"patch",
+									"/missing",
+									[
+										{
+											"path": [],
+											"value": 1
+										}
+									]
+								]
+							}
+						],
+						0,
+						"gen"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"executeAction",
+				"/code/p/on/quick",
+				10
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"executeAction",
+				"/code/p/on/bad",
+				1
+			]
+		},
+		{
+			"op": "log",
+			"name": "promised",
+			"expect": {
+				"values": [
+					[
+						11
+					],
+					[
+						"rejected",
+						"nothing-there (missing)"
+					]
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/a"
+			],
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "record",
+			"kind": "call",
+			"path": [
+				"code",
+				"p",
+				"on",
+				"quick"
+			],
+			"expect": {
+				"record": {
+					"n": 1,
+					"frame": [
+						{
+							"caller": {
+								"node": "n1",
+								"actor": "test"
+							},
+							"handler": "n5",
+							"call": 1,
+							"locations": [
+								"program"
+							]
+						},
+						{
+							"handler": "n5"
+						},
+						{
+							"process": [
+								"code",
+								"p"
+							]
+						},
+						{
+							"process": [
+								"code",
+								"p"
+							],
+							"node": "proc:p",
+							"locations": [
+								"program"
+							]
+						},
+						{
+							"processes": "start"
+						},
+						{
+							"actor": "test",
+							"node": "n1"
+						}
+					],
+					"caller": "n1",
+					"handler": "n5",
+					"args": [
+						10
+					],
+					"end": "done",
+					"returned": 11,
+					"reads": [],
+					"writes": [
+						[
+							"value",
+							"n2"
+						]
+					]
+				}
+			}
+		},
+		{
+			"op": "record",
+			"kind": "call",
+			"path": [
+				"code",
+				"p",
+				"on",
+				"bad"
+			],
+			"expect": {
+				"record": {
+					"n": 2,
+					"frame": [
+						{
+							"caller": {
+								"node": "n1",
+								"actor": "test"
+							},
+							"handler": "n7",
+							"call": 2,
+							"locations": [
+								"program"
+							]
+						},
+						{
+							"handler": "n7"
+						},
+						{
+							"process": [
+								"code",
+								"p"
+							]
+						},
+						{
+							"process": [
+								"code",
+								"p"
+							],
+							"node": "proc:p",
+							"locations": [
+								"program"
+							]
+						},
+						{
+							"processes": "start"
+						},
+						{
+							"actor": "test",
+							"node": "n1"
+						}
+					],
+					"caller": "n1",
+					"handler": "n7",
+					"args": [
+						1
+					],
+					"end": "failed",
+					"error": "nothing-there (missing)",
+					"reads": [],
+					"writes": []
+				}
+			}
+		}
+	]
+}

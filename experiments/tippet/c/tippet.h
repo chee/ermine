@@ -77,7 +77,7 @@ typedef struct {
 	tp_span on;
 } tp_step;
 
-// a device's own id as text, ermine:ed01 and its key's hex (ermine/ids): how long
+// a device's own id as text, ermine:ed01 and its key's hex (ids): how long
 #define TP_OWN_ID 75
 
 // 0: the bytes are a step, its fields in *s; TP_NOTSTEP: they are not (../WIRE.md step)

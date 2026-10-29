@@ -4,7 +4,7 @@
 # tippet-http-test (the http client), tippet-review-test-check (check_c_review_test.c, with the
 # sanitizers), and on macOS tippet-catchup-bench (a device's heap, catching up). tippet's own
 # files build as C99 with every warning an error, but history.c and the harness's adapter, on the
-# graph, as C11 (op's value.h is), every warning an error; what it reuses (ermine/encoding's cbor
+# graph, as C11 (op's value.h is), every warning an error; what it reuses (encoding's cbor
 # and blake3, ed25519, the graph, the harness loop) as C11, as the root Makefile builds them.
 #   sh experiments/tippet/c/build.sh          all of them
 #   SIZE=1 sh experiments/tippet/c/build.sh   and each object's size, at -Os
@@ -18,10 +18,10 @@ mkdir -p "$out"
 own="wire step pack sign log store store_file sync http"
 # on the graph: C11
 graph="history"
-reused="core/ed25519/c/ed25519 core/ed25519/c/sha2 ermine/encoding/c/cbor ermine/encoding/c/json ermine/encoding/c/blake3/blake3 ermine/encoding/c/blake3/blake3_dispatch ermine/encoding/c/blake3/blake3_portable"
+reused="encoding/ed25519/c/ed25519 encoding/ed25519/c/sha2 encoding/c/cbor encoding/c/json encoding/c/blake3/blake3 encoding/c/blake3/blake3_dispatch encoding/c/blake3/blake3_portable"
 # the graph: table, node, op, places, scheduler (the root Makefile's places_src, but its harnesses)
-places="core/places/c/places core/unread/c/unread core/places/c/cache core/clingy/c/clingy core/scheduler/c/selector core/places/c/status core/table/c/table core/node/c/node core/changeable/c/update core/changeable/c/value core/changeable/c/apply core/changeable/c/invert core/scheduler/c/paths core/scheduler/c/scheduler core/scheduler/c/order core/scheduler/c/rank core/scheduler/c/causes core/scheduler/c/ptrmap core/scheduler/c/tracker"
-harness="conformance/c/harness conformance/c/protocol_harness core/changeable/c/json"
+places="places/c/places crow/c/crow places/c/crowify processes/c/status graph/c/table graph/c/node graph/c/update changeable/c/value changeable/c/frame changeable/c/apply changeable/c/invert reactivity/c/paths reactivity/c/scheduler reactivity/c/order reactivity/c/rank reactivity/c/causes changeable/c/ptrmap reactivity/c/tracker"
+harness="conformance/c/harness conformance/c/protocol_harness changeable/c/json"
 STRICT="-std=c99 -Wall -Wextra -Wpedantic -Werror"
 LOOSE="-std=c11 -Wall -Wextra -Wpedantic"
 BLAKE3="-DBLAKE3_NO_SSE2 -DBLAKE3_NO_SSE41 -DBLAKE3_NO_AVX2 -DBLAKE3_NO_AVX512 -DBLAKE3_USE_NEON=0"
@@ -67,7 +67,7 @@ link() {
 	case "$main" in
 		*harness*) $CC $opt -o "$here/$bin" $objs "$mainobj" ;;
 		catchup* | check_c_review*) $CC $opt -o "$here/$bin" $(echo "$objs" | tr ' ' '\n' | grep -v -e conformance_c_) "$mainobj" ;;
-		*) $CC $opt -o "$here/$bin" $(echo "$objs" | tr ' ' '\n' | grep -vE 'conformance_c_|/core_(op|node|table|scheduler|unread|places|protect|clingy)_|history') "$mainobj" ;;
+		*) $CC $opt -o "$here/$bin" $(echo "$objs" | tr ' ' '\n' | grep -vE 'conformance_c_|/core_(op|node|table|scheduler|crow|places|protect)_|history') "$mainobj" ;;
 	esac
 }
 

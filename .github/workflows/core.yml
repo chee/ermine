@@ -37,11 +37,11 @@ jobs:
           deno-version: v2.x
       - name: Build the harnesses
         run: |
-          bins="core/changeable/c/apply-harness core/changeable/c/squish-harness core/node/c/node-harness
-            core/changeable/c/update-harness core/table/c/table-harness core/unread/c/unread-harness
-            core/scheduler/c/tracker-harness core/scheduler/c/paths-harness
-            core/scheduler/c/scheduler-harness core/places/c/places-harness core/places/c/guard-harness
-            core/protect/c/protect-harness"
+          bins="changeable/c/apply-harness changeable/c/squish-harness graph/c/node-harness
+            graph/c/update-harness graph/c/table-harness core/unread/c/unread-harness
+            reactivity/c/tracker-harness reactivity/c/paths-harness
+            reactivity/c/scheduler-harness places/c/places-harness places/c/guard-harness
+            protect/c/protect-harness"
           make -s $bins $(for b in $bins; do printf '%s-check ' "$b"; done)
       - name: Conformance, C
         run: deno task conformance $SUITES --c
@@ -64,8 +64,8 @@ jobs:
           deno-version: v2.x
       - name: Build the harnesses
         run: |
-          make -s core/changeable/c/apply-harness core/changeable/c/squish-harness core/unread/c/unread-harness \
-            core/scheduler/c/scheduler-harness
+          make -s changeable/c/apply-harness changeable/c/squish-harness core/unread/c/unread-harness \
+            reactivity/c/scheduler-harness
       - name: Performance, TypeScript
         run: deno task perf
       - name: Performance, C

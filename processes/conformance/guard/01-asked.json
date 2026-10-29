@@ -1,0 +1,311 @@
+{
+	"title": "reads and writes are asked of the policy: who is the scope open, from where the asker is placed; a thing reached by a path with that path, an entry by id alone",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"apps": "Apps",
+				"notes": "N"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "Apps",
+			"value": {
+				"notes": "Notes"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "N",
+			"value": {
+				"today": "T"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "T",
+			"value": "hello",
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "notes",
+			"info": {
+				"actor": "notes"
+			},
+			"expect": {}
+		},
+		{
+			"op": "guard",
+			"name": "g",
+			"may": "yes",
+			"from": [
+				"apps",
+				"notes"
+			],
+			"expect": {}
+		},
+		{
+			"op": "eval",
+			"guard": "g",
+			"scope": "notes",
+			"e": {
+				"get": [
+					"notes",
+					"today"
+				]
+			},
+			"expect": {
+				"value": "T"
+			}
+		},
+		{
+			"op": "asks",
+			"expect": {
+				"asks": [
+					{
+						"op": "read",
+						"target": {
+							"id": "T",
+							"path": [
+								"notes",
+								"today"
+							]
+						},
+						"who": {
+							"actor": "notes",
+							"frame": [
+								{
+									"actor": "notes"
+								}
+							]
+						},
+						"from": {
+							"path": [
+								"apps",
+								"notes"
+							]
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "eval",
+			"guard": "g",
+			"scope": "notes",
+			"e": {
+				"read": [
+					{
+						"at": [
+							"notes",
+							"today"
+						]
+					},
+					"value"
+				]
+			},
+			"expect": {
+				"value": "hello"
+			}
+		},
+		{
+			"op": "asks",
+			"expect": {
+				"asks": [
+					{
+						"op": "read",
+						"target": {
+							"id": "T",
+							"path": [
+								"notes",
+								"today"
+							]
+						},
+						"who": {
+							"actor": "notes",
+							"frame": [
+								{
+									"actor": "notes"
+								}
+							]
+						},
+						"from": {
+							"path": [
+								"apps",
+								"notes"
+							]
+						}
+					},
+					{
+						"op": "read",
+						"target": {
+							"id": "T",
+							"part": "value",
+							"path": [
+								"notes",
+								"today"
+							]
+						},
+						"who": {
+							"actor": "notes",
+							"frame": [
+								{
+									"actor": "notes"
+								}
+							]
+						},
+						"from": {
+							"path": [
+								"apps",
+								"notes"
+							]
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "eval",
+			"guard": "g",
+			"scope": "notes",
+			"e": {
+				"edit": [
+					{
+						"at": [
+							"notes",
+							"today"
+						]
+					},
+					"value",
+					[
+						{
+							"path": [],
+							"value": "bye"
+						}
+					]
+				]
+			},
+			"expect": {
+				"value": {
+					"actor": "notes",
+					"frame": [
+						{
+							"locations": [
+								"program"
+							]
+						},
+						{
+							"actor": "notes"
+						}
+					],
+					"timely": true
+				}
+			}
+		},
+		{
+			"op": "asks",
+			"expect": {
+				"asks": [
+					{
+						"op": "read",
+						"target": {
+							"id": "T",
+							"path": [
+								"notes",
+								"today"
+							]
+						},
+						"who": {
+							"actor": "notes",
+							"frame": [
+								{
+									"actor": "notes"
+								}
+							]
+						},
+						"from": {
+							"path": [
+								"apps",
+								"notes"
+							]
+						}
+					},
+					{
+						"op": "edit",
+						"target": {
+							"id": "T",
+							"part": "value",
+							"field": [],
+							"path": [
+								"notes",
+								"today"
+							]
+						},
+						"who": {
+							"actor": "notes",
+							"frame": [
+								{
+									"actor": "notes"
+								}
+							]
+						},
+						"from": {
+							"path": [
+								"apps",
+								"notes"
+							]
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "eval",
+			"guard": "g",
+			"scope": "notes",
+			"e": {
+				"read": [
+					"T",
+					"value"
+				]
+			},
+			"expect": {
+				"value": "bye"
+			}
+		},
+		{
+			"op": "asks",
+			"expect": {
+				"asks": [
+					{
+						"op": "read",
+						"target": {
+							"id": "T",
+							"part": "value"
+						},
+						"who": {
+							"actor": "notes",
+							"frame": [
+								{
+									"actor": "notes"
+								}
+							]
+						},
+						"from": {
+							"path": [
+								"apps",
+								"notes"
+							]
+						}
+					}
+				]
+			}
+		}
+	]
+}

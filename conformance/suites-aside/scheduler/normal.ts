@@ -17,7 +17,7 @@
 //   whole {id}         node(id): {"value":[version],"info":{n:[version]},"children":{n:[version]}};
 //                      null: not loaded, or refused
 //   as {cause, do}     do (one of these, with its fields) by as({cause})
-import type { Api } from "@ermine/core/scheduler"
+import type { Api } from "@ermine/reactivity"
 
 export const LIVE = "<live>"
 

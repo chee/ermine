@@ -3,12 +3,12 @@
 // order. each line stands alone; a header with no time is answered the time now (compared within
 // the run's seconds).
 // wild: a header's fields out of order, a time of -0, -0 in an integer typed array, 64-bit
-// elements as "007" and "-0", metadata that is no object, a node with no values
+// elements as "007" and "-0", a frame that is no list of objects, a node with no values
 // the model, each implementation on its own (invariant, below): every answer predicted from
 // node_harness.ts's rules: the value as its JSON form reads back (form.ts: typed arrays as their
 // kind holds them), the header's own fields only, a time of -0 as 0, none: a whole number of
-// these seconds, the same for every table of a node; a refusal for metadata that is no
-// object, a node with no values, a form that stands for none, an op not known
+// these seconds, the same for every table of a node; a refusal for a frame that is no
+// list of objects, a node with no values, a form that stands for none, an op not known
 import { ordered } from "../typescript/json.ts"
 import { revive } from "../typescript/form.ts"
 import {
@@ -73,18 +73,23 @@ function header(pick: (n: number) => number): Record<string, unknown> {
 	if (pick(5)) h.time = pick(2) ? pick(1 << 30) : -1 - pick(100)
 	if (pick(2)) h.actor = pick(4) ? NAMES[pick(4)] : pick(2) ? null : { person: NAMES[pick(4)] }
 	if (pick(4) === 0) h.reader = NAMES[pick(4)]
+	// the frame: a list of infos, innermost first; locations in an info, what began outside
 	if (pick(3) === 0) {
-		h.external = Array.from({ length: pick(3) }, () => ({
-			file: `f${pick(9)}.ts`,
-			line: 1 + pick(500),
-			...(pick(2) ? { column: pick(80) } : {}),
-			...(pick(3) === 0 ? { function: NAMES[pick(4)] } : {}),
-		}))
-	}
-	if (pick(3) === 0) {
-		h.metadata = Object.fromEntries(
-			Array.from({ length: pick(4) }, () => [NAMES[pick(2)], json(pick, 2, false)]),
-		)
+		h.frame = Array.from({ length: 1 + pick(2) }, () => {
+			const info: Record<string, unknown> = Object.fromEntries(
+				Array.from({ length: pick(4) }, () => [NAMES[pick(2)], json(pick, 2, false)]),
+			)
+			if (pick(3) === 0) {
+				info.locations = Array.from({ length: pick(3) }, () => ({
+					file: `f${pick(9)}.ts`,
+					line: 1 + pick(500),
+					...(pick(2) ? { column: pick(80) } : {}),
+					...(pick(3) === 0 ? { function: NAMES[pick(4)] } : {}),
+					external: true,
+				}))
+			}
+			return info
+		})
 	}
 	return h
 }
@@ -101,8 +106,8 @@ function wild(pick: (n: number) => number): Request {
 		{ op: "entry", value: { "/": { int16: [-0, 1] } }, header: { time: 1 } },
 		{ op: "entry", value: { "/": { int64: ["007", "-0"] } }, header: { time: 1 } },
 		{ op: "entry", value: { "/": { float64: ["NaN", -0] } }, header: { time: 1 } },
-		{ op: "entry", value: -0, header: { time: 1, metadata: { a: -0 } } },
-		{ op: "entry", value: 1, header: { time: 1, metadata: [["a", 1]] } },
+		{ op: "entry", value: -0, header: { time: 1, frame: [{ a: -0 }] } },
+		{ op: "entry", value: 1, header: { time: 1, frame: [[["a", 1]]] } },
 		{ op: "entry", value: 1, header: { time: 1, other: 2, actor: "a" } },
 		{ op: "node", header: { time: 1 } },
 		{ op: "node", values: { a: { "/": { bytes: "a=" } } }, header: { time: 1 } },
@@ -141,7 +146,7 @@ export default generator
 
 // what a request should answer: undefined, a refusal; time, the "now" a header with no time is
 // given (one for the whole node)
-const FIELDS = ["time", "actor", "reader", "external", "metadata", "op"]
+const FIELDS = ["time", "actor", "reader", "frame", "op"]
 class Refused {}
 function expected(r: Request, time: number): Answer | undefined {
 	const entry = (value: unknown, h: unknown) => {
@@ -149,9 +154,10 @@ function expected(r: Request, time: number): Answer | undefined {
 		const change: Record<string, unknown> = {}
 		for (const k of FIELDS) if (Object.hasOwn(header, k)) change[k] = header[k]
 		change.time = change.time === undefined ? time : Object.is(change.time, -0) ? 0 : change.time
-		const m = change.metadata
-		if (Object.hasOwn(header, "metadata")) {
-			if (typeof m !== "object" || m === null || Array.isArray(m)) throw new Refused()
+		const f = change.frame
+		if (Object.hasOwn(header, "frame")) {
+			const map = (x: unknown) => typeof x === "object" && x !== null && !Array.isArray(x)
+			if (!Array.isArray(f) || f.length === 0 || !f.every(map)) throw new Refused()
 		}
 		let v: unknown
 		try {

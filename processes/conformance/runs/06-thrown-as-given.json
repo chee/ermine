@@ -1,0 +1,160 @@
+{
+	"title": "a throw that is not an Error is kept as thrown: a run's error, an act's error, and the node's status are the value itself (an object, a string), not its text",
+	"typescript": true,
+	"steps": [
+		{
+			"op": "runs",
+			"expect": {}
+		},
+		{
+			"op": "status",
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "o",
+			"info": {
+				"actor": "o"
+			},
+			"expect": {}
+		},
+		{
+			"op": "effect",
+			"name": "f",
+			"scope": "o",
+			"f": {
+				"throwRaw": {
+					"code": 7,
+					"why": [
+						"a"
+					]
+				}
+			},
+			"act": 0,
+			"expect": {}
+		},
+		{
+			"op": "effect",
+			"name": "g",
+			"scope": "o",
+			"f": [
+				1
+			],
+			"act": {
+				"throwRaw": "plain text"
+			},
+			"expect": {}
+		},
+		{
+			"op": "giveRun",
+			"name": "f",
+			"id": "F",
+			"expect": {}
+		},
+		{
+			"op": "give",
+			"name": "f",
+			"id": "F",
+			"expect": {}
+		},
+		{
+			"op": "giveRun",
+			"name": "g",
+			"id": "G",
+			"expect": {}
+		},
+		{
+			"op": "give",
+			"name": "g",
+			"id": "G",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "runOf",
+			"id": "F",
+			"expect": {
+				"run": {
+					"n": 1,
+					"frame": [
+						{
+							"run": 1,
+							"mark": 1
+						},
+						{
+							"mark": 1
+						},
+						{
+							"actor": "o"
+						}
+					],
+					"end": "failed",
+					"error": {
+						"code": 7,
+						"why": [
+							"a"
+						]
+					},
+					"timed": true,
+					"reads": [],
+					"writes": []
+				}
+			}
+		},
+		{
+			"op": "statusValue",
+			"id": "F",
+			"expect": {
+				"value": {
+					"thrown": {
+						"code": 7,
+						"why": [
+							"a"
+						]
+					}
+				}
+			}
+		},
+		{
+			"op": "runOf",
+			"id": "G",
+			"expect": {
+				"run": {
+					"n": 1,
+					"frame": [
+						{
+							"run": 1,
+							"mark": 2
+						},
+						{
+							"mark": 2
+						},
+						{
+							"actor": "o"
+						}
+					],
+					"end": "done",
+					"act": {
+						"end": "failed",
+						"error": "plain text"
+					},
+					"timed": true,
+					"reads": [],
+					"writes": []
+				}
+			}
+		},
+		{
+			"op": "statusValue",
+			"id": "G",
+			"expect": {
+				"value": {
+					"thrown": "plain text"
+				}
+			}
+		}
+	]
+}

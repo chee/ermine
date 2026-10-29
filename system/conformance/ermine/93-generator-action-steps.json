@@ -1,0 +1,283 @@
+{
+	"title": "a generator action is stepped by the system [Solid 2.0's action]: each step runs with the call's mark, so a write after a `yield` carries it (call, handler, caller in its frames) and is allowed, and after `yield somePromise` too (the promise is waited for, and what it gave comes back at the yield). the call gives a promise of the generator's return; its record ends when that settles; what the action made belongs to the scope that placed it",
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/a",
+				0
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/b",
+				0
+			]
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"createAction",
+						"on/gen",
+						[
+							{
+								"do": [
+									"patch",
+									"/a",
+									[
+										{
+											"path": [],
+											"value": 1
+										}
+									]
+								]
+							},
+							{
+								"do": [
+									"yield",
+									[
+										"later",
+										"$0"
+									]
+								],
+								"as": "got"
+							},
+							{
+								"do": [
+									"patch",
+									"/b",
+									[
+										{
+											"path": [],
+											"value": "$got"
+										}
+									]
+								]
+							},
+							{
+								"do": [
+									"createMemo",
+									"m",
+									{},
+									[
+										"read",
+										"/b"
+									]
+								]
+							}
+						],
+						[
+							"inc",
+							"$got"
+						],
+						"gen"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/q",
+			"program": [],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "start",
+			"name": "q",
+			"at": "/code/q",
+			"expect": {
+				"id": "proc:q"
+			}
+		},
+		{
+			"op": "do",
+			"process": "q",
+			"call": [
+				"executeAction",
+				"./p/on/gen",
+				10
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/a"
+			],
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/b"
+			],
+			"expect": {
+				"value": 0
+			}
+		},
+		{
+			"op": "record",
+			"kind": "call",
+			"path": [
+				"code",
+				"p",
+				"on",
+				"gen"
+			],
+			"expect": {
+				"record": {
+					"n": 1,
+					"frame": [
+						{
+							"caller": {
+								"node": "proc:q",
+								"actor": "test"
+							},
+							"handler": "n7",
+							"call": 1
+						},
+						{
+							"handler": "n7"
+						},
+						{
+							"process": [
+								"code",
+								"p"
+							]
+						},
+						{
+							"process": [
+								"code",
+								"p"
+							],
+							"node": "proc:p",
+							"locations": [
+								"program"
+							]
+						},
+						{
+							"processes": "start"
+						},
+						{
+							"actor": "test",
+							"node": "n1"
+						}
+					],
+					"caller": "proc:q",
+					"handler": "n7",
+					"args": [
+						10
+					],
+					"end": "pending",
+					"reads": [],
+					"writes": [
+						[
+							"value",
+							"n2"
+						]
+					]
+				}
+			}
+		},
+		{
+			"op": "settle",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/b"
+			],
+			"expect": {
+				"value": 10
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/code/p/m"
+			],
+			"expect": {
+				"value": 10
+			}
+		},
+		{
+			"op": "log",
+			"name": "promised",
+			"expect": {
+				"values": [
+					[
+						11
+					]
+				]
+			}
+		},
+		{
+			"op": "frame",
+			"part": "value",
+			"id": "n3",
+			"expect": {
+				"frame": [
+					{
+						"caller": {
+							"node": "proc:q",
+							"actor": "test"
+						},
+						"handler": "n7",
+						"call": 1
+					},
+					{
+						"handler": "n7"
+					},
+					{
+						"process": [
+							"code",
+							"p"
+						]
+					},
+					{
+						"process": [
+							"code",
+							"p"
+						],
+						"node": "proc:p",
+						"locations": [
+							"program"
+						]
+					},
+					{
+						"processes": "start"
+					},
+					{
+						"actor": "test",
+						"node": "n1"
+					}
+				]
+			}
+		}
+	]
+}

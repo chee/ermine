@@ -12,8 +12,8 @@ import {
 	read,
 	unplace,
 } from "@ermine/system"
-import { get } from "@ermine/core/places/lib"
-import { manual } from "../../../ermine/system/typescript/manual_fixture.ts"
+import { get } from "@ermine/places/lib"
+import { manual } from "../../../system/typescript/manual_fixture.ts"
 import { createLoader, NEEDS, PROVIDES, run } from "./software.ts"
 
 // a loader that takes the code as a number n and makes a setup writing it, doubled, to the process

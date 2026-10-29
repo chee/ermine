@@ -4,8 +4,8 @@
 //   const bytes = encodeStep({ device, n: 1, before: null, node, part, patches, lamport, when, on: [] })
 //   const step = decodeStep(bytes)
 import { decode, encode, type Value } from "@ermine/encoding/cbor"
-import { blake3 } from "@ermine/core/blake3"
-import type { Patch } from "@ermine/core/changeable/apply"
+import { blake3 } from "@ermine/encoding/blake3"
+import type { Patch } from "@ermine/changeable/apply"
 
 export type Step = {
 	// the writer's key, hex here, its 32 bytes on the wire
@@ -37,7 +37,7 @@ export type On = { device: string; n: number }
 
 const KEY = /^[0-9a-f]{64}$/
 
-// a device's own id, as text (ermine/ids: key)
+// a device's own id, as text (ids: key)
 export const own = (device: string) => `ermine:ed01${device}`
 // what follows the device's own id in node, when node is that id or under it ("" or "/…")
 export function rest(device: string, node: string): string | undefined {

@@ -15,7 +15,7 @@
 
 #include "../../../conformance/c/harness.h"
 #include "../../../conformance/c/protocol_harness.h"
-#include "../../../ermine/encoding/c/cbor.h"
+#include "../../../encoding/c/cbor.h"
 #include "history.h"
 #include "store.h"
 #include "tippet.h"

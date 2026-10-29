@@ -10,7 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../../../core/changeable/c/json.h"
+#include "../../../changeable/c/json.h"
 #include "software.h"
 
 // --- the table loader: programs built in. the code is "name" or "name argument" -----------------

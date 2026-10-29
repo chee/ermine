@@ -1,0 +1,10 @@
+{
+	"name": "@ermine/encoding",
+	"version": "0.0.0",
+	"license": "AGPL-3.0-or-later",
+	"exports": {
+		"./cbor": "./typescript/cbor.ts",
+		"./blake3": "./blake3/typescript/blake3.ts",
+		"./ed25519": "./ed25519/typescript/ed25519.ts"
+	}
+}

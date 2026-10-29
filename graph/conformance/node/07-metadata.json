@@ -1,0 +1,121 @@
+{
+	"title": "the frame: a list of infos, innermost first, each an object, its keys kept as given, any value",
+	"steps": [
+		{
+			"op": "entry",
+			"header": {
+				"time": 1,
+				"frame": [
+					{
+						"a": 1,
+						"b": "two"
+					}
+				]
+			},
+			"expect": {
+				"entry": {
+					"change": {
+						"time": 1,
+						"frame": [
+							{
+								"a": 1,
+								"b": "two"
+							}
+						]
+					}
+				}
+			}
+		},
+		{
+			"op": "entry",
+			"header": {
+				"frame": [
+					{
+						"z": null,
+						"y": [
+							1,
+							{
+								"k": true
+							}
+						],
+						"x": {
+							"n": [
+								0.5,
+								"é 🦊"
+							]
+						},
+						"": ""
+					}
+				]
+			},
+			"expect": {
+				"entry": {
+					"change": {
+						"time": "now",
+						"frame": [
+							{
+								"z": null,
+								"y": [
+									1,
+									{
+										"k": true
+									}
+								],
+								"x": {
+									"n": [
+										0.5,
+										"é 🦊"
+									]
+								},
+								"": ""
+							}
+						]
+					}
+				}
+			}
+		},
+		{
+			"op": "entry",
+			"header": {
+				"frame": [
+					{}
+				]
+			},
+			"expect": {
+				"entry": {
+					"change": {
+						"time": "now",
+						"frame": [
+							{}
+						]
+					}
+				}
+			}
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 2,
+				"actor": "me",
+				"frame": [
+					{
+						"why": "because"
+					}
+				]
+			},
+			"expect": {
+				"entry": {
+					"change": {
+						"time": 2,
+						"actor": "me",
+						"frame": [
+							{
+								"why": "because"
+							}
+						]
+					}
+				}
+			}
+		}
+	]
+}

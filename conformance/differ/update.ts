@@ -1,5 +1,5 @@
 // update's streams: an entry started on a random value
-// (core/fuzz/gen_harness.ts), then updates of a few patches each (some refused: they change nothing), an
+// (places/fuzz/gen_harness.ts), then updates of a few patches each (some refused: they change nothing), an
 // entry asked after each; a put of a fresh list, map or string then spliced into in the same
 // update, now and then. headers given or not ({ time: 1, actor: "me" }), {} too.
 // the invariant, each implementation on its own: the entry's value is the start value with every
@@ -10,8 +10,8 @@
 // wild: patches of no patch's shape, odd numbers, updates with no patches or patches not a list,
 // values that are no JSON form. half the seeds have the keys made tricky (kit.ts)
 // deno-lint-ignore-file no-explicit-any
-import apply, { ApplyError, type Patch } from "@ermine/core/changeable/apply"
-import { KEYS, patch, start } from "../../core/fuzz/gen_harness.ts"
+import apply, { ApplyError, type Patch } from "@ermine/changeable/apply"
+import { KEYS, patch, start } from "../../places/fuzz/gen_harness.ts"
 import { wildPatches } from "./apply.ts"
 import {
 	type Answer,
@@ -73,7 +73,7 @@ function streams(seed: number, o: { wild: boolean }): Request[][] {
 		const r: Request = { op: "update", patches: formPatches(ps) }
 		const h = pick(4)
 		if (h === 0) r.header = {}
-		else if (h === 1) r.header = { time: 2 + step, actor: { step }, metadata: { s: step } }
+		else if (h === 1) r.header = { time: 2 + step, actor: { step }, frame: [{ s: step }] }
 		if (o.wild && pick(8) === 0) {
 			out.push(
 				[{ op: "update" }, { op: "update", patches: {} }, {

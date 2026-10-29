@@ -1,46 +1,25 @@
 {
 	"workspace": [
-		"./core",
-		"./ermine/encoding",
-		"./playground/encoding",
-		"./ermine/processes",
-		"./playground/compilers",
-		"./ermine/types",
-		"./ermine/system",
-		"./playground/realms",
-		"./playground/together",
-		"./ermine/sites",
-		"./ermine/ids",
-		"./playground/programs",
-		"./extensions/patchy",
-		"./playground/demo-world",
-		"./playground/demos",
-		"./playground/libraries/pack-indexeddb",
-		"./playground/libraries/jsx-runtime",
-		"./playground/libraries/render",
-		"./playground/libraries/upsert",
-		"./extensions/pully",
-		"./extensions/pipe",
-		"./extensions/boxes",
-		"./extensions/unplugin",
-		"./playground/tools/files",
-		"./playground/installs",
-		"./playground/sessions",
-		"./playground/trust",
-		"./playground/ssr-live",
+		"./changeable",
+		"./crow",
+		"./graph",
+		"./protect",
+		"./reactivity",
+		"./places",
+		"./encoding",
+		"./ids",
+		"./processes",
+		"./system",
+		"./bundling",
 		"./experiments/software",
-		"./experiments/tippet",
-		"./experiments/sources"
+		"./experiments/tippet"
 	],
 	"tasks": {
-		"test": "deno test --allow-run --allow-read --allow-env && deno task conformance",
+		"test": "deno test --allow-run --allow-read --allow-env --allow-write --allow-net && deno task conformance",
 		"conformance": "deno test --quiet --allow-run --allow-read --allow-env conformance/run.ts --",
 		"perf": "deno run --quiet --allow-run --allow-read --allow-env conformance/perf.ts",
 		"differ": "deno run --quiet --allow-run --allow-read --allow-write --allow-env conformance/differ.ts",
 		"plants": "deno run --quiet --allow-run --allow-read --allow-write --allow-env conformance/plants/plants_run.ts",
-		"demo": "cd playground/demos && deno task dev",
-		"ssr-live": "cd playground/ssr-live && deno task start",
-		"ssr-live-party": "cd playground/ssr-live && deno task party",
 		"check": "deno check .",
 		"bench": "deno bench"
 	},
@@ -64,12 +43,5 @@
 		"conformance/suites-aside",
 		".claude",
 		".agent-shell"
-	],
-	"test": {
-		"exclude": [
-			"playground/demo-world",
-			"playground/demos",
-			"playground/devtools"
-		]
-	}
+	]
 }

@@ -1,0 +1,272 @@
+{
+	"title": "any name is a part: a read and a write of run are asked with run as the target's part; rules stored at run are tracked",
+	"steps": [
+		{
+			"op": "root",
+			"name": "notes",
+			"info": {
+				"actor": "notes"
+			},
+			"expect": {}
+		},
+		{
+			"op": "edit",
+			"part": "run",
+			"id": "T",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"n": 1
+					}
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "guard",
+			"name": "g",
+			"may": {
+				"access": [
+					"run",
+					"rules"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "eval",
+			"guard": "g",
+			"scope": "notes",
+			"e": {
+				"try": {
+					"read": [
+						"T",
+						"run",
+						[
+							"n"
+						]
+					]
+				}
+			},
+			"expect": {
+				"value": "pending"
+			}
+		},
+		{
+			"op": "asks",
+			"expect": {
+				"asks": [
+					{
+						"op": "read",
+						"target": {
+							"id": "T",
+							"part": "run",
+							"field": [
+								"n"
+							]
+						},
+						"who": {
+							"actor": "notes",
+							"frame": [
+								{
+									"actor": "notes"
+								}
+							]
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "edit",
+			"part": "run",
+			"id": "rules",
+			"patches": [
+				{
+					"path": [],
+					"value": "allow"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "eval",
+			"guard": "g",
+			"scope": "notes",
+			"e": {
+				"read": [
+					"T",
+					"run",
+					[
+						"n"
+					]
+				]
+			},
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "asks"
+		},
+		{
+			"op": "eval",
+			"guard": "g",
+			"scope": "notes",
+			"e": {
+				"edit": [
+					"T",
+					"run",
+					[
+						{
+							"path": [
+								"n"
+							],
+							"value": 2
+						}
+					]
+				]
+			},
+			"expect": {
+				"value": {
+					"actor": "notes",
+					"frame": [
+						{
+							"locations": [
+								"program"
+							]
+						},
+						{
+							"actor": "notes"
+						}
+					],
+					"timely": true
+				}
+			}
+		},
+		{
+			"op": "asks",
+			"expect": {
+				"asks": [
+					{
+						"op": "edit",
+						"target": {
+							"id": "T",
+							"part": "run",
+							"field": [
+								"n"
+							]
+						},
+						"who": {
+							"actor": "notes",
+							"frame": [
+								{
+									"actor": "notes"
+								}
+							]
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "node",
+			"part": "run",
+			"id": "T",
+			"expect": {
+				"value": {
+					"n": 2
+				}
+			}
+		},
+		{
+			"op": "watch",
+			"name": "w",
+			"scope": "notes",
+			"guard": "g",
+			"f": {
+				"try": {
+					"read": [
+						"T",
+						"run",
+						[
+							"n"
+						]
+					]
+				}
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 1,
+				"value": 2
+			}
+		},
+		{
+			"op": "edit",
+			"part": "run",
+			"id": "rules",
+			"patches": [
+				{
+					"path": [],
+					"value": "closed"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 2,
+				"value": "refused"
+			}
+		},
+		{
+			"op": "eval",
+			"guard": "g",
+			"scope": "notes",
+			"e": {
+				"edit": [
+					"T",
+					"run",
+					[
+						{
+							"path": [
+								"n"
+							],
+							"value": 3
+						}
+					]
+				]
+			},
+			"expect": {
+				"error": "refused",
+				"reason": "closed",
+				"op": "edit"
+			}
+		},
+		{
+			"op": "node",
+			"part": "run",
+			"id": "T",
+			"expect": {
+				"value": {
+					"n": 2
+				}
+			}
+		}
+	]
+}

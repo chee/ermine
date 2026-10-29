@@ -1,0 +1,204 @@
+{
+	"title": "a write's header: the frame open itself (shared), the write's extra a frame on top of it, then the parents up to the root; from outside the graph, the locations of the call in a frame more on top. the actor: the first actor key up the frames; the reader: the first reader holding a string; an owner key is only a key. the time now. nothing open: unscoped",
+	"steps": [
+		{
+			"op": "header",
+			"expect": {
+				"error": "unscoped"
+			}
+		},
+		{
+			"op": "root",
+			"name": "chee",
+			"info": {
+				"actor": "chee",
+				"reader": "juno",
+				"why": "test"
+			},
+			"expect": {}
+		},
+		{
+			"op": "scope",
+			"name": "save",
+			"parent": "chee",
+			"info": {
+				"cause": "x",
+				"actor": "notes"
+			},
+			"expect": {}
+		},
+		{
+			"op": "header",
+			"scope": "chee",
+			"expect": {
+				"actor": "chee",
+				"reader": "juno",
+				"frame": [
+					{
+						"locations": [
+							"program"
+						]
+					},
+					{
+						"actor": "chee",
+						"reader": "juno",
+						"why": "test"
+					}
+				],
+				"timely": true
+			}
+		},
+		{
+			"op": "header",
+			"scope": "save",
+			"extra": {
+				"then": "y",
+				"actor": "games"
+			},
+			"expect": {
+				"actor": "games",
+				"reader": "juno",
+				"frame": [
+					{
+						"locations": [
+							"program"
+						]
+					},
+					{
+						"then": "y",
+						"actor": "games"
+					},
+					{
+						"cause": "x",
+						"actor": "notes"
+					},
+					{
+						"actor": "chee",
+						"reader": "juno",
+						"why": "test"
+					}
+				],
+				"timely": true
+			}
+		},
+		{
+			"op": "header",
+			"scope": "save",
+			"expect": {
+				"actor": "notes",
+				"reader": "juno",
+				"frame": [
+					{
+						"locations": [
+							"program"
+						]
+					},
+					{
+						"cause": "x",
+						"actor": "notes"
+					},
+					{
+						"actor": "chee",
+						"reader": "juno",
+						"why": "test"
+					}
+				],
+				"timely": true
+			}
+		},
+		{
+			"op": "header",
+			"scope": "save",
+			"extra": {
+				"owner": [
+					[
+						"actor",
+						"fake"
+					]
+				],
+				"reader": 5
+			},
+			"expect": {
+				"actor": "notes",
+				"reader": "juno",
+				"frame": [
+					{
+						"locations": [
+							"program"
+						]
+					},
+					{
+						"owner": [
+							[
+								"actor",
+								"fake"
+							]
+						],
+						"reader": 5
+					},
+					{
+						"cause": "x",
+						"actor": "notes"
+					},
+					{
+						"actor": "chee",
+						"reader": "juno",
+						"why": "test"
+					}
+				],
+				"timely": true
+			}
+		},
+		{
+			"op": "root",
+			"name": "bare",
+			"info": {
+				"why": "bare"
+			},
+			"expect": {}
+		},
+		{
+			"op": "header",
+			"scope": "bare",
+			"expect": {
+				"frame": [
+					{
+						"locations": [
+							"program"
+						]
+					},
+					{
+						"why": "bare"
+					}
+				],
+				"timely": true
+			}
+		},
+		{
+			"op": "value",
+			"id": "A",
+			"value": 1,
+			"expect": {}
+		},
+		{
+			"op": "edit",
+			"part": "value",
+			"id": "A",
+			"patches": [
+				{
+					"path": [],
+					"value": 2
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "node",
+			"part": "value",
+			"id": "A",
+			"expect": {
+				"value": 2
+			}
+		}
+	]
+}

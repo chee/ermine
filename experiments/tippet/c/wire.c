@@ -4,7 +4,7 @@
 #include <stdbool.h>
 #include <string.h>
 
-// ermine/encoding/c/cbor.h's, declared here: that header is C11 (its json.h)
+// encoding/c/cbor.h's, declared here: that header is C11 (its json.h)
 bool cborCheck(const unsigned char *data, size_t length, const char **why, size_t *at);
 
 void *tp_alloc(const tp_mem *mem, size_t size) { return mem->fn(mem->ctx, NULL, 0, size); }

@@ -1,0 +1,274 @@
+{
+	"title": "a feature written in the same file as the programs changes nothing about where a write came from: a write or memo in a process's setup has the process's frames; the host's write has locations of its own",
+	"steps": [
+		{
+			"op": "ermine",
+			"features": [
+				"inline"
+			],
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"ensureNode",
+						"./doc",
+						{
+							"n": 1
+						}
+					],
+					"as": "doc"
+				},
+				{
+					"do": [
+						"createMemo",
+						"m",
+						{},
+						[
+							"read",
+							"$doc",
+							[
+								"n"
+							]
+						]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"doc"
+			],
+			"expect": {
+				"id": "n4"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"code",
+				"p",
+				"m"
+			],
+			"expect": {
+				"id": "n5"
+			}
+		},
+		{
+			"op": "frame",
+			"part": "value",
+			"id": "n4",
+			"expect": {
+				"frame": [
+					{
+						"process": [
+							"code",
+							"p"
+						]
+					},
+					{
+						"process": [
+							"code",
+							"p"
+						],
+						"node": "proc:p",
+						"locations": [
+							"program"
+						]
+					},
+					{
+						"processes": "start"
+					},
+					{
+						"actor": "test",
+						"node": "n1"
+					}
+				]
+			}
+		},
+		{
+			"op": "frame",
+			"part": "value",
+			"id": "n5",
+			"expect": {
+				"frame": [
+					{
+						"run": 1,
+						"mark": 4
+					},
+					{
+						"node": "n5",
+						"mark": 4
+					},
+					{
+						"process": [
+							"code",
+							"p"
+						]
+					},
+					{
+						"process": [
+							"code",
+							"p"
+						],
+						"node": "proc:p",
+						"locations": [
+							"program"
+						]
+					},
+					{
+						"processes": "start"
+					},
+					{
+						"actor": "test",
+						"node": "n1"
+					}
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/x",
+				1
+			]
+		},
+		{
+			"op": "frame",
+			"part": "value",
+			"id": "n6",
+			"expect": {
+				"frame": [
+					{
+						"locations": [
+							"program"
+						]
+					},
+					{
+						"actor": "test",
+						"node": "n1"
+					}
+				]
+			}
+		},
+		{
+			"op": "log",
+			"name": "hooks",
+			"expect": {
+				"values": [
+					[
+						"inline",
+						"onWrite",
+						"children",
+						"R"
+					],
+					[
+						"inline",
+						"onWrite",
+						"attributes",
+						"n1"
+					],
+					[
+						"inline",
+						"onWrite",
+						"children",
+						"R"
+					],
+					[
+						"inline",
+						"onWrite",
+						"value",
+						"n2"
+					],
+					[
+						"inline",
+						"onWrite",
+						"children",
+						"n3"
+					],
+					[
+						"inline",
+						"onWrite",
+						"process",
+						"R"
+					],
+					[
+						"inline",
+						"onWrite",
+						"attributes",
+						"proc:p"
+					],
+					[
+						"inline",
+						"onWrite",
+						"status",
+						"proc:p"
+					],
+					[
+						"inline",
+						"onWrite",
+						"value",
+						"n4"
+					],
+					[
+						"inline",
+						"onWrite",
+						"children",
+						"n3"
+					],
+					[
+						"inline",
+						"onWrite",
+						"children",
+						"proc:p"
+					],
+					[
+						"inline",
+						"onWrite",
+						"attributes",
+						"n5"
+					],
+					[
+						"inline",
+						"onWrite",
+						"status",
+						"proc:p"
+					],
+					[
+						"inline",
+						"onWrite",
+						"value",
+						"n5"
+					],
+					[
+						"inline",
+						"onWrite",
+						"value",
+						"n6"
+					],
+					[
+						"inline",
+						"onWrite",
+						"children",
+						"R"
+					]
+				]
+			}
+		}
+	]
+}

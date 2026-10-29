@@ -1,0 +1,101 @@
+{
+	"title": "an entry taken out leaves a change made now, as a write's is, from outside the graph: a frame of locations on top of the scope open",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"notes": "N"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "N",
+			"value": 1,
+			"expect": {}
+		},
+		{
+			"op": "watchAll",
+			"name": "w",
+			"id": "N",
+			"expect": {},
+			"frame": true
+		},
+		{
+			"op": "edit",
+			"part": "value",
+			"id": "N",
+			"patches": [
+				{
+					"path": [],
+					"value": 2
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "watched",
+			"name": "w",
+			"expect": {
+				"facts": [
+					{
+						"part": "value",
+						"id": "N",
+						"patches": [
+							{
+								"path": [],
+								"value": 2
+							}
+						],
+						"actor": "test",
+						"frame": [
+							{
+								"locations": [
+									"program"
+								]
+							},
+							{
+								"actor": "test"
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"id": "N",
+			"expect": {}
+		},
+		{
+			"op": "watched",
+			"name": "w",
+			"expect": {
+				"facts": [
+					{
+						"part": "value",
+						"id": "N",
+						"patches": [
+							{
+								"path": []
+							}
+						],
+						"actor": "test",
+						"frame": [
+							{
+								"locations": [
+									"program"
+								]
+							},
+							{
+								"actor": "test"
+							}
+						]
+					}
+				]
+			}
+		}
+	]
+}
