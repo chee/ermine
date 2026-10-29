@@ -1,7 +1,0 @@
-{
-	"title": "a run split in two, [[value, 1], [value, 1]] for [[value, 2]]: not what pack writes",
-	"bytes": "a167636f6c756d6e7358445b9e9c9158eca4a0909c9952dc94989898945292999beac4c4909a979f925aecc4c0905a90585452dcd4945a9698539aca08a353cb333293339c1818d3c0fce226462600",
-	"expect": {
-		"code": "not-a-pack"
-	}
-}

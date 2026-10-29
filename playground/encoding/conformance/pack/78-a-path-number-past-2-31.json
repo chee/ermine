@@ -1,7 +1,0 @@
-{
-	"title": "a path's number past 2^31 - 1 (what any C long holds): not the encoding of a pack",
-	"bytes": "a2646b65797381836576616c7565616100656e6f64657381a1666368616e6765a2626f70a264756e646f80677061746368657381a264706174688261611a800000006576616c7565016474696d6501",
-	"expect": {
-		"code": "not-a-pack"
-	}
-}

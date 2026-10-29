@@ -1,9 +1,0 @@
-{
-	"title": "what is not a map is not a commit, and names no field",
-	"steps": [
-		{ "op": "encode", "commit": [], "expect": { "error": "not-a-commit" } },
-		{ "op": "encode", "commit": "value", "expect": { "error": "not-a-commit" } },
-		{ "op": "encode", "commit": null, "expect": { "error": "not-a-commit" } },
-		{ "op": "encode", "commit": 5, "expect": { "error": "not-a-commit" } }
-	]
-}

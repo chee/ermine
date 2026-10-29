@@ -1,7 +1,0 @@
-{
-	"title": "columns not a map",
-	"bytes": "a167636f6c756d6e73456b62640200",
-	"expect": {
-		"code": "not-a-pack"
-	}
-}

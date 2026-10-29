@@ -1,7 +1,0 @@
-{
-	"name": "@ermine/upsert",
-	"version": "0.0.0",
-	"exports": {
-		".": "./typescript/upsert.ts"
-	}
-}

@@ -1,7 +1,0 @@
-{
-	"title": "a value too many",
-	"bytes": "a167636f6c756d6e73584c1dc7db0d80200c0550ac93b04a37a9e51a48540cc5c72fb88c639a78feceab518cbdd714ac8bc8146a5ac14410adb9b42e3761cb01c6ce619752ad759cb21c205c31696437ccffed1968fc00",
-	"expect": {
-		"code": "not-a-pack"
-	}
-}

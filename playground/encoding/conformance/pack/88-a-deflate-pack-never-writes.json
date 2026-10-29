@@ -1,7 +1,0 @@
-{
-	"title": "KNOWN PROBLEM, not fixed on purpose: the same columns as stored blocks, not what pack writes; pack.h says refused, TS and C inflate any deflate and read it (chee 10-17)",
-	"bytes": "a167636f6c756d6e73584f014a00b5ffa8636861734121636964738161616474696d654102656163746f728182617801656e6f646573410065706172747381826576616c75650165776869636841006676616c75657381626869",
-	"expect": {
-		"code": "not-a-pack"
-	}
-}

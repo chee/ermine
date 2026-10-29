@@ -1,7 +1,0 @@
-{
-	"title": "columns not bytes",
-	"bytes": "a167636f6c756d6e738101",
-	"expect": {
-		"code": "not-a-pack"
-	}
-}

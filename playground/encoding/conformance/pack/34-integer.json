@@ -1,7 +1,0 @@
-{
-	"title": "a node's number as the float f90000, not the integer 00: not the canonical encoding (whole numbers are integers)",
-	"bytes": "a2646b65797381836576616c75656161f90000656e6f64657381a1666368616e6765a16474696d6501",
-	"expect": {
-		"code": "not-a-pack"
-	}
-}

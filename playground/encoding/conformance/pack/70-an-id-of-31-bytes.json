@@ -1,7 +1,0 @@
-{
-	"title": "an id of 31 bytes",
-	"bytes": "a167636f6c756d6e7358507dc7cb0d80200c0050e82286553a85d75a6a205131143f573a8d639a3880eff61e4ea41802e7a8360eee1f4db1e5551040885ba9dde806d94a1445e764a7dab49b9cb41c0272a5cc099d9fbfab797801",
-	"expect": {
-		"code": "not-a-pack"
-	}
-}

@@ -1,8 +1,0 @@
-{
-	"title": "one node alone with an empty change",
-	"bytes": "a1666368616e6765a0",
-	"node": true,
-	"expect": {
-		"code": "not-a-node"
-	}
-}

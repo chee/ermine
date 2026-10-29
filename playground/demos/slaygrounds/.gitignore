@@ -1,5 +1,0 @@
-dist
-node_modules
-deno.lock
-# screenshots the agents take while checking (shot.ts)
-shots
