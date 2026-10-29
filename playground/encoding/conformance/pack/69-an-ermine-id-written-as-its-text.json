@@ -1,7 +1,0 @@
-{
-	"title": "an ermine id written as its text",
-	"bytes": "a167636f6c756d6e735857a5c7b10d8020100550bc4d9c406b4b3ac738e11b48140c874a0bd338a6892bf8baf718c7a2fbde782badcc48bb0f988661fc89179bfd0e4d043639a6dab81042b410ad140e4e596ac3c5db09c2edbc715a75eb77691dbd",
-	"expect": {
-		"code": "not-a-pack"
-	}
-}

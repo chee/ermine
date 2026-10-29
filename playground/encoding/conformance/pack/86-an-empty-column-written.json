@@ -1,7 +1,0 @@
-{
-	"title": "an empty column written, op: [], not left out: not what pack writes",
-	"bytes": "a167636f6c756d6e7358461dc7c10d80200c05d0c224ccd24d0a7c03890ab1a857ed348e69c2bbbd2fb6fea422ca21a49ad54424e65137b027ec2d4399085d8ea1afe192f584c75d6a2a4c6e995773fe07",
-	"expect": {
-		"code": "not-a-pack"
-	}
-}

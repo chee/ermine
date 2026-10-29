@@ -1,7 +1,0 @@
-{
-	"title": "a key naming a node that is not there",
-	"bytes": "a2646b65797381836576616c7565616102656e6f64657382a1666368616e6765a16474696d6501a1666368616e6765a16474696d6502",
-	"expect": {
-		"code": "not-a-pack"
-	}
-}

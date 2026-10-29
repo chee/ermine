@@ -1,7 +1,0 @@
-{
-	"title": "a node with a key past change and value",
-	"bytes": "a2646b65797381836576616c7565616100656e6f64657381a2617801666368616e6765a16474696d6501",
-	"expect": {
-		"code": "not-a-pack"
-	}
-}

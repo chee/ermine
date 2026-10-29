@@ -1,7 +1,0 @@
-{
-	"name": "@ermine/pack-indexeddb",
-	"version": "0.0.0",
-	"exports": {
-		".": "./typescript/store.ts"
-	}
-}

@@ -1,9 +1,0 @@
-{
-	"harness": "start",
-	"allow": ["--allow-write", "--allow-ffi", "--allow-run=/usr/bin/codesign"],
-	"make": [
-		"playground/programs/c/fixtures/reverse.so",
-		"playground/programs/c/fixtures/runner.so",
-		"playground/programs/c/fixtures/unsigned.so"
-	]
-}

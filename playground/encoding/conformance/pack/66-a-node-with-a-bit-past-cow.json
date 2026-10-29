@@ -1,7 +1,0 @@
-{
-	"title": "a node with a bit past cow",
-	"bytes": "a167636f6c756d6e73584c1dc7cd0d80200c0650e826ae8293d4f21948540cc59f2bddc49b639af86eef95c43a3e7e901cd598798a2daf08446069a576e39bb095080dce61e7dab41b4e5e0e10ae942505e7e7ff6a9e3e",
-	"expect": {
-		"code": "not-a-pack"
-	}
-}

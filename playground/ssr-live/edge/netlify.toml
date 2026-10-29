@@ -1,9 +1,0 @@
-# the party on Netlify's edge (live.ermine.love). LLM generated: a prototype. the edge function is
-# built by ../typescript/edge-build.ts (deno task edge-build) into netlify/edge-functions/live.js
-[build]
-  publish = "public"
-  command = ""
-
-[[edge_functions]]
-  path = "/*"
-  function = "live"

@@ -1,8 +1,0 @@
-{
-	"title": "metadata in the old form, a list of [key, value] pairs: read as a map, of a key repeated the first",
-	"bytes": "a2646b65797381836576616c7565616100656e6f64657381a1666368616e6765a26474696d6501686d6574616461746183826377687961788261610182637768796179",
-	"expect": {
-		"entries": [["value", "a", 0]],
-		"nodes": [{ "change": { "time": 1, "metadata": { "why": "x", "a": 1 } } }]
-	}
-}

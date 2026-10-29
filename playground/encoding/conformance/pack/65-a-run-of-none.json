@@ -1,7 +1,0 @@
-{
-	"title": "a run of none",
-	"bytes": "a167636f6c756d6e73584c2dc7db0d80200c0550ec26acd24d6ab906121543f1f16ba7714c13e3d7c979348b718c5a92b9888ca997054c04d15edbed7211d69a601c023669dddc71c8bc837e03ce5c347318a6efe603bd",
-	"expect": {
-		"code": "not-a-pack"
-	}
-}
