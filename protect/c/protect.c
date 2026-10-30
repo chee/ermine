@@ -97,7 +97,6 @@ const op_value *pr_read_at(const pr_read *read, const char *part, tb_key id, con
 static const pr_answer YES = {PR_YES, NULL, NULL, {0}};
 static pr_answer no(const char *reason) { return (pr_answer){PR_NO, reason, NULL, {0}}; }
 
-// values equal: scalars, lists in order, maps by keys, bytes and typed arrays by content (as protect.ts's same)
 int pr_same(const op_value *a, const op_value *b) {
 	if (a == NULL || b == NULL) return a == b;
 	if (a->type != b->type) return 0;
@@ -125,7 +124,6 @@ int pr_same(const op_value *a, const op_value *b) {
 	}
 }
 
-// whether list is a list that starts the names given (given: there are any)
 static int starts_names(const op_value *list, const char *const *path, size_t n, int given) {
 	if (list->type != OP_LIST || !given || list->count > n) return 0;
 	for (size_t i = 0; i < list->count; i++) {
@@ -165,7 +163,6 @@ static int matches(const op_value *g, const pr_ask *ask) {
 	return 1;
 }
 
-// the first field of a grant that is not known, or of the wrong kind (as protect.ts's malformed)
 static const char *malformed(const op_value *g) {
 	for (size_t i = 0; i < g->count; i++) {
 		const char *k = g->keys[i];
@@ -187,7 +184,7 @@ static pr_answer grants(const pr_policy *p, const pr_ask *ask, const pr_read *re
 		const op_value *g = rules->items[i];
 		const char *bad = g->type == OP_MAP ? malformed(g) : NULL;
 		if (bad != NULL) {
-			// the reason lives in a buffer kept until the next such answer on this thread
+			// The reason lives in a buffer that lasts until the next such answer on this thread.
 			static _Thread_local char why[160];
 			snprintf(why, sizeof why, "bad grant %zu: %s", i, bad);
 			return no(why);
