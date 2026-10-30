@@ -1,5 +1,5 @@
 {
-	"title": "an effect's act makes nothing [marks 10-27; Solid 2.0 refuses it too: PRIMITIVE_IN_FORBIDDEN_SCOPE]: createAction inside an act throws in-act (a plain message, and with hints a hint saying where to make it instead); the act's own other work goes on, and nothing was made",
+	"title": "an effect's act makes nothing [marks 10-27; Solid 2.0 refuses it too: PRIMITIVE_IN_FORBIDDEN_SCOPE]: createAction inside an act throws in-act; the act's own other work goes on, and nothing was made",
 	"steps": [
 		{
 			"op": "ermine",

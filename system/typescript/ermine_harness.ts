@@ -577,9 +577,8 @@ function plain(v: unknown): unknown {
 }
 function status(st: Status | undefined) {
 	if (st === undefined) return undefined
-	const { hint: _, ...bareStatus } = st
 	return plain({
-		...bareStatus,
+		...st,
 		...st.error !== undefined && { error: message(st.error) },
 		...st.waiting && {
 			waiting: st.waiting.map((x) =>
