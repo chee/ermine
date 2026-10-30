@@ -1,8 +1,5 @@
-// the table on whichever harness HARNESS names (default: table_harness.ts): the unknown op, and a
-// seeded fuzzer. The scenarios are run by conformance/run.ts.
-//
-// The fuzzer runs random operations, and checks every answer against a plain model here: a list of
-// [part, id, node] triples in the order made, and the order each node's parts were first taken.
+// The table on the harness HARNESS names (default table_harness.ts): the unknown op, and a seeded
+// fuzzer that checks every answer against a plain model. conformance/run.ts runs the scenarios.
 import { assert, assertEquals } from "@std/assert"
 import { ask as send, command } from "../../conformance/typescript/ask.ts"
 import { rand } from "../../conformance/typescript/rand.ts"
@@ -33,11 +30,8 @@ Deno.test("an unknown op, or a malformed request, is an error, and the harness g
 	assertEquals(answers[4], { node: "n" })
 })
 
-// a few dozen seeds (memory: fuzz runs small)
 const SEEDS = 40
 const STEPS = 300
-// strings: ASCII, BMP, a pair (😀: the two halves below), a pair and a modifier, lone halves, both
-// halves the wrong way round (no pair), NUL
 const PARTS: unknown[] = ["value", "children", "é", "\uD83D", "a\u0000", { symbol: "drag" }]
 const IDS: unknown[] = [
 	...["a", "a\u0000", "中", "😀", "👍🏽", "\uD83D", "\uDE00", "\uDE00\uD83D"],
@@ -48,7 +42,6 @@ const NODES = ["n1", "n2", "\u0000", "\uDE00", "👍"]
 type Triple = [unknown, unknown, string]
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 
-// the table, plainly: triples in the order made; groups: a node's parts in the order each was first taken
 class Model {
 	triples: Triple[] = []
 	groups: [string, unknown][] = []

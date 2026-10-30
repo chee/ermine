@@ -2,12 +2,11 @@ import type { Changeable, ChangeHeader } from "@ermine/changeable"
 
 export type { ChangeHeader, Frame, Info, Location } from "@ermine/changeable"
 
-// an entry: a changeable kept in a table (where it is kept is a layer above's)
+// An entry: a changeable stored in a table.
 export type Entry<V> = Changeable<V>
 
-// kept by the caller; nothing checked: checks are a layer above's. the change given is the
-// entry's, not copied; one with no time: a new change with the time now, whole seconds since 1970,
-// the one given unchanged. now: the clock that time is read from, ms since 1970 (none: Date.now)
+// The change is the entry's own, not copied, unless it has no time: then a copy gets the time now
+// in whole seconds since 1970. `now` is the clock in ms since 1970 (default Date.now).
 export default function createEntry<V>(
 	value: V,
 	change: ChangeHeader = {} as ChangeHeader,

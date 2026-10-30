@@ -1,6 +1,6 @@
-// The table (typescript/table.ts), in C: nodes held under keys of a part and an id. Several parts at
-// one id, one node under any number of keys. Same rules as table.ts; the table never looks inside a
-// node, only its address matters, and it never frees one. Lookups are O(1) on average.
+// The table (typescript/table.ts) in C: nodes held under keys of a part and an id. Several parts
+// at one id, one node under any number of keys. The table never looks inside a node or frees one;
+// only its address matters. Lookups are O(1) on average.
 #ifndef TABLE_H
 #define TABLE_H
 
@@ -8,10 +8,10 @@
 
 typedef struct tb_table tb_table;
 
-// a key: a string, or a symbol (symbol non-NULL: the string is not read). Strings are equal by
-// content, symbols by address: the caller's token, one per symbol, alive while any key made from
-// it is in the table. The table copies a string it keeps, so the caller may free its own after
-// the call; the copy lives as long as the key is in the table
+// A key: a string, or a symbol (when symbol is non-NULL the string is not read). Strings are
+// equal by content, symbols by address, so the caller keeps one token per symbol alive while any
+// key made from it is in the table. The table copies strings it stores, so the caller may free
+// its own after the call.
 typedef struct {
 	const char *string;
 	const void *symbol;
@@ -31,48 +31,37 @@ typedef struct {
 } tb_where;
 
 typedef enum { TB_NOTHING_THERE = 1, TB_ALREADY_THERE } tb_code;
-// the TypeScript code of a return, "nothing-there" or "already-there"; "" for 0
 const char *tb_code_name(int code);
 
-// told after a table event landed, ctx the one given at making: an entry added, replaced or taken
-// out at a key. The same entry again is none. del of a node from a part, or from every key: one
-// event per key it was under, after all are taken, in tb_who's order. The keys are good for the
-// call
+// Called after a table event landed, with the ctx given at making: an entry added, replaced or
+// taken out at a key. Putting the same node again is no event. Deleting a node from a part or
+// from every key gives one event per key, after all are removed, in tb_who's order. The keys are
+// only good for the call.
 typedef void (*tb_event)(void *ctx, tb_key part, tb_key id);
 
-// an empty table; out of memory aborts, as everywhere in core
 tb_table *tb_new(void);
-// the same, told every table event (event may be NULL: none)
 tb_table *tb_make(tb_event event, void *ctx);
-// frees the table and what it kept; not the nodes, nor the caller's tokens
 void tb_free(tb_table *t);
 
-// the node under the key. 0; the same node there already: 0, nothing changed; a different
-// node there: TB_ALREADY_THERE, nothing changed
+// Puts the node under the key. Returns 0, also if the same node is already there. A different
+// node there gives TB_ALREADY_THERE, with nothing changed.
 int tb_add(tb_table *t, tb_key part, tb_key id, void *node);
-// the node under the key, in place of what was there; the old node loses only that key. The
-// key goes to the end of its id's
+// Puts the node under the key, replacing what was there; the old node loses only that key. The
+// key goes to the end of its id's.
 void tb_sub(tb_table *t, tb_key part, tb_key id, void *node);
 
-// the node under the key, or NULL
 void *tb_get(const tb_table *t, tb_key part, tb_key id);
-// the three below give an array in the table's own scratch, live until the next call of that one
-// or the next change, and its length in *length; the keys in it are the table's copies, live
-// until the key is removed. The orders are the order added.
-// a node's ids under the part
+// The three below return an array in the table's own scratch space, good until the next call of
+// that one or the next change, with its length in *length. The keys in it are the table's copies,
+// good until the key is removed. Orders are the order added.
 const tb_key *tb_ids(tb_table *t, tb_key part, const void *node, size_t *length);
-// every part at an id, with its node
 const tb_entry *tb_at(tb_table *t, tb_key id, size_t *length);
-// every key the node is under, a part's ids together, the parts in the order each was first
-// taken; none: not in the table
+// Every key the node is under: a part's ids together, parts in the order first taken.
 const tb_where *tb_who(tb_table *t, const void *node, size_t *length);
 
-// all return 0, or TB_NOTHING_THERE when there was nothing to delete (nothing changed)
-// the key
+// All three return 0, or TB_NOTHING_THERE when there was nothing to delete (nothing changes).
 int tb_del(tb_table *t, tb_key part, tb_key id);
-// the node from every id under the part
 int tb_del_part(tb_table *t, tb_key part, const void *node);
-// the node from every key
 int tb_del_node(tb_table *t, const void *node);
 
 #endif

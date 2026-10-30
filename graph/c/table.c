@@ -1,11 +1,10 @@
-// The table (table.h), in C. Four hash maps over linked records, kept in step:
+// The table (table.h) in C: four hash maps over linked records, kept in step.
 //   entries: (part, id) → a record of the key, its node, and its place in two lists
-//   ids: id → its entries in the order made
-//   nodes: node → its groups, one per part, in the order each was first taken
-//   groups: (node, part) → its entries in the order made
-// A group, a node's record and an id's record are freed with their last entry. A part string is
-// kept once however many groups have it (parts: a counted copy, freed with its last group); an id
-// string lives inside its record.
+//   ids:     id → its entries in the order made
+//   nodes:   node → its groups, one per part, in the order each was first taken
+//   groups:  (node, part) → its entries in the order made
+// A group, a node record and an id record are freed with their last entry. A part string is
+// stored once however many groups use it, as a counted copy; an id string lives in its record.
 #include "table.h"
 
 #include <stdint.h>
@@ -25,7 +24,6 @@ static char *xdup(const char *s) {
 	size_t n = strlen(s) + 1;
 	return memcpy(xrealloc(NULL, n), s, n);
 }
-// room for one more at index count
 #define GROW(p, count, capacity) \
 	do { \
 		if ((count) == (capacity)) { \
@@ -42,9 +40,8 @@ const char *tb_code_name(int code) {
 	return "";
 }
 
-// hashing
 
-// MurmurHash3's finalizer: its 64-bit one where a size_t is 64 bits, its 32-bit one where it is 32
+// MurmurHash3's finalizer: the 64-bit one where size_t is 64 bits, otherwise the 32-bit one.
 static size_t mix(size_t h) {
 #if SIZE_MAX > 0xffffffffu
 	h ^= h >> 33;
@@ -71,13 +68,11 @@ static int same(tb_key a, tb_key b) {
 	if (a.symbol != NULL || b.symbol != NULL) return a.symbol == b.symbol;
 	return strcmp(a.string, b.string) == 0;
 }
-// a key the table keeps: the string copied
 static tb_key keep(tb_key k) { return k.symbol != NULL ? k : tb_string(xdup(k.string)); }
 static void drop(tb_key k) {
 	if (k.symbol == NULL) free((char *)k.string);
 }
 
-// a chained map; every record starts with its link and its hash
 typedef struct link link;
 struct link {
 	link *next;
@@ -211,7 +206,6 @@ void tb_free(tb_table *t) {
 	free(t);
 }
 
-// finding
 
 static entry *find_entry(const tb_table *t, tb_key part, tb_key id) {
 	if (t->entries.slots == 0) return NULL;
@@ -248,9 +242,7 @@ static group *find_group(const tb_table *t, const void *node, tb_key part) {
 	return NULL;
 }
 
-// making and unmaking
 
-// a part the table keeps: a string is the one counted copy, made on first use
 static tb_key part_take(tb_table *t, tb_key part) {
 	if (part.symbol != NULL) return part;
 	size_t h = hash_key(part);
@@ -305,7 +297,6 @@ static group *group_for(tb_table *t, tb_key part, void *node) {
 	}
 	return g;
 }
-// the end of its id's and its group's
 static void link_entry(entry *e, idrec *i, group *g) {
 	e->group = g;
 	e->id = i;
@@ -336,7 +327,6 @@ static void unlink_entry(entry *e) {
 	else g->last = e->group_prev;
 	g->count--;
 }
-// frees a group with no entries, and its node's record with its last group
 static void group_free(tb_table *t, group *g) {
 	noderec *n = g->node;
 	unlink_(&t->groups, &g->link);
@@ -375,7 +365,6 @@ static void take(tb_table *t, entry *e) {
 	if (g->first == NULL) group_free(t, g);
 }
 
-// the api
 
 int tb_add(tb_table *t, tb_key part, tb_key id, void *node) {
 	entry *e = find_entry(t, part, id);
@@ -389,8 +378,8 @@ void tb_sub(tb_table *t, tb_key part, tb_key id, void *node) {
 	entry *e = find_entry(t, part, id);
 	if (e != NULL) {
 		if (e->node == node) return;
-		// the entry stays in the table and its id: it moves to the new node's group, and to the end
-		// of its id's. The new group is made first and holds the part the keys may be the table's own
+		// The entry stays in the table and moves to the new node's group, at the end of its id's.
+		// The new group is made first, because the keys may be the table's own copies.
 		group *old = e->group;
 		group *g = group_for(t, part, node);
 		unlink_entry(e);
@@ -443,7 +432,6 @@ const tb_where *tb_who(tb_table *t, const void *node, size_t *length) {
 	return t->who_out;
 }
 
-// keys kept to tell of after they are taken: the table's copies go with the entries
 typedef struct {
 	tb_key part, id;
 } told;
@@ -463,7 +451,6 @@ int tb_del(tb_table *t, tb_key part, tb_key id) {
 		take(t, e);
 		return 0;
 	}
-	// the keys may be the table's own copies, which take frees
 	tb_key p = keep(part), i = keep(id);
 	take(t, e);
 	t->event(t->ctx, p, i);
@@ -481,7 +468,6 @@ int tb_del_part(tb_table *t, tb_key part, const void *node) {
 		v = xrealloc(NULL, g->count * sizeof *v);
 		for (entry *e = g->first; e; e = e->group_next) v[n++] = (told){keep(g->part), keep(e->id->id)};
 	}
-	// the last entry takes the group with it
 	while (g->first->group_next != NULL) take(t, g->first);
 	take(t, g->first);
 	if (t->event) told_all(t, v, n);

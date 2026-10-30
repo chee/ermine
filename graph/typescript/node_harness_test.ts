@@ -1,6 +1,6 @@
-// What the node suite asks of a harness besides its scenarios (conformance/run.ts): an unknown op
-// is an error and the harness goes on; a fuzzer against a model. Against HARNESS, else the
-// reference (node_harness.ts). The protocol: node_harness.ts.
+// Beyond its scenarios (conformance/run.ts), the node suite checks that an unknown op is an
+// error and the harness goes on, and runs a fuzzer against a model. Uses HARNESS, else
+// node_harness.ts.
 import { assert, assertEquals } from "@std/assert"
 import { ask, command } from "../../conformance/typescript/ask.ts"
 import { rand } from "../../conformance/typescript/rand.ts"
@@ -12,7 +12,6 @@ type Request = Record<string, unknown> & { op: string }
 
 const now = () => Math.floor(Date.now() / 1000)
 
-// a time "now" in the expectation: within [from - 1, to + 1], then taken as the expectation's
 function match(got: unknown, want: Shown, at: string, from: number, to: number) {
 	const entry = got as Shown | undefined
 	assert(entry !== undefined, `${at}: no entry`)
@@ -34,11 +33,9 @@ Deno.test("an unknown op is an error, and the harness goes on", async () => {
 	match(b.entry, { change: { time: "now" } }, "entry", from, now())
 })
 
-// a few dozen seeds (memory: fuzz runs small)
 const SEEDS = 40
 const STEPS = 25
 const NAMES = ["a", "b", "c", "d"]
-// strings: ASCII, escapes, BMP, pairs, a pair and a modifier, lone halves, a high then a low, NUL
 const STRINGS = [
 	"",
 	"a",
@@ -82,7 +79,6 @@ Deno.test(`fuzz: ${SEEDS} seeds × ${STEPS} requests against the model`, async (
 			const header: Record<string, unknown> = {}
 			if (pick(2)) header.time = pick(1 << 30)
 			if (pick(2)) header.actor = NAMES[pick(4)]
-			// the frame: a list of infos (one here), its keys any JSON, its locations what began outside
 			const info: Record<string, unknown> = {}
 			if (pick(3) === 0) {
 				for (let n = pick(4); n > 0; n--) info[NAMES[pick(2)]] = json(pick, 2)

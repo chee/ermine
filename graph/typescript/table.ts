@@ -1,44 +1,34 @@
-// entries held in memory, each under keys of a table name and an id: several tables at one id, one
-// entry under any number of keys. what a table name or an id means is a layer above's. one
-// listener, given at making, is told of every table event, after it landed: an entry added,
-// replaced or taken out at a key (the same entry again is nothing, and no event)
+// An in-memory table of entries, each under keys of a table name and an id. One id can have
+// several tables, and one entry can sit under any number of keys. One listener, given at making,
+// hears every event after it landed. Putting the same entry again is no event.
 import type { Entry } from "@ermine/graph/entry"
 
-// the tables graph holds, each a name and the shape of the value under it. a package with tables
-// of its own exports them as a type, and whoever makes the table names what it holds:
-//   createTable<Tables & StatusTables>()
-// an app may also add to this interface by declaration merging. the table checks no name and no
-// shape; a name not in the type is allowed, and its entries are Entry<unknown>
+// The tables the graph has, each a name and the shape of its value. Packages with tables of
+// their own export them as a type: createTable<Tables & StatusTables>(). Apps may add to this
+// interface by declaration merging. Names outside the type are allowed, as Entry<unknown>.
 export interface Tables {
 	value: unknown
 	attributes: Record<string, unknown>
-	// places' hole: each name to its entries, in order (anything else under a name is taken)
 	children: Record<string, unknown>
 }
 
-// a table's name
 export type Key = string
 
-// the value shape under a name: the type's, else unknown
 export type Shape<T, K extends Key> = K extends keyof T ? T[K] : unknown
 
-// an id
 export type Id = string | symbol
 
 export type Code = "nothing-there" | "already-there"
 
 export class TableError extends Error {
-	// the key asked about, as far as there was one
 	constructor(readonly code: Code, readonly part?: Key, readonly id?: Id) {
 		super([code, part, id].filter((x) => x !== undefined).map(String).join(" "))
 	}
 }
 
-// a table event at a key: told after it landed
 export type Event = (part: Key, id: Id) => void
 
-// a table holding T's tables. add and sub are methods, so a table of more tables is a table of
-// fewer (Table<Tables & StatusTables> is a Table)
+// A table holding T's tables. add and sub are methods so Table<Tables & StatusTables> is a Table.
 export type Table<T extends Tables = Tables> = {
 	add<K extends Key>(part: K, id: Id, node: Entry<Shape<T, K>>): void
 	sub<K extends Key>(part: K, id: Id, node: Entry<Shape<T, K>>): void
@@ -57,7 +47,6 @@ export type Table<T extends Tables = Tables> = {
 
 export function createTable<T extends Tables = Tables>(event?: Event): Table<T> {
 	type N = Entry<unknown>
-	// id → table name → entry, and entry → table name → ids
 	const at = new Map<Id, Map<Key, N>>()
 	const where = new Map<N, Map<Key, Set<Id>>>()
 
@@ -83,7 +72,6 @@ export function createTable<T extends Tables = Tables>(event?: Event): Table<T> 
 		if (ids.size === 0) where.delete(node)
 	}
 
-	// the entry under the key; a different entry there already: already-there
 	function add(part: Key, id: Id, node: N) {
 		const there = at.get(id)?.get(part)
 		if (there === node) return
@@ -92,7 +80,6 @@ export function createTable<T extends Tables = Tables>(event?: Event): Table<T> 
 		event?.(part, id)
 	}
 
-	// the entry under the key, in place of what was there
 	function sub(part: Key, id: Id, node: N) {
 		const there = at.get(id)?.get(part)
 		if (there === node) return
@@ -101,8 +88,6 @@ export function createTable<T extends Tables = Tables>(event?: Event): Table<T> 
 		event?.(part, id)
 	}
 
-	// the entry under the key; an entry's ids under the table name, in the order added; every table
-	// at an id
 	function get(part: Key, id: Id): N | undefined
 	function get(part: Key, node: N): Id[]
 	function get(id: Id): [Key, N][]
@@ -112,16 +97,13 @@ export function createTable<T extends Tables = Tables>(event?: Event): Table<T> 
 		return at.get(b!)?.get(a as Key)
 	}
 
-	// every key the entry is under, as [table name, id]; none: not in the table
 	function who(node: N): [Key, Id][] {
 		const out: [Key, Id][] = []
 		for (const [part, ids] of where.get(node) ?? []) for (const id of ids) out.push([part, id])
 		return out
 	}
 
-	// the key; the entry from every id under the table name; the entry from every key. nothing
-	// there:
-	// nothing-there
+	// throws TableError "nothing-there" when there is no such entry
 	function del(part: Key, id: Id): void
 	function del(part: Key, node: N): void
 	function del(node: N): void
