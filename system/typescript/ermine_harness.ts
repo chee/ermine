@@ -104,7 +104,7 @@
 //                                             in them: "a handle"; none a call: null)
 //   ["explainfrom", target, i?]               explain of readAll(target)[i].from.change, shown
 //   ["share", path, name]                     createAction(path, f), f one function per name across
-//                                             the whole run: it gives back the NODE key's id of the
+//                                             the whole run: it gives back the node key's id of the
 //                                             nearest scope above the one open as it runs
 //   any library function another harness adds (libraries, below)
 // expr: [fn, ...args], ["all", expr, …], ["whole", expr] ([{ path: [], value }]), "$x", or any other
@@ -123,7 +123,7 @@ import createEntry from "@ermine/graph/entry"
 import { at } from "@ermine/places"
 import { PlacesError } from "@ermine/places"
 import { get } from "@ermine/places/lib"
-import { createChangeHeader, NODE } from "@ermine/places/header"
+import { createChangeHeader } from "@ermine/places/header"
 import type { Location } from "@ermine/changeable/stacktrace"
 import { Refusal } from "@ermine/processes/guard"
 import type { Process } from "@ermine/processes/start"
@@ -427,7 +427,7 @@ function call(api: Sys, env: Env, [fn, ...raw]: [string, ...unknown[]]): unknown
 					name,
 					f = () => {
 						for (let o = s.getCurrentScope(); o !== undefined; o = o.parent) {
-							if (NODE in o.info) return o.info[NODE]
+							if ("node" in o.info) return o.info.node
 						}
 						return null
 					},
@@ -846,7 +846,7 @@ async function answer(r: Request): Promise<Record<string, unknown>> {
 				folder: o.folder,
 				args: o.args,
 				...o.process && { process: o.process.id },
-				scope: o.scope.info[NODE] === e.id ? "host" : o.process ? "process" : "other",
+				scope: o.scope.info.node === e.id ? "host" : o.process ? "process" : "other",
 			}
 		}
 		case "o": {

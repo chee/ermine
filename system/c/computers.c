@@ -45,7 +45,7 @@ struct made {
 	sc_scope *own;
 	sc_computer *c;
 	char *id;
-	// its id as its PL_NODE pair's value: alive as long as the scheduler's scope is
+	// its id as its CH_NODE pair's value: alive as long as the scheduler's scope is
 	op_value *id_value;
 	char **path;
 	size_t npath;
@@ -616,10 +616,10 @@ static void hold(made *m) {
 
 // making one --------------------------------------------------------------------------------------------------
 
-// the PL_NODE key's id of frame o or the nearest frame under it with one; NULL: none
+// the CH_NODE key's id of frame o or the nearest frame under it with one; NULL: none
 static const op_value *node_above(const ch_frame *o) {
 	for (; o != NULL; o = o->parent) {
-		const op_value *v = ch_frame_get(o, PL_NODE);
+		const op_value *v = ch_frame_get(o, CH_NODE);
 		if (v != NULL) return v->type == OP_STR ? v : NULL;
 	}
 	return NULL;
@@ -633,7 +633,7 @@ typedef struct {
 	const op_value *above;
 } placing;
 
-// a computer's node placed at its path, its scope written (own's PL_NODE key, or the nearest above with
+// a computer's node placed at its path, its scope written (own's CH_NODE key, or the nearest above with
 // one; none: not written)
 static int place_node(void *data) {
 	placing *p = data;
@@ -670,7 +670,7 @@ static void create_in(void *data) {
 	creating *k = data;
 	made *m = k->m;
 	es_ermine *e = m->x->e;
-	sc_pair info[2] = {{PL_NODE, m->id_value}};
+	sc_pair info[2] = {{CH_NODE, m->id_value}};
 	size_t n = 1;
 	if (k->locations != NULL) info[n++] = (sc_pair){CH_LOCATIONS, k->locations};
 	m->c = k->effect ? sc_create_effect(e->scheduler, k->def, info, n)

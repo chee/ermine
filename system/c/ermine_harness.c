@@ -1088,7 +1088,7 @@ static es_out share_run(es_context *c, void *ctx, const op_value *const *args, s
 	(void)args;
 	(void)nargs;
 	for (ch_frame *o = sc_get_current_frame(W->e->scheduler); o != NULL; o = o->parent) {
-		const void *node = ch_frame_get(o, PL_NODE);
+		const void *node = ch_frame_get(o, CH_NODE);
 		if (node != NULL) return es_out_of(op_ref((op_value *)node));
 	}
 	return es_out_of(op_null());

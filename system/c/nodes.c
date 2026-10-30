@@ -1080,7 +1080,7 @@ static int node_part(es_context *t, es_target x, const char *part, es_node_data 
 
 // the computer's node whose run is open, else NULL
 static const char *computer_node(sc_computer *computer) {
-	const op_value *v = ch_frame_get(sc_scope_frame(computer), PL_NODE);
+	const op_value *v = ch_frame_get(sc_scope_frame(computer), CH_NODE);
 	return v != NULL && v->type == OP_STR ? v->str : NULL;
 }
 

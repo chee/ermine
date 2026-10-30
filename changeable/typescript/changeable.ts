@@ -8,8 +8,8 @@ import type { Location } from "./stacktrace.ts"
 export type { Location }
 
 // what a frame says: a plain object, any keys; the keys some layer reads by name typed here.
-// node: the id of the node whose computer made it (table's Id: string | symbol). run, mark: that
-// computer's run count and mark. actor, reader: as the header's. caller, trusted-event: a send's.
+// node: the id of the node whose computer made it (table's Id: string | symbol). run, mark: a run
+// frame's: the run's number and the tick that made it due. actor, reader: as the header's. caller, trusted-event: a send's.
 // place: a path (places' Path). cause, wallclock, message: sync's. locations: where in code, from
 // outside the graph, what the frame is began: every line of the stack there, top first
 export type Info = {

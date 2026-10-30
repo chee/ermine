@@ -1685,7 +1685,7 @@ int es_create(const es_options *given, es_ermine **out) {
 		for (size_t i = 0; i < o->ninfo; i++) info[i] = o->info[i];
 		op_value *node = op_str(e->node);
 		keep_value(h, node);
-		info[o->ninfo] = (sc_pair){PL_NODE, node};
+		info[o->ninfo] = (sc_pair){CH_NODE, node};
 		e->host_scope = sc_create_root_scope(e->scheduler, info, o->ninfo + 1);
 		free(info);
 	}
@@ -2114,7 +2114,7 @@ int es_start_in_at(es_context *c, es_program fn, void *ctx, es_at at, const es_s
 	if (own == NULL || !sc_scope_alive(own)) {
 		return es_fail_ermine(ES_GONE, "gone: what this was started in has ended");
 	}
-	const op_value *node = es_pair_of(own, PL_NODE);
+	const op_value *node = es_pair_of(own, CH_NODE);
 	if (node != NULL && node->type == OP_STR && es_is_computer(e, node->str)) {
 		return es_fail_ermine(ES_NOT_HERE,
 			"start in a memo or effect: start a process in setup or an action");

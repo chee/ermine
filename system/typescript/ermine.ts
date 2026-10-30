@@ -27,7 +27,7 @@
 // over the functions on the ermine object]: bare names in the root, folder the root, args the
 // host's, an action's caller the host's node, addTeardown(fn) at close.
 // the host's node: one plain node, not a process (no row, nothing to stop). its id: a send's
-// caller from the host, and its scope's NODE. its attributes: ermine.host.args,
+// caller from the host, and its scope's node key. its attributes: ermine.host.args,
 // ermine.features (what ermine.features shows).
 // the lifecycle:
 //   start(fn, at, { args })   a process at at running fn, its
@@ -55,7 +55,7 @@ import { place } from "./system/names.ts"
 import { getStatus } from "./system/status.ts"
 import { enterScheduler, leaveScheduler, registerScheduler, registerScope } from "./registry.ts"
 import { isHandle, mint } from "./handles.ts"
-import { createChangeHeader, NODE, outsideAt } from "@ermine/places/header"
+import { createChangeHeader, outsideAt } from "@ermine/places/header"
 import type { Location } from "@ermine/changeable/stacktrace"
 import { createStatus, STATUS, TABLE as STATUS_TABLE } from "@ermine/processes/status"
 import type { Policy } from "@ermine/protect"
@@ -346,7 +346,7 @@ export function createErmine(options: Options = {}): Ermine {
 
 	// 5. the root node and the host's node, written as the host
 	const node = newId()
-	const hostScope = s.createRootScope({ ...options.info, [NODE]: node })
+	const hostScope = s.createRootScope({ ...options.info, node: node })
 
 	// pulses: one soon, however many ask
 	let queued = false

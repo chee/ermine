@@ -4,7 +4,7 @@
 import { userActivation } from "./event_fixture.ts"
 import { assert, assertEquals, assertThrows } from "@std/assert"
 import { no, type Policy, yes } from "@ermine/protect"
-import { nearest, NODE } from "@ermine/places/header"
+import { nearest } from "@ermine/places/header"
 import type { Frame } from "@ermine/graph/entry"
 import {
 	addTeardown,
@@ -176,7 +176,7 @@ Deno.test("marks: start asks as the starter for the stop() too: whoever calls it
 	let blocked = false
 	const may: Policy = (ask) => {
 		if (ask.op !== "place" || ask.target.path?.[0] !== "work") return yes
-		whos.push(nearest((ask.who as { frame?: Frame })?.frame, NODE))
+		whos.push(nearest((ask.who as { frame?: Frame })?.frame, "node"))
 		return blocked ? no("denied") : yes
 	}
 	let stopIt: (() => void) | undefined

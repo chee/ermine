@@ -542,7 +542,7 @@ static op_value *START_WHO, *STOP_WHO;
 static const char *who_node(const op_value *who) {
 	const op_value *frames = who != NULL ? op_get(who, "frame") : NULL;
 	for (size_t i = 0; frames != NULL && i < frames->count; i++) {
-		const op_value *node = op_get(frames->items[i], PL_NODE);
+		const op_value *node = op_get(frames->items[i], CH_NODE);
 		if (node != NULL && node->type == OP_STR) return node->str;
 	}
 	return NULL;

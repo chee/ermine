@@ -133,7 +133,7 @@ export function again(inner: Inner, own: Scope, path: Path, code: Code): Compute
 	}
 }
 
-// a computer's node: a new id, placed at path, its scope written (own's NODE key, or the
+// a computer's node: a new id, placed at path, its scope written (own's node key, or the
 // nearest above with one; none: not written); in own's bin, its node and name gone with it.
 // made in a call: the call's record says so
 export function computerNode(

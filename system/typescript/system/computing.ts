@@ -1,5 +1,4 @@
 import type { Path } from "@ermine/places"
-import { NODE } from "@ermine/places/header"
 import type { Equal, PENDING } from "@ermine/reactivity"
 import { ErmineError } from "../features.ts"
 import { type Inner, type Node, type NodeData, whole } from "../context.ts"
@@ -99,7 +98,7 @@ function makeComputer<T>(
 	}
 	// made from outside the graph: where, in its info (inside: its frames say)
 	const locations = base.locations()
-	const info = { [NODE]: id, ...locations !== undefined && { locations } }
+	const info = { node: id, ...locations !== undefined && { locations } }
 	let given = false
 	const run = (previous: T | undefined) => {
 		if (!given) {

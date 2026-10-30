@@ -36,7 +36,6 @@ import type { ChangeHeader, Frame } from "@ermine/graph/entry"
 import type { Key as Step } from "@ermine/changeable/apply"
 import type { Fact, Id, Path, Places } from "@ermine/places"
 import type { Read, Write } from "@ermine/processes/runs"
-import { NODE } from "@ermine/places/header"
 import type { Scheduler, Scope } from "@ermine/reactivity"
 import { isPromise } from "@ermine/reactivity/helpers"
 import type { Key, Table } from "@ermine/graph/table"
@@ -212,7 +211,7 @@ export function createCalls(setup: Setup): Calls {
 		}),
 		// a computer's waits left from its earlier runs go as a run ends without them
 		s.onRunEnd((c, rn) => {
-			const id = c.info[NODE] as Id | undefined
+			const id = c.info.node as Id | undefined
 			const mine = id === undefined ? undefined : waiting.get(id)
 			if (mine === undefined) return
 			let gone = false

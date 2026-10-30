@@ -1,5 +1,4 @@
 import type { Id, Path } from "@ermine/places"
-import { NODE } from "@ermine/places/header"
 import type { Frame, Scope } from "@ermine/reactivity"
 import { enterScheduler, leaveScheduler } from "../registry.ts"
 import { ErmineError } from "../features.ts"
@@ -12,7 +11,7 @@ import { USER_ACTIVATED } from "./shapes.ts"
 // the computers' scopes whose act is running now: an act makes nothing [marks-2026-10-27]
 export const acting = new Set<Scope>()
 
-// what a frame is looked for by: the NODE key in its info; an actor in it; a call's info (caller,
+// what a frame is looked for by: the node key in its info; an actor in it; a call's info (caller,
 // handler and call)
 type By = "node" | "actor" | "call"
 // the first frame from o up, short of end, that is by; none: undefined
@@ -20,7 +19,7 @@ function above(o: Frame | undefined, end: Frame | undefined, by: By) {
 	for (; o !== undefined && o !== end; o = o.parent) {
 		switch (by) {
 			case "node":
-				if (NODE in o.info) return o
+				if ("node" in o.info) return o
 				break
 			case "actor":
 				if ("actor" in o.info) return o
@@ -31,9 +30,9 @@ function above(o: Frame | undefined, end: Frame | undefined, by: By) {
 	}
 }
 
-// the NODE key's id of o's frame or the nearest frame above it with one; none: undefined
+// the node key's id of o's frame or the nearest frame above it with one; none: undefined
 export const nodeAbove = (o: Scope | undefined) =>
-	above(o?.frame, undefined, "node")?.info[NODE] as Id | undefined
+	above(o?.frame, undefined, "node")?.info.node as Id | undefined
 // the frame of the call open from o up: its info names the caller, the handler and the call
 export const callAbove = (o: Frame | undefined) => above(o, undefined, "call")
 
@@ -96,7 +95,7 @@ export function teardown(inner: Inner, own: Scope, fn: (why: Why) => unknown) {
 // again, so its writer would die at each rerun or start a process every run; an act makes nothing)
 // message: as the scenarios pin it (the C side says the same)
 export function notHere(base: Base, own: Scope, message: string) {
-	const node = own.info[NODE] as Id | undefined
+	const node = own.info.node as Id | undefined
 	if (node !== undefined && computerAt(base.made, node)) {
 		throw new ErmineError("not-here", message)
 	}

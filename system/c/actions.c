@@ -95,7 +95,7 @@ static op_value *change_value(es_ermine *e, const ch_header *h) {
 }
 
 // the value at key nearest up a change's frames (the change value's list of infos, innermost
-// first), stopping after the first holding PL_NODE (what is above a node's scope is not its); NULL:
+// first), stopping after the first holding CH_NODE (what is above a node's scope is not its); NULL:
 // none
 static const op_value *nearest(const op_value *change, const char *key) {
 	const op_value *frames = change != NULL ? op_get(change, "frame") : NULL;
@@ -104,7 +104,7 @@ static const op_value *nearest(const op_value *change, const char *key) {
 		const op_value *info = frames->items[i];
 		const op_value *v = op_get(info, key);
 		if (v != NULL) return v;
-		if (op_get(info, PL_NODE) != NULL) return NULL;
+		if (op_get(info, CH_NODE) != NULL) return NULL;
 	}
 	return NULL;
 }
@@ -671,7 +671,7 @@ static void writer_of(es_context *c, const op_value *change, es_explained *out) 
 	out->has_writer = 1;
 	es_writer *w = &out->writer;
 	const op_value *run = nearest(change, "run");
-	const op_value *node = nearest(change, PL_NODE);
+	const op_value *node = nearest(change, CH_NODE);
 	const op_value *call = nearest(change, "call");
 	const op_value *handler = nearest(change, "handler");
 	if (run != NULL && node != NULL && node->type == OP_STR) {
@@ -1147,7 +1147,7 @@ static void run_ended(sc_computer *c, unsigned n, sc_ended ended, const void *co
 	(void)nreads;
 	(void)more;
 	struct es_calls *x = data;
-	const op_value *id = value_of(c, PL_NODE, OP_STR);
+	const op_value *id = value_of(c, CH_NODE, OP_STR);
 	if (id == NULL) return;
 	waiter *w = waiter_of(x, id->str);
 	if (w == NULL) return;
@@ -1882,7 +1882,7 @@ static int execute_action(es_context *c, es_target x, const op_value *const *arg
 	// in a run, the computer waits; else whoever this context is
 	sc_run *run = sc_get_run(e->scheduler);
 	sc_computer *computer = run == NULL ? NULL : sc_run_computer(run);
-	const op_value *by = computer == NULL ? NULL : value_of(computer, PL_NODE, OP_STR);
+	const op_value *by = computer == NULL ? NULL : value_of(computer, CH_NODE, OP_STR);
 	const char *caller = by != NULL ? by->str : c->node;
 	// tracked in a run, so the handler coming reruns it
 	const op_value *value =
@@ -2072,7 +2072,7 @@ int es_create_writer_at(es_context *c, op_value **writer, const ch_location *sit
 	if (own == NULL || !sc_scope_alive(own)) {
 		return es_fail_ermine(ES_GONE, "gone: what this writer was created in has ended");
 	}
-	const op_value *node = value_of(own, PL_NODE, OP_STR);
+	const op_value *node = value_of(own, CH_NODE, OP_STR);
 	if (node != NULL && es_is_computer(e, node->str)) {
 		return es_fail_ermine(ES_NOT_HERE,
 			"createWriter in a memo or effect: create it in setup or an action, and use the writer there");

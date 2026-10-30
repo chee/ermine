@@ -98,9 +98,6 @@ typedef struct {
 // a step's answer: nothing at here + name, nor anywhere under it (see PRUNING)
 #define PL_NONE 2
 
-// the key of the pair naming a scope's node (its value: the id, an op_value string). the one
-// spelling: use this, never the string
-#define PL_NODE "node"
 // the id a walk is at on a level: not an id of any entry, so never given as an answer (pl_get: nothing
 // there)
 tb_key pl_level(void);

@@ -90,6 +90,7 @@
 // closed by then, as code after an await runs on an empty stack. the web has the same rule for
 // the same reason: a handler's preventDefault() after an await does nothing, the event is already
 // gone
+import type { Info } from "@ermine/changeable"
 import { type Cause, createCauses } from "./causes.ts"
 import { isPromise, same } from "./helpers.ts"
 import { createOrder } from "./order.ts"
@@ -112,24 +113,9 @@ export type Equal<T = unknown> = (a: T, b: T) => boolean
 // one time a computer ran: the run open while it runs (getRun()), kept for a write after an await
 export type Run = { readonly computer: Computer; readonly n: number; readonly frame: Frame }
 
-// a scope's info: a plain object, any keys; the keys some layer reads by name typed here. node:
-// the id of the node whose computer it is (table's Id). run, mark: a run frame's: the run's number
-// and the tick that made it due (made here). actor, reader: a header's. caller, trusted-event: a send's.
-// place: a path. cause, wallclock, message: sync's
-export type Info = {
-	[key: string]: unknown
-	node?: string | symbol
-	run?: number
-	mark?: number
-	actor?: unknown
-	reader?: string
-	caller?: unknown
-	"trusted-event"?: boolean
-	place?: readonly string[]
-	cause?: unknown
-	wallclock?: number
-	message?: string
-}
+// a scope's info: changeable's Info (its typed keys, the one source); run and mark: a run frame's,
+// the run's number and the tick that made it due (made here)
+export type { Info }
 
 // a scope: the scopes and computers under it, in the order made (a list: newest, the newest under
 // it; older and newer, the one made before and after it under the same scope), and its teardowns;

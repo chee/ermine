@@ -10,7 +10,7 @@ import type { Inner, Node, Patch, Step, Target, Version, Why } from "../context.
 // (a ChangeView's userActivated)
 export const USER_ACTIVATED = "userActivated"
 
-// the attribute a memo's or effect's node holds its scope in: the NODE key's id of the nearest
+// the attribute a memo's or effect's node holds its scope in: the node key's id of the nearest
 // scope above it with one, written once as the node is made (beside status.ts')
 export const SCOPE = "ermine.computer.scope"
 // what a pending process waits on, written by what started it (ermine's start)
@@ -56,7 +56,7 @@ export type Status = {
 
 // what made a change, one step: a computer (a memo or effect; run: its latest record, when that
 // still holds the change), a method (call: its record while it is the handler's latest, whether or not it holds the write), a feature's
-// thing writing as itself (a scope whose info holds NODE and feature: a pipe), or code outside any
+// thing writing as itself (a scope whose info holds node and feature: a pipe), or code outside any
 // (locations: where it began, from outside the graph, the nearest up its frames, top of the stack
 // first)
 // nodes named by their path from the root (seen; none: moved,
@@ -67,7 +67,7 @@ export type Writer =
 	| { readonly kind: "method"; readonly path?: Path; readonly call?: CallView }
 	| { readonly kind: "outside"; readonly locations?: readonly Location[] }
 	// pipe-extension: core gap. a feature's thing that writes as itself (a scope whose info holds
-	// NODE and feature): the feature's name, and its node's path
+	// node and feature): the feature's name, and its node's path
 	| { readonly kind: "feature"; readonly feature: string; readonly path?: Path }
 // a record's read or write, as the process asking sees it
 export type Touched = { readonly part: Key; readonly path?: Path }
