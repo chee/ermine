@@ -1,0 +1,398 @@
+{
+	"title": "array paths: a removal at an index of an array (a path, no range) takes that element away from the array's elements too, by its place as written, so later splices name what the writer saw; a move makes new the sequences at both ends (the one a range is in, the array an index is in), so writes after it still say ids (its steps' bytes here, ids and all)",
+	"steps": [
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "device",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"expect": {
+				"key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "t",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"a": [
+							1,
+							2,
+							3,
+							4
+						]
+					}
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "t",
+			"patches": [
+				{
+					"path": [
+						"a"
+					],
+					"range": [
+						4,
+						4
+					],
+					"value": [
+						5
+					]
+				}
+			],
+			"expect": {
+				"n": 2,
+				"lamport": 2
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "t",
+			"patches": [
+				{
+					"path": [
+						"a",
+						1
+					]
+				}
+			],
+			"expect": {
+				"n": 3,
+				"lamport": 3
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "b",
+			"of": "a",
+			"at": 1,
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "t",
+			"patches": [
+				{
+					"path": [
+						"a"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": [
+						"A"
+					]
+				}
+			],
+			"expect": {
+				"n": 4,
+				"lamport": 4
+			}
+		},
+		{
+			"op": "write",
+			"device": "b",
+			"node": "t",
+			"patches": [
+				{
+					"path": [
+						"a"
+					],
+					"range": [
+						2,
+						3
+					]
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 4
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "b",
+			"of": "a",
+			"at": 4,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "b",
+			"to": "a",
+			"of": "b",
+			"at": 1,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "value",
+			"device": "a",
+			"node": "t",
+			"expect": {
+				"value": {
+					"a": [
+						1,
+						"A",
+						3,
+						5
+					]
+				}
+			}
+		},
+		{
+			"op": "value",
+			"device": "b",
+			"node": "t",
+			"expect": {
+				"value": {
+					"a": [
+						1,
+						"A",
+						3,
+						5
+					]
+				}
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "m",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"a": [
+							1,
+							2
+						],
+						"x": 5,
+						"b": [
+							7,
+							8
+						]
+					}
+				}
+			],
+			"expect": {
+				"n": 5,
+				"lamport": 5
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "m",
+			"patches": [
+				{
+					"path": [
+						"a"
+					],
+					"range": [
+						2,
+						2
+					],
+					"value": [
+						3
+					]
+				}
+			],
+			"expect": {
+				"n": 6,
+				"lamport": 6
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "m",
+			"patches": [
+				{
+					"path": [
+						"a"
+					],
+					"range": [
+						0,
+						0
+					],
+					"move": {
+						"path": [
+							"x"
+						]
+					}
+				}
+			],
+			"expect": {
+				"n": 7,
+				"lamport": 7
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "m",
+			"patches": [
+				{
+					"path": [
+						"a"
+					],
+					"range": [
+						4,
+						4
+					],
+					"value": [
+						9
+					]
+				}
+			],
+			"expect": {
+				"n": 8,
+				"lamport": 8
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "m",
+			"patches": [
+				{
+					"path": [
+						"y"
+					],
+					"move": {
+						"path": [
+							"b",
+							0
+						]
+					}
+				}
+			],
+			"expect": {
+				"n": 9,
+				"lamport": 9
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "m",
+			"patches": [
+				{
+					"path": [
+						"b"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": [
+						6
+					]
+				}
+			],
+			"expect": {
+				"n": 10,
+				"lamport": 10
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "b",
+			"of": "a",
+			"at": 5,
+			"expect": {
+				"added": 6
+			}
+		},
+		{
+			"op": "value",
+			"device": "a",
+			"node": "m",
+			"expect": {
+				"value": {
+					"a": [
+						5,
+						1,
+						2,
+						3,
+						9
+					],
+					"b": [
+						8,
+						6
+					],
+					"y": 7
+				}
+			}
+		},
+		{
+			"op": "value",
+			"device": "b",
+			"node": "m",
+			"expect": {
+				"value": {
+					"a": [
+						5,
+						1,
+						2,
+						3,
+						9
+					],
+					"b": [
+						8,
+						6
+					],
+					"y": 7
+				}
+			}
+		},
+		{
+			"op": "steps",
+			"device": "a",
+			"of": "a",
+			"expect": {
+				"steps": [
+					"8958208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c01f661746576616c756581a26470617468806576616c7565a161618401020304011a68e7780080",
+					"8a58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c02582037af36c48b476afdc154bde572220645041fbf600c4301e1e91d44a781d3733d61746576616c756581a364706174688161616572616e67658204046576616c75658105021a68e778008101818282010380",
+					"8958208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c0358207e9829550d96378bc1a7b145b7e32bc5ca3b4f7b9e227bea90fd80151428e31e61746576616c756581a1647061746882616101031a68e778008101",
+					"8a58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c04582022643599237e71668c0d8d9c6c4961988b9f09068bf1e33f0a8c548f972423d361746576616c756581a364706174688161616572616e67658201016576616c7565816141041a68e778008101818282030080",
+					"8958208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c0558200e80fca3c8339b2fd1c18ca483488bd19f14162608b5c18649473e4aca19ff94616d6576616c756581a26470617468806576616c7565a361618201026162820708617805051a68e7780080",
+					"8a58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c06582079a24fe6905a02e3b4500a204f3523161f7b61c571496f576ea23556b8766db1616d6576616c756581a364706174688161616572616e67658202026576616c75658103061a68e778008101818282010180",
+					"8958208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c07582083db77a2b6afa847d9611480075db46a1146563d24b000f51befb6e54d9d31c4616d6576616c756581a3646d6f7665a1647061746881617864706174688161616572616e6765820000071a68e778008101",
+					"8a58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c085820fbd86267ccdcad1bb4593b4e5c7cca69888a081596f41fb3d4e6eed6190d734d616d6576616c756581a364706174688161616572616e67658204046576616c75658109081a68e778008101818282010380",
+					"8958208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c095820bb565975d66877c242c854bce69cd115ca32fb028e7cf7c8be2c4f9a7ac4a4f0616d6576616c756581a2646d6f7665a16470617468826162006470617468816179091a68e778008101",
+					"8a58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c0a5820dbcdd8d8c2c8c8bf61c374c8483d312ef43f535ab40c0ac0ed9151ffcbd70527616d6576616c756581a364706174688161626572616e67658201016576616c756581060a1a68e778008101818282010080"
+				]
+			}
+		}
+	]
+}

@@ -47,8 +47,10 @@ One kept write. Bytes: a cbor array.
 
   a sequence's elements are counted from its first splice: those there since the step that made it
   new are that step's, k their place. made new: by a put, a removal or a move at its path or above;
-  and, for those under an array, by a splice into the array (a path through an array is by position,
-  as written, so what is under it is new)
+  by a move out of or into it (an end with a range: the sequence it is in; at an index of an array:
+  that array); and, for those under an array, by a splice into the array (a path through an array is
+  by position, as written, so what is under it is new). a removal at an index of an array (a path,
+  no range) is a splice of that one element, by its place as written
 
   applied in the entry's order (history): a splice by ids takes its gone elements away wherever they
   are now, and goes after its after element, past any elements there whose ids sort after its own
