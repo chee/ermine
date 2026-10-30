@@ -188,5 +188,19 @@ export function createTracker<O>(): {
 		return out
 	}
 
-	return { node, begin, track, end, leave, resume, old, trim, dedupe, add, untrack, reads, readers }
+	return {
+		node,
+		begin,
+		track,
+		end,
+		leave,
+		resume,
+		old,
+		trim,
+		dedupe,
+		add,
+		untrack,
+		reads,
+		readers,
+	}
 }
