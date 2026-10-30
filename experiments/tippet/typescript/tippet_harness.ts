@@ -1,86 +1,42 @@
-// tippet_harness: tippet (WIRE.md) on the line protocol (conformance/typescript/harness.ts): its
-// bytes, a log, the merge (history.ts) and catch-up over links joined by hand. one process a
-// scenario: devices and links last between lines
-//
-// bytes are hex, lowercase. a value in a patch: conformance/typescript/form.ts's JSON form. a
-// device is named by its key, 64 hex; in an answer, by the first device made with that key, if any
-//
-// deterministic: keys from seeds; a write's when the request's, else 1760000000; the harness's
-// random: its k-th call (from 1) gives k, big-endian, in as many bytes as asked (a live id: 8)
-//
-// vectors
-// { op: "encode", step }               → { bytes }    step: { device, n, before, node,
-//                                                      relative?, part, patches, lamport, when,
-//                                                      on?, who? }, before hex or null; relative:
-//                                                      true, node written relative to the device;
-//                                                      on: [[device, n], …], none an old step's
-// { op: "decode", bytes }              → { step } | { refused: true }
-// { op: "hash", bytes }                → { hash }     blake3
-// { op: "sign", seed, bytes }          → { sig }      ed25519 over the bytes
-// { op: "pack", steps, before? }       → { pack }     steps: hex; pack: its cbor; before: hex,
-//                                                      the step before, packed against
-// { op: "unpack", pack, before? }      → { steps } | { refused: true }   before: as pack's
-// { op: "message", message }           → { bytes }    message as on the wire, bytes hex, a run's
-//                                                      pack as its steps: ["run", device, sig, steps]
-// { op: "read", bytes }                → { message } | { refused: true }   as message gives one; a
-//                                                      run whose pack doesn't unpack: ["run",
-//                                                      device, "not a pack"] (a message still)
-//
-// a log
-// { op: "device", name, seed }         → { key }      a log that writes, its graph (history.ts)
-//                                                      and sync
-// { op: "relay", name }                → {}           a log with no key and no graph; its sync
-//                                                      a relay
-// { op: "write", device, node, part?, patches, when?, who? } → { n, lamport }
-//    into the graph, as a host writes: the step is what history makes of it. part: value. no
-//    entry there: patches must be one whole value, [{ path: [], value }]. a disk's: a step of
-//    these fields, straight into its log
-//
-// a log on disk (the file store, in a directory of its own)
-// { op: "disk", name, seed, log? }     → { key }      a log that writes, no graph; its sync. log:
-//                                                      hex, what dir/log holds to start
-// { op: "sync", device }               → {}           store.sync
-// { op: "reset", device }              → { count }    its process gone, nothing more written, and
-//                                                      started again from its files (unlinked first):
-//                                                      its own steps held
-// { op: "tear", device, file, bytes }  → {}           dir/<file> (log, open) its last bytes cut off
-// { op: "files", device }              → { log, open, bytes }   each whole frame: ["run", device,
-//                                                      first, last], ["step", device, n] or
-//                                                      ["other"]; bytes: { log, open }, the sizes
-// { op: "value", device, node, part? } → { value } | {}   history.ts's merge: every step's patches
-//                                                      in order of lamport, then device
-// { op: "versions", device, node, part? } → { versions }   history.ts's: each { value } or
-//                                                      { gone: true }, and from: [[device, n], …],
-//                                                      the heads it is
-// { op: "have", device }               → { have }     { device: n }, log.have()
-// { op: "count", device, of }          → { count }    steps held, signed or not
-// { op: "steps", device, of }          → { steps }    every step held, hex
-// { op: "run", device, of, from }      → { from, to, sig } | {}
-// { op: "take", device, run }          → { added } | { refused }   run: { device, steps, sign?,
-//                                                      sig? }; a step hex, or fields as encode's
-//                                                      (device: the run's; before: none, the hash
-//                                                      of the step before it in the list, null at
-//                                                      the first); sign: the device whose key signs
-//                                                      the last step's hash (the run's when none);
-//                                                      sig: hex, as given
-// { op: "pass", from, to, of, at }     → { added } | { refused }   to takes from's run(of, at)
-//
-// links, joined by hand: a message sent waits until delivered
-// { op: "link", a, b }                 → {}           a links, then b; each says have
-// { op: "unlink", a, b }               → {}           what waits is dropped
-// { op: "queued", from, to }           → { queued }   what waits from → to, as views
-// { op: "deliver", from, to, count? }  → { got }      what waits from → to (the first count),
-//                                                      delivered in order, as views
-// { op: "drop", from, to, count? }     → { dropped }  what waits, lost on the way, as deliver
-// { op: "inject", from, to, message? , bytes? } → {}  to gets it on its link from from: message
-//                                                      as message's, or bytes as they are
-// { op: "live", device, data }         → {}           sync.live
-// { op: "heard", device }              → { heard }    every live data heard, hex, in order
-//
-// views: ["have", { device: n }], ["run", device, from, to], ["live", id, data],
-// ["refused", device, n]
-//
-// after each request every device is idle: no take or run going on
+// Tippet (WIRE.md) on the line protocol (conformance/typescript/harness.ts), one process per
+// scenario.
+// Bytes are lowercase hex; a device is named by its 64-hex key. Deterministic: keys come from
+// seeds,
+// a write's when is the request's or 1760000000, and the k-th random call gives k big-endian.
+//   encode  { step: { device, n, before, node, relative?, part, patches, lamport, when, on?, who? } } -> { bytes }
+//   decode  { bytes } -> { step } | { refused: true }
+//   hash    { bytes } -> { hash }        blake3
+//   sign    { seed, bytes } -> { sig }   ed25519
+//   pack    { steps, before? } -> { pack }       before: the step it is packed against
+//   unpack  { pack, before? } -> { steps } | { refused: true }
+//   message { message } -> { bytes }     a run is ["run", device, sig, steps]
+//   read    { bytes } -> { message } | { refused: true }
+//   device  { name, seed } -> { key }    a log that writes, with its graph and sync
+//   relay   { name } -> {}               no key, no graph
+//   write   { device, node, part?, patches, when?, who? } -> { n, lamport }
+//   disk    { name, seed, log? } -> { key }    a log on the file store, no graph; log: initial hex
+//   sync    { device } -> {}
+//   reset   { device } -> { count }      restart from its files
+//   tear    { device, file, bytes } -> {}      cut the last bytes off dir/<file> (log, open)
+//   files   { device } -> { log, open, bytes }   frames: ["run", device, first, last], ["step", device, n], ["other"]
+//   value   { device, node, part? } -> { value } | {}
+//   versions { device, node, part? } -> { versions }   each { value } or { gone: true }, and from
+//   have    { device } -> { have }       { device: n }
+//   count   { device, of } -> { count }
+//   steps   { device, of } -> { steps }  hex
+//   run     { device, of, from } -> { from, to, sig } | {}
+//   take    { device, run } -> { added } | { refused }   run: { device, steps, sign?, sig? }
+//   pass    { from, to, of, at } -> { added } | { refused }    to takes from's run(of, at)
+//   link    { a, b } -> {}               each side says have; messages wait until delivered
+//   unlink  { a, b } -> {}
+//   queued  { from, to } -> { queued }
+//   deliver { from, to, count? } -> { got }
+//   drop    { from, to, count? } -> { dropped }
+//   inject  { from, to, message?, bytes? } -> {}
+//   live    { device, data } -> {}
+//   heard   { device } -> { heard }
+// Views: ["have", { device: n }], ["run", device, from, to], ["live", id, data], ["refused",
+// device, n].
 import { decode, encode, type Value } from "@ermine/encoding/cbor"
 import createEntry from "@ermine/graph/entry"
 import update from "@ermine/changeable/update"
@@ -101,7 +57,6 @@ import { firstOf, pack, type Packed, priorOf, stepsIn, unpack } from "./pack.ts"
 
 const WHEN = 1_760_000_000
 
-// the harness's random: the k-th call gives k
 let calls = 0
 crypto.getRandomValues = (<T extends ArrayBufferView>(a: T): T => {
 	const b = new Uint8Array(a.buffer, a.byteOffset, a.byteLength)
@@ -110,7 +65,6 @@ crypto.getRandomValues = (<T extends ArrayBufferView>(a: T): T => {
 	return a
 }) as typeof crypto.getRandomValues
 
-// takes (a message's too) and runs going on, every device's: idle at none
 let pending = 0
 const track = <T>(p: Promise<T>) => {
 	pending++
@@ -123,13 +77,10 @@ async function idle() {
 	}
 }
 
-// ---- devices
-
 type Device = {
 	log: Log
 	sync: Sync
 	signer?: Signer
-	// a disk's: its directory, and the store there
 	dir?: string
 	store?: Store
 	graph?: {
@@ -145,16 +96,13 @@ const device = (name: string) => {
 	if (!d) throw new Error(`no device ${name}`)
 	return d
 }
-// a device's key, by its name or as given
 const keyOf = (s: string) => devices.get(s)?.log.device ?? s
-// a key's name, the first device made with it, or the key
 const nameOf = (key: string) => {
 	for (const [n, d] of devices) if (d.log.device === key) return n
 	return key
 }
 
 function made(log: Log, relay: boolean, signer?: Signer): Device {
-	// a log whose takes and runs are counted
 	const tracked = new Proxy(log, {
 		get(t, k) {
 			const v = Reflect.get(t, k)
@@ -208,7 +156,6 @@ async function createDevice(seed: Uint8Array): Promise<Device> {
 	return d
 }
 
-// a log on a file store in dir, its sync
 async function onDisk(dir: string, seed: Uint8Array): Promise<Device> {
 	const store = fileStore(dir), log = createLog({ store, seed })
 	await log.load()
@@ -226,7 +173,6 @@ const readOr = (path: string) =>
 		if (e instanceof Deno.errors.NotFound) return new Uint8Array()
 		throw e
 	})
-// a file's whole frames, as files gives them
 function framesOf(bytes: Uint8Array) {
 	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength), out = []
 	for (let at = 0; at + 4 <= bytes.length;) {
@@ -249,7 +195,6 @@ function framesOf(bytes: Uint8Array) {
 	}
 	return out
 }
-// ---- forms
 
 const patchesIn = (ps: Patch[]): Patch[] =>
 	ps.map((p) => "value" in p ? { ...p, value: revive(p.value) } : p)
@@ -290,8 +235,6 @@ function stepOut(s: Step) {
 	}
 }
 
-// a message from its form: ["have", [[device, n]]], ["run", device, sig, steps], ["live", id,
-// data], ["refused", device, n]
 function messageIn(m: unknown[]): Message {
 	const [t, x, y, z] = m as [string, unknown, unknown, unknown]
 	if (t === "have") {
@@ -318,7 +261,6 @@ function messageOut(m: Message): unknown[] {
 	if (m.t === "live") return [m.t, m.id, hex(m.data)]
 	return [m.t, m.device, m.n]
 }
-// a message sent, as a scenario reads it
 function view(b: Uint8Array): unknown[] {
 	const m = read(b)
 	if (!m) return ["not a message", hex(b)]
@@ -335,9 +277,6 @@ function view(b: Uint8Array): unknown[] {
 const haveOut = (h: Record<string, number>) =>
 	Object.fromEntries(Object.entries(h).map(([d, n]) => [nameOf(d), n]))
 
-// ---- links
-
-// a side of a link: what it sent, waiting, and what it is told with
 type Side = { queue: Uint8Array[]; told?: (b: Uint8Array) => void; unlink?: () => void }
 const links = new Map<string, Side>()
 const side = (from: string, to: string) => {
@@ -359,14 +298,11 @@ function join(a: string, b: string) {
 		mine.unlink = device(x).sync.link(link)
 	}
 }
-// to's side of the link from → to: what to hears from
 const hear = (from: string, to: string, bytes: Uint8Array) => {
 	const told = side(from, to).told
 	if (!told) throw new Error(`${to} does not listen to ${from}`)
 	told(bytes)
 }
-
-// ---- runs
 
 async function runIn(r: Request) {
 	const device = keyOf(r.device)
@@ -396,7 +332,6 @@ async function answer(r: Request): Promise<Answer> {
 
 async function one(r: Request): Promise<Answer> {
 	switch (r.op) {
-		// vectors
 		case "encode":
 			return { bytes: hex(encodeStep(stepIn(r.step))) }
 		case "decode":
@@ -430,12 +365,10 @@ async function one(r: Request): Promise<Answer> {
 			try {
 				return { message: messageOut(m) }
 			} catch {
-				// a run whose pack doesn't unpack: a message still, refused when taken
 				return { message: [m.t, (m as { device: string }).device, "not a pack"] }
 			}
 		}
 
-		// a log
 		case "device": {
 			if (devices.has(r.name)) throw new Error(`${r.name} is made`)
 			const d = await createDevice(unhex(r.seed))
@@ -458,7 +391,6 @@ async function one(r: Request): Promise<Answer> {
 			for (const k of links.keys()) {
 				if (k.split(" ").includes(r.device)) throw new Error(`${r.device} is linked`)
 			}
-			// what it appended is written; what it held only in memory is gone
 			await d.log.saved()
 			d.store.close?.()
 			const seed = await Deno.readFile(`${d.dir}/key`), again = await onDisk(d.dir, seed)
@@ -534,7 +466,6 @@ async function one(r: Request): Promise<Answer> {
 			return await device(r.to).log.take(b)
 		}
 
-		// links
 		case "link":
 			device(r.a), device(r.b), join(r.a, r.b)
 			return {}
@@ -567,7 +498,6 @@ async function one(r: Request): Promise<Answer> {
 	}
 }
 
-// the disks' directories, let go at the end
 globalThis.addEventListener("unload", () => {
 	for (const d of devices.values()) if (d.dir) Deno.removeSync(d.dir, { recursive: true })
 })

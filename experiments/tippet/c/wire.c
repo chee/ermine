@@ -5,7 +5,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-// encoding/c/cbor.h's, declared here: that header is C11 (its json.h)
 bool cborCheck(const unsigned char *data, size_t length, const char **why, size_t *at);
 
 void *tp_alloc(const tp_mem *mem, size_t size) { return mem->fn(mem->ctx, NULL, 0, size); }
@@ -41,7 +40,7 @@ int tp_head(tp_in *in, int *major, uint64_t *arg) {
 	return 0;
 }
 
-// no recursion: how many items are still to pass
+// no recursion: counts how many items are still to pass
 int tp_skip(tp_in *in, tp_span *item) {
 	const uint8_t *start = in->p;
 	uint64_t left = 1;
@@ -55,7 +54,6 @@ int tp_skip(tp_in *in, tp_span *item) {
 			if (arg > room) return -1;
 			in->p += arg;
 		} else if (major == 4 || major == 5) {
-			// every item at least a byte
 			if (arg > room || (major == 5 && arg > room / 2)) return -1;
 			left += major == 5 ? 2 * arg : arg;
 		} else if (major == 6) {
@@ -118,7 +116,6 @@ int tp_is(tp_span t, const char *s) { return strlen(s) == t.n && !memcmp(t.p, s,
 int tp_canonical(const uint8_t *p, size_t n) { return cborCheck(p, n, NULL, NULL); }
 
 int tp_deeper(const uint8_t *p, size_t n, size_t most) {
-	// per container open, how many of its items are still to come
 	uint64_t small[64], *left = small;
 	size_t depth = 0, room = 64;
 	int deeper = 0;
@@ -127,7 +124,6 @@ int tp_deeper(const uint8_t *p, size_t n, size_t most) {
 		int major;
 		uint64_t arg;
 		if (tp_head(&in, &major, &arg)) break;
-		// a tag over bytes (a bignum, a typed array): its item next, no deeper
 		if (major == 6 && arg != 0x12345678u) continue;
 		if (depth) left[depth - 1]--;
 		if (major == 2 || major == 3) {
@@ -138,7 +134,6 @@ int tp_deeper(const uint8_t *p, size_t n, size_t most) {
 				deeper = 1;
 				break;
 			}
-			// a stand-in holds one item, a map two each
 			arg = major == 6 ? 1 : major == 5 ? 2 * arg : arg;
 			if (arg && depth == room) {
 				uint64_t *more = left == small ? malloc(2 * room * sizeof *more)

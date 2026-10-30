@@ -9,7 +9,6 @@ import { createSigner, type Signer } from "./sign.ts"
 import { encodeStep, hashStep, type Step } from "./step.ts"
 import type { Patch } from "@ermine/changeable/apply"
 
-// a graph with a log and its history, nothing else
 async function receiver() {
 	const s = createScheduler()
 	const table = createTable((part, id) => places.onTableChange(part as Key, id))
@@ -28,7 +27,6 @@ async function receiver() {
 	return { log, history, value: (id: string) => table.get("value", id)?.value }
 }
 
-// one signed step, alone in its batch
 type Out = { device: string; steps: Uint8Array[]; sig: Uint8Array; name: string }
 const chains = new Map<string, Uint8Array | null>()
 async function step(
@@ -61,7 +59,6 @@ function orders<T>(xs: T[]): T[][] {
 }
 
 Deno.test("review: three devices, every arrival order, one value", async () => {
-	// writers named so that lamports alone decide (no ties)
 	const [a, b, c] = await Promise.all([createSigner(), createSigner(), createSigner()])
 	const base = await step(a, "a1 {x:0,y:0} @1", 1, 1, [{ path: [], value: { x: 0, y: 0 } }])
 	const by = await step(b, "b1 y=2 @2", 1, 2, [{ path: ["y"], value: 2 }])
@@ -72,7 +69,6 @@ Deno.test("review: three devices, every arrival order, one value", async () => {
 	const cx = await step(c, "c1 x=3 @4", 1, 4, [{ path: ["x"], value: 3 }])
 
 	const results = new Map<string, string[]>()
-	// the base first; then the other three in every order (a2 after a1 always holds)
 	for (const rest of orders([by, axy, cx])) {
 		const r = await receiver()
 		for (const o of [base, ...rest]) {
@@ -81,7 +77,6 @@ Deno.test("review: three devices, every arrival order, one value", async () => {
 		const v = JSON.stringify(r.value("pig"))
 		results.set(v, [...(results.get(v) ?? []), rest.map((o) => o.name).join(" → ")])
 	}
-	// every receiver holds the same four steps: they should agree
 	assertEquals(results.size, 1, JSON.stringify([...results], null, 1))
 })
 

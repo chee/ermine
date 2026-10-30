@@ -18,12 +18,10 @@ import { hex, unhex } from "./step.ts"
 
 const tick = (ms = 30) => new Promise((r) => setTimeout(r, ms))
 
-// a recv answer's number and messages
 async function opened(res: Response) {
 	const bytes = new Uint8Array(await res.arrayBuffer())
 	return { k: new DataView(bytes.buffer).getUint32(0), got: unframe(bytes.subarray(4))! }
 }
-// a recv, given up on after ms (as a client that hangs up)
 function recv(handle: (r: Request) => Promise<Response> | undefined, q: string, ms = 100) {
 	const stop = new AbortController()
 	const t = setTimeout(() => stop.abort(), ms)
@@ -33,8 +31,6 @@ function recv(handle: (r: Request) => Promise<Response> | undefined, q: string, 
 }
 
 Deno.test("check: http, a link made again here: its first message reaches a client that acked 1", async () => {
-	// a galaxy restarted, or the link 60 s unheard: the new link says what it has at once
-	// the client that acked 1 is told to link again, and links again with a fresh id
 	const http = httpLinks((link) => link.send(new Uint8Array([7])))
 	const again = await recv(http, "link=a&ack=1")
 	await again.body?.cancel()
@@ -107,7 +103,6 @@ Deno.test("check: galaxy, a malformed batch leaves its device in every have", as
 	assertEquals(decode(got[0]), ["have", []])
 })
 
-// a log with steps from another, and their signatures, on disk
 async function written(dir: string) {
 	const a = createLog({ writes: true })
 	await a.load()
@@ -126,7 +121,6 @@ async function written(dir: string) {
 Deno.test("check: a store file with a zeroed tail loads what came before it", async () => {
 	const dir = await Deno.makeTempDir()
 	const { a } = await written(dir)
-	// the file grown but its bytes never written, as after a power cut
 	await Deno.writeFile(`${dir}/log`, new Uint8Array(8), { append: true })
 	const g = createLog({ store: fileStore(dir) })
 	const loaded = await g.load().then(() => true, () => false)

@@ -13,7 +13,6 @@ import { socket } from "./carriers/websocket.ts"
 import { frames, poll, unframe } from "./carriers/http.ts"
 import { fileStore } from "./store_file.ts"
 
-// one device, as tippet_test makes one
 async function device() {
 	const s = createScheduler()
 	const table = createTable((part, id) => places.onTableChange(part as Key, id))
@@ -61,7 +60,6 @@ function serve(dir: string) {
 	}
 }
 
-// a websocket link, and a promise kept once it has closed
 function ws(url: string): [Link, Promise<unknown>] {
 	const w = new WebSocket(`ws://${url}`)
 	const closed = new Promise((r) => w.addEventListener("close", r))
@@ -90,7 +88,6 @@ Deno.test("a file store: records and snapshot back after a restart, a torn tail 
 		records: [new Uint8Array([1]), new Uint8Array([2, 3])],
 		snapshot: new Uint8Array([9]),
 	})
-	// a step read back from the file, and one not yet written
 	assertEquals(again.get("d", 1), new Uint8Array([2, 3]))
 	const appended = again.append(new Uint8Array([5]), ["d", 2, 2])
 	assertEquals(again.get("d", 2), new Uint8Array([5]))
@@ -128,7 +125,6 @@ Deno.test("galaxy: a websocket and a long-poll in one room, then a restart", asy
 	await aClosed
 	await g.close()
 
-	// the same dir, a new galaxy: a new device catches up on all of it
 	g = serve(dir)
 	const c = await device()
 	const [wc, cClosed] = ws(g.url)
@@ -147,7 +143,6 @@ Deno.test("galaxy: a websocket and a long-poll in one room, then a restart", asy
 Deno.test("galaxy: a room that isn't a name is refused", async () => {
 	const dir = await Deno.makeTempDir()
 	const galaxy = createGalaxy({ dir })
-	// "." and ".." are taken out by url parsing before they reach it
 	for (const room of ["", "a%2Fb", "%2F", "%E0%A4%A"]) {
 		const res = await galaxy.handler(new Request(`http://x/tippet/${room}/recv?link=1&ack=0`))
 		assertEquals(res.status, 400, room)
@@ -155,5 +150,39 @@ Deno.test("galaxy: a room that isn't a name is refused", async () => {
 	}
 	assertEquals(await Array.fromAsync(Deno.readDir(dir)), [])
 	await galaxy.close()
+	await Deno.remove(dir, { recursive: true })
+})
+
+Deno.test("galaxy: at its most rooms, one with no links is let go for another, one in use never", async () => {
+	const dir = await Deno.makeTempDir()
+	const galaxy = createGalaxy({ dir, most: 2 })
+	const server = Deno.serve({ port: 0, onListen() {} }, galaxy.handler)
+	const at = (room: string) => `localhost:${server.addr.port}/tippet/${room}`
+	const a = await device(), b = await device(), c = await device()
+	const [la, ca] = ws(at("a")), [lb, cb] = ws(at("b"))
+	let gone = false
+	ca.then(() => gone = true)
+	a.sync.link(la)
+	const unlink = b.sync.link(lb)
+	await until(() => galaxy.open === 2)
+	await tick(200)
+	// both in use: no third
+	const full = await galaxy.handler(new Request(`http://${at("c")}/recv?link=1&ack=0`))
+	assertEquals(full.status, 503)
+	await full.body?.cancel()
+	// b's link gone: b is let go for c, a never
+	unlink()
+	await cb
+	await tick(100)
+	const [lc, cc] = ws(at("c"))
+	const unlinkC = c.sync.link(lc)
+	await tick(200)
+	assertEquals(galaxy.open, 2)
+	assert(!gone)
+	unlinkC()
+	await cc
+	await galaxy.close()
+	await ca
+	await server.shutdown()
 	await Deno.remove(dir, { recursive: true })
 })

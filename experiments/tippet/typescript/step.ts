@@ -1,52 +1,34 @@
-// a step: one kept write, as it travels (WIRE.md, step). a step is its bytes: encodeStep makes
-// them once, decodeStep reads them back and throws on anything that isn't one, hashStep names them
-//
-//   const bytes = encodeStep({ device, n: 1, before: null, node, part, patches, lamport, when, on: [] })
-//   const step = decodeStep(bytes)
+// A step is one kept write as it travels (WIRE.md, step), and is its bytes: encodeStep makes them,
+// decodeStep reads them back and throws on anything that isn't a step, hashStep names them.
 import { decode, encode, type Value } from "@ermine/encoding/cbor"
 import { blake3 } from "@ermine/encoding/blake3"
 import type { Patch } from "@ermine/changeable/apply"
 
 export type Step = {
-	// the writer's key, hex here, its 32 bytes on the wire
 	device: string
-	// 1, 2, 3, … per device
 	n: number
-	// the hash of this device's step n - 1; null at 1
 	before: Uint8Array | null
-	// the node's id, whole. relative: written as the rest after the device's own id (ermine:ed01 +
-	// its key's hex), node being that id or under it (WIRE.md, step)
 	node: string
 	relative?: boolean
 	part: string
 	patches: readonly Patch[]
-	// one more than the highest the writer had seen; a whole number, as are n and when
 	lamport: number
-	// whole seconds since 1970, the writer's clock
 	when: number
-	// who, as the writer's change header said, when it was a string
 	who?: string
-	// what it was written on: its entry's heads at the writer (history.ts), each a step by its
-	// device and n. none: an old step, from before steps said (read as on every step of its entry
-	// before it, in order)
 	on?: readonly On[]
 }
 
-// a step another names: its device (hex) and n
 export type On = { device: string; n: number }
 
 const KEY = /^[0-9a-f]{64}$/
 
-// a device's own id, as text (ids: key)
 export const own = (device: string) => `ermine:ed01${device}`
-// what follows the device's own id in node, when node is that id or under it ("" or "/…")
 export function rest(device: string, node: string): string | undefined {
 	const id = own(device)
 	if (!node.startsWith(id)) return
 	const r = node.slice(id.length)
 	return r === "" || r[0] === "/" ? r : undefined
 }
-// the node as written: its id, or [the rest] when relative
 export function written(s: Step): Value {
 	if (!s.relative) return s.node
 	const r = rest(s.device, s.node)
@@ -54,11 +36,9 @@ export function written(s: Step): Value {
 	return [r]
 }
 
-// on as written: this device's own steps as how far back (n - theirs), another's as [device, n]
 export function writtenOn(s: Step): Value {
 	return s.on!.map((o) => o.device === s.device ? s.n - o.n : [unhex(o.device), o.n])
 }
-// on as read back: each step whole
 export const readOn = (device: string, n: number, on: unknown[]): On[] =>
 	on.map((o) =>
 		typeof o === "number"
@@ -66,7 +46,6 @@ export const readOn = (device: string, n: number, on: unknown[]): On[] =>
 			: { device: hex((o as [Uint8Array])[0]), n: (o as [Uint8Array, number])[1] }
 	)
 
-// a step's bytes; a device that isn't a key, or a node relative that isn't under it, throws
 export function encodeStep(s: Step): Uint8Array {
 	if (!KEY.test(s.device)) throw new TypeError("not a device")
 	const a = [unhex(s.device), s.n, s.before, written(s), s.part, s.patches, s.lamport, s.when]
@@ -80,7 +59,6 @@ export const key = (x: unknown): x is Uint8Array => x instanceof Uint8Array && x
 const only = (o: object, keys: string[]) => Object.keys(o).every((k) => keys.includes(k))
 const isMap = (x: unknown): x is Record<string, unknown> =>
 	typeof x === "object" && x !== null && !Array.isArray(x) && !ArrayBuffer.isView(x)
-// a place: a path of names and whole numbers, and maybe a range, two whole numbers
 const target = (t: Record<string, unknown>) =>
 	Array.isArray(t.path) && t.path.every((k) => typeof k === "string" || whole(k)) &&
 	(t.range === undefined ||
@@ -89,24 +67,19 @@ const patch = (p: unknown) =>
 	isMap(p) && only(p, ["path", "range", "value", "move"]) && target(p) &&
 	(p.move === undefined || (isMap(p.move) && only(p.move, ["path", "range"]) && target(p.move)))
 
-// text a node or part can be: no NUL
 const name = (x: unknown): x is string => typeof x === "string" && !x.includes("\0")
 
-// a node relative to the device: [rest], rest "" or "/…"
 const relative = (x: unknown): x is [string] =>
 	Array.isArray(x) && x.length === 1 && name(x[0]) && (x[0] === "" || x[0][0] === "/")
 
-// one of on's: this device's step n - k (k from 1, n - k from 1), or another device's [device, n]
 export const onOf = (device: Uint8Array, n: number) => (o: unknown) =>
 	whole(o) ? o >= 1 && o < n : Array.isArray(o) && o.length === 2 && key(o[0]) && whole(o[1]) &&
 		o[1] >= 1 && !same(o[0], device)
 
-// a step, only as tippet writes one: eight elements, then on (an array) when it says, then who (a
-// string) when there is one, each of its kind, every number whole, so it packs and unpacks to the
-// same bytes; node and part without NUL; nested at most cbor's DEPTH less one, as a run message
-// holds its patches one deeper. anything else throws
+// node and part have no NUL, and nesting is at most cbor's DEPTH less one, since a run message
+// holds its patches one deeper.
 export function decodeStep(bytes: Uint8Array): Step {
-	// read inside one more array: a step nested to cbor's DEPTH throws
+	// Read inside one more array, so a step nested to cbor's DEPTH throws.
 	const inside = new Uint8Array(bytes.length + 1)
 	inside[0] = 0x81, inside.set(bytes, 1)
 	const a = (decode(inside) as Value[])[0]

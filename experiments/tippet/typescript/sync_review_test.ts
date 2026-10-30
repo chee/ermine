@@ -13,7 +13,6 @@ import { port } from "./carriers/messagechannel.ts"
 
 const tick = (ms = 30) => new Promise((r) => setTimeout(r, ms))
 
-// one bad message from a peer, and what it does to the side that reads it
 for (
 	const [name, m] of [
 		["a run whose step is not a step", [
@@ -44,7 +43,6 @@ for (
 	})
 }
 
-// one device, as tippet_test makes one
 async function device(o: { store?: Store } = {}) {
 	const s = createScheduler()
 	const table = createTable((part, id) => places.onTableChange(part as Key, id))
@@ -94,8 +92,6 @@ Deno.test("review: a device on a new disk is a new device, with every step and v
 	a.put("pig", { x: 1 })
 	await until(() => b.value("pig") !== undefined)
 	closeAll()
-	// an empty store: a new disk, say. its key is its own, so it is a new device (restoring a
-	// device from its seed alone would fork its steps: a log refuses its own device's steps)
 	const again = await device()
 	join(again, b)
 	await until(() => again.log.have()[a.log.device!] === 1)
@@ -112,14 +108,12 @@ Deno.test("review: steps held without their signature are never sent on", async 
 	await until(() => b0.value("pig") !== undefined)
 	await b0.log.saved()
 	closeAll()
-	// b stopped between a's step record and its signature record
 	const records: Uint8Array[] = []
 	await b0store.load((r) => void records.push(r))
 	const torn = createMemoryStore()
 	for (const r of records) if (!("sig" in (decode(r) as object))) await torn.append(r)
 	const b = await device({ store: torn })
 	assertEquals(b.log.count(a.log.device!), 1)
-	// a comes back and says what it has: b holds it all, so takes nothing, and keeps no signature
 	join(a, b)
 	await tick()
 	closeAll()

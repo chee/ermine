@@ -1,6 +1,4 @@
-// a device that forgets (history.ts): not a history keeper. it lets a run go once the run is in a
-// snapshot and has passed on, its own only once a keeper holds them; a reload keeps what it let go
-// let go; a late step older than the newest it holds is passed over
+// A device that forgets (history.ts) lets a run go once it is in a snapshot and has passed on.
 import { assert, assertEquals } from "@std/assert"
 import createEntry from "@ermine/graph/entry"
 import { createScheduler } from "@ermine/reactivity"
@@ -51,7 +49,6 @@ async function device(o: { store?: Store; forgets?: boolean } = {}) {
 }
 type Device = Awaited<ReturnType<typeof device>>
 
-// a link between two devices; keeper: b keeps every run (a's end says so)
 const ports: MessagePort[] = []
 function join(a: Device, b: Device, keeper = false) {
 	const { port1, port2 } = new MessageChannel()
@@ -77,14 +74,12 @@ Deno.test("forgets: a run in a snapshot that every link has is let go, and never
 		undefined,
 		undefined,
 	])
-	// one that comes to it now is sent none of them
 	const late = await device()
 	join(late, d)
 	await tick(100)
 	assertEquals(late.log.count(kd), 0)
 	closeAll()
 	await d.log.close()
-	// loaded again: the graph from the snapshot, the steps counted, none to send; more go on from there
 	const again = await device({ store: fileStore(dir), forgets: true })
 	assertEquals([again.value("pig"), again.log.have()[kd], await again.log.run(kd, 1)], [
 		{ n: 40 },
@@ -107,10 +102,8 @@ Deno.test("forgets: its own steps go only once a link to a keeper has said it ho
 	d.put("pig", 1), d.put("pig", 2), d.put("pig", 3)
 	const me = d.log.device!
 	await until(() => k.log.count(me) === 3 && plain.log.count(me) === 3)
-	// the keeper said it held none when the link began
 	await d.history.forget(d.sync)
 	assert(await d.log.run(me, 1), "let go before a keeper said it holds them")
-	// linked again: its have says 3
 	unlink()
 	join(d, k, true)
 	await tick(100)
@@ -129,7 +122,6 @@ Deno.test("forgets: a late step older than the newest is passed over, not merged
 	await w2.take(first)
 	for (let i = 0; i < 3; i++) write(w2, "other", [{ path: [], value: i }])
 	write(w2, "pig", [{ path: ["b"], value: 2 }])
-	// w1, not knowing w2's: older by lamport
 	write(w1, "pig", [{ path: ["c"], value: 3 }])
 	const lofi = await device({ forgets: true }), keeper = await device()
 	for (const d of [lofi, keeper]) {

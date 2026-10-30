@@ -1,6 +1,4 @@
-// tippet-test: the file store, as a log uses it. a writer's steps and signatures saved and loaded
-// again; a relay's; a frame cut short by a crash cut off; a store with another key refused.
-//   ./tippet-test dir     dir: made, used, and removed again
+// Tests the file store as a log uses it. Run ./tippet-test dir (dir is made, used and removed).
 #define _POSIX_C_SOURCE 200809L
 #include <dirent.h>
 #include <fcntl.h>
@@ -38,7 +36,6 @@ static tp_log *open_log(const tp_mem *mem, const char *dir, const uint8_t *seed)
 	return log;
 }
 
-// every file in dir, then dir
 static void wipe(const char *dir) {
 	DIR *in = opendir(dir);
 	struct dirent *e;
@@ -50,12 +47,10 @@ static void wipe(const char *dir) {
 	rmdir(dir);
 }
 
-// steps as they were written: STEPS of them, back to back
 #define STEPS 300
 static uint8_t kept[STEPS][128];
 static long lengths[STEPS];
 
-// how many of device's steps 1 to count are not as kept
 static int unlike(tp_log *log, const uint8_t device[32], uint64_t count) {
 	int bad = 0;
 	uint8_t b[128];
@@ -79,7 +74,6 @@ static off_t size_of(const char *dir, const char *name) {
 }
 
 static long patches(uint8_t *out, int x) {
-	// [{path: [], value: x}]
 	uint8_t p[] = {0x81, 0xa2, 0x64, 'p', 'a', 't', 'h', 0x80, 0x65, 'v', 'a', 'l', 'u', 'e', (uint8_t)x};
 	memcpy(out, p, sizeof p);
 	return sizeof p;
@@ -95,7 +89,6 @@ int main(int argc, char **argv) {
 	uint64_t n, lamport, end, end2;
 	uint8_t sig[64], sig2[64];
 
-	// a writer: 40 steps of 101 bytes, a run closed at 2048 bytes (21), the rest when asked for
 	tp_log *a = open_log(&mem, dir, seed);
 	CHECK(a && !tp_log_load(a));
 	tp_write w = {{(const uint8_t *)"pig", 3}, {(const uint8_t *)"value", 5}, {ps, 0}, {NULL, 0}, 1760000000, {NULL, 0}};
@@ -109,7 +102,6 @@ int main(int argc, char **argv) {
 	memcpy(device, tp_log_device(a), 32);
 	tp_log_free(a);
 
-	// loaded again: every step, both signatures, lamport
 	a = open_log(&mem, dir, seed);
 	CHECK(a && !tp_log_load(a));
 	CHECK(tp_log_count(a, device) == 40 && tp_log_lamport(a) == 40);
@@ -119,7 +111,6 @@ int main(int argc, char **argv) {
 	CHECK(!tp_log_write(a, &w, &n, &lamport) && n == 41 && lamport == 41);
 	tp_log_free(a);
 
-	// a crash mid-frame: the frame cut off, the rest as it was
 	char path[4096];
 	snprintf(path, sizeof path, "%s/log", dir);
 	int fd = open(path, O_WRONLY | O_APPEND);
@@ -132,7 +123,6 @@ int main(int argc, char **argv) {
 	a = open_log(&mem, dir, seed);
 	CHECK(a && !tp_log_load(a) && tp_log_count(a, device) == 42);
 
-	// a relay in a store of its own: a run taken, loaded again, vouched for
 	char relaydir[4096];
 	snprintf(relaydir, sizeof relaydir, "%s/relay", dir);
 	tp_log *r = open_log(&mem, relaydir, NULL);
@@ -155,15 +145,10 @@ int main(int argc, char **argv) {
 	tp_log_free(r);
 	tp_log_free(a);
 
-	// another seed, strictly: refused
 	a = open_log(&mem, dir, other);
 	CHECK(a && tp_log_load(a) == TP_KEY);
 	tp_log_free(a);
 
-	// the index on disk: a run closed at each step (as each ask closes one), the heap no more at the
-	// end than early on; then the index let go (an old store), cut short and wrong (a reset in the
-	// middle of writing it), and longer than the log (the log's end cut off): each made right again
-	// as the log loads, every step found as written
 	char indexdir[4096];
 	snprintf(indexdir, sizeof indexdir, "%s/indexed", dir);
 	a = open_log(&mem, indexdir, other);
@@ -187,7 +172,6 @@ int main(int argc, char **argv) {
 	CHECK(a && !tp_log_load(a) && tp_log_count(a, device) == STEPS && !unlike(a, device, STEPS));
 	tp_log_free(a);
 	CHECK(size_of(indexdir, "i0") == STEPS * 16 && size_of(indexdir, "index") == 32);
-	// cut in the middle of an entry, one entry wrong, the devices' keys cut in the middle of one
 	cut(indexdir, "i0", 150 * 16 + 7), cut(indexdir, "index", 20);
 	snprintf(path, sizeof path, "%s/i0", indexdir);
 	fd = open(path, O_WRONLY);
@@ -199,7 +183,6 @@ int main(int argc, char **argv) {
 	CHECK(a && !tp_log_load(a) && tp_log_count(a, device) == STEPS && !unlike(a, device, STEPS));
 	CHECK(!tp_log_run(a, device, 10, &end, sig) && end == 10);
 	tp_log_free(a);
-	// the log's last frame cut off: the index says more than the log holds
 	cut(indexdir, "log", size_of(indexdir, "log") - 10);
 	a = open_log(&mem, indexdir, other);
 	CHECK(a && !tp_log_load(a) && tp_log_count(a, device) == STEPS - 1 && !unlike(a, device, STEPS - 1));

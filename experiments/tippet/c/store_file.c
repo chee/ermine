@@ -1,24 +1,11 @@
-// a log's store on disk (POSIX), as typescript/store_file.ts: records appended to dir/log as frames
-// (4 bytes big-endian length, then the record), the snapshot in dir/snapshot, written whole beside
-// it then renamed into place, and the device's key in dir/key, written once. a frame cut short by a
-// crash is cut off when loaded, so the next append starts clean. records are read back from the
-// file by where they are, as the index on disk says; in memory, the last run read, unpacked. sync:
-// fsync
-//
-// the index (not typescript's: it keeps its index in memory): dir/index, each device's key as it
-// was first indexed, 32 bytes each; and for the k-th, dir/i<k in hex>, an entry of ENTRY bytes for
-// each of its steps, step n's at (n - 1) * ENTRY: where the record holding it is (its offset, 5
-// bytes, and length, 4), how far back that record starts and how far on it goes from n (2 bytes
-// each), whether it is a run (1), and a check (2), all big-endian. a step is found with one read, and
-// none of it is in memory but the devices' keys. entries are written at a sync, or when WAIT records
-// wait; until then they are in memory. a load checks each record's entries against it as it reads
-// the log, and writes again what is missing or not so: an old store (no index), one cut short by a
-// reset, or one whose log was written again (the den's torn frames left out)
-//
-// open steps (this device's, not yet in a closed run): in memory, and in dir/open as frames, written
-// only by a sync, after the log's: those not yet there appended; and once every step there is in a
-// run on disk, it is emptied first. a step is written to dir/open only if no run held it by the sync
-// after it. loaded: a frame cut short cut off (and that synced), a step held already passed over
+// A log's store on disk (POSIX), as typescript/store_file.ts, but records are found through an
+// index
+// on disk, so only the last run read, unpacked, is kept in memory.
+// The index: dir/index lists each device's key (32 bytes). For the k-th, dir/i<k in hex> holds an
+// ENTRY-byte entry per step (step n's at (n - 1) * ENTRY): the record's offset (5) and length (4),
+// how far back it starts and on it goes from n (2 each), whether it is a run (1), a check (2). A
+// load rewrites entries that are missing or wrong. Open steps are kept in memory, written to
+// dir/open at a sync.
 #define _POSIX_C_SOURCE 200809L
 #include <errno.h>
 #include <fcntl.h>
@@ -31,24 +18,19 @@
 #include "store.h"
 #include "wire.h"
 
-// an entry's bytes; records waiting for their entries to be written, at most
 #define ENTRY 16
 #define WAIT 16
 
-// an indexed device: its key; dropped: its steps through it no longer got (forgetting)
 typedef struct {
 	uint8_t key[32];
 	uint64_t dropped;
 } indexed;
 
-// a record waiting: its device's k, where it is
 typedef struct {
 	size_t k;
 	tp_held at;
 } waiting;
 
-// a load's step whose entry is kept as a later record's (a run that holds it again, as old logs
-// wrote): written as this record's at the load's end unless that later one is read and holds it
 typedef struct {
 	size_t k;
 	uint64_t n;
@@ -59,40 +41,32 @@ typedef struct {
 	tp_store store;
 	tp_mem mem;
 	tp_index index;
-	// the indexed devices, dir/index's keys, in order
 	indexed *keys;
 	size_t nkeys, roomkeys;
-	// one device's entries open: its k and fd (-1: none)
 	size_t xk;
 	int xfd;
 	waiting wait[WAIT];
 	size_t nwait;
-	// loading: its laters, and the log's length before it
 	later *laters;
 	size_t nlaters, roomlaters;
 	uint64_t size;
 	int fd;
 	uint64_t end, synced; // the file's length, every append so far; how much of it is synced
-	// dir/open (-1: not opened): its length; the n of its first step and how many follow; dirty: it
-	// holds a frame that is no open step (held, or not one)
 	int ofd;
 	uint64_t oend, ffirst;
 	size_t fcount;
 	int dirty;
 	size_t max;
-	// two rooms, each dir and then a name: dir's length, and a room's
 	char *path;
 	size_t dir, room;
 } file;
 
-// dir/name, in room i (0 or 1)
 static const char *named(file *f, int i, const char *name) {
 	char *p = f->path + (size_t)i * f->room;
 	memcpy(p + f->dir, name, strlen(name) + 1);
 	return p;
 }
 
-// all of it read at offset; 0, or -1 short
 static int readat(int fd, uint8_t *out, size_t n, uint64_t offset) {
 	while (n) {
 		ssize_t got = pread(fd, out, n, (off_t)offset);
@@ -103,7 +77,6 @@ static int readat(int fd, uint8_t *out, size_t n, uint64_t offset) {
 	return 0;
 }
 
-// all of it written at offset; 0, or -1
 static int writeat(int fd, const uint8_t *in, size_t n, uint64_t offset) {
 	while (n) {
 		ssize_t put = pwrite(fd, in, n, (off_t)offset);
@@ -114,7 +87,6 @@ static int writeat(int fd, const uint8_t *in, size_t n, uint64_t offset) {
 	return 0;
 }
 
-// what there is of n bytes at offset, read, the rest left as it was
 static void readsome(int fd, uint8_t *out, size_t n, uint64_t offset) {
 	while (n) {
 		ssize_t got = pread(fd, out, n, (off_t)offset);
@@ -124,9 +96,7 @@ static void readsome(int fd, uint8_t *out, size_t n, uint64_t offset) {
 	}
 }
 
-// ---- the index on disk
 
-// an entry's check: its other bytes and its n
 static uint16_t check(const uint8_t *e, uint64_t n) {
 	uint32_t h = 2166136261u;
 	for (int i = 0; i < ENTRY - 2; i++) h = (h ^ e[i]) * 16777619u;
@@ -134,7 +104,6 @@ static uint16_t check(const uint8_t *e, uint64_t n) {
 	return (uint16_t)(h ^ h >> 16);
 }
 
-// step n's entry, its record r
 static void put_entry(uint8_t *e, uint64_t n, const tp_held *r) {
 	uint64_t back = n - r->first, on = r->last - n;
 	for (int i = 0; i < 5; i++) e[i] = (uint8_t)(r->offset >> (32 - 8 * i));
@@ -145,7 +114,6 @@ static void put_entry(uint8_t *e, uint64_t n, const tp_held *r) {
 	e[14] = (uint8_t)(c >> 8), e[15] = (uint8_t)c;
 }
 
-// step n's entry read: 0 and its record in *r; -1 it is none (never written, or not whole)
 static int get_entry(const uint8_t *e, uint64_t n, tp_held *r) {
 	if ((uint16_t)(e[14] << 8 | e[15]) != check(e, n)) return -1;
 	uint64_t offset = 0, back = (uint64_t)(e[9] << 8 | e[10]), on = (uint64_t)(e[11] << 8 | e[12]);
@@ -161,7 +129,6 @@ static int same(const tp_held *a, const tp_held *b) {
 		a->run == b->run;
 }
 
-// the devices' keys, dir/index's, back in memory: a key cut short by a reset cut off. 0 or a code
 static int keys_load(file *f) {
 	f->nkeys = 0;
 	int fd = open(named(f, 0, "/index"), O_RDWR);
@@ -188,8 +155,6 @@ static void unindex(file *f) {
 	f->xfd = -1;
 }
 
-// device's k in the index, or -1; made (its key appended to dir/index) when make and there is none:
-// then -1 is TP_NOMEM, or TP_STORE
 static long key_of(file *f, const uint8_t device[32], int make) {
 	for (size_t k = 0; k < f->nkeys; k++) {
 		if (!memcmp(f->keys[k].key, device, 32)) return (long)k;
@@ -201,20 +166,18 @@ static long key_of(file *f, const uint8_t device[32], int make) {
 		if (!keys) return TP_NOMEM;
 		f->keys = keys, f->roomkeys = room;
 	}
-	// one file more open, not two (the board's FAT holds 3 open: the log, dir/open, and this)
 	unindex(f);
 	int fd = open(named(f, 0, "/index"), O_WRONLY | O_APPEND | O_CREAT, 0644);
 	if (fd < 0) return TP_STORE;
 	off_t was = lseek(fd, 0, SEEK_END);
 	ssize_t wrote = was < 0 ? -1 : write(fd, device, 32);
-	// a key cut short is cut off: the file as it was
 	if (wrote != 32 && was >= 0 && ftruncate(fd, was)) wrote = -1;
 	if (close(fd) || wrote != 32) return TP_STORE;
 	memcpy(f->keys[f->nkeys].key, device, 32), f->keys[f->nkeys].dropped = 0;
 	return (long)f->nkeys++;
 }
 
-// the k-th device's entries, open (made when make): its fd, or -1. one is open at a time
+// Only one entries file is open at a time.
 static int entries(file *f, size_t k, int make) {
 	if (f->xfd >= 0 && f->xk == k) return f->xfd;
 	unindex(f);
@@ -225,8 +188,6 @@ static int entries(file *f, size_t k, int make) {
 	return f->xfd;
 }
 
-// step n of the k-th device's: where its record is, waiting or on disk. 0, or -1: not indexed, not
-// in the log, or let go (any: kept as let go)
 static int find(file *f, size_t k, uint64_t n, tp_held *r, int any) {
 	int got = 0;
 	for (size_t i = f->nwait; i-- && !got;) {
@@ -246,7 +207,6 @@ static int found(file *f, const uint8_t device[32], uint64_t n, tp_held *r) {
 	return k < 0 ? -1 : find(f, (size_t)k, n, r, 0);
 }
 
-// a record's entries written, r's for each of its steps. 0 or TP_STORE
 static int put_entries(file *f, size_t k, const tp_held *r) {
 	int fd = entries(f, k, 1);
 	if (fd < 0) return TP_STORE;
@@ -260,8 +220,6 @@ static int put_entries(file *f, size_t k, const tp_held *r) {
 	return 0;
 }
 
-// the waiting records' entries written, a device's at a time (one file opened each), in order, and
-// closed (so on disk). 0 or TP_STORE
 static int written(file *f) {
 	int why = 0;
 	for (size_t i = 0; i < f->nwait && !why; i++) {
@@ -277,16 +235,12 @@ static int written(file *f) {
 	return why;
 }
 
-// a load's later for step n settled: that later record was read, and holds it
 static void settled(file *f, size_t k, uint64_t n) {
 	for (size_t i = 0; i < f->nlaters; i++) {
 		if (f->laters[i].k == k && f->laters[i].n == n) f->laters[i--] = f->laters[--f->nlaters];
 	}
 }
 
-// a record read in a load (at, length bytes at offset): its entries checked, and those not as they
-// should be written again; one that is a later record's, a run holding the step again, kept until
-// that one is read (a later). 0 or a code
 static int indexed_again(file *f, const tp_at *at, uint64_t offset, uint64_t length, int run) {
 	if (at->last < at->first || at->last - at->first > 0xffff) return TP_BOUND;
 	long k = key_of(f, at->device, 1);
@@ -327,8 +281,6 @@ static int indexed_again(file *f, const tp_at *at, uint64_t offset, uint64_t len
 	return 0;
 }
 
-// the load's laters left (their later record never read: cut off, or passed over) written as the
-// record before. 0 or TP_STORE
 static int laters_done(file *f) {
 	int why = 0;
 	for (size_t i = 0; i < f->nlaters && !why; i++) {
@@ -344,8 +296,6 @@ static int laters_done(file *f) {
 	return why;
 }
 
-// dir/open's steps, each told to read after the log's records: those held open, the rest passed
-// over; a frame cut short cut off, and that synced
 static int load_open(file *f, tp_read read, void *ctx, tp_buf *b) {
 	struct stat st;
 	f->ffirst = 0, f->fcount = 0, f->dirty = 0, f->oend = 0;
@@ -387,9 +337,8 @@ static int load(void *self, tp_read read, void *ctx) {
 	uint64_t size = (uint64_t)st.st_size, at = 0;
 	tp_buf b = {NULL, 0, 0, f->max, &f->mem, 0};
 	f->size = size;
-	// a record is never empty: a zero length is a tail never written (a power cut), and ends it
+	// A zero length is a tail that was never written (a power cut) and ends the log.
 	while (at + 4 <= size) {
-		// those before it are in the log (a drop record, read, finds them)
 		f->end = at;
 		uint8_t head[4];
 		if (readat(f->fd, head, 4, at)) break;
@@ -424,7 +373,6 @@ static int load(void *self, tp_read read, void *ctx) {
 static int append(void *self, const uint8_t *record, size_t length, const tp_at *at) {
 	file *f = self;
 	if (!length || length > f->max || length > 0xffffffffu) return TP_BOUND;
-	// its device indexed, and room for it to wait, before it is written
 	long k = 0;
 	if (at && (at->last < at->first || at->last - at->first > 0xffff)) return TP_BOUND;
 	if (at && (k = key_of(f, at->device, 1)) < 0) return (int)k;
@@ -437,7 +385,6 @@ static int append(void *self, const uint8_t *record, size_t length, const tp_at 
 	do wrote = writev(f->fd, v, 2);
 	while (wrote < 0 && errno == EINTR);
 	if (wrote != (ssize_t)want) {
-		// a frame cut short is cut off: the file as it was
 		if (ftruncate(f->fd, (off_t)f->end)) return TP_STORE;
 		return TP_STORE;
 	}
@@ -450,8 +397,6 @@ static int append(void *self, const uint8_t *record, size_t length, const tp_at 
 	return 0;
 }
 
-// a step: open, from memory; alone, read as it is; in a run, out of the run last read, else the run
-// read and unpacked
 static long get(void *self, const uint8_t device[32], uint64_t n, uint8_t *out, size_t cap) {
 	file *f = self;
 	size_t length;
@@ -489,7 +434,6 @@ static long run(void *self, const uint8_t device[32], uint64_t n, uint8_t *out, 
 
 static int snapshot(void *self, const uint8_t *bytes, size_t length) {
 	file *f = self;
-	// one file more open, not two (key_of)
 	unindex(f);
 	int fd = open(named(f, 0, "/snapshot.new"), O_WRONLY | O_CREAT | O_TRUNC, 0644);
 	if (fd < 0) return TP_STORE;
@@ -515,14 +459,11 @@ static long snapped(void *self, uint8_t *out, size_t cap) {
 	return n;
 }
 
-// dir/open made to hold the open steps: emptied first when every step there is in a run on disk
-// (and none is open), then those not yet there appended, and synced
 static int write_open(file *f) {
 	const tp_index *x = &f->index;
 	uint64_t first = x->ocount ? x->ofirst : UINT64_MAX;
 	int stale = f->dirty || (f->fcount && f->ffirst < first);
 	int empty = stale && !(f->fcount && f->ffirst + f->fcount > first);
-	// how many open steps dir/open holds already, and where those after them start
 	size_t skip = f->fcount && !empty ? (size_t)(f->ffirst + f->fcount - first) : 0, from = 0;
 	if (skip >= x->ocount && !empty) return 0;
 	for (size_t i = 0; i < skip; i++) from += 4 + tp_get32(x->open.p + from);
@@ -536,7 +477,6 @@ static int write_open(file *f) {
 		ssize_t wrote = write(f->ofd, x->open.p + done, x->open.len - done);
 		if (wrote < 0 && errno == EINTR) continue;
 		if (wrote <= 0) {
-			// a frame cut short is cut off: the file as it was
 			if (ftruncate(f->ofd, (off_t)f->oend)) return TP_STORE;
 			return TP_STORE;
 		}
@@ -547,7 +487,6 @@ static int write_open(file *f) {
 	return 0;
 }
 
-// the log, then the index (what a load would write again, were it lost), then the open steps
 static int flush(void *self) {
 	file *f = self;
 	if (f->synced != f->end) {
@@ -579,8 +518,7 @@ static int key(void *self, const uint8_t seed[32], uint8_t out[32]) {
 	return bad ? TP_STORE : 0;
 }
 
-// forgetting: the bytes stay on disk, and the records holding device's steps through n (those
-// whose last step is no later) are no longer got
+// Forgetting: the bytes stay on disk; the records are just no longer returned.
 static long drop(void *self, const uint8_t device[32], uint64_t n) {
 	file *f = self;
 	long k = key_of(f, device, 0);
@@ -613,7 +551,6 @@ tp_store *tp_file_store(const tp_mem *mem, const char *dir, size_t max) {
 	memset(f, 0, sizeof *f);
 	f->mem = *mem, f->index.mem = &f->mem, f->index.max = max, f->max = max, f->fd = f->ofd = f->xfd = -1;
 	f->store = (tp_store){f, load, append, get, run, snapshot, snapped, key, flush, shut, drop, open_};
-	// the longest name: /snapshot.new, or /i and a size_t in hex
 	f->dir = n, f->room = n + 2 + 2 * sizeof(size_t) + 1;
 	if (f->room < n + 14) f->room = n + 14;
 	if (!(f->path = tp_alloc(mem, 2 * f->room))) return shut(f), NULL;

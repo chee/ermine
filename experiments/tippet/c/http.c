@@ -1,6 +1,5 @@
-// the http long-poll client (../WIRE.md, typescript/carriers/http.ts's poll), its framing and
-// acks alone: the device makes the requests and gives their answers here. frames: a 4-byte
-// big-endian length, then a message, back to back
+// The http long-poll client (../WIRE.md; see typescript/carriers/http.ts's poll): only framing and
+// acks.
 #include <stdio.h>
 #include <string.h>
 
@@ -24,7 +23,6 @@ void tp_http_close(tp_http *h) {
 int tp_http_send(tp_http *h, const uint8_t *message, size_t length) {
 	if (h->closed) return TP_GONE;
 	if (length > TP_BODY - 4) return TP_BOUND;
-	// offline too long: let go, and linked again later
 	if (h->bytes + length > TP_BODY) return tp_http_close(h), TP_GONE;
 	if (h->length + 4 + length > h->cap) {
 		size_t cap = h->cap ? h->cap : 256;
@@ -68,7 +66,6 @@ static int gone(tp_http *h, int status) {
 int tp_http_sent(tp_http *h, int status, size_t count) {
 	if (h->closed || gone(h, status)) return TP_GONE;
 	if (status < 200 || status > 299) return 1;
-	// the first count frames taken: out of the outbox
 	size_t at = 0;
 	for (size_t i = 0; i < count && at < h->length; i++) {
 		size_t n = tp_get32(h->frames + at);
@@ -84,7 +81,6 @@ int tp_http_recv(tp_http *h, int status, const uint8_t *answer, size_t length,
 	void (*told)(void *ctx, const uint8_t *message, size_t length), void *ctx) {
 	if (h->closed || gone(h, status)) return TP_GONE;
 	if (status < 200 || status > 299 || length < 4) return 1;
-	// whole frames, or none told
 	uint64_t got = 0;
 	size_t at = 4;
 	while (at + 4 <= length) {
@@ -93,7 +89,6 @@ int tp_http_recv(tp_http *h, int status, const uint8_t *answer, size_t length,
 		at += 4 + n, got++;
 	}
 	if (at != length) return 1;
-	// the answer's number is its last message's: those past ack are new
 	uint64_t last = tp_get32(answer);
 	int64_t k = (int64_t)last - (int64_t)got + 1;
 	for (at = 4; at < length; k++) {

@@ -1,18 +1,6 @@
-// galaxy: just another peer. per room, a log on disk and a sync that relays, and no graph and no
-// signer: it checks every step's chain and signature (log.take) and never reads a patch. a room is
-// loaded on use, and let go (its log closed) once it has had no links for 5 minutes. at most 1000
-// are open: past that the one least recently written is let go, links or not. its dir is made on
-// its first kept run
-//
-//   /tippet/<room>          a websocket (carriers/websocket.ts)
-//   /tippet/<room>/send     http long-poll (carriers/http.ts)
-//   /tippet/<room>/recv
-//
-//   const galaxy = createGalaxy({ dir: "./tippet-data" })   // at: where it answers, "/tippet" when none
-//   Deno.serve(galaxy.handler)
-//   await galaxy.close()
-//
-//   PORT=8090 DIR=./tippet-data deno run --allow-net --allow-read --allow-write typescript/galaxy.ts
+// Galaxy is just another peer. Per room it has a log on disk and a relaying sync, with no graph and
+// no signer: it checks every step's chain and signature and never reads a patch.
+// PORT=8090 DIR=./tippet-data deno run --allow-net --allow-read --allow-write typescript/galaxy.ts
 import { createLog, type Log } from "./log.ts"
 import { createSync, type Sync } from "./sync.ts"
 import { fileStore } from "./store_file.ts"
@@ -21,7 +9,6 @@ import { httpLinks } from "./carriers/http.ts"
 import { hex } from "./step.ts"
 import { blake3 } from "@ermine/encoding/blake3"
 
-// written: when it last kept a run, 0 never
 type Room = {
 	log: Log
 	sync: Sync
@@ -31,7 +18,6 @@ type Room = {
 	timer?: ReturnType<typeof setTimeout>
 }
 
-// idle: how long a room with no links stays open (ms); most: how many rooms are open at once
 export function createGalaxy(o: { dir: string; at?: string; idle?: number; most?: number }): {
 	handler: (req: Request) => Promise<Response>
 	close(): Promise<void>
@@ -39,8 +25,6 @@ export function createGalaxy(o: { dir: string; at?: string; idle?: number; most?
 } {
 	const at = (o.at ?? "/tippet") + "/"
 	const idle = o.idle ?? 5 * 60_000, most = o.most ?? 1000
-	// rooms open or opening; loaded: those open; closing: those being let go, until their log is
-	// on disk
 	const rooms = new Map<string, Promise<Room>>()
 	const loaded = new Map<string, Room>()
 	const closing = new Map<string, Promise<void>>()
@@ -55,15 +39,19 @@ export function createGalaxy(o: { dir: string; at?: string; idle?: number; most?
 		closing.set(n, done)
 	}
 
-	// a room, loaded from disk on use. its dir is its name's hash, so names that a filesystem folds
-	// together (case, unicode normalization) stay apart
-	function room(n: string): Promise<Room> {
+	// A room's dir is its name's hash, so names a filesystem folds together stay apart. At most
+	// open, the one least recently written with no links is let go; every one linked: none opens
+	// (undefined), and no room in use is ever let go for another.
+	function room(n: string): Promise<Room> | undefined {
 		let r = rooms.get(n)
 		if (r) return r
 		if (rooms.size >= most) {
 			let oldest: [string, Room] | undefined
-			for (const e of loaded) if (!oldest || e[1].written < oldest[1].written) oldest = e
-			if (oldest) free(...oldest)
+			for (const e of loaded) {
+				if (!e[1].sync.links && (!oldest || e[1].written < oldest[1].written)) oldest = e
+			}
+			if (!oldest) return undefined
+			free(...oldest)
 		}
 		r = (async () => {
 			await closing.get(n)
@@ -79,7 +67,6 @@ export function createGalaxy(o: { dir: string; at?: string; idle?: number; most?
 				written: 0,
 			}
 			log.on(() => room.written = Date.now())
-			// counted idle from its last link gone, until it is let go
 			const linked = () => {
 				clearTimeout(room.timer)
 				if (loaded.get(n) !== room) return
@@ -103,7 +90,6 @@ export function createGalaxy(o: { dir: string; at?: string; idle?: number; most?
 		try {
 			n = decodeURIComponent(parts[0])
 		} catch {
-			// not a name
 		}
 		if (["", ".", ".."].includes(n) || n.includes("/")) {
 			return new Response("not a room", { status: 400 })
@@ -114,7 +100,9 @@ export function createGalaxy(o: { dir: string; at?: string; idle?: number; most?
 		if (parts.length === 1 && req.headers.get("upgrade")?.toLowerCase() !== "websocket") {
 			return new Response("a websocket, or /send and /recv", { status: 426 })
 		}
-		const r = await room(n)
+		const opening = room(n)
+		if (!opening) return new Response("every room is in use", { status: 503 })
+		const r = await opening
 		if (parts.length === 2) return r.http(req)!
 		const { socket: ws, response } = Deno.upgradeWebSocket(req)
 		r.sockets.add(ws)
@@ -125,13 +113,11 @@ export function createGalaxy(o: { dir: string; at?: string; idle?: number; most?
 
 	return {
 		handler,
-		// every link closed, and every record on disk
 		async close() {
 			await Promise.allSettled(rooms.values())
 			for (const [n, r] of loaded) free(n, r)
 			await Promise.all(closing.values())
 		},
-		// how many rooms are open
 		get open() {
 			return rooms.size
 		},

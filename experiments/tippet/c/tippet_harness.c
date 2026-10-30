@@ -1,10 +1,6 @@
-// tippet_harness: tippet in C on the line protocol (conformance/c/harness.h), speaking
-// typescript/tippet_harness.ts's ops. its bytes, a log, the merge (history.h, on ermine's C graph:
-// a table, places and a scheduler per device), and sync over links joined by hand: a message sent
-// waits until delivered. one process a scenario: devices and links last between lines
-//
-// the library's memory goes through one allocator here, counted: TIPPET_HEAP set, its peak and
-// what is left at the end go to stderr. the graph's is malloc's, as everywhere in core
+// Tippet in C on the line protocol (conformance/c/harness.h), the same ops as
+// typescript/tippet_harness.ts, one process per scenario. With TIPPET_HEAP set, the library's peak
+// memory and what is left at the end go to stderr.
 #define _POSIX_C_SOURCE 200809L
 #include <dirent.h>
 #include <stdio.h>
@@ -22,7 +18,6 @@
 #include "wire.h"
 
 #define WHEN 1760000000
-// the most bytes a pack, or a pack's steps, is here
 #define MAX (64u << 20)
 
 typedef struct {
@@ -43,7 +38,6 @@ static void *counted(void *ctx, void *p, size_t old, size_t size) {
 	return q;
 }
 
-// a device: its log and sync, and, writing, its key and graph (a relay has neither)
 typedef struct {
 	char *name;
 	tp_log *log;
@@ -57,16 +51,13 @@ typedef struct {
 	sc_scope *scope;
 	sc_pair info;
 	tp_history *history;
-	// live data heard, in order
 	tp_span *heard;
 	size_t nheard;
-	// a disk's: its directory, its store, its seed
 	char *dir;
 	tp_store *store;
 	uint8_t seed[32];
 } device;
 
-// one way of a link: what from sent to, waiting; link: from's
 typedef struct {
 	char *from, *to;
 	tp_link *link;
@@ -74,7 +65,6 @@ typedef struct {
 	size_t count;
 } side;
 
-// the harness's own: what lasts between lines
 typedef struct {
 	heap heap;
 	tp_mem mem;
@@ -82,9 +72,7 @@ typedef struct {
 	size_t count;
 	side **sides;
 	size_t nsides;
-	// the harness's random: its k-th call gives k
 	uint64_t calls;
-	// lines whose holds were let go, freed at the next line
 	hh_line **dead;
 	size_t ndead;
 } world;
@@ -116,7 +104,6 @@ void hh_finish(void) {
 		}
 		for (size_t k = 0; k < d->nheard; k++) free((void *)d->heard[k].p);
 		if (d->dir) {
-			// every file the store made (its index's among them), then the dir
 			DIR *in = opendir(d->dir);
 			struct dirent *e;
 			char path[4096];
@@ -136,7 +123,6 @@ void hh_finish(void) {
 	}
 }
 
-// ---- forms
 
 static void hex(FILE *out, const uint8_t *b, size_t n) {
 	fputc('"', out);
@@ -144,7 +130,6 @@ static void hex(FILE *out, const uint8_t *b, size_t n) {
 	fputc('"', out);
 }
 
-// a hex string's bytes, the line's: its length, or -1
 static long unhex(const char *s, uint8_t **out) {
 	size_t n = s ? strlen(s) : 1;
 	if (n % 2) return -1;
@@ -165,7 +150,6 @@ static device *named(const char *name) {
 	return NULL;
 }
 
-// a device's key, by its name or as given; NULL: neither
 static const uint8_t *keyof(const char *s) {
 	device *d = named(s);
 	if (d && tp_log_device(d->log)) return tp_log_device(d->log);
@@ -173,7 +157,6 @@ static const uint8_t *keyof(const char *s) {
 	return unhex(s, &b) == 32 ? b : NULL;
 }
 
-// a key's name: the first device made with it, or the key
 static void nameof(FILE *out, const uint8_t key[32]) {
 	for (size_t i = 0; i < w.count; i++) {
 		const uint8_t *k = tp_log_device(w.devices[i]->log);
@@ -184,7 +167,6 @@ static void nameof(FILE *out, const uint8_t key[32]) {
 
 static int whole(const op_value *v, int64_t *n) { return v && op_as_int64(v, n) && *n >= 0; }
 
-// a value in cbor, as cbor.ts encodes it: maps' keys in their encodings' order
 static int put(CborOut *o, const op_value *v);
 static const op_value *sorting;
 static int bykey(const void *a, const void *b) {
@@ -224,7 +206,6 @@ static int put(CborOut *o, const op_value *v) {
 	}
 }
 
-// a value's cbor, the line's: its length
 static size_t encode(const op_value *v, uint8_t **out) {
 	CborOut o = {NULL, 0, 0, true};
 	if (!put(&o, v)) {
@@ -237,7 +218,6 @@ static size_t encode(const op_value *v, uint8_t **out) {
 	return o.length;
 }
 
-// cbor's items as op's values
 static void *make(void *self, const CborItem *it) {
 	(void)self;
 	switch (it->what) {
@@ -272,7 +252,6 @@ static op_value *decode(const uint8_t *b, size_t n) {
 	return v ? hh_hold(v) : NULL;
 }
 
-// a step's bytes from its fields, as encode's: device and before by default; the line's
 static size_t stepin(const op_value *s, const uint8_t *device, const uint8_t *before, uint8_t **out) {
 	const char *d = hh_str(s, "device"), *b = hh_str(s, "before");
 	const op_value *bv = op_get(s, "before");
@@ -288,7 +267,6 @@ static size_t stepin(const op_value *s, const uint8_t *device, const uint8_t *be
 	for (int i = 0; i < 7; i++) {
 		op_value *v = op_get(s, fields[i]);
 		if (i == 5) {
-			// on: [[device, n], …], each whole; written this device's own as how far back from n
 			int64_t n, m;
 			if (!v) continue;
 			if (v->type != OP_LIST || !whole(op_get(s, "n"), &n)) return op_free(a), 0;
@@ -309,7 +287,6 @@ static size_t stepin(const op_value *s, const uint8_t *device, const uint8_t *be
 			continue;
 		}
 		if (!i && v && v->type == OP_STR && rel && rel->type == OP_BOOL && rel->bool_) {
-			// relative: [the rest after the device's own id]
 			long rest = tp_step_rest(key, (tp_span){(const uint8_t *)v->str, v->bytes});
 			if (rest < 0) return op_free(a), 0;
 			op_value *near = op_list();
@@ -332,7 +309,6 @@ static void steps(FILE *out, const tp_steps *s) {
 	fputc(']', out);
 }
 
-// a list of hex steps as spans, the line's: how many, or -1
 static long spans(const op_value *list, tp_span **out) {
 	if (!list || list->type != OP_LIST) return -1;
 	tp_span *s = hh_take((list->count ? list->count : 1) * sizeof *s);
@@ -346,9 +322,7 @@ static long spans(const op_value *list, tp_span **out) {
 	return (long)list->count;
 }
 
-// ---- messages
 
-// a message from its form, in cbor; the line's: its length, or 0
 static size_t message(const op_value *m, uint8_t **out) {
 	CborOut o = {NULL, 0, 0, true};
 	const char *t = m && m->type == OP_LIST && m->count ? (m->items[0]->type == OP_STR ? m->items[0]->str : NULL) : NULL;
@@ -374,7 +348,6 @@ static size_t message(const op_value *m, uint8_t **out) {
 		long k = spans(z, &s);
 		ok = k > 0 && !tp_pack(&w.mem, s, (size_t)k, MAX, &pack);
 		if (ok) {
-			// the pack's bytes after the rest, as they are
 			cborPutHead(&o, 4, 4), cborPutText(&o, t, 3), cborPutBytes(&o, key, 32);
 			cborPutBytes(&o, b, (size_t)n);
 			tail = hh_take(pack.n ? pack.n : 1), tailn = pack.n;
@@ -408,7 +381,6 @@ static int counted_whole(const op_value *v) {
 	return v && v->type == OP_NUM && !v->big && whole(v, &n) && (uint64_t)n <= TP_WHOLE;
 }
 
-// a message read as sync.ts's read has it, written as its form; 0: not a message
 static int readout(FILE *out, const uint8_t *b, size_t n) {
 	op_value *m = decode(b, n);
 	if (!m || m->type != OP_LIST || !m->count) return 0;
@@ -424,7 +396,6 @@ static int readout(FILE *out, const uint8_t *b, size_t n) {
 		int first = 1;
 		for (size_t i = 0; i < x->count; i++) {
 			const op_value *e = x->items[i];
-			// a device twice: its first place, its last count
 			int seen = 0;
 			for (size_t j = 0; j < i && !seen; j++) seen = !memcmp(x->items[j]->items[0]->data, e->items[0]->data, 32);
 			if (seen) continue;
@@ -440,12 +411,11 @@ static int readout(FILE *out, const uint8_t *b, size_t n) {
 		return 1;
 	}
 	if (is(t, "run") && m->count == 4 && sized(x, 32) && sized(y, 64) && z->type == OP_LIST) {
-		// the pack's bytes, as they came: the fourth item's
 		tp_in in = {b, b + n};
 		uint64_t k;
 		tp_array(&in, &k), tp_skip(&in, NULL), tp_skip(&in, NULL), tp_skip(&in, NULL);
 		tp_steps s;
-		int unpacked = !tp_unpack(&w.mem, (tp_span){in.p, (size_t)(in.end - in.p)}, MAX, &s);
+		int unpacked = !tp_unpack(&w.mem, (tp_span){in.p, (size_t)(in.end - in.p)}, TP_RUN, &s);
 		fputs("{\"message\":[\"run\",", out);
 		hex(out, x->data, 32), fputc(',', out);
 		if (unpacked) {
@@ -470,9 +440,7 @@ static int readout(FILE *out, const uint8_t *b, size_t n) {
 	return 0;
 }
 
-// ---- a log
 
-// a step held, the line's
 static tp_span stepof(const tp_log *log, const uint8_t *key, uint64_t n) {
 	long length = tp_log_step(log, key, n, NULL, 0);
 	if (length < 0) hh_fail("a step held is not in the store");
@@ -481,7 +449,6 @@ static tp_span stepof(const tp_log *log, const uint8_t *key, uint64_t n) {
 	return (tp_span){b, (size_t)length};
 }
 
-// the log's told: the history's lander, then the sync
 static void told(void *ctx, const uint8_t key[32], uint64_t from, size_t count) {
 	device *d = ctx;
 	if (d->history) tp_history_told(d->history, key, from, count);
@@ -503,7 +470,6 @@ static void heard(void *ctx, const uint8_t *data, size_t length) {
 	d->heard = h, d->heard[d->nheard++] = (tp_span){copy, length};
 }
 
-// writes into the graph, in the device's scope
 static void inside(void *ctx, void (*f)(void *data), void *data) {
 	device *d = ctx;
 	sc_run_with_scope(d->scope, f, data);
@@ -514,7 +480,6 @@ static void drop_value(void *value, void *data) {
 	op_free(value);
 }
 
-// a device that writes (seed), with its graph and history; or a relay (no seed): no key, no graph
 static device *made(const char *name, const uint8_t *seed, FILE *out) {
 	if (named(name)) return hh_error(out, "%s is made", name), NULL;
 	device *d = calloc(1, sizeof *d);
@@ -566,7 +531,6 @@ static void taken(FILE *out, long got) {
 	else hh_error(out, "%s", tp_why((int)got));
 }
 
-// a run as take's request gives it: steps hex or fields, and its sig, or the key that signs it
 static void take(const op_value *r, FILE *out) {
 	device *d = which(r, "device", out);
 	const op_value *run = op_get(r, "run"), *list = run ? op_get(run, "steps") : NULL;
@@ -598,7 +562,6 @@ static void take(const op_value *r, FILE *out) {
 	taken(out, tp_log_take(d->log, key, s, list->count, sig, (tp_span){NULL, 0}));
 }
 
-// from's run of a device's, at n, taken by to
 static void pass(const op_value *r, FILE *out) {
 	device *from = which(r, "from", out), *to = from ? which(r, "to", out) : NULL;
 	const char *of = hh_str(r, "of");
@@ -615,16 +578,13 @@ static void pass(const op_value *r, FILE *out) {
 	taken(out, tp_log_take(to->log, key, s, n, sig, (tp_span){NULL, 0}));
 }
 
-// ---- the graph
 
-// a line's hold on a node let go: freed at the next line, past this one's answer
 static void let_go(void *line) {
 	hh_line **dead = realloc(w.dead, (w.ndead + 1) * sizeof *dead);
 	if (!dead) hh_fail("out of memory");
 	w.dead = dead, w.dead[w.ndead++] = line;
 }
 
-// a write as a host makes one: the patches to the entry there, or the first, one whole value
 typedef struct {
 	device *d;
 	const char *node, *part, *error;
@@ -690,7 +650,6 @@ static void written(const op_value *r, FILE *out) {
 	fprintf(out, "{\"n\":%llu,\"lamport\":%llu}", (unsigned long long)s.n, (unsigned long long)s.lamport);
 }
 
-// history's versions: each { value } or { gone: true }, from the heads it is
 static void versions(const op_value *r, FILE *out) {
 	device *d = which(r, "device", out);
 	const char *node = hh_str(r, "node"), *part = hh_str(r, "part") ? hh_str(r, "part") : "value";
@@ -726,7 +685,6 @@ static void value(const op_value *r, FILE *out) {
 	fputs("{\"value\":", out), op_json_write(out, e->value), fputc('}', out);
 }
 
-// ---- links
 
 static side *side_of(const char *from, const char *to) {
 	for (size_t i = 0; from && to && i < w.nsides; i++) {
@@ -735,7 +693,6 @@ static side *side_of(const char *from, const char *to) {
 	return NULL;
 }
 
-// what from's sync sends on the link to to: it waits
 static int sent(void *ctx, const uint8_t *bytes, size_t length) {
 	side *s = ctx;
 	uint8_t *copy = malloc(length ? length : 1);
@@ -746,7 +703,6 @@ static int sent(void *ctx, const uint8_t *bytes, size_t length) {
 	return 0;
 }
 
-// to hears it from from, on its link to from
 static void hear(const char *from, const char *to, const uint8_t *bytes, size_t length) {
 	side *s = side_of(to, from);
 	device *d = named(to);
@@ -769,7 +725,6 @@ static void join(const op_value *r, FILE *out) {
 		s->from = strdup(ends[i][0]), s->to = strdup(ends[i][1]);
 		w.sides[w.nsides++] = s;
 	}
-	// a links, then b: each says have
 	for (int i = 0; i < 2; i++) {
 		side *s = side_of(ends[i][0], ends[i][1]);
 		s->link = tp_sync_link(named(s->from)->sync, sent, s, 0);
@@ -793,8 +748,6 @@ static void unjoin(const op_value *r, FILE *out) {
 	fputs("{}", out);
 }
 
-// a message sent, as a scenario reads it: ["have", {device: n}], ["run", device, from, to],
-// ["live", id, data], ["refused", device, n]
 static void view(FILE *out, const uint8_t *b, size_t n) {
 	tp_in in = {b, b + n};
 	uint64_t k, count, num;
@@ -840,7 +793,6 @@ static void views(FILE *out, const char *field, const tp_span *list, size_t n) {
 	fputs("]}", out);
 }
 
-// queued, deliver and drop: what waits from → to; the first count (all: none given) taken off
 static void waiting(const op_value *r, const char *op, FILE *out) {
 	side *s = side_of(hh_str(r, "from"), hh_str(r, "to"));
 	int64_t count;
@@ -872,9 +824,7 @@ static void inject(const op_value *r, FILE *out) {
 	fputs("{}", out);
 }
 
-// ---- a log on disk
 
-// a disk's log, on the file store in its dir, and its sync: 0 or a code
 static int on_disk(device *d) {
 	tp_store *store = tp_file_store(&w.mem, d->dir, MAX);
 	tp_log_options o = {w.mem, store, d->seed, 1, {0, 0, 0}, told, d};
@@ -927,7 +877,6 @@ static device *on(const op_value *r, FILE *out) {
 	return d;
 }
 
-// its process gone, nothing more written (no sync), started again from its files
 static void reset(const op_value *r, FILE *out) {
 	device *d = on(r, out);
 	if (!d) return;
@@ -943,7 +892,6 @@ static void reset(const op_value *r, FILE *out) {
 	fprintf(out, "{\"count\":%llu}", (unsigned long long)tp_log_count(d->log, tp_log_device(d->log)));
 }
 
-// dir/<name>'s bytes, the line's: its length (0: none)
 static size_t slurp(const device *d, const char *name, uint8_t **out) {
 	char path[4200];
 	snprintf(path, sizeof path, "%s/%s", d->dir, name);
@@ -965,7 +913,6 @@ static size_t slurp(const device *d, const char *name, uint8_t **out) {
 	return n;
 }
 
-// a file's whole frames: ["run", device, first, last], ["step", device, n] or ["other"]
 static void frames(FILE *out, const uint8_t *b, size_t size) {
 	fputc('[', out);
 	for (size_t at = 0, i = 0; at + 4 <= size; i++) {
@@ -1016,7 +963,6 @@ static void tear(const op_value *r, FILE *out) {
 	fputs("{}", out);
 }
 
-// a disk's write: a step of these fields, straight into its log
 static void write_disk(device *d, const op_value *r, FILE *out) {
 	const op_value *patches = op_get(r, "patches"), *who = op_get(r, "who");
 	int64_t when = WHEN;
@@ -1024,7 +970,6 @@ static void write_disk(device *d, const op_value *r, FILE *out) {
 	if (!patches || patches->type != OP_LIST || !hh_str(r, "node")) { hh_error(out, "not a write"); return; }
 	if (op_get(r, "when") && !whole(op_get(r, "when"), &when)) { hh_error(out, "not a when"); return; }
 	op_value *revived = hh_hold(op_list());
-	// each patch as given, its value revived (the "/" forms)
 	for (size_t i = 0; i < patches->count; i++) {
 		const op_value *given = patches->items[i];
 		op_patch p;
@@ -1047,7 +992,6 @@ static void write_disk(device *d, const op_value *r, FILE *out) {
 	fprintf(out, "{\"n\":%llu,\"lamport\":%llu}", (unsigned long long)n, (unsigned long long)lamport);
 }
 
-// ---- answers
 
 void hh_answer(const op_value *r, FILE *out) {
 	const char *op = hh_str(r, "op");
@@ -1074,7 +1018,6 @@ void hh_answer(const op_value *r, FILE *out) {
 		const char *fields[] = {"", "", "", "node", "part", "patches", "lamport", "when", "who", "who"};
 		for (size_t i = 3; i < a->count; i++) {
 			if (i == 8 && s.on.p) {
-				// on, each step whole
 				size_t at = 0, k = 0;
 				const uint8_t *d;
 				uint64_t m;
@@ -1111,7 +1054,6 @@ void hh_answer(const op_value *r, FILE *out) {
 		tp_prior prior;
 		long k = spans(op_get(r, "steps"), &s);
 		int why = k < 0 ? TP_NOTSTEP : 0;
-		// before: the step before the first, which it is packed against
 		if (!why && hh_str(r, "before") && ((n = unhex(hh_str(r, "before"), &b)) < 0 || tp_prior_of(b, (size_t)n, &prior)))
 			why = TP_NOTSTEP;
 		if (!why) why = tp_pack_after(&w.mem, hh_str(r, "before") ? &prior : NULL, s, (size_t)k, MAX, &pack);
@@ -1126,8 +1068,8 @@ void hh_answer(const op_value *r, FILE *out) {
 		if ((n = unhex(hh_str(r, "pack"), &b)) < 0) { hh_error(out, "not hex"); return; }
 		if (hh_str(r, "before") && ((m = unhex(hh_str(r, "before"), &before)) < 0 || tp_prior_of(before, (size_t)m, &prior)))
 			{ hh_error(out, "not a step before"); return; }
-		int why = tp_unpack_after(&w.mem, (tp_span){b, (size_t)n}, MAX, hh_str(r, "before") ? &prior : NULL, &s);
-		if (why == TP_NOTSTEP || why == TP_BEFORE) { fputs("{\"refused\":true}", out); return; }
+		int why = tp_unpack_after(&w.mem, (tp_span){b, (size_t)n}, TP_RUN, hh_str(r, "before") ? &prior : NULL, &s);
+		if (why == TP_NOTSTEP || why == TP_BEFORE || why == TP_BOUND) { fputs("{\"refused\":true}", out); return; }
 		if (why) { hh_error(out, "%s", tp_why(why)); return; }
 		fputs("{\"steps\":", out), steps(out, &s), fputc('}', out);
 		tp_steps_free(&w.mem, &s);

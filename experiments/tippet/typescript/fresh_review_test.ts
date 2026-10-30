@@ -1,4 +1,4 @@
-// a fresh review: one test per bug found, each failing while the bug stands
+// One test per bug a fresh review found.
 import { assert, assertEquals } from "@std/assert"
 import { createScheduler } from "@ermine/reactivity"
 import { createPaths } from "@ermine/reactivity/paths"
@@ -48,7 +48,6 @@ async function receiver(store?: Store) {
 	return { log, history, value: (id: string) => table.get("value", id)?.value }
 }
 
-// a device's steps, made by hand: lamports as given, one run signed at its last
 async function steps(lamports: number[], patches: (i: number) => Patch[]) {
 	const w = await createSigner()
 	let before: Uint8Array | null = null
@@ -77,7 +76,6 @@ Deno.test("fresh 1: a run sent by a peer that holds less marks it as holding all
 	const two = (await d.run(d.device!, 2))!
 	const b = createLog(), r = createLog()
 	await b.take(one)
-	// r's link to b: a link that can take more only once let (an http link with 1 MB queued)
 	let open!: () => void
 	const gate = new Promise<void>((x) => open = x)
 	const fns: ((x: Uint8Array) => void)[] = []
@@ -87,7 +85,6 @@ Deno.test("fresh 1: a run sent by a peer that holds less marks it as holding all
 		wait,
 	})
 	createSync({ log: r }).link(mk(0, () => gate)), createSync({ log: b }).link(mk(1))
-	// b says it has step 1 and sends it; r meanwhile takes 1 and 2 from elsewhere
 	await r.take(one), await r.take(two)
 	await tick(50)
 	open()
