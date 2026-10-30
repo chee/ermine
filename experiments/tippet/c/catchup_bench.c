@@ -207,7 +207,7 @@ static void bench(tp_log *w, const messages *m, int file, int forgets) {
 	tp_log_options o = {mem[1], store, seed, 1, {0, 0, 0}, told, &d};
 	tp_log *log = tp_log_new(&o);
 	tp_log_load(log);
-	tp_history_options ho = {mem[2], log, table, places, NULL, inside, &d, forgets};
+	tp_history_options ho = {mem[2], log, table, places, NULL, inside, &d, forgets, 0};
 	d.history = tp_history_new(&ho);
 	tp_sync_options so = {mem[3], log, 0, NULL, NULL, NULL, 0, 0};
 	d.sync = tp_sync_new(&so);

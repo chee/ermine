@@ -772,7 +772,7 @@ static int dev_make(dev *d, tp_store *store, uint8_t s) {
 	tp_log_options o = {mem, store, seed, 1, {0, 0, 0}, dev_told, d};
 	d->log = tp_log_new(&o);
 	tp_log_load(d->log);
-	tp_history_options ho = {mem, d->log, d->table, d->places, NULL, inside, d, forgets};
+	tp_history_options ho = {mem, d->log, d->table, d->places, NULL, inside, d, forgets, 0};
 	d->history = tp_history_new(&ho);
 	return tp_history_load(d->history);
 }
