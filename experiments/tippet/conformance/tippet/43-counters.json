@@ -1,0 +1,422 @@
+{
+	"title": "counters: a step takes a lamport for each element it inserts, so a device never names two elements alike. a run whose step says on at a lamport its device's step before took (its counters again) is refused, whole; one past them is taken. an old step (no on) is not refused, but its insert at counters its device used in that sequence doesn't apply. the jump allowed past what was seen grows by the lamports the run's steps before take: a paste of three at 2^20 lets the next be at 2^20 + 4, not 2^20 + 5",
+	"steps": [
+		{
+			"op": "device",
+			"name": "m",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "device",
+			"name": "u",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"expect": {
+				"key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
+		},
+		{
+			"op": "take",
+			"device": "u",
+			"run": {
+				"device": "m",
+				"steps": [
+					{
+						"n": 1,
+						"node": "t",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"value": "ab"
+							}
+						],
+						"lamport": 1,
+						"when": 0,
+						"on": []
+					},
+					{
+						"n": 2,
+						"node": "t",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"range": [
+									0,
+									0
+								],
+								"value": "zzzy"
+							}
+						],
+						"lamport": 2,
+						"when": 0,
+						"on": [
+							[
+								"m",
+								1
+							]
+						],
+						"ids": [
+							{
+								"after": null,
+								"gone": []
+							}
+						]
+					},
+					{
+						"n": 3,
+						"node": "t",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"range": [
+									6,
+									6
+								],
+								"value": "x"
+							}
+						],
+						"lamport": 5,
+						"when": 0,
+						"on": [
+							[
+								"m",
+								2
+							]
+						],
+						"ids": [
+							{
+								"after": [
+									"m",
+									1,
+									1
+								],
+								"gone": []
+							}
+						]
+					}
+				]
+			},
+			"expect": {
+				"refused": "lamport"
+			}
+		},
+		{
+			"op": "count",
+			"device": "u",
+			"of": "m",
+			"expect": {
+				"count": 0
+			}
+		},
+		{
+			"op": "take",
+			"device": "u",
+			"run": {
+				"device": "m",
+				"steps": [
+					{
+						"n": 1,
+						"node": "t",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"value": "ab"
+							}
+						],
+						"lamport": 1,
+						"when": 0,
+						"on": []
+					},
+					{
+						"n": 2,
+						"node": "t",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"range": [
+									0,
+									0
+								],
+								"value": "zzzy"
+							}
+						],
+						"lamport": 2,
+						"when": 0,
+						"on": [
+							[
+								"m",
+								1
+							]
+						],
+						"ids": [
+							{
+								"after": null,
+								"gone": []
+							}
+						]
+					},
+					{
+						"n": 3,
+						"node": "t",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"range": [
+									6,
+									6
+								],
+								"value": "x"
+							}
+						],
+						"lamport": 6,
+						"when": 0,
+						"on": [
+							[
+								"m",
+								2
+							]
+						],
+						"ids": [
+							{
+								"after": [
+									"m",
+									1,
+									1
+								],
+								"gone": []
+							}
+						]
+					}
+				]
+			},
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "value",
+			"device": "u",
+			"node": "t",
+			"expect": {
+				"value": "zzzyabx"
+			}
+		},
+		{
+			"op": "device",
+			"name": "o",
+			"seed": "0303030303030303030303030303030303030303030303030303030303030303",
+			"expect": {
+				"key": "ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1"
+			}
+		},
+		{
+			"op": "take",
+			"device": "o",
+			"run": {
+				"device": "m",
+				"steps": [
+					{
+						"n": 1,
+						"node": "t",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"value": "ab"
+							}
+						],
+						"lamport": 1,
+						"when": 0
+					},
+					{
+						"n": 2,
+						"node": "t",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"range": [
+									0,
+									0
+								],
+								"value": "zzzy"
+							}
+						],
+						"lamport": 2,
+						"when": 0
+					},
+					{
+						"n": 3,
+						"node": "t",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"range": [
+									6,
+									6
+								],
+								"value": "x"
+							}
+						],
+						"lamport": 3,
+						"when": 0
+					}
+				]
+			},
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "value",
+			"device": "o",
+			"node": "t",
+			"expect": {
+				"value": "zzzyab"
+			}
+		},
+		{
+			"op": "device",
+			"name": "j",
+			"seed": "0404040404040404040404040404040404040404040404040404040404040404",
+			"expect": {
+				"key": "ca93ac1705187071d67b83c7ff0efe8108e8ec4530575d7726879333dbdabe7c"
+			}
+		},
+		{
+			"op": "take",
+			"device": "j",
+			"run": {
+				"device": "m",
+				"steps": [
+					{
+						"n": 1,
+						"node": "t",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"value": "xy"
+							}
+						],
+						"lamport": 1,
+						"when": 0
+					},
+					{
+						"n": 2,
+						"node": "t",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"range": [
+									0,
+									0
+								],
+								"value": "abc"
+							}
+						],
+						"lamport": 1048576,
+						"when": 0
+					},
+					{
+						"n": 3,
+						"node": "t",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"range": [
+									0,
+									0
+								],
+								"value": "q"
+							}
+						],
+						"lamport": 1048581,
+						"when": 0
+					}
+				]
+			},
+			"expect": {
+				"refused": "lamport"
+			}
+		},
+		{
+			"op": "take",
+			"device": "j",
+			"run": {
+				"device": "m",
+				"steps": [
+					{
+						"n": 1,
+						"node": "t",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"value": "xy"
+							}
+						],
+						"lamport": 1,
+						"when": 0
+					},
+					{
+						"n": 2,
+						"node": "t",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"range": [
+									0,
+									0
+								],
+								"value": "abc"
+							}
+						],
+						"lamport": 1048576,
+						"when": 0
+					},
+					{
+						"n": 3,
+						"node": "t",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"range": [
+									0,
+									0
+								],
+								"value": "q"
+							}
+						],
+						"lamport": 1048580,
+						"when": 0
+					}
+				]
+			},
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "value",
+			"device": "j",
+			"node": "t",
+			"expect": {
+				"value": "qabcxy"
+			}
+		}
+	]
+}

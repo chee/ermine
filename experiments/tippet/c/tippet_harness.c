@@ -252,20 +252,23 @@ static op_value *decode(const uint8_t *b, size_t n) {
 	return v ? hh_hold(v) : NULL;
 }
 
-// ids as written (WIRE.md): an id [device, n, k] is [back, k] on the step's own device
-static op_value *id_in(const op_value *x, const uint8_t *key, int64_t n) {
-	int64_t m, k;
-	const uint8_t *d = x->type == OP_LIST && x->count == 3 && x->items[0]->type == OP_STR
+// ids as written (WIRE.md): an id [device, c] (made) or [device, lamport, k] (born) is x or [x, k] on
+// the step's own device, x lamport less c
+static op_value *id_in(const op_value *x, const uint8_t *key, int64_t lamport) {
+	int64_t c, k = 0;
+	const uint8_t *d = x->type == OP_LIST && (x->count == 2 || x->count == 3) && x->items[0]->type == OP_STR
 		? keyof(x->items[0]->str) : NULL;
-	if (!d || !whole(x->items[1], &m) || !whole(x->items[2], &k)) return NULL;
+	int born = d && x->count == 3;
+	if (!d || !whole(x->items[1], &c) || (born && !whole(x->items[2], &k))) return NULL;
+	if (!memcmp(d, key, 32) && !born) return op_int(lamport - c);
 	op_value *a = op_list();
-	if (!memcmp(d, key, 32)) op_push(a, op_int(n - m));
-	else op_push(a, op_bytes(d, 32)), op_push(a, op_int(m));
-	op_push(a, op_int(k));
+	if (!memcmp(d, key, 32)) op_push(a, op_int(lamport - c));
+	else op_push(a, op_bytes(d, 32)), op_push(a, op_int(c));
+	if (born) op_push(a, op_int(k));
 	return a;
 }
 
-static op_value *ids_in(const op_value *v, const uint8_t *key, int64_t n) {
+static op_value *ids_in(const op_value *v, const uint8_t *key, int64_t lamport) {
 	if (v->type != OP_LIST) return NULL;
 	op_value *out = op_list();
 	for (size_t i = 0; i < v->count; i++) {
@@ -273,13 +276,13 @@ static op_value *ids_in(const op_value *v, const uint8_t *key, int64_t n) {
 			       *gone = x->type == OP_MAP ? op_get(x, "gone") : NULL;
 		if (x->type == OP_NULL) { op_push(out, op_null()); continue; }
 		op_value *a = op_list(), *g = op_list(), *id = NULL;
-		if (!after || !gone || gone->type != OP_LIST || (after->type != OP_NULL && !(id = id_in(after, key, n))))
+		if (!after || !gone || gone->type != OP_LIST || (after->type != OP_NULL && !(id = id_in(after, key, lamport))))
 			return op_free(a), op_free(g), op_free(out), NULL;
 		op_push(a, id ? id : op_null()), op_push(a, g);
 		for (size_t j = 0; j < gone->count; j++) {
 			const op_value *pair = gone->items[j];
 			int64_t c;
-			op_value *i2 = pair->type == OP_LIST && pair->count == 2 ? id_in(pair->items[0], key, n) : NULL;
+			op_value *i2 = pair->type == OP_LIST && pair->count == 2 ? id_in(pair->items[0], key, lamport) : NULL;
 			if (!i2 || !whole(pair->items[1], &c)) return op_free(a), op_free(out), NULL;
 			op_value *p = op_list();
 			op_push(p, i2), op_push(p, op_int(c)), op_push(g, p);
@@ -326,7 +329,7 @@ static size_t stepin(const op_value *s, const uint8_t *device, const uint8_t *be
 		if (i == 6) {
 			int64_t n;
 			if (!v) continue;
-			op_value *ids = whole(op_get(s, "n"), &n) ? ids_in(v, key, n) : NULL;
+			op_value *ids = whole(op_get(s, "lamport"), &n) ? ids_in(v, key, n) : NULL;
 			if (!ids) return op_free(a), 0;
 			op_push(a, ids);
 			continue;
@@ -347,15 +350,23 @@ static size_t stepin(const op_value *s, const uint8_t *device, const uint8_t *be
 
 static void id_out(FILE *out, tp_in *in, const tp_step *s) {
 	uint64_t k, a, b;
+	int64_t x;
 	tp_span key;
-	tp_array(in, &k);
-	if (k == 2) {
-		tp_whole(in, &a), tp_whole(in, &b);
-		fputc('[', out), hex(out, s->device, 32), fprintf(out, ",%llu,%llu]", (unsigned long long)(s->n - a), (unsigned long long)b);
+	fputc('[', out);
+	if (*in->p >> 5 <= 1) {
+		tp_int(in, &x), hex(out, s->device, 32);
+		fprintf(out, ",%llu]", (unsigned long long)((int64_t)s->lamport - x));
 		return;
 	}
-	tp_bytes(in, 32, &key), tp_whole(in, &a), tp_whole(in, &b);
-	fputc('[', out), hex(out, key.p, 32), fprintf(out, ",%llu,%llu]", (unsigned long long)a, (unsigned long long)b);
+	tp_array(in, &k);
+	if (*in->p >> 5 == 0) {
+		tp_whole(in, &a), tp_whole(in, &b), hex(out, s->device, 32);
+		fprintf(out, ",%llu,%llu]", (unsigned long long)(s->lamport - a), (unsigned long long)b);
+		return;
+	}
+	tp_bytes(in, 32, &key), tp_whole(in, &a), hex(out, key.p, 32), fprintf(out, ",%llu", (unsigned long long)a);
+	if (k == 3) tp_whole(in, &b), fprintf(out, ",%llu", (unsigned long long)b);
+	fputc(']', out);
 }
 
 static void ids_out(FILE *out, const tp_step *s) {

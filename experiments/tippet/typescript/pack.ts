@@ -141,7 +141,7 @@ export function pack(bytes: readonly Uint8Array[], prior?: Prior): Packed {
 				: null
 		)))
 	}
-	// ids as written: typing (each after the one before, its own) is one run
+	// ids as written: typing alone (each after the one before, its own) is one run
 	if (rest.some((s) => s.ids)) p.push(runs(rest.map((s) => s.ids ? writtenIds(s) : null)))
 	return p
 }
@@ -212,10 +212,10 @@ export function unpack(p: unknown, prior?: Prior): Uint8Array[] {
 			s.on = readOn(prev.device, prev.n + 1, written)
 		}
 		if (ids[i] !== null) {
-			if (!s.on || !idsOf(device, prev.n + 1, s.patches as unknown[])(ids[i])) {
+			if (!s.on || !idsOf(device, s.lamport, s.patches as unknown[])(ids[i])) {
 				throw new TypeError("not a pack")
 			}
-			s.ids = readIds(prev.device, prev.n + 1, ids[i] as unknown[])
+			s.ids = readIds(prev.device, s.lamport, ids[i] as unknown[])
 		}
 		const b = encodeStep(s)
 		if ((bytes += b.length) > RUN) throw new RangeError("a run past its most bytes")

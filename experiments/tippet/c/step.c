@@ -109,14 +109,46 @@ int tp_on_next(const tp_step *s, size_t *at, const uint8_t **device, uint64_t *n
 	return 0;
 }
 
-// an element id as written: this device's [back, k], back below n, or another's [device, n, k]
-static int id_item(tp_in *in, const uint8_t *device, uint64_t n) {
+// an element id as written: this device's x (counter lamport - x, whole) or [x, k] (x whole, to
+// lamport); another's [device, c] or [device, lamport, k]
+static int id_item(tp_in *in, const uint8_t *device, uint64_t lamport) {
 	uint64_t k, a, b;
+	int64_t x;
 	tp_span key;
+	if (in->p < in->end && *in->p >> 5 <= 1) {
+		if (tp_int(in, &x)) return -1;
+		return x >= 0 ? ((uint64_t)x > lamport ? -1 : 0) : ((uint64_t)-x > TP_WHOLE - lamport ? -1 : 0);
+	}
 	if (tp_array(in, &k)) return -1;
-	if (k == 2) return tp_whole(in, &a) || a >= n || tp_whole(in, &b) ? -1 : 0;
-	if (k != 3 || tp_bytes(in, 32, &key) || !memcmp(key.p, device, 32)) return -1;
-	return tp_whole(in, &a) || a < 1 || tp_whole(in, &b) ? -1 : 0;
+	if (in->p < in->end && *in->p >> 5 == 0) {
+		return k != 2 || tp_whole(in, &a) || a > lamport || tp_whole(in, &b) ? -1 : 0;
+	}
+	if (k < 2 || k > 3 || tp_bytes(in, 32, &key) || !memcmp(key.p, device, 32) || tp_whole(in, &a)) return -1;
+	return k == 3 && tp_whole(in, &b) ? -1 : 0;
+}
+
+uint64_t tp_patch_made(const tp_patch *p) {
+	uint64_t made = 0, k;
+	if (!p->ranged || !p->value.p) return 0;
+	tp_in in = {p->value.p, p->value.p + p->value.n};
+	tp_span t;
+	if (*in.p >> 5 == 3 && !tp_text(&in, &t)) {
+		for (size_t i = 0; i < t.n; i++) made += (t.p[i] & 0xc0) != 0x80;
+	} else if (*in.p >> 5 == 4 && !tp_array(&in, &k)) made = k;
+	return made;
+}
+
+uint64_t tp_step_made(const tp_step *s) {
+	size_t at = 0;
+	uint64_t made = 0;
+	tp_patch p;
+	while (!tp_patch_next(s->patches, &at, &p)) made += tp_patch_made(&p);
+	return made;
+}
+
+uint64_t tp_step_last(const tp_step *s) {
+	uint64_t made = tp_step_made(s);
+	return s->lamport + (made ? made - 1 : 0);
 }
 
 // the ids: one per patch, null or [after, gone], only on a patch with a range
@@ -129,11 +161,11 @@ static int ids_item(tp_in *in, const tp_step *s, const uint8_t *device) {
 		if (tp_patch_next(s->patches, &at, &p)) return -1;
 		if (tp_null(in)) continue;
 		if (!p.ranged || tp_array(in, &two) || two != 2) return -1;
-		if (!tp_null(in) && id_item(in, device, s->n)) return -1;
+		if (!tp_null(in) && id_item(in, device, s->lamport)) return -1;
 		if (tp_array(in, &g)) return -1;
 		for (uint64_t j = 0; j < g; j++) {
 			uint64_t pair, count;
-			if (tp_array(in, &pair) || pair != 2 || id_item(in, device, s->n) || tp_whole(in, &count) ||
+			if (tp_array(in, &pair) || pair != 2 || id_item(in, device, s->lamport) || tp_whole(in, &count) ||
 				count < 1)
 				return -1;
 		}

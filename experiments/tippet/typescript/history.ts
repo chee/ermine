@@ -229,11 +229,7 @@ export function createHistory(o: {
 				)
 				if (!keep.some(Boolean)) continue
 				try {
-					applyStep(st, {
-						...s,
-						patches: s.patches.filter((_, j) => keep[j]),
-						...(s.ids && { ids: s.ids.filter((_, j) => keep[j]) }),
-					})
+					applyStep(st, s, { keep })
 				} catch {
 				}
 			}
@@ -404,7 +400,7 @@ export function createHistory(o: {
 			try {
 				ids = applyStep(
 					mine,
-					{ device: me!, n: log.count(me!) + 1, lamport: log.lamport + 1, patches },
+					{ device: me!, lamport: log.lamport + 1, patches },
 					{ undo, back, name: true },
 				).ids
 			} catch {

@@ -1273,7 +1273,7 @@ static void recorded(const pl_fact *f, void *ctx) {
 			ids = !el_step(&c, &mine->el, &mine->value, &er, (tp_span){o.data, o.length}, f->patches, np,
 				NULL, NULL, 1, &u, &bk, NULL, NULL, &named);
 			if (!ids) el_back_free(&h->mem, &bk), bk = (el_back){NULL, 0, 0}, unown(h, &h->entries[k]);
-			else if (el_named(named, np)) el_write(&idb, &c, named, np, (uint32_t)mei, er.n);
+			else if (el_named(named, np)) el_write(&idb, &c, named, np, (uint32_t)mei, er.lamport);
 		}
 	}
 	tp_write w = {{(const uint8_t *)node, strlen(node)}, {(const uint8_t *)part, strlen(part)},

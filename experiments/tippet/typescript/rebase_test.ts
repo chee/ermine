@@ -162,11 +162,10 @@ Deno.test("ids: a splice into an array makes the texts under it new: both sides 
 
 Deno.test("ids: an insert of another kind than its sequence doesn't apply, as apply refuses it", () => {
 	const st = fresh()
-	step(st, { device: "a", n: 1, lamport: 1, patches: [{ path: [], value: { t: "ab", l: [1] } }] })
+	step(st, { device: "a", lamport: 1, patches: [{ path: [], value: { t: "ab", l: [1] } }] })
 	assertThrows(() =>
 		step(st, {
 			device: "a",
-			n: 2,
 			lamport: 2,
 			patches: [{ path: ["t"], range: [1, 1], value: [1] }],
 		})
@@ -174,14 +173,12 @@ Deno.test("ids: an insert of another kind than its sequence doesn't apply, as ap
 	assertThrows(() =>
 		step(st, {
 			device: "a",
-			n: 2,
 			lamport: 2,
 			patches: [{ path: ["l"], range: [1, 1], value: "x" }],
 		})
 	)
 	step(st, {
 		device: "a",
-		n: 2,
 		lamport: 2,
 		patches: [{ path: ["t"], range: [1, 1], value: "x" }],
 	})

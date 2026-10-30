@@ -1,7 +1,17 @@
 // The log: every device's steps this device holds, stored as the signed runs they came in
 // (WIRE.md). It knows nothing of the graph, so galaxy can hold logs without one.
 import { decode, encode, type Value } from "@ermine/encoding/cbor"
-import { decodeStep, encodeStep, hashStep, hex, rest, same, type Step, unhex } from "./step.ts"
+import {
+	decodeStep,
+	encodeStep,
+	hashStep,
+	hex,
+	last,
+	rest,
+	same,
+	type Step,
+	unhex,
+} from "./step.ts"
 import { createSigner, type Signer, verify } from "./sign.ts"
 import { firstOf, pack, type Packed, type Prior, priorOf, RUN, stepsIn, unpack } from "./pack.ts"
 
@@ -167,7 +177,8 @@ export function createMemoryStore(): Store {
 const EVERY = 32, BYTES = 2048
 const JUMP = 2 ** 20
 
-type Feed = { count: number; last: Uint8Array | null; lamport: number; when: number }
+// end: the last lamport its newest step takes
+type Feed = { count: number; last: Uint8Array | null; lamport: number; when: number; end: number }
 type Chained = { steps: Step[]; last: Uint8Array | null }
 export type Taken = { added: number } | { refused: string }
 type Told = (device: string, steps: Step[], from?: unknown) => void
@@ -242,8 +253,9 @@ export function createLog(o: { store?: Store; writes?: boolean; seed?: Uint8Arra
 			last: c.last,
 			lamport: end.lamport,
 			when: end.when,
+			end: last(end),
 		})
-		for (const s of c.steps) lamport = Math.max(lamport, s.lamport)
+		for (const s of c.steps) lamport = Math.max(lamport, last(s))
 	}
 	function add(device: string, record: Uint8Array, c: Chained, from?: unknown, open?: boolean) {
 		const n = count(device), at: At = [device, n + 1, n + c.steps.length]
@@ -291,7 +303,13 @@ export function createLog(o: { store?: Store; writes?: boolean; seed?: Uint8Arra
 			return { refused: "chain" }
 		}
 		if (typeof c === "string") return { refused: c }
-		if (c.steps.some((s) => s.lamport > lamport + JUMP)) return { refused: "lamport" }
+		// none a jump past what was seen and the lamports the run's steps before it take; and one that
+		// says on past the lamports its device's step before took (its counters never used twice)
+		let most = lamport + JUMP, end = feeds.get(b.device)?.end ?? -1
+		for (const s of c.steps) {
+			if (s.lamport > most || (s.on && s.lamport <= end)) return { refused: "lamport" }
+			most += last(s) - s.lamport + 1, end = Math.max(end, last(s))
+		}
 		if (!c.steps.length) return { added: 0 }
 		if (!(await verify(b.device, c.last!, b.sig))) return { refused: "signature" }
 		const fresh = b.steps.slice(b.steps.length - c.steps.length), held = count(b.device)

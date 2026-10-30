@@ -72,6 +72,11 @@ typedef struct {
 	uint64_t from, to;
 } tp_patch;
 int tp_patch_next(tp_span patches, size_t *at, tp_patch *p);
+// how many elements a patch inserts, a step's patches all told, and the last lamport the step takes
+// (WIRE.md, lamport): a splice's string's code points or array's items
+uint64_t tp_patch_made(const tp_patch *p);
+uint64_t tp_step_made(const tp_step *s);
+uint64_t tp_step_last(const tp_step *s);
 int tp_on_next(const tp_step *s, size_t *at, const uint8_t **device, uint64_t *n);
 
 

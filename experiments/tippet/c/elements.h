@@ -1,6 +1,6 @@
-// The elements of an entry's strings and arrays (see typescript/elements.ts, WIRE.md ids): each
-// element its id, the step that made it, and whether it is gone. A sequence gets its elements at
-// the first splice that touches it. A splice by ids goes after its element and takes its gone
+// The elements of an entry's strings and arrays (see typescript/elements.ts, WIRE.md ids), held as
+// runs: elements one after another of one device, their counters one on, all gone or none. A
+// sequence gets its elements at the first splice that touches it. A splice by ids goes after its element and takes its gone
 // elements away wherever they are now; a splice by range goes as written. el_step applies a step's
 // patches to a value by position, all or none, keeping the elements, and gives what undoes both.
 // Memory goes through tp_mem; values are the graph's (malloc'd).
@@ -24,15 +24,17 @@ typedef struct {
 	const uint8_t *(*bytes)(void *self, uint32_t index);
 } el_ctx;
 
-// a step's place
+// a step's place (n: the caller's, not used here)
 typedef struct {
 	uint64_t lamport, n;
 	uint32_t device;
 } el_ref;
 
+// an element: made by a step, c its counter (born 0); or there since a step made its sequence new
+// (born 1), c that step's lamport, k its place
 typedef struct {
-	uint32_t device;
-	uint64_t n, k;
+	uint32_t device, born;
+	uint64_t c, k;
 } el_id;
 typedef struct {
 	el_id id;
@@ -45,12 +47,6 @@ typedef struct {
 	el_gone *gone;
 	size_t ngone;
 } el_anchor;
-
-typedef struct el_elem {
-	uint64_t lamport, n;
-	uint32_t device;
-	uint32_t k : 31, gone : 1;
-} el_elem;
 
 typedef struct el_list el_list;
 typedef struct {
@@ -73,7 +69,11 @@ typedef struct {
 	union {
 		struct {
 			el_list *list;
-			size_t j, m, *where, nwhere;
+			uint32_t device; // inserted: m from (device, c) on
+			int had; // the device's top before (had: it had one)
+			uint64_t c, m, top;
+			el_gone *taken; // taken away, as runs
+			size_t ntaken, roomtaken;
 		} splice;
 		struct {
 			el_born *born;
@@ -93,8 +93,8 @@ typedef struct {
 int el_read(const el_ctx *c, const tp_step *s, el_anchor **out);
 void el_anchors_free(const tp_mem *mem, el_anchor *a, size_t n);
 int el_named(const el_anchor *a, size_t n);
-// ids as written, by a step of device me, number n
-void el_write(tp_buf *b, const el_ctx *c, const el_anchor *a, size_t n, uint32_t me, uint64_t mine);
+// ids as written, by a step of device me at lamport
+void el_write(tp_buf *b, const el_ctx *c, const el_anchor *a, size_t n, uint32_t me, uint64_t lamport);
 
 // patches (their cbor, and as op patches) applied to *value in order, all or none. keep: 0 for a
 // patch to leave out (NULL: all). ids: per patch (NULL: none). name: splices by range are named
