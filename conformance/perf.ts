@@ -1,22 +1,15 @@
-// performance conformance: how an implementation's cost grows with size, not how fast it is.
+// Performance conformance: how an implementation's cost grows with size, not how fast it is.
 //   deno task perf [suite...] [--c] [--known <file>]
-// no suite: every one with a perf folder. --c: <package>/c/<suite>-harness; HARNESS: any other
-// command. --check, --leaks: refused.
-//
-// scenario <package>/conformance/<suite>-perf/NN-name.json: { title, sizes, bound, template }
+// A scenario <package>/conformance/<suite>-perf/NN-name.json is { title, sizes, bound, template }.
 //   bound: "1" | "log" | "n" | "n log n"
-//   template: conformance steps, expanded for each n; answers not compared
+//   template: conformance steps expanded for each n; answers are not compared
 //   { "for": v, "from": a, "to": b, "do": [..] }   in a list: `do` once per v in [a, b)
 //   { "map": { "for", "from"?, "to", "key", "value" } }   a map, one entry per v
 //   { "repeat": [s, count] }   s count times
 //   { "=": "e" }   the number e;  "{e}" in a string: e as text
 //   e: whole numbers, n, loop vars, + - * / % ( ) (a quotient must be whole)
-// size 0 is the baseline (start-up), subtracted; the template must work at n = 0.
-// each size: fresh process, least CPU time of RUNS. each step may grow SLACK times the bound's
-// growth; steps netting under QUICK_MS are not judged.
-//   ok | slow ("x15.8 for x4, wanted <= x10") | broken (crash, bad exit, bad answers, past CAP_MS)
-// known misses: <package>/{typescript,c}/perf.sadly_known_fail or --known, `<suite>-perf/<NN-name>
-// reason`; listed misses don't fail, listed passes are reported, unlisted misses fail.
+// Size 0 is the baseline and is subtracted. Each size runs in a fresh process; results: ok, slow, broken.
+// Known misses are listed in <package>/{typescript,c}/perf.sadly_known_fail (or --known).
 import { command, type Suite, suites } from "./typescript/ask.ts"
 import { line } from "./typescript/form.ts"
 import { ordered, read } from "./typescript/json.ts"
@@ -28,7 +21,6 @@ const FLOOR_MS = 10
 const QUICK_MS = 50
 const CAP_MS = 20000
 
-// ---- the template language
 type Vars = Record<string, number>
 const isMap = (x: unknown): x is Record<string, unknown> =>
 	x !== null && typeof x === "object" && !Array.isArray(x)
@@ -79,13 +71,11 @@ function expand(x: unknown, v: Vars): unknown {
 				return ordered(out)
 			}
 		}
-		// keys in the template's order (json.ts)
 		return ordered(keys.map((k) => [k, expand(x[k], v)]))
 	}
 	return x
 }
 
-// ---- running
 type Scenario = {
 	title: string
 	sizes: number[]
@@ -101,7 +91,6 @@ const known = args.includes("--known") ? args[args.indexOf("--known") + 1] : und
 const names = args.filter((a, i) => !a.startsWith("--") && args[i - 1] !== "--known")
 	.map((n) => n.replace(/-perf$/, ""))
 
-// the requests for size n as lines to send, and which of them should fail
 function lines(template: unknown[], n: number): { text: string; fails: boolean[] } {
 	const steps = expand(template, { n }) as Record<string, unknown>[]
 	const fails = steps.map((s) => isMap(s) && s.fails === true)
@@ -117,8 +106,6 @@ function lines(template: unknown[], n: number): { text: string; fails: boolean[]
 
 class Broken extends Error {}
 
-// the time of a run is its CPU time (user and system, as `time -p` reports): a busy machine slows
-// the clock, not the work. without /usr/bin/time, the clock's
 const timer = (() => {
 	try {
 		return Deno.statSync("/usr/bin/time").isFile
@@ -140,7 +127,6 @@ async function once(cmd: string[], input: Uint8Array, fails: boolean[]): Promise
 			stdout: "piped",
 			stderr: "piped",
 		}).spawn()
-		// a backstop only (the cap is on the work): the harness under `time` is killed first
 		stuck = setTimeout(() => {
 			timedOut = true
 			try {
@@ -182,7 +168,6 @@ async function once(cmd: string[], input: Uint8Array, fails: boolean[]): Promise
 	}
 	for (let i = 0; i < answers.length; i++) {
 		const a = answers[i]
-		// a cheap look first: only a line that mentions an error is parsed
 		const error = a.includes('"error"') && JSON.parse(a).error !== undefined
 		if (error && !fails[i]) throw new Broken(`step ${i}: an error: ${a.slice(0, 200)}`)
 		if (!error && fails[i]) throw new Broken(`step ${i}: no error`)

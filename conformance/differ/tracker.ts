@@ -1,12 +1,4 @@
-// tracker's streams: runs begun and ended (nested, interleaved), tracks mostly in the innermost,
-// adds, untracks, ends outside a run (tracker_harness_test.ts's mix, copied), with the reads of
-// the from and the readers of the to asked after every step.
-// wild: begin in a run, add in a run, odd names (NUL, lone surrogates, "__proto__", ""), requests
-// missing from, to or of
-// the model, each implementation on its own (invariant, below): tracker_harness.ts's rules read
-// plainly, with lists and indices: every answer predicted exactly (reads and readers in order,
-// duplicates too; {} for a write; a refusal for begin or add in a run, a field missing, an op
-// not known, the error's text free). a track outside a run is no rule: not followed from there
+// tracker's streams: runs begun and ended, tracks and untracks, checked against a model.
 import {
 	type Answer,
 	differs,
@@ -77,14 +69,12 @@ const generator: Generator = {
 generator.invariant = invariant
 export default generator
 
-// a link: from reads to; gen, the run that made or confirmed it
 type Link = { from: string; to: string; gen: number }
 
 function invariant(stream: Request[], answers: (Answer | undefined)[]): Promise<Violation[]> {
 	const out: Violation[] = []
 	const reads = new Map<string, Link[]>()
 	const readers = new Map<string, Link[]>()
-	// each open run: its cursor (the links before it are this run's, so far) and its gen
 	const runs = new Map<string, { at: number; gen: number }>()
 	let gen = 0
 	const of = <T>(m: Map<string, T[]>, k: string) => m.get(k) ?? (m.set(k, []), m.get(k)!)
@@ -101,7 +91,6 @@ function invariant(stream: Request[], answers: (Answer | undefined)[]): Promise<
 	for (let at = 0; at < stream.length; at++) {
 		const r = stream[at], a = answers[at]
 		if (a === undefined) break
-		// what it should answer: {} for a write; undefined: a refusal
 		let want: Answer | undefined = {}
 		const run = name(r.from) ? runs.get(r.from) : undefined
 		if ((r.op === "begin" || r.op === "end") && name(r.from)) {
@@ -137,7 +126,6 @@ function invariant(stream: Request[], answers: (Answer | undefined)[]): Promise<
 		} else if (r.op === "readers" && name(r.of)) {
 			want = { names: of(readers, r.of).map((l) => l.from) }
 		} else if (["begin", "end", "track", "add", "untrack", "reads", "readers"].includes(r.op)) {
-			// a field missing; one of no string is no rule
 			const fields = [r.from, r.to, r.of].filter((x) => x !== undefined)
 			if (!fields.every(name)) break
 			want = undefined

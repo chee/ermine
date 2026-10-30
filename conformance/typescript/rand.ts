@@ -1,5 +1,4 @@
-// a seeded generator for the fuzzers: n -> a whole number in 0 ... n - 1 (xorshift). a few dozen
-// seeds is a run (memory: fuzz runs small)
+// A seeded generator for the fuzzers: n -> a whole number in 0 ... n - 1 (xorshift).
 export function rand(seed: number): (n: number) => number {
 	let x = seed * 2654435761 >>> 0 || 1
 	return (n) => {

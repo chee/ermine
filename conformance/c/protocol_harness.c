@@ -6,17 +6,13 @@
 #include <stdlib.h>
 #include <string.h>
 
-// --- patches ---
 
-// a patch place; anything malformed is one no patch can be: a negative key (not-a-patch)
 static const op_key bad_key = {.type = OP_NUM_KEY, .n = -1};
 static int whole(const op_value *x, int64_t *out) {
 	if (x->type != OP_NUM || !isfinite(x->num) || x->num != floor(x->num) || x->num < -1e15) return 0;
-	// past 1e15: the largest, which no list or string reaches
 	*out = x->num > 1e15 ? INT64_MAX : (int64_t)x->num;
 	return 1;
 }
-// a key's number: past what a long holds, the largest (or the smallest)
 static int index_of(const op_value *x, long *out) {
 	int64_t n;
 	if (!whole(x, &n)) return 0;
@@ -63,7 +59,6 @@ void hh_patch(const op_value *m, op_patch *out) {
 	}
 }
 
-// --- headers ---
 
 const char *hh_bad_header(const op_value *header) {
 	const op_value *frame = header && header->type == OP_MAP ? op_get(header, "frame") : NULL;
@@ -75,7 +70,6 @@ const char *hh_bad_header(const op_value *header) {
 	return NULL;
 }
 
-// a list of infos, innermost first, as frames (the outermost made first, each under the next out)
 static ch_frame *frame_of(const op_value *list) {
 	ch_frame *up = NULL;
 	for (size_t i = list->count; i > 0; i--) {
@@ -108,7 +102,6 @@ nd_entry *hh_entry(const op_value *p) {
 	return e;
 }
 
-// --- writing ---
 
 static void put_target(FILE *out, const op_target *t) {
 	fputs("\"path\":[", out);

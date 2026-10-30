@@ -1,20 +1,5 @@
-// differential fuzzing: random request streams sent to every implementation of a suite, answers
-// diffed line by line; no reference, the odd one out is named by majority.
-//   deno task differ [suite...] [--seeds N] [--impl a,b,c] [--out dir] [--wild] [--budget N]
-//                    [--timeout s]
-// defaults: every suite with a generator (differ/<suite>.ts), 30 seeds, all impls, a temp --out,
-// 200 harness runs per shrink, 30 s per run. --wild: malformed and edge input too.
-//
-// implementations.json (or IMPLEMENTATIONS): { name: { suite: command } }.
-// a missing binary is skipped and said. a dashed name votes with its family (c-check with c).
-// compared as run.ts compares (maps by content, -0 not 0); string error codes compared, other
-// strings not; a non-zero exit, sanitizer report, non-JSON line or timeout is a finding.
-// a finding: first differing line, signed suite + odd one out + op + first differing field.
-// invariants (per implementation, agreeing or not): undo undoes (apply, invert, update, crow),
-// squish keeps meaning, models for update/crow/table/paths/tracker/node/scheduler (scheduler:
-// values from scratch, acts, sets, ticks, refusals exact; moments as invariants).
-// each signature: its first stream shrunk, printed with every answer, written to --out as a
-// scenario expecting the majority's answers.
+// Differential fuzzing: random request streams go to every implementation; the odd one out is named.
+//   deno task differ [suite...] [--seeds N] [--impl a,b] [--out dir] [--wild] [--budget N] [--timeout s]
 // deno-lint-ignore-file no-explicit-any
 import { line } from "./typescript/form.ts"
 import { ordered, read } from "./typescript/json.ts"
@@ -24,7 +9,6 @@ import { type Answer, differs, type Generator, type Request } from "./differ/kit
 const root = new URL("../", import.meta.url).pathname
 const here = new URL(".", import.meta.url).pathname
 
-// the arguments
 const valued = new Set(["--seeds", "--impl", "--out", "--budget", "--timeout"])
 const named: Record<string, string> = {}
 const positional: string[] = []
@@ -59,8 +43,6 @@ const chosen = positional.length ? positional : generators
 for (const s of chosen) if (!generators.includes(s)) throw new Error(`no generator for ${s}`)
 const now = new Map(suites().map((s) => [s.name, s.options.now === true]))
 
-// --- running a harness
-
 type Ran = { answers: (Answer | undefined)[]; failure?: { kind: string; why: string } }
 const sanitized = /runtime error:|Sanitizer/
 
@@ -76,7 +58,6 @@ function exists(cmd: string[]): string | undefined {
 }
 
 async function run(cmd: string[], requests: Request[]): Promise<Ran> {
-	// a request that cannot be written is the generator's fault, not the harness's
 	const sent = requests.map((r) => line(r)).join("\n") + "\n"
 	const child = new Deno.Command(cmd[0], {
 		args: cmd.slice(1),
@@ -124,8 +105,6 @@ async function run(cmd: string[], requests: Request[]): Promise<Ran> {
 	return { answers, failure }
 }
 
-// --- comparing
-
 const isMap = (x: unknown): x is Record<string, any> =>
 	x !== null && typeof x === "object" && !Array.isArray(x)
 const isCode = (s: string) => /^[A-Za-z][A-Za-z0-9-]*$/.test(s)
@@ -156,7 +135,6 @@ type Finding = {
 
 const top = (path: string) => path.match(/^\.([^.[]*)/)?.[1] ?? "(answer)"
 
-// what one stream's answers say: the first disagreement, failures, broken invariants
 async function findings(
 	suite: string,
 	gen: Generator,
@@ -196,7 +174,6 @@ async function findings(
 		})
 		break
 	}
-	// failures, one per kind: the implementations that had it
 	const failed = new Map<string, { impls: string[]; at: number; why: string }>()
 	for (const [impl, r] of ran) {
 		if (!r.failure) continue
@@ -205,7 +182,6 @@ async function findings(
 		if (f) f.impls.push(impl), f.at = Math.max(f.at, at)
 		else failed.set(r.failure.kind, { impls: [impl], at, why: `${impl}: ${r.failure.why}` })
 	}
-	// a disagreement that is only the failed ones' missing answers is the failure
 	if (
 		found[0]?.groups &&
 		found[0].groups.slice(1).every((g) =>
@@ -239,11 +215,7 @@ async function findings(
 	return { found, ran, window }
 }
 
-// --- shrinking
-
-// a map made again from its entries, in their order ("__proto__" a key like any, "2" where it was)
 const rebuild = (entries: [string, unknown][]) => ordered(entries)
-// x made a little smaller, every way: an element or key dropped, a string or number cut
 function* smaller(x: unknown, depth = 0): IterableIterator<unknown> {
 	if (Array.isArray(x)) {
 		for (let i = 0; i < x.length; i++) yield [...x.slice(0, i), ...x.slice(i + 1)]
@@ -286,7 +258,6 @@ async function shrink(
 		const { found } = await findings(suite, gen, s, asked)
 		return found.some((f) => f.signature === signature)
 	}
-	// delta debugging over the lines
 	let n = 2
 	while (stream.length >= 2 && runs < BUDGET) {
 		const size = Math.ceil(stream.length / n)
@@ -303,7 +274,6 @@ async function shrink(
 			n = Math.min(stream.length, n * 2)
 		}
 	}
-	// each line's values made smaller
 	for (let i = 0; i < stream.length && runs < BUDGET; i++) {
 		let better = true
 		while (better && runs < BUDGET) {
@@ -321,8 +291,6 @@ async function shrink(
 	return { stream, runs }
 }
 
-// --- the run
-
 async function pool<T>(xs: T[], size: number, f: (x: T) => Promise<void>) {
 	let next = 0
 	await Promise.all(
@@ -332,14 +300,12 @@ async function pool<T>(xs: T[], size: number, f: (x: T) => Promise<void>) {
 	)
 }
 
-// a whole number in the run's seconds, in an expect: "now"
 function nowed(x: unknown, w: [number, number]): unknown {
 	if (Array.isArray(x)) return x.map((y) => nowed(y, w))
 	if (isMap(x)) return rebuild(Object.entries(x).map(([k, v]) => [k, nowed(v, w)]))
 	return Number.isInteger(x) && (x as number) >= w[0] - 1 && (x as number) <= w[1] + 1 ? "now" : x
 }
 
-// indented, -0 written -0, a bigint as its digits
 const MINUS = "\u2063minus zero\u2063"
 const raw = (JSON as unknown as { rawJSON(s: string): unknown }).rawJSON
 const pretty = (x: unknown) =>

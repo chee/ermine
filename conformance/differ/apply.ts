@@ -1,14 +1,4 @@
-// apply's streams: a start value and a batch of patches (conformance/typescript/gen.ts), asked as one call,
-// then each patch alone on what the ones before it left, then each refused patch put in where it
-// fell; some again with cow: false. every line stands alone (nothing lasts between lines). half
-// the seeds have the generator's keys made tricky (kit.ts: "2", "01", "__proto__", "", NUL, ...).
-// wild: patches of no patch's shape, odd numbers as indices, requests missing their patches
-// the properties, each implementation on its own, of every apply or invert asked with a list of
-// patches that its apply takes or refuses with a code: the undo undoes (applied to the value after,
-// the value given back, maps by content) and the undo of the undo redoes (applied to the value
-// given, the value after); invert refuses as apply does; the batch split in two calls at every
-// place gives what it gives in one (the same value; refused: the same code, its
-// index counted in the half it fell in)
+// apply's streams: patch batches, each patch alone, and refused patches put back in; wild adds malformed ones.
 // deno-lint-ignore-file no-explicit-any
 import apply, { type Patch } from "@ermine/changeable/apply"
 import { batch, KEYS, start } from "../typescript/gen.ts"
@@ -36,7 +26,6 @@ export function request(op: string, value: unknown, ps: readonly unknown[]): Req
 	}
 }
 
-// what no patch is, and numbers at their edges
 export function wildPatches(pick: (n: number) => number): unknown[] {
 	const p = [[], ["s"], ["l", 0], ["m"]][pick(4)]
 	const bad: unknown[] = [
@@ -79,7 +68,6 @@ export function streams(op: "apply" | "invert"): Generator["streams"] {
 		for (const [k, p] of bad) {
 			out.push(request(op, first, [...good.slice(0, k), p, ...good.slice(k)]))
 		}
-		// the same in place, some of them
 		for (const r of out.slice()) if (pick(3) === 0) out.push({ ...r, cow: false })
 		if (o.wild) {
 			for (let i = 0; i < 6; i++) {
@@ -90,7 +78,6 @@ export function streams(op: "apply" | "invert"): Generator["streams"] {
 			out.push({ op, value: { "/": { number: "NaN" } }, patches: [] })
 			out.push({ op, value: -0, patches: [] }, { op, value: { a: -0, b: [-0] }, patches: [] })
 		}
-		// half the seeds: the keys made tricky ("2", "01", "__proto__", ...: kit.ts)
 		const names = tricky(seed, KEYS)
 		return [out.map((r) => rename(r, names))]
 	}
@@ -98,7 +85,6 @@ export function streams(op: "apply" | "invert"): Generator["streams"] {
 
 const isMap = (x: unknown): x is Record<string, any> =>
 	x !== null && typeof x === "object" && !Array.isArray(x)
-// a refusal with a code: { code, patch }
 const coded = (a: Answer | undefined) => isMap(a?.error) && typeof a.error.code === "string"
 
 export async function invariant(
@@ -108,7 +94,6 @@ export async function invariant(
 ): Promise<Violation[]> {
 	const out: Violation[] = []
 	const no = (kind: string, at: number, why: string) => out.push({ kind, at, why })
-	// a request of the case's: its value given (none: v undefined and not given) and cow
 	type Case = { at: number; r: Request; ps: unknown[] }
 	const asked = (c: Case, op: string, from: Answer | Request | undefined, ps: unknown) => ({
 		op,
@@ -122,7 +107,6 @@ export async function invariant(
 			cases.push({ at: i, r, ps: r.patches })
 		}
 	})
-	// the whole, its undo, each first part
 	const one = cases.flatMap((c) => [
 		asked(c, "apply", c.r, c.ps),
 		asked(c, "invert", c.r, c.ps),
@@ -136,7 +120,6 @@ export async function invariant(
 		whole.push(got1[n++]), undo.push(got1[n++])
 		firstOf.push(c.ps.slice(1).map(() => got1[n++]))
 	}
-	// the undo applied after, its undo; each second part
 	const two: Request[] = [], back: [number, string, number?][] = []
 	cases.forEach((c, j) => {
 		const w = whole[j], u = undo[j]

@@ -1,7 +1,4 @@
-// the loop of every suite's TypeScript harness: one JSON request per line in, one answer per line
-// out, in order. a suite's adapter (<package>/typescript/<suite>_harness.ts) is the function from
-// a request to its answer; what lasts between lines is the adapter's. a line that is not JSON, or
-// an adapter that throws, is answered { error: "text" } and the loop goes on
+// The loop of every TypeScript harness: one JSON request per line in, one answer per line out.
 import { line } from "./form.ts"
 import { parse } from "./json.ts"
 
@@ -32,6 +29,5 @@ export async function serve(answer: (request: Request) => Answer | Promise<Answe
 		}
 		if (lines) await out.write(encoder.encode(lines))
 	}
-	// a last line with no newline is a request too
 	if (buffer.trim() !== "") await out.write(encoder.encode((await one(buffer)) + "\n"))
 }

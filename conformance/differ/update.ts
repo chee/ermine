@@ -1,14 +1,4 @@
-// update's streams: an entry started on a random value
-// (conformance/typescript/gen.ts), then updates of a few patches each (some refused: they change nothing), an
-// entry asked after each; a put of a fresh list, map or string then spliced into in the same
-// update, now and then. headers given or not ({ time: 1, actor: "me" }), {} too.
-// the invariant, each implementation on its own: the entry's value is the start value with every
-// stored op's patches (each update's change.op.patches, as the entry right after it answered)
-// replayed in order, by that implementation's apply; asked at every entry. and a model (model,
-// below), each implementation on its own: refused as its apply refuses, changing nothing; the
-// change the header and patches given; the undo undoes.
-// wild: patches of no patch's shape, odd numbers, updates with no patches or patches not a list,
-// values that are no JSON form. half the seeds have the keys made tricky (kit.ts)
+// update's streams: updates of a few patches on an entry, checked against a model.
 // deno-lint-ignore-file no-explicit-any
 import apply, { ApplyError, type Patch } from "@ermine/changeable/apply"
 import { KEYS, patch, start } from "../typescript/gen.ts"
@@ -29,7 +19,6 @@ import {
 	type Violation,
 } from "./kit.ts"
 
-// a put of a fresh container, then spliced into, in one update
 function fresh(pick: (n: number) => number, v: unknown): Patch[] {
 	const isMap = (x: unknown) =>
 		x !== null && typeof x === "object" && !Array.isArray(x) && !ArrayBuffer.isView(x)
@@ -42,7 +31,6 @@ function fresh(pick: (n: number) => number, v: unknown): Patch[] {
 		if (pick(2)) ps.push({ path: where, range: [0, 0], value: [[pick(9)]] })
 		if (pick(2)) ps.push({ path: [...where, 0], value: pick(9) })
 	} else if (kind === 1) {
-		// a lone high, then a lone low after it: one pair from the second splice on
 		ps.push({ path: where, range: [0, 0], value: pick(2) ? "ab" : "\uD83D" })
 		if (pick(2)) {
 			ps.push({ path: where, range: [1, 1], value: pick(2) ? "\uDE00" : "\uDE00👍🏽\u0000" })
@@ -89,13 +77,10 @@ function streams(seed: number, o: { wild: boolean }): Request[][] {
 			if (!(e instanceof ApplyError)) throw e
 		}
 	}
-	// half the seeds: the keys made tricky (kit.ts)
 	const names = tricky(seed, [...KEYS, "k"])
 	return [out.map((r) => rename(r, names))]
 }
 
-// the start value with every stored op replayed, by the implementation's own apply, is the
-// entry's value
 async function invariant(
 	stream: Request[],
 	answers: (Answer | undefined)[],
@@ -149,7 +134,6 @@ const isMap = (x: unknown): x is Record<string, any> =>
 	x !== null && typeof x === "object" && !Array.isArray(x)
 const coded = (e: unknown): e is { code: string; patch: number } =>
 	isMap(e) && typeof e.code === "string"
-// a patch as the change keeps it: path, range, value, move, -0 as 0
 const zero = (k: unknown) => Object.is(k, -0) ? 0 : k
 const kept = (p: any) =>
 	isMap(p)
@@ -161,11 +145,6 @@ const kept = (p: any) =>
 		}
 		: p
 
-// the model: an update lands as its patches applied (by this implementation's apply) on what the
-// landed ones before it made, refused with apply's code and index (counted in the update) when that
-// refuses; a refused update changes nothing (the entry after is the entry before); a landed one's
-// change is its header (none: { time: 1, actor: "me" }) with its patches as given, and its undo,
-// applied to the entry after, gives the entry before (by content)
 async function model(
 	stream: Request[],
 	answers: (Answer | undefined)[],
@@ -196,7 +175,6 @@ async function model(
 	})
 	const from = (b: Request) => ("value" in b ? { value: b.value } : {})
 	const value = (e?: Answer) => (e && "value" in e ? { value: e.value } : {})
-	// each update on the landed before it; the landed before it alone; the undo on the entry after
 	const asked: Request[] = []
 	for (const c of cases) {
 		asked.push(

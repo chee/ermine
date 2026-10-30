@@ -1,9 +1,5 @@
-// the planted bugs: each a small exact mutation of one TS source file that breaks a real rule,
-// and the run that has to catch it. a plant is a finding when it survives: some rule nothing
-// checks. paths from the repo root. find must match exactly once, or the plant is stale.
-//   fuzz: an in-process fuzz test file (deno test), fixed seeds in the file
-//   differ: a differ suite, asked of impls (default typescript,c: a disagreement is a finding;
-//     typescript alone: only the per-implementation invariants and models can catch it)
+// The planted bugs: small exact mutations of one TS source file, each with the run that must catch it.
+// A plant that survives is a finding; `find` must match exactly once or the plant is stale.
 
 export type Catcher = { fuzz: string } | { differ: string; impls?: string }
 export type Plant = { name: string; file: string; find: string; replace: string; catcher: Catcher }
@@ -21,7 +17,6 @@ const fuzzPlacesUpdate = { fuzz: `places/fuzz/places_update_fuzz_test.ts` }
 const fuzzPlaces = { fuzz: `places/${T}/places_fuzz_test.ts` }
 
 export const plants: Plant[] = [
-	// scheduler
 	{
 		name: "scheduler: a result is never equal to the last (cutoff gone)",
 		file: sched,
@@ -58,7 +53,6 @@ export const plants: Plant[] = [
 		replace: "if (edge(x, q)) k = Math.max(k, rankOf(q))",
 		catcher: fuzzSched,
 	},
-	// tracker
 	{
 		name: "tracker: end keeps the reads a run did not read again",
 		file: `reactivity/${T}/tracker.ts`,
@@ -73,7 +67,6 @@ export const plants: Plant[] = [
 		replace: "f.reads = null",
 		catcher: { differ: "tracker" },
 	},
-	// paths
 	{
 		name: "paths: a range put marks from one element too late (off by one)",
 		file: `reactivity/${T}/paths.ts`,
@@ -88,7 +81,6 @@ export const plants: Plant[] = [
 		replace: 'typeof path[i] === "number" && path[i] > Q[i] + 1',
 		catcher: fuzzPaths,
 	},
-	// table
 	{
 		name: "table: a different entry at a taken key is replaced, not refused",
 		file: `graph/${T}/table.ts`,
@@ -110,7 +102,6 @@ export const plants: Plant[] = [
 		replace: "",
 		catcher: { differ: "table" },
 	},
-	// node / update
 	{
 		name: "update: the stored undo is empty (dropped undo)",
 		file: `changeable/${T}/update.ts`,
@@ -132,7 +123,6 @@ export const plants: Plant[] = [
 		replace: "op: { patches: ps.slice(1), undo }",
 		catcher: { differ: "update", impls: T },
 	},
-	// op
 	{
 		name: "apply: the last patch's undo is dropped from the undo",
 		file: `changeable/${T}/apply.ts`,
@@ -175,7 +165,6 @@ export const plants: Plant[] = [
 		replace: "\t\tfalse &&\n",
 		catcher: { differ: "squish" },
 	},
-	// crow
 	{
 		name: "crow: letGo no longer ends the root's in-place right",
 		file: `crow/${T}/crow.ts`,
@@ -197,7 +186,6 @@ export const plants: Plant[] = [
 		replace: "\t\tif (isTyped(v)) return\n\t\tif (Array.isArray(v)) {",
 		catcher: fuzzCrow,
 	},
-	// places
 	{
 		name: "places: a table event tells no spot",
 		file: `places/${T}/places.ts`,

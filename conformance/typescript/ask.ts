@@ -1,6 +1,4 @@
-// the side that asks: a suite's place in the repo, the harness to run it against, and a harness
-// run on a list of requests. HARNESS (a command, split at spaces) names another implementation
-// than the TypeScript one, such as a C binary
+// Finds a suite and runs a harness on requests; set HARNESS to test another implementation (such as C).
 // deno-lint-ignore-file no-explicit-any
 import { line } from "./form.ts"
 import { read } from "./json.ts"
@@ -10,48 +8,28 @@ const root = new URL("../../", import.meta.url).pathname
 
 export type Suite = {
 	name: string
-	// the package it is in, as a path from the root: protect
 	package: string
-	// its scenarios: <package>/conformance/<name>/
 	fixtures: string
-	// the adapter and binary it speaks with: <package>/typescript/<harness>_harness.ts,
-	// <package>/c/<harness>-harness. (the harness option of its suite.json: it shares another's)
 	typescript: string
 	binary: string
-	// suite.json: how its answers are compared (conformance/run.ts)
 	options: Options
 }
 export type Options = {
 	harness?: string
-	// the answer need only have the fields expect gives
 	loose?: boolean
-	// fields compared as sets
 	unordered?: string[]
-	// "now" in an expect: a whole number of seconds since 1970, as of the run
 	now?: boolean
-	// invert's answers are checked as undoing, not compared to expect (conformance/run.ts)
 	undoes?: boolean
-	// the scenarios run again, a request that has the field (or this op) given more fields
 	again?: { name: string; has?: string; op?: string; set: Record<string, unknown> }
-	// the suite runs only against the TypeScript harness: --c, --check and --leaks skip it (a loader
-	// importing JavaScript or instantiating wasm, which C has no way to)
 	typescript?: boolean
-	// what the TypeScript harness is allowed beyond reading: deno's flags (native: --allow-ffi, ...)
 	allow?: string[]
-	// requests that change nothing, asked around every refused step: the same before and after
-	// (conformance/run.ts)
 	reads?: Record<string, unknown>[]
-	// operating systems where a link holds no extended attribute (Linux): an expected link entry's attrs and id are left out
 	noLinkAttrs?: string[]
-	// what make builds before the suite runs, from the repository's root (native: its fixtures)
 	make?: string[]
 }
 
-// every suite there is: a folder in <package>/conformance/ with an adapter in <package>/typescript/
 export function suites(): Suite[] {
 	const found: Suite[] = []
-	// a package is a folder of the root deno.json's workspace with conformance/ in it, and any one
-	// folder further down
 	const packages: string[] = []
 	const has = (path: string) => {
 		try {
@@ -89,7 +67,6 @@ export function suites(): Suite[] {
 			} catch (e) {
 				if (!(e instanceof Deno.errors.NotFound)) throw e
 			}
-			// no suite.json is no options; a broken one is an error
 			if (text !== undefined) {
 				try {
 					options = JSON.parse(text)
@@ -103,7 +80,6 @@ export function suites(): Suite[] {
 			try {
 				Deno.statSync(typescript)
 			} catch {
-				// a suite implementations.json gives a TypeScript harness must have it; others have none yet
 				if (claimed.typescript?.[d.name] !== undefined) {
 					throw new Error(`suite ${d.name}: no TypeScript harness at ${typescript}`)
 				}
@@ -114,7 +90,6 @@ export function suites(): Suite[] {
 				package: path,
 				fixtures,
 				typescript,
-				// implementations.json's c binary, else beside the suite
 				binary: claimed.c?.[d.name] ?? `${pkg}/c/${shared}-harness`,
 				options,
 			})
@@ -129,25 +104,19 @@ export function suite(name: string): Suite {
 	return s
 }
 
-// the suite's TypeScript harness. reading allowed: an npm package may read its own files as it
-// loads (Subduction its wasm); the rest its suite.json allows
 export function reference(name: string): string[] {
 	const s = suite(name)
 	return ["deno", "run", "--quiet", "--allow-read", ...(s.options.allow ?? []), s.typescript]
 }
 
-// the harness to ask: HARNESS, else the suite's TypeScript one
 export function command(name: string): string[] {
 	const given = Deno.env.get("HARNESS")
 	return given ? given.split(" ") : reference(name)
 }
 
-// a sanitizer's report: undefined behaviour goes on after it (exit 0), so it is looked for
+// Sanitizers keep running after a report (exit 0), so their stderr is searched for one.
 const sanitized = /runtime error:|Sanitizer/
 
-// the requests, one per line (a string is sent as it is), and the answers, in order. the harness
-// failing (exiting with other than 0: a crash, a sanitizer, leaks.sh finding a leak) or a sanitizer
-// reporting is an error, its stderr in it, even after the last answer; otherwise stderr is passed on
 export async function ask(cmd: string[], requests: (Request | string)[]): Promise<Answer[]> {
 	const child = new Deno.Command(cmd[0], {
 		args: cmd.slice(1),
@@ -155,14 +124,12 @@ export async function ask(cmd: string[], requests: (Request | string)[]): Promis
 		stdout: "piped",
 		stderr: "piped",
 	}).spawn()
-	// the answers are read while the requests are written: a big run fills the pipe both ways
+	// Answers are read while requests are written, because a big run fills the pipe both ways.
 	const done = child.output()
 	const w = child.stdin.getWriter()
-	// as the scenario has them: -0 too, for the harness to read
 	const text =
 		requests.map((r) => typeof r === "string" ? r : line(r, undefined, true)).join("\n") +
 		"\n"
-	// a harness that dies early closes its stdin: its exit says why
 	try {
 		await w.write(new TextEncoder().encode(text))
 		await w.close()
@@ -174,6 +141,5 @@ export async function ask(cmd: string[], requests: (Request | string)[]): Promis
 	}
 	if (err) await Deno.stderr.write(stderr)
 	const lines = new TextDecoder().decode(stdout).trim().split("\n").filter((l) => l !== "")
-	// every key in its order (json.ts)
 	return lines.map((l) => read(l) as Answer)
 }

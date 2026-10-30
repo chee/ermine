@@ -1,7 +1,4 @@
-// set aside: the old scheduler's suite, of processes; its scenarios in ../core/scheduler/conformance. for ermine.ts
-// Runs the scenarios against a harness. SCHEDULER_HARNESS: the command for another
-// implementation (default: the reference). SCHEDULER_SKIP: scenario files it does not speak yet,
-// by commas. The protocol: harness.ts; programs as data: steps.ts; what is seen: normal.ts.
+// Runs the scheduler scenarios against a harness; SCHEDULER_HARNESS and SCHEDULER_SKIP choose and trim.
 import { assert, assertEquals } from "@std/assert"
 
 const here = new URL(".", import.meta.url).pathname

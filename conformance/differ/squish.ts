@@ -1,18 +1,4 @@
-// squish's streams: patches typed at a caret into a string and a list, keys set and moved, whole
-// puts, list elements by place (from squish_harness_test.ts's generator, copied), asked to squish,
-// encode, and decode (columns made by squish.ts's encode). each line stands alone.
-// wild: typed arrays and bytes typed, lone surrogates, -0 positions, a patch's fields out of order
-// or beyond its own, requests missing what they need. half the seeds have the keys made tricky
-// (kit.ts)
-// each list begins with a whole put of its start value, so it applies to nothing there. the
-// properties, each implementation on its own, of every squish of a list its apply takes: the
-// squished list applied is the list applied (by content: "changes meaning"); it is never longer;
-// and squishing one at a time is squishing all at once
-// (the squish of the first n - 1 with the nth added, squished, is the squish of the first n, for
-// every n: so the first n where pushing one more on what was squished differs); and squishing
-// twice is squishing once, for a list with no lone surrogate in it (fouling outlives the patch
-// that put the lone surrogate, when a put above kills it: squished again, more merges)
-// typing makes backspace runs that start past what was typed and reach back into it
+// squish's streams: patches typed into a string and a list, squished, encoded and decoded.
 import type { Patch } from "@ermine/changeable/apply"
 import { encode } from "@ermine/changeable/squish"
 import { apply, at, type V } from "../../changeable/typescript/squish_model.ts"
@@ -51,7 +37,6 @@ function patches(pick: (n: number) => number, content: V, count: number): Patch[
 		const s = at(content, path) as string | unknown[]
 		return { path, len: typeof s === "string" ? chars(s) : s.length, text: typeof s === "string" }
 	}
-	// a backspace run going on: how many more, and where
 	let run = 0, runPath = ["t"]
 	for (let i = 0; i < count; i++) {
 		const k = pick(24)
@@ -74,7 +59,6 @@ function patches(pick: (n: number) => number, content: V, count: number): Patch[
 				const value = many()
 				p = { path: s.path, range: [where, where], value }
 				caret = where + (typeof value === "string" ? chars(value) : value.length)
-				// a backspace run from past its end
 				if (pick(4) === 0) run = 2 + pick(5), runPath = s.path, caret += 2 + pick(2)
 			} else if (kind < 5 && s.len > 0) {
 				const back = pick(2) === 0 && where > 0
@@ -135,14 +119,12 @@ function patches(pick: (n: number) => number, content: V, count: number): Patch[
 	return out
 }
 
-// a lone surrogate anywhere in a value: strings, list elements, map values
 function lone(v: unknown): boolean {
 	if (typeof v === "string") return !v.isWellFormed()
 	if (v === null || typeof v !== "object" || ArrayBuffer.isView(v)) return false
 	return (Array.isArray(v) ? v : Object.values(v)).some(lone)
 }
 
-// typed at a caret, of a kind squish may not join
 function wild(pick: (n: number) => number): unknown[] {
 	const out: unknown[] = []
 	let at = 0
@@ -169,7 +151,6 @@ const generator: Generator = {
 	streams(seed, o) {
 		const { pick } = picker(seed)
 		const out: Request[] = []
-		// half the seeds: the keys made tricky (kit.ts)
 		const names = tricky(seed, ["a", "b", "c", "d", "k0", "k1", "k2", "x", "y", "z"])
 		for (let i = 0; i < 4; i++) {
 			const first = start(pick)
@@ -218,7 +199,6 @@ const generator: Generator = {
 				no("squish changes meaning", c.at, `${show(got)}, not ${show(want)}`)
 			}
 		})
-		// one at a time: the squish of each first n; then of the first n - 1's with the nth
 		const firstN = await ask(
 			"squish",
 			cases.flatMap((c) =>
@@ -255,7 +235,6 @@ const generator: Generator = {
 				}
 			})
 		})
-		// twice: what was squished, squished again, is itself
 		const twice = cases.filter((c) => !c.ps.some((p) => lone((p as Patch).value)))
 		const again = await ask("squish", twice.map((c) => ({ op: "squish", patches: c.sq })))
 		twice.forEach((c, j) => {

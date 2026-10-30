@@ -1,10 +1,4 @@
-// programs as data, for the scheduler's conformance: a map of parts, each a list of steps:
-// {setup}, {compute}, or {compute, effect}. this one gives scheduler.ts their code.
-//
-// a step: a map whose "do" says what it is; fields are expressions, evaluated first; "var" names
-// where its answer goes. each part, handler call and cleanup has its own variables; a cleanup or
-// $steps function starts with a copy of its maker's.
-//
+// Programs as data: a map of parts, each a list of steps; fields are expressions, "var" names the answer.
 //   {"do":"let","var":v,"value":e}
 //   {"do":"return","value":e?}                    ends the part with e (none: null)
 //   {"do":"pending"}                              ends a compute pending
@@ -15,7 +9,6 @@
 //   {"do":"start","address":e,"program":e,...}    name, id; var: the pid
 //   {"do":"call","address":e,"args":e?}           var: the handler's answer
 //   {"do":op,...,"peep":b?}                       op: an interface's (normal.ts)
-//
 // expression: any JSON, evaluated member by member, except a one-key map starting with "$":
 //   {"$var":v}          a variable; none: null
 //   {"$given":f}        value, previous, args, self, name, killed
@@ -152,7 +145,6 @@ function steps(list: unknown[], given: Given, vars: Vars, log: Log) {
 	}
 }
 
-// a part: its steps run; what it returns, or pending
 function part(list: unknown[], given: Given, vars: Vars, log: Log): unknown {
 	try {
 		steps(list, given, vars, log)
@@ -164,7 +156,6 @@ function part(list: unknown[], given: Given, vars: Vars, log: Log): unknown {
 	}
 }
 
-// a program's code; a path (a list) is a path, as it is
 export function program(p: unknown, log: Log): unknown {
 	if (Array.isArray(p)) return p
 	return load(p, log)

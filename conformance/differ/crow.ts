@@ -1,14 +1,4 @@
-// crow's streams: an entry started on a random value (crow/typescript/random_harness.ts), then
-// writes of a few patches (some refused), unwrites, reads, keeps (wrapped, handed, through a
-// scheduler), marks and sames, held and value asked between; names held now and then.
-// the invariants, each implementation on its own: the value (asked by value or read) is the start
-// value with every landed write replayed in order by that implementation's apply (a write's
-// patches as sent; an unwrite's, the undo the write before it answered); and what a write, an
-// unwrite or a read held is, when asked, what it was then (the patches' values as sent, the undo's
-// values as answered, the value read). and a model (model, below): refused as its apply refuses,
-// nothing-written as nothing landed, the undo undoes.
-// wild: patches of no patch's shape, values that are no JSON form, an unwrite with nothing
-// written, odd paths for mark and keep. half the seeds have the keys made tricky (kit.ts)
+// crow's streams: writes, unwrites, reads and marks on an entry, checked against a model; wild adds odd input.
 import apply, { ApplyError, type Patch } from "@ermine/changeable/apply"
 import { isMap, made, patch, paths } from "../../crow/typescript/random_harness.ts"
 import { wildPatches } from "./apply.ts"
@@ -87,12 +77,10 @@ function streams(seed: number, o: { wild: boolean }): Request[][] {
 		}
 	}
 	out.push({ op: "value" })
-	// half the seeds: the keys made tricky (kit.ts)
 	const names = tricky(seed, ["a", "b", "c", "d", "zz"])
 	return [out.map((r) => rename(r, names))]
 }
 
-// the value is the start with every landed write replayed; what was held stays what it was
 async function invariant(
 	stream: Request[],
 	answers: (Answer | undefined)[],
@@ -182,11 +170,6 @@ async function invariant(
 	return firsts([...out, ...await model(stream, answers, ask)])
 }
 
-// the model: a write (an unwrite: the last landed write's undo, written) lands as its patches
-// applied (by this implementation's apply) on what the landed ones before it made, refused with
-// apply's code and index (counted in the write) when that refuses; an unwrite with nothing landed
-// since start is nothing-written; a landed write's undo, applied after it, gives what was before
-// (by content)
 async function model(
 	stream: Request[],
 	answers: (Answer | undefined)[],
@@ -231,7 +214,6 @@ async function model(
 	const got = await ask("apply", asked)
 	cases.forEach((c, j) => {
 		const whole = got[3 * j], was = got[3 * j + 1], undone = got[3 * j + 2]
-		// not understood: no code
 		if (c.a.error !== undefined && typeof c.a.patch !== "number") return
 		if (!whole || (whole.error !== undefined && typeof whole.error?.code !== "string")) return
 		if (whole.error !== undefined) {
