@@ -1,11 +1,9 @@
-// what the fuzz tests share: seeded numbers, random values and patches on them, and a comparison
-// that keeps lone surrogates and typed arrays (key order when asked). seeded and deterministic: a seed is a
-// run. a few dozen seeds per property (fuzz runs small)
+// What the fuzz tests share: seeded random values and patches, and a comparison that keeps lone surrogates.
 import apply, { ApplyError, type Key, type Patch } from "@ermine/changeable/apply"
 
 export type Pick = (n: number) => number
 
-// xorshift (an LCG's low bits repeat, so % k of one is patterned)
+// xorshift, because an LCG's low bits repeat.
 export function rand(seed: number) {
 	let x = seed * 2654435761 >>> 0 || 1
 	const pick: Pick = (n) => {
@@ -18,7 +16,6 @@ export function rand(seed: number) {
 	return { pick, one }
 }
 
-// string parts: ASCII, BMP, pairs, lone halves of both kinds
 export const PARTS = ["a", "b", "xy", "é", "中", "😀", "\uD83D", "\uDE00", "\uD800", "\uDC00"]
 export const KEYS = ["a", "b", "c", "__proto__"]
 export const KINDS = [Int8Array, Int16Array, Float64Array, BigInt64Array]
@@ -27,10 +24,8 @@ export const isMap = (v: unknown): v is Record<string, unknown> =>
 	v !== null && typeof v === "object" && !Array.isArray(v) && !ArrayBuffer.isView(v)
 export const view = (v: unknown): v is ArrayLike<unknown> & object =>
 	ArrayBuffer.isView(v) && !(v instanceof DataView)
-// what apply splices: strings, lists, typed arrays (bytes are whole)
 export const isSeq = (v: unknown) =>
 	typeof v === "string" || Array.isArray(v) || view(v) && !(v instanceof Uint8Array)
-// positions, as apply counts them: code points
 export const len = (v: unknown) =>
 	typeof v === "string" ? Array.from(v).length : (v as unknown[]).length
 
@@ -42,7 +37,6 @@ export function elements(pick: Pick, kind: (typeof KINDS)[number], n: number) {
 	const make = kind as unknown as new (xs: unknown[]) => ArrayLike<unknown>
 	return new make(kind === BigInt64Array ? xs.map(BigInt) : xs)
 }
-// a value: numbers, strings, typed arrays, bytes, null/true/false/-0, lists, maps
 export function made(pick: Pick, depth: number): unknown {
 	switch (pick(depth > 0 ? 9 : 6)) {
 		case 0:
@@ -66,7 +60,6 @@ export function made(pick: Pick, depth: number): unknown {
 	}
 }
 
-// every path in v and what is there, [] first, up to depth 4
 export function places(v: unknown, path: Key[] = [], out: [Key[], unknown][] = []) {
 	out.push([path, v])
 	if (path.length >= 4) return out
@@ -84,7 +77,6 @@ function filling(pick: Pick, s: unknown): unknown {
 	return elements(pick, s!.constructor as (typeof KINDS)[number], pick(3))
 }
 
-// a patch on v: of every kind, many valid, some not
 export function patch(pick: Pick, v: unknown): Patch {
 	const all = v === undefined ? [] : places(v)
 	const any = () => all.length ? all[pick(all.length)] : [[], undefined] as [Key[], unknown]
@@ -120,7 +112,6 @@ export function patch(pick: Pick, v: unknown): Patch {
 			return { ...gap(), move: { path: any()[0] } }
 		case 9:
 		case 10: {
-			// a span within its sequence
 			const [f, s] = seq()
 			const n = isSeq(s) ? len(s) : 0, r = span(pick, n)
 			const g = pick(n - (r[1] - r[0]) + 1)
@@ -135,7 +126,6 @@ export function patch(pick: Pick, v: unknown): Patch {
 		}
 		case 12:
 		case 13: {
-			// a value into a sequence of its kind
 			const [p, s] = seq()
 			const fits = all.filter(([q, x]) =>
 				q.length > 0 && (Array.isArray(s) ||
@@ -155,7 +145,6 @@ export function patch(pick: Pick, v: unknown): Patch {
 			return { path: [], value: made(pick, 2) }
 		case 16:
 		case 17: {
-			// a span or an item of a list, landed in that list: on an item (or deeper), or in a span
 			const lists = all.filter(([, x]) => Array.isArray(x))
 			if (!lists.length) return { path: any()[0], move: { path: any()[0] } }
 			const [f, l] = lists[pick(lists.length)]
@@ -168,22 +157,18 @@ export function patch(pick: Pick, v: unknown): Patch {
 			return { ...to, move: take }
 		}
 		default: {
-			// what is not there, or a key of the wrong kind
 			const [p] = any()
 			return { path: [...p, [["x"], [0], [9], ["a", "b"]][pick(4)]].flat(), value: 1 }
 		}
 	}
 }
 
-// a start value: mostly a map of each kind
 export function start(pick: Pick): unknown {
 	return pick(8)
 		? { s: text(pick, 8), l: made(pick, 2), t: elements(pick, Int16Array, 3), m: made(pick, 2) }
 		: made(pick, 3)
 }
 
-// patches from start, each valid after the ones before it, and some refused ones with where they
-// fell
 export function batch(pick: Pick, from: unknown, most = 24) {
 	let v = from
 	const good: Patch[] = [], bad: [number, Patch][] = []
@@ -200,9 +185,6 @@ export function batch(pick: Pick, from: unknown, most = 24) {
 	return { good, bad, end: v }
 }
 
-// where a and b differ ("": nowhere). lists, strings and typed arrays element for element; maps
-// by content (a map's key order is not part of its value: apply.ts). order: in key order too, for
-// telling a value changed in place after it was handed out
 export function differ(a: unknown, b: unknown, order = false, at = "$"): string {
 	if (typeof a === "string" || typeof b === "string") return a === b ? "" : `${at}: string`
 	if (Array.isArray(a) || Array.isArray(b)) {
@@ -235,7 +217,6 @@ export function differ(a: unknown, b: unknown, order = false, at = "$"): string 
 	return Object.is(a, b) ? "" : `${at}: ${String(a)} ≠ ${String(b)}`
 }
 
-// a copy that keeps lone surrogates, typed arrays, symbols, key order ("__proto__" a key too)
 export function snap<T>(v: T): T {
 	if (Array.isArray(v)) return v.map(snap) as T
 	if (view(v)) return (v as unknown as Int8Array).slice() as T

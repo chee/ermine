@@ -1,28 +1,4 @@
-// scheduler's streams: a few roots and scopes; computes over the host's keys and earlier
-// computes (sums, mods, choices, a throw at one value; some with a cleanup, a set, equal "json",
-// a declared key; some waiting on a promise, then reading; some making a child by name in their
-// runs, in one of two codes or not at all, so it is claimed, kept or goes); effects over them logging their value
-// and the previous, some early, some writing a sink key only a sink compute reads (so no loop
-// is endless); then steps: host writes and changed, promises resolved and rejected, computations
-// and scopes disposed, new ones made, cleanups, runs in a scope, a pulse after most; moments
-// (with reads now and then), log, get, tick, started, forgotten and current asked between.
-// wild: writes of keys that are no strings, mods by 0, sums of strings, a write naming no scope,
-// -0 results under equal "json", run() of a pending. half the seeds have the host's and the sinks'
-// keys made tricky (kit.ts: "2", "01", "__proto__", "", NUL, ...). strings: values of a few keys
-// (emoji, lone halves, NUL), chosen by computes and acted on; computes' names end in such
-// the model, each implementation on its own (invariant, below): the harness's rules and the
-// scheduler fuzz's properties (scheduler_fuzz_test.ts) on what each request answers.
-//   predicted exactly: refusals (no scope, gone, name taken, no promise, keys, sums, mods by 0, a
-//   write naming no computation writes nothing); every get and run() answer (each live compute's
-//   value from scratch over the host's, a failed one keeping what it had, a waiting one what its
-//   promise landed); current; ticks (exact till a pulse, then rising); each logging effect's acts
-//   (once per pulse at most, exactly when its value is not the one acted on last, with that one
-//   as previous: no glitch reaches an act); each set's last value; the cleanups a dispose runs
-//   checked: a set never given the value it had, an act never on the value acted on; moments: runs
-//   counted on by one, each started for a reason (made due, or its last stopped), ends and acts
-//   of runs started, no compute acts, no loop, nothing of one gone; asked again with nothing done
-//   since (a pulse with nothing due), moments, log, started and forgotten are empty
-//   not followed: sinks, children, early effects till the log is asked, ranks and order
+// scheduler's streams: roots, scopes and computes driven by steps, checked against a model of the harness.
 // deno-lint-ignore-file no-explicit-any
 import { ordered } from "../typescript/json.ts"
 import { line } from "../typescript/form.ts"
@@ -39,9 +15,7 @@ import {
 
 const HOST = ["h0", "h1", "h2", "h3"]
 const SINKS = ["x0", "x1"]
-// keys holding strings: read by eq, if and effects, never summed
 const STRS = ["t0", "t1"]
-// string parts: ASCII, BMP, pairs, a pair and a modifier, lone halves (a high then a low: a pair), NUL
 const PARTS = ["a", "xy", "é", "中", "😀", "👍🏽", "\uD83D", "\uDE00", "\u0000"]
 
 const generator: Generator = {
@@ -83,7 +57,6 @@ const generator: Generator = {
 			const name = `c${computes++}${one(["", "é", "\uD83D", "\uDE00", "\u0000"])}`
 			const k = pick(11)
 			if (k === 10) {
-				// a string chosen, its key among the strings'
 				const test = { eq: [{ read: one(strs) }, { quote: pick(2) ? text() : one(PARTS) }] }
 				const f = { if: [test, { read: one(strs) }, pick(2) ? { read: one(strs) } : text()] }
 				const r: Request = { op: "compute", name, scope, f, to: name }
@@ -101,7 +74,6 @@ const generator: Generator = {
 			} else if (k === 1) f = { do: [{ cleanup: [null, { log: ["undo", name] }] }, f] }
 			else if (k === 2) f = { do: [{ log: ["run", name] }, f] }
 			else if (k === 3) {
-				// a child by name, made again (claimed) by each run, in one of two codes, or not made
 				const kid = `${name}k`
 				const made = (n: number) =>
 					pick(2)
@@ -124,7 +96,6 @@ const generator: Generator = {
 		}
 		const effect = (scope: string) => {
 			const name = `e${effects++}`
-			// on a string: logs, never writes a sink (a sink sums)
 			const words = pick(4) === 0
 			const f = words ? { read: one(strs) } : { sum: Array.from({ length: 1 + pick(2) }, read) }
 			const act = !words && pick(4) === 0
@@ -139,7 +110,6 @@ const generator: Generator = {
 		const living = (xs: string[]) => xs.filter((x) => alive.has(x))
 		for (let i = 2 + pick(5); i > 0; i--) compute(one(scopes))
 		for (let i = 1 + pick(3); i > 0; i--) effect(one(scopes))
-		// sinks: read by no effect
 		for (const x of SINKS) {
 			out.push({
 				op: "compute",
@@ -237,7 +207,6 @@ const generator: Generator = {
 		for (const c of [...keys, ...strs].filter((x) => x.startsWith("c"))) {
 			out.push({ op: "get", key: c })
 		}
-		// half the seeds: the host's and the sinks' keys made tricky (kit.ts), wherever named
 		const names = tricky(seed, [...HOST, ...SINKS, ...STRS])
 		return [names.size ? out.map((r) => renamed(r, names) as Request) : out]
 	},
@@ -245,7 +214,6 @@ const generator: Generator = {
 generator.invariant = invariant
 export default generator
 
-// every string that is one of the names, as a key or a value, renamed; maps in their order
 function renamed(x: unknown, names: Map<string, string>): unknown {
 	if (typeof x === "string") return names.get(x) ?? x
 	if (Array.isArray(x)) return x.map((v) => renamed(v, names))
@@ -254,65 +222,44 @@ function renamed(x: unknown, names: Map<string, string>): unknown {
 	return ordered(Object.keys(o).map((k) => [names.get(k) ?? k, renamed(o[k], names)]))
 }
 
-// --- the model: one implementation's answers on their own, against the harness's rules
-// (scheduler_harness.ts) and the scheduler fuzz's properties (scheduler_fuzz_test.ts)
-
-// a key whose value the model cannot know (a sink; what a compute it cannot follow gives)
 const UNKNOWN = Symbol("unknown")
-// nothing yet (no act, no set)
 const NONE = Symbol("none")
-// thrown in an evaluation: it fails (a throw, a sum of no number, a mod by 0); the model cannot
-// follow it; it gives no value (PENDING, a promise)
 class Fail {}
 class Unknown {}
 class Pending {}
 
 type Result = { ok: true; v: unknown } | { ok: false; unknown: boolean }
-// a scope or computation by its name, as the model has it
 type Thing = {
 	name: string
 	kind: "scope" | "compute" | "effect"
 	parent?: Thing
 	alive: boolean
-	// the request that made it; its results compared as it says
 	r: Request
 	same: (a: unknown, b: unknown) => boolean
-	// a compute waiting on a promise: made, ran (the promise there), settled, landed
 	wait?: { p: string; e?: unknown; state: "made" | "ran" | "settled" | "landed"; result?: Result }
-	// a compute whose set logs ["set", name, value]: the value it set last, modelled and logged
 	sets: boolean
 	setv: unknown
 	setLast: unknown
-	// an effect whose act logs [name, value, previous]: the value acted on last as modelled
-	// (known while sync), the acts due since the log was asked, the last act logged
 	logs: boolean
 	acted: unknown
 	sync: boolean
 	want: unknown[][]
 	actLast: unknown
-	// a plain scope's cleanups, what each logs
 	cleanups: unknown[]
-	// the request it went at
 	goneAt?: number
 }
-// as the moments tell a computation: runs started, made due since, how its last run ended
 type Told = { started: number; due: boolean; ended?: string }
 
 const isMap = (x: unknown): x is Record<string, any> =>
 	x !== null && typeof x === "object" && !Array.isArray(x)
 const json = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
-// the operations that only ask
 const ASKS = new Set(["get", "log", "moments", "tick", "started", "forgotten", "current"])
 
 type Ctx = {
 	look: (key: string) => unknown
-	// run(): a write kept at once; elsewhere a write is not followed
 	write?: (key: string, v: unknown) => void
-	// a computation of that name there (a write's third)
 	known: (name: string) => boolean
 }
-// an expression as the harness evaluates it (scheduler_harness.ts), its effects aside: a log
-// gives its value, a child made or a cleanup gives null
 function ev(e: unknown, c: Ctx): unknown {
 	if (e === null || typeof e !== "object") return e
 	if (Array.isArray(e)) return e.map((x) => ev(x, c))
@@ -322,15 +269,12 @@ function ev(e: unknown, c: Ctx): unknown {
 	const unknown = (): never => {
 		throw new Unknown()
 	}
-	// a map of no key or an unknown form: the harness's error; of more keys: not followed
 	const keys = Object.keys(e)
 	if (keys.length !== 1) return keys.length ? unknown() : fail()
 	const arg = (e as Record<string, unknown>)[keys[0]]
 	const a = Array.isArray(arg) ? arg : []
-	// a form's arguments: a list of n (of n to m), else not followed (shrunk out of shape)
 	const args = (n: number, m = n) =>
 		Array.isArray(arg) && arg.length >= n && arg.length <= m ? arg : unknown()
-	// null is 0; a sum of anything else fails (109), a mod is not followed
 	const num = (v: unknown, or: () => never) => v === null ? 0 : typeof v === "number" ? v : or()
 	switch (keys[0]) {
 		case "read": {
@@ -362,7 +306,6 @@ function ev(e: unknown, c: Ctx): unknown {
 			if (!c.write) return unknown()
 			const k = ev(a[0], c), v = ev(a[1], c)
 			if (typeof k !== "string") return unknown()
-			// a computation not there: nothing written (105)
 			if (a.length > 2 && a[2] !== null && a[2] !== "open" && !c.known(a[2] as string)) fail()
 			c.write(k, v)
 			return v
@@ -378,7 +321,6 @@ function ev(e: unknown, c: Ctx): unknown {
 			throw new Pending()
 		case "quote":
 			return arg
-		// a child made: one with no name is an error
 		case "compute":
 		case "effect":
 			return typeof args(1, 4)[0] === "string" ? null : fail()
@@ -409,7 +351,6 @@ function attempt(f: () => unknown): Result {
 	}
 }
 
-// a request as the generator makes them, its fields there and of their kinds
 const info = (x: unknown) =>
 	typeof x === "object" && x !== null && !Array.isArray(x) && Object.keys(x).length > 0
 const text = (x: unknown) => typeof x === "string"
@@ -443,8 +384,6 @@ function shaped(r: Request): boolean {
 	}
 }
 
-// one implementation's answers, request by request, against a model of the harness: what it
-// cannot follow it stops at (lost) or leaves unchecked (UNKNOWN, an effect out of sync)
 function invariant(
 	stream: Request[],
 	answers: (Answer | undefined)[],
@@ -457,18 +396,14 @@ function invariant(
 	const store = new Map<string, unknown>()
 	const promises = new Set<string>()
 	let lost = false
-	// the latest tick; exact, or a least (a pulse takes ticks the model does not count)
 	let tick = 0, exact = true
-	// asked again with nothing done since: nothing to tell
 	const quiet: Record<string, boolean> = {
 		moments: true,
 		log: true,
 		started: true,
 		forgotten: true,
 	}
-	// done since the last pulse: the next one runs something, maybe
 	let dirty = false
-	// cleanups run since the log was asked; some not followed
 	let fired: unknown[] = []
 	let hidden = false
 	let asked = -1
@@ -502,7 +437,6 @@ function invariant(
 	}
 
 	function pulse() {
-		// the settled land first; a waiting compute made runs once, its promise there
 		for (const t of things.values()) {
 			if (t.wait?.state === "settled") {
 				t.wait.state = "landed"
@@ -510,7 +444,6 @@ function invariant(
 			}
 		}
 		for (const t of things.values()) if (t.wait?.state === "made" && t.alive) t.wait.state = "ran"
-		// every live compute from scratch: a failed one keeps the value it had
 		const writers = new Map<string, Thing>()
 		for (const t of things.values()) {
 			if (t.kind === "compute" && t.alive && !t.wait && typeof t.r.to === "string") {
@@ -534,8 +467,6 @@ function invariant(
 			return value(k)
 		}
 		for (const t of writers.values()) keep(t, result(t))
-		// then the effects, over the values landed: each acts once, when its value is not the one
-		// it acted on last
 		for (const t of things.values()) {
 			if (t.kind !== "effect" || !t.alive || !t.logs) continue
 			const r = attempt(() => ev(t.r.f, { look: value, known }))
@@ -549,7 +480,6 @@ function invariant(
 		}
 	}
 
-	// a refusal as the model has it: when not, said once and the model stops
 	const refused = (a: Answer, want: boolean, why: string) => {
 		const got = typeof a.error === "string"
 		if (got === want) return
@@ -605,7 +535,6 @@ function invariant(
 	for (at = 0; at < stream.length && !lost; at++) {
 		const r = stream[at], a = answers[at]
 		if (!isMap(a)) break
-		// a request out of the generator's shape (shrunk so): not followed from here
 		if (!shaped(r)) break
 		if (!ASKS.has(r.op) && (r.op !== "pulse" || dirty)) {
 			for (const k in quiet) quiet[k] = false
@@ -674,9 +603,7 @@ function invariant(
 				const t = making(r, a)
 				if (!t) break
 				t.logs = logs
-				// an early one runs and acts in the request: in sync once the log is asked
 				if (r.early === true) t.sync = false
-				// a sink, written by acts the model does not follow
 				if (sink !== undefined) {
 					store.set(sink, UNKNOWN)
 					if (r.early === true) exact = false
@@ -717,7 +644,6 @@ function invariant(
 					refused(a, true, o ? "gone" : "no scope")
 					break
 				}
-				// what it gives: a value, an error, no value (PENDING, a promise), or not followed
 				let v: unknown, how = "value"
 				try {
 					v = ev(r.do, {
@@ -828,15 +754,12 @@ function invariant(
 			let c = told.get(name)
 			if (!c) told.set(name, c = { started: 0, due: false })
 			const say = (kind: string, why: string) => bad(`moments: ${kind}`, `${line(m)}: ${why}`)
-			// a computation gone before the moments were last asked: nothing more of it
 			if (t?.goneAt !== undefined && t.goneAt < asked) say("gone", "gone")
 			if ("due" in m) c.due = true
 			else if ("starts" in m) {
-				// a run's count goes on by one; one made again at a name gone (a child) starts at 1
 				if (m.run !== c.started + 1 && (t !== undefined || m.run !== 1)) {
 					say("run count", `after run ${c.started}`)
 				}
-				// a run starts for a reason: made due since its last, or its last stopped
 				if (!c.due && c.ended !== "stopped") {
 					say("no reason", "never made due since its last run")
 				}
@@ -846,7 +769,6 @@ function invariant(
 				if (!(m.run >= 1 && m.run <= c.started)) {
 					say("end", `ends a run not started (${c.started})`)
 				}
-				// nothing here writes what it reads: no loop
 				if (m.ended === "looping" || "through" in m) say("loop", "a loop where none can be")
 				c.ended = m.ended
 			} else if ("acts" in m) {
@@ -869,7 +791,6 @@ function invariant(
 			if (!Array.isArray(e)) continue
 			const t = things.get(e[1])
 			if (e[0] === "set" && e.length === 3 && t?.sets) {
-				// set is never given the value it had (the cut off stops there)
 				if (t.setLast !== NONE && t.same(t.setLast, e[2])) {
 					bad("set again", `${t.name} set ${line(e[2])}, the value it had`)
 				}
@@ -878,7 +799,6 @@ function invariant(
 			}
 			const u = things.get(e[0])
 			if (e.length === 3 && u?.logs) {
-				// an act's previous is the value acted on last; never acted on the same again
 				if (u.actLast === NONE ? e[2] !== null : differs(e[2], u.actLast)) {
 					bad(
 						"previous",

@@ -1,15 +1,5 @@
-// paths' streams: for a few keys, a random value's paths (and some made up) spotted, plain or keys
-// reads, the change spot, the key's event now and then, then a batch of patches apply takes
-// marked; the rule asked of each patch (marks); events, releases and held between
-// (paths_harness_test.ts's values and patches, copied). sources and ids strings and symbols.
-// wild: -0 and 1e15 as indices, a path not a list, keys of the wrong kind, malformed patches, a
-// mark with no patches. half the seeds have the keys made tricky (kit.ts)
+// paths' streams: reads spotted on random values, then patches marked, checked against a model of held spots.
 // deno-lint-ignore-file no-explicit-any
-// the properties, each implementation on its own: a change under a read marks it (marks: a place
-// at or under a plain read's path, the read's path or one key more unranged for a keys read; mark:
-// every spot at or above a place, the change spot first); event and held are a model's of the
-// spots held (model, below): event the change spot, then each step's spot, its keys spot, then
-// its kids, in the order the kid steps were made (a step let go and made again last)
 import apply from "@ermine/changeable/apply"
 import type { Key, Patch } from "@ermine/changeable/apply"
 import {
@@ -111,7 +101,7 @@ function reads(r: Rand, v: unknown): Key[][] {
 	const seen = new Set<string>()
 	return out.filter((p) => !seen.has(JSON.stringify(p)) && seen.add(JSON.stringify(p)))
 }
-// typed arrays are leaves to the rule: sent as a map
+// Typed arrays are leaves to the rule, so they are sent as a map.
 const sent = (p: Patch): Patch =>
 	JSON.parse(JSON.stringify(p, (_, x) => typed(x) ? { typed: [...x] } : x))
 
@@ -173,7 +163,6 @@ const generator: Generator = {
 				)
 			}
 		}
-		// half the seeds: the keys made tricky (kit.ts)
 		const names = tricky(seed, NAMES)
 		return [out.map((r) => rename(r, names))]
 	},
@@ -235,14 +224,11 @@ const generator: Generator = {
 }
 export default generator
 
-// a path's keys compared: -0 is 0, 1 and "1" differ
 const step = (k: unknown) => show(Object.is(k, -0) ? 0 : k)
 const same = (a: unknown[], b: unknown[]) =>
 	a.length === b.length && a.every((k, i) => step(k) === step(b[i]))
-// a is b or above it
 const under = (a: unknown[], b: unknown[]) =>
 	a.length <= b.length && a.every((k, i) => step(k) === step(b[i]))
-// a patch's places: a move's take and landing, else its own
 function places(p: any): { path: unknown[]; ranged: boolean }[] {
 	if (p === null || typeof p !== "object" || !Array.isArray(p.path)) return []
 	const own = { path: p.path, ranged: Array.isArray(p.range) }
@@ -253,9 +239,6 @@ function places(p: any): { path: unknown[]; ranged: boolean }[] {
 	return [own]
 }
 
-// the spots held, per key a trie of steps: a step held while a spot is at or under it, its kids
-// in the order made. given an answered request (no error), what the model says of it: the answer
-// for event and held; for mark, what it must give; undefined: not compared
 function model(): (r: Request) => any {
 	type Step = { path: unknown[]; spot: boolean; keys: boolean; kids: Map<string, Step> }
 	type Root = { change: boolean; top: Step }
@@ -333,7 +316,6 @@ function model(): (r: Request) => any {
 				const want: unknown[] = at?.change ? ["change"] : []
 				for (const p of Array.isArray(r.patches) ? r.patches : []) {
 					for (const q of places(p)) {
-						// the place's step and those above it, as far as they are held
 						let s: Step | undefined = at?.top
 						for (const k of [...q.path, null]) {
 							if (!s) break

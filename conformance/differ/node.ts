@@ -1,14 +1,4 @@
-// node's streams: entries and nodes of random values (plain JSON, typed arrays, bytes, odd keys
-// and strings, the tricky keys of kit.ts) with random headers, their fields in the header's own
-// order. each line stands alone; a header with no time is answered the time now (compared within
-// the run's seconds).
-// wild: a header's fields out of order, a time of -0, -0 in an integer typed array, 64-bit
-// elements as "007" and "-0", a frame that is no list of objects, a node with no values
-// the model, each implementation on its own (invariant, below): every answer predicted from
-// node_harness.ts's rules: the value as its JSON form reads back (form.ts: typed arrays as their
-// kind holds them), the header's own fields only, a time of -0 as 0, none: a whole number of
-// these seconds, the same for every table of a node; a refusal for a frame that is no
-// list of objects, a node with no values, a form that stands for none, an op not known
+// node's streams: entries and nodes of random values with random headers, checked against a model.
 import { ordered } from "../typescript/json.ts"
 import { revive } from "../typescript/form.ts"
 import {
@@ -25,7 +15,6 @@ import {
 } from "./kit.ts"
 
 const NAMES = ["a", "b", "c", "d"]
-// strings: escapes, BMP, pairs, a pair and a modifier, lone halves, a high then a low, NUL
 const STRINGS = [
 	"",
 	"a",
@@ -44,10 +33,8 @@ const STRINGS = [
 	"\uDC00b",
 	"\uD83D\uDE00",
 ]
-// keys: those and the tricky ones ("2", "01", "constructor", ...: kit.ts), in the order made
 const KEYS = [...STRINGS, ...TRICKY]
 
-// forms: typed arrays and bytes too (a value's; a header is plain JSON)
 function json(pick: (n: number) => number, depth = 0, forms = true): unknown {
 	const k = pick(depth > 2 ? 4 : 8)
 	if (k === 0) return null
@@ -73,7 +60,6 @@ function header(pick: (n: number) => number): Record<string, unknown> {
 	if (pick(5)) h.time = pick(2) ? pick(1 << 30) : -1 - pick(100)
 	if (pick(2)) h.actor = pick(4) ? NAMES[pick(4)] : pick(2) ? null : { person: NAMES[pick(4)] }
 	if (pick(4) === 0) h.reader = NAMES[pick(4)]
-	// the frame: a list of infos, innermost first; locations in an info, what began outside
 	if (pick(3) === 0) {
 		h.frame = Array.from({ length: 1 + pick(2) }, () => {
 			const info: Record<string, unknown> = Object.fromEntries(
@@ -144,8 +130,6 @@ const generator: Generator = {
 generator.invariant = invariant
 export default generator
 
-// what a request should answer: undefined, a refusal; time, the "now" a header with no time is
-// given (one for the whole node)
 const FIELDS = ["time", "actor", "reader", "frame", "op"]
 class Refused {}
 function expected(r: Request, time: number): Answer | undefined {
@@ -182,12 +166,10 @@ function expected(r: Request, time: number): Answer | undefined {
 
 function invariant(stream: Request[], answers: (Answer | undefined)[]): Promise<Violation[]> {
 	const out: Violation[] = []
-	// the seconds the run can have been in (the harness ran just now)
 	const end = Math.floor(Date.now() / 1000) + 1, start = end - 120
 	stream.forEach((r, at) => {
 		const a = answers[at]
 		if (a === undefined) return
-		// the time now as answered, when it is one: a node's tables share it
 		const times = [a.entry, ...Object.values(a.node ?? {})].map((e) => e?.change?.time)
 		const now = times.find((t) => Number.isInteger(t) && t >= start && t <= end) ?? start - 1
 		const want = expected(r, now)

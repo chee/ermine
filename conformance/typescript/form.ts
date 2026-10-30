@@ -1,13 +1,4 @@
-// values in their JSON form, as the C codec (changeable/c/json.c) writes them: JSON for what JSON
-// holds; {"/": {"bytes": b64}} for bytes, a Uint8Array (no uint8 kind),
-// {"/": {"number": "NaN" | "Infinity" | "-Infinity"}}, {"/": {"bigint": "-123…"}} for a whole
-// number past 2^53 - 1 either way (decimal, no leading zero; never a safe one: plain digits are
-// that), {"/": {kind: [elements]}} for a typed array, 64-bit elements as decimal strings, a float's
-// NaN and infinities as the words; {"/": {"live": kind}} for a stand-in; {"/": {"map": {"/": x}}}
-// for a map whose one key is "/". Base64: the standard alphabet, unpadded. a number's -0 is 0,
-// written and read (whole numbers are integers, cbor.ts); a float typed array's -0 element stays
-// -0. a safe bigint is its number. For tests only, never encoded (symbols aren't saved):
-// {"/": {"symbol": name}}, Symbol.for(name)
+// Values in the JSON form the C codec (changeable/c/json.c) writes: plain JSON, else {"/": ...} forms.
 import { Stand } from "@ermine/encoding/cbor"
 import { ordered } from "./json.ts"
 
@@ -24,7 +15,7 @@ const KINDS: { [kind: string]: { new (b: ArrayBuffer): ArrayBufferView } } = {
 }
 const NAMES = new Map(Object.entries(KINDS).map(([k, c]) => [c as unknown, k]))
 
-// in slices: a spread of 200k bytes overflows the stack
+// In slices, because spreading 200k bytes overflows the stack.
 const b64 = (b: Uint8Array) => {
 	let s = ""
 	for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode(...b.subarray(i, i + 0x8000))
@@ -33,7 +24,6 @@ const b64 = (b: Uint8Array) => {
 const slash = (x: unknown) => ({ "/": x })
 
 const SAFE = 2n ** 53n - 1n
-// a number as a value: -0 is 0; a bigint JS holds exactly is its number
 const scalar = (x: unknown) =>
 	typeof x === "bigint" ? (x >= -SAFE && x <= SAFE ? Number(x) : x) : Object.is(x, -0) ? 0 : x
 
@@ -54,7 +44,6 @@ export function toJson(x: unknown): unknown {
 	if (x === null || typeof x !== "object") return x
 	if (x instanceof Uint8Array) return slash({ bytes: b64(x) })
 	if (ArrayBuffer.isView(x)) {
-		// elements as they are: a float's -0 kept, whole floats plain
 		const elements = Array.from(
 			x as unknown as ArrayLike<number | bigint>,
 			(e) =>
@@ -72,18 +61,15 @@ export function toJson(x: unknown): unknown {
 	if (keys.length === 1 && keys[0] === "/") {
 		return slash({ map: slash(toJson((x as { "/": unknown })["/"])) })
 	}
-	// in its order, a key that reads as an index too (json.ts)
 	return ordered(keys.map((k) => [k, toJson((x as Record<string, unknown>)[k])]))
 }
 
-// a JSON form that stands for no value: what json.c's jsonDecode refuses
 export class FormError extends Error {}
 const no = (why: string): never => {
 	throw new FormError(why)
 }
 
 const DIGITS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-// base64, standard alphabet, unpadded, in the one spelling of its bytes: unused bits zero
 function bytesOf(x: unknown): Uint8Array {
 	if (typeof x !== "string" || x.length % 4 === 1) return no("bytes")
 	const out: number[] = []
@@ -108,8 +94,6 @@ const RANGE: { [kind: string]: [number, number] } = {
 	int32: [-(2 ** 31), 2 ** 31 - 1],
 	uint32: [0, 2 ** 32 - 1],
 }
-// a typed array from the list of its elements: whole numbers in range, 64-bit as decimal
-// strings, floats numbers or the words
 function typedOf(kind: string, list: unknown): ArrayBufferView {
 	const T = KINDS[kind] as unknown as { from(xs: unknown[]): ArrayBufferView }
 	if (!T || !Array.isArray(list)) return no("typed")
@@ -123,7 +107,6 @@ function typedOf(kind: string, list: unknown): ArrayBufferView {
 		}
 		if (kind === "float32" || kind === "float64") {
 			if (typeof e === "number") return e
-			// a whole one past 2^53, read exactly (json.ts): the double its digits name
 			if (typeof e === "bigint") return Number(e)
 			if (typeof e === "string" && WORDS.has(e)) return WORDS.get(e)!
 			return no("typed")
@@ -135,7 +118,6 @@ function typedOf(kind: string, list: unknown): ArrayBufferView {
 	return T.from(elements)
 }
 
-// a whole number past 2^53 - 1 either way, in decimal: the one spelling (a safe one is plain)
 function bigintOf(x: unknown): bigint {
 	if (typeof x !== "string" || !/^-?(?:0|[1-9][0-9]*)$/.test(x)) return no("bigint")
 	const n = BigInt(x)
@@ -146,7 +128,6 @@ const isSlashMap = (x: unknown): x is { "/": unknown } =>
 	x !== null && typeof x === "object" && !Array.isArray(x) && Object.keys(x).length === 1 &&
 	Object.hasOwn(x, "/")
 
-// a value from its JSON form; a form that stands for none throws FormError
 export function fromJson(x: unknown): unknown {
 	if (typeof x === "string") return x.isWellFormed() ? x : no("a lone surrogate")
 	if (x === null || typeof x !== "object") return scalar(x)
@@ -180,9 +161,6 @@ export function fromJson(x: unknown): unknown {
 	return out
 }
 
-// JSON.stringify, but -0 written 0, save a float typed array's element (in its form: -0) or with
-// minus (a request as a scenario wrote it: what a harness reads), and a bigint as its digits, as json.ts reads them back (a value's goes through toJson first: the
-// bigint form)
 const MINUS = "\u0000-0\u0000"
 const raw = (JSON as unknown as { rawJSON(s: string): unknown }).rawJSON
 export function line(x: unknown, also: (v: unknown) => unknown = (v) => v, minus = false): string {
@@ -198,8 +176,6 @@ export function line(x: unknown, also: (v: unknown) => unknown = (v) => v, minus
 		)
 }
 
-// a value from its JSON form, as fromJson has it, but a string or a key may hold lone surrogates:
-// op counts each as a position, and the C codec (changeable/c/json.c) takes them
 const isMap = (x: unknown): x is Record<string, unknown> =>
 	x !== null && typeof x === "object" && !Array.isArray(x)
 export function revive(x: unknown): unknown {

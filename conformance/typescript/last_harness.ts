@@ -1,3 +1,3 @@
-// echoes each request: the harness loop's own test (typescript_test.ts)
+// Echoes each request; the test for the harness loop.
 import { serve } from "./harness.ts"
 await serve((r) => r)

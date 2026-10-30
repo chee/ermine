@@ -1,32 +1,21 @@
-// every suite's scenarios against a harness, on one rule.
+// Runs every suite's scenarios against a harness.
 //   deno task conformance [suite...] [--c | --check | --leaks]
-// no suite: all. default <package>/typescript/<suite>_harness.ts; --c <package>/c/<suite>-harness,
-// --check its sanitizer build, --leaks under leaks (conformance/leaks.sh); HARNESS: any other.
-//
-// a harness: one run per scenario, one JSON request per line in, one answer per line out, exit 0.
-// a non-zero exit or sanitizer report ("runtime error:", "Sanitizer") fails the scenario.
-// its JSON must keep lone surrogates, NUL, -0 (read as 0: whole numbers are integers), whole
-// numbers exactly (digits alone past 2^53 - 1: a bigint), doubles; "/" forms: form.ts.
-// key order is kept on the way out, ignored when comparing (maps by content).
-//
-// scenario <package>/conformance/<suite>/NN-name.json: { title, typescript?, on?, steps }; typescript:
-// the TypeScript harness only (another implementation's comes later), as the suite option; on: the
-// platforms it runs on, as "<os>-<arch>" (Deno.build's: "darwin-aarch64"), else every one
-//   expect: answer fields, deep-equal; no others   fails: true: answer is { error }
-//   skip: fields not compared                      no expect: not compared
-// <suite>/suite.json:
+// A scenario <package>/conformance/<suite>/NN-name.json is { title, typescript?, on?, steps }.
+//   expect: answer fields, deep-equal   fails: true: the answer is { error }
+//   skip: fields not compared           no expect: not compared
+// <suite>/suite.json options:
 //   loose       answers may have fields beyond expect
 //   unordered   fields compared as sets
 //   now         "now" in expect: seconds since 1970 as of the run
 //   again       run once more with these fields added to every request
 //   undoes      { op: "invert" } answers must be { undo } and undo, checked by applying both ways
-//   reads       requests asked before and after each failing step; answers must match. "$name"
-//               stands for each value name takes in the scenario
+//   reads       requests asked before and after each failing step, with matching answers;
+//               "$name" stands for each value name takes in the scenario
 //   harness     another suite's harness (invert speaks apply's)
 //   typescript  TypeScript harness only
 //   allow       extra deno flags for the TypeScript harness (native: --allow-ffi)
-//   noLinkAttrs operating systems whose links hold no extended attribute: an expected link entry's attrs and id are left out
-//   make        targets built (make -s, from the repository's root) before the suite runs
+//   noLinkAttrs operating systems whose links hold no extended attribute (expected attrs and id dropped)
+//   make        targets built (make -s, from the repo root) before the suite runs
 import { assert, assertEquals } from "@std/assert"
 import { ask, command, type Options, type Suite, suites } from "./typescript/ask.ts"
 import { line } from "./typescript/form.ts"
@@ -45,8 +34,6 @@ const all = suites()
 const chosen = names.length ? names.map((n) => all.find((s) => s.name === n)!) : all
 for (const [i, s] of chosen.entries()) if (!s) throw new Error(`no suite ${names[i]}`)
 
-// a harness not TypeScript's (HARNESS: any other, as the Makefile's C runs): a scenario typescript:
-// true is not run on it
 const native = flags.some((f) => f === "--c" || f === "--check" || f === "--leaks")
 const other = native || Deno.env.get("HARNESS") !== undefined
 const platform = `${Deno.build.os}-${Deno.build.arch}`
@@ -63,15 +50,11 @@ function harness(s: Suite): string[] {
 
 const isMap = (x: unknown): x is Record<string, unknown> =>
 	x !== null && typeof x === "object" && !Array.isArray(x)
-// as line writes it: -0 as 0, but a float typed array's
 const show = (x: unknown) => line(x)
-// a map's keys sorted, at every depth (line's also): maps by content
 const sortKeys = (v: unknown) =>
 	isMap(v) ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, v[k]])) : v
-// a set's element as compared: by content
 const member = (x: unknown) => line(x, sortKeys)
 
-// whether the answer says what is expected; the first thing it does not, or undefined
 function differs(
 	want: unknown,
 	got: unknown,
@@ -96,7 +79,6 @@ function differs(
 	}
 	if (isMap(want)) {
 		if (!isMap(got)) return `${show(got)}, not ${show(want)}`
-		// a link as the disk has it (an entry, or a difference's now) holds no attribute here, so no id
 		const entry = want.kind === "link" && o.noLinkAttrs?.includes(Deno.build.os)
 			? Object.fromEntries(
 				Object.entries(want).filter(([k]) => k !== "attrs" && (k !== "id" || key !== "now")),
@@ -111,7 +93,6 @@ function differs(
 		}
 		return
 	}
-	// a number as Object.is has it: 0 and -0 differ
 	return Object.is(want, got) ? undefined : `${show(got)}, not ${show(want)}`
 }
 
@@ -144,14 +125,9 @@ function check(
 	}
 }
 
-// whether a step's answer is checked as undoing: an invert of a suite that undoes, not one that
-// says it fails or has an error in its expect (those are pinned as ever)
 const undoing = (o: Options, st: Step) =>
 	o.undoes === true && st.op === "invert" && !st.fails && !(st.expect && "error" in st.expect)
 
-// the answers of the undoing steps, walked back with the harness (one ask for each stage): why not
-// for each step, or undefined. the run's changes are in every request (cow: false too)
-// nothing there is no value; maps by content
 const same = (a?: Record<string, any>, b?: Record<string, any>) =>
 	line(a && "value" in a ? a.value : undefined, sortKeys) ===
 		line(b && "value" in b ? b.value : undefined, sortKeys)
@@ -172,7 +148,6 @@ async function undone(
 	live = live.filter((i) =>
 		Array.isArray(answers[i]?.undo) || fail(i, `not an undo: ${show(answers[i])}`)
 	)
-	// the change
 	const changed: Record<number, Record<string, any>> = {}
 	const done = await ask(cmd, live.map((i) => request("apply", steps[i], steps[i].patches)))
 	live = live.filter((i, k) => {
@@ -182,7 +157,6 @@ async function undone(
 		changed[i] = done[k] ?? {}
 		return true
 	})
-	// the undo applied to it; its undo
 	const back = await ask(
 		cmd,
 		live.flatMap((i) => [
@@ -201,7 +175,6 @@ async function undone(
 		unwound[i] = u.undo
 		return true
 	})
-	// the undo of the undo, applied to the value given
 	const last = await ask(cmd, live.map((i) => request("apply", steps[i], unwound[i])))
 	live.forEach((i, k) => {
 		if (last[k]?.error !== undefined) {
@@ -215,7 +188,6 @@ async function undone(
 
 const asked = ({ expect: _, fails: __, skip: ___, ...request }: Step) => request
 
-// the suite's reads for a scenario: each "$name" field made every value name has in its requests
 function reads(o: Options, requests: Record<string, unknown>[]): Record<string, unknown>[] {
 	const values = (name: string) => {
 		const seen = new Map<string, unknown>()
@@ -234,9 +206,7 @@ function reads(o: Options, requests: Record<string, unknown>[]): Record<string, 
 		)
 	)
 }
-// a step a refused request: the reads are asked around it
 const refused = (st: Step) => st.fails === true || (st.expect !== undefined && "error" in st.expect)
-// an answer as compared to itself: maps by content, unordered fields as sets
 function settled(a: Record<string, unknown> | undefined, o: Options) {
 	if (a === undefined) return "no answer"
 	const set = (k: string, v: unknown) =>
@@ -250,8 +220,6 @@ for (const s of chosen) {
 		/^\d.*\.json$/.test(n)
 	)
 		.sort()
-	// a suite asked for by name that runs nothing is not a pass (the all run leaves out the ones
-	// another runner checks: cbor's vectors)
 	if (files.length === 0) {
 		if (names.length) throw new Error(`suite ${s.name}: no scenarios in ${s.fixtures}`)
 		continue
@@ -292,7 +260,6 @@ for (const s of chosen) {
 					on !== undefined && !on.includes(platform),
 			}, async () => {
 				const from = Math.floor(Date.now() / 1000)
-				// the steps, the reads around each refused one: where each step's answer is
 				const around = reads(s.options, steps.map(asked))
 				const sent: Record<string, unknown>[] = [], at: number[] = []
 				for (const st of steps) {

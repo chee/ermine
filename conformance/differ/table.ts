@@ -1,16 +1,7 @@
-// table's streams: random add, sub, get, ids, at, who and the three dels over a few parts, ids
-// (symbols too) and nodes (table_harness_test.ts's mix, copied), with the events asked now and
-// then, plain or with every part at the id as it was when told (at: true).
-// wild: odd keys (NUL, lone surrogates, "__proto__", "", a symbol and a string of one name, the
-// tricky ones: "2", "01", "constructor", ...: kit.ts),
-// and requests missing a field or with a key of the wrong kind
-// the property, each implementation on its own: every answer is the model's (model, below), up to
-// the first that is not
+// table's streams: add, sub, get, ids, at, who and dels, checked against a model.
 // deno-lint-ignore-file no-explicit-any
 import { type Answer, differs, type Generator, picker, type Request, show, TRICKY } from "./kit.ts"
 
-// strings: ASCII, BMP, a pair (😀: the two halves below), a pair and a modifier, lone halves, both
-// halves the wrong way round (no pair), NUL
 const PARTS: unknown[] = ["value", "children", "é", "\uD83D", "a\u0000", { symbol: "drag" }]
 const IDS: unknown[] = [
 	...["a", "a\u0000", "中", "😀", "👍🏽", "\uD83D", "\uDE00", "\uDE00\uD83D"],
@@ -88,8 +79,6 @@ const generator: Generator = {
 }
 export default generator
 
-// the table as the protocol has it (table_harness.ts): an answer per request. an error that is a
-// code is that code; any other is { error: true }: some error, its words free
 function model(): (r: Request) => Answer {
 	type Key = string | { symbol: string }
 	const isKey = (k: unknown): k is Key =>
@@ -97,7 +86,6 @@ function model(): (r: Request) => Answer {
 		(k !== null && typeof k === "object" && typeof (k as any).symbol === "string")
 	const shown = (k: Key) => typeof k === "string" ? k : { symbol: k.symbol }
 	const name = (k: Key) => show(shown(k))
-	// id → part → [part, node]; node → part → id → id; events not yet asked
 	const at = new Map<string, Map<string, [Key, string]>>()
 	const where = new Map<string, Map<string, { part: Key; ids: Map<string, Key> }>>()
 	const events: [Key, Key, [Key, string][]][] = []

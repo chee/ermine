@@ -1,4 +1,4 @@
-// the loop of every suite's C harness (harness.h)
+// The loop shared by every suite's C harness; see harness.h.
 #define _POSIX_C_SOURCE 200809L
 #include "harness.h"
 
@@ -113,7 +113,6 @@ int main(void) {
 		fputc('\n', stdout);
 		fflush(stdout);
 		free(answer);
-		// a retained line is the adapter's now
 		if (!line->retained) hh_release(line);
 		current = NULL;
 	}

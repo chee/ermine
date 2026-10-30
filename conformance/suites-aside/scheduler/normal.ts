@@ -1,13 +1,11 @@
-// what the harness and programs as data see of the scheduler, as JSON every implementation can
-// give the same:
+// What the harness and programs as data see of the scheduler, as JSON every implementation can give:
 //   an item          {"id":id,"loaded":b,"refused"?:why}
 //   a content item   {"id":id,"versions"?:[version...],"refused"?:why}  no versions: pending
 //   a version        {"content":c,"time":t,"status"?:true}  status: in front of a process's value
 //   a change         its time; several: their times
 //   a live value     "<live>"
 //   an error         its code: the library's, protect's refusal "refused", a step's throw, else "thrown"
-//
-// an interface's operations, by name, with their fields:
+// Interface operations, by name, with their fields:
 //   look {address}  lookup {path}  lookups {path}  children {address, name?}  names {address, part}
 //   content {address}  info {address, name}
 //   write {address, patches, index?, slotindex?}  set {address, name, patches, index?, slotindex?}
@@ -46,14 +44,12 @@ export function version(v: V): unknown {
 }
 const status = (v: V) => (v.because as { place?: unknown } | undefined)?.place === "status"
 
-// a status as JSON: an error as its code
 function statusOf(s: unknown): unknown {
 	const out = json(s) as Record<string, unknown>
 	if (out && "error" in out) out.error = code((s as { error: unknown }).error)
 	return out
 }
 
-// an error's code
 export function code(e: unknown): string {
 	if (e !== null && typeof e === "object" && typeof (e as { code?: unknown }).code === "string") {
 		return (e as { code: string }).code

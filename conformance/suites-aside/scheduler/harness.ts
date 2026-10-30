@@ -1,7 +1,5 @@
-// the reference scheduler on the line protocol: one JSON request per line in, one answer per line
-// out, in order. another implementation joins by speaking this (SCHEDULER_HARNESS).
-//
-//   {"op":"new","rules"?,"site"?} -> {}  root "root", clock 0; rules: a "rules" node in the root
+// The reference scheduler on the line protocol (SCHEDULER_HARNESS names another implementation).
+//   {"op":"new","rules"?,"site"?} -> {}  root "root", clock 0; rules is a "rules" node in the root
 //   {"op":op,...} -> {"ok":a}  a host operation (normal.ts)
 //   {"op":"start","address","program","name"?,"id"?} -> {"ok":pid}
 //   {"op":"call","address","args"?,"actor"?,"person"?,"trusted"?} -> {"ok":answer}
@@ -13,10 +11,6 @@
 //                       or null: not loaded
 //   {"op":"header","id"}  its value's first change: {time, cause?, site?} or null
 //   {"op":"clock"}  the last time given
-//
-// program: as steps.ts, or a path (list) read from the process's place; none there: pending.
-// moment: as SCHEDULER.tex's, reads without items, errors as codes.
-// error: {"error": code} (normal.ts); the harness goes on.
 import createNode from "@ermine/graph/node"
 import { rules } from "@ermine/protect"
 import {
@@ -44,7 +38,6 @@ function moment(m: Moment): unknown {
 	return json(out)
 }
 
-// the host's code: the program at the path, read as the process
 const finder: Finder = (process, view: Api) => {
 	const found = view.content(process.program).find((it) => it.versions?.length)
 	if (!found) return PENDING

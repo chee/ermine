@@ -1,9 +1,5 @@
-// planted-bug test: every plant (plants.ts) is applied to a temp copy of the sources and its
-// catcher run there; it must fail. before that, every catcher must pass on the unmutated copy.
+// Applies every plant (plants.ts) to a temp copy of the sources; its catcher must fail.
 //   deno task plants [--seeds N] [--only text] [--jobs N]
-// seeds: for differ catchers (default 30); the in-process fuzz tests run the seeds written in them.
-// exit non-zero when a plant survived, went stale (find not matching exactly once), or broke the
-// source (a syntax or import error is no catch)
 import { type Catcher, type Plant, plants } from "./plants.ts"
 
 const root = new URL("../../", import.meta.url).pathname
@@ -17,8 +13,6 @@ const JOBS = Number(arg("--jobs") ?? 4)
 const ONLY = arg("--only")
 const TIMEOUT = 180_000
 
-// the tree a catcher imports: the packages up to places, conformance, and encoding; no
-// node_modules, no encoding c (the differ's c impl runs the others')
 const copied = [
 	"changeable",
 	"crow",
@@ -64,7 +58,6 @@ async function makeTree(): Promise<string> {
 		if (r.code !== 0) throw new Error(`copy ${d}: ${r.out}`)
 	}
 	await Deno.symlink(`${root}node_modules`, `${dir}/node_modules`).catch(() => {})
-	// the workspace: only what was copied
 	const deno = JSON.parse(await Deno.readTextFile(`${root}deno.json`))
 	deno.workspace = deno.workspace.filter((w: string) => copied.includes(w.replace(/^\.\//, "")))
 	await Deno.writeTextFile(`${dir}/deno.json`, JSON.stringify(deno))
@@ -93,7 +86,6 @@ function command(c: Catcher): string[] {
 	]
 }
 
-// what a failure says about how many seeds it took
 function seeds(c: Catcher, out: string): string {
 	if ("differ" in c) {
 		const m = out.match(/(\d+) of (\d+) streams/)
@@ -117,7 +109,6 @@ async function control(dir: string): Promise<boolean> {
 	let ok = true
 	await pool([...seen], async ([name, c]) => {
 		const r = await run(c, dir)
-		// a differ finding exits non-zero; its text says so
 		const bad = r.code !== 0 ||
 			("differ" in c && !/: all agree$/m.test(r.out) && !/^0 signatures;/m.test(r.out))
 		console.log(`control ${bad ? "FAIL" : "pass"}  ${name}`)
