@@ -1,9 +1,8 @@
-// cbor.c on the line protocol (typescript/cbor_harness.ts): one JSON request per line
-// in, one answer per line out. a value in its JSON form (json_text.h), lone surrogates taken (held
-// as WTF-8, so encoding can refuse them); bytes lowercase hex.
+// cbor.c on the line protocol (see typescript/cbor_harness.ts): one JSON request per line in, one
+// answer per line out. Values use the JSON form (json_text.h); bytes are lowercase hex.
 //   {op: "encode", value} -> {bytes} | {error: "no-encoding"} | {error: "not-a-form"}
-//   {op: "decode", bytes} -> {value, again} | {error: "not-an-encoding"}   again: value's encoding
-// the fuzz (typescript/cbor_fuzz_test.ts) and the scenarios (conformance/cbor/NN-*.json) ask it
+//   {op: "decode", bytes} -> {value, again} | {error: "not-an-encoding"}   (again: re-encoded value)
+
 #include "cbor.h"
 #include "json.h"
 #include "json_text.h"
@@ -16,7 +15,6 @@ static void hex(const unsigned char *b, size_t n) {
 	for (size_t i = 0; i < n; i++) printf("%02x", b[i]);
 }
 
-// lowercase hex only; NULL for anything else
 static unsigned char *unhex(const char *s, size_t length, size_t *n) {
 	if (length % 2) return NULL;
 	*n = length / 2;
@@ -34,8 +32,8 @@ static unsigned char *unhex(const char *s, size_t length, size_t *n) {
 	return bytes;
 }
 
-// strings and keys holding a lone surrogate, which jsonDecode refuses: each swapped for a
-// stand-in text before it ("\x01" and a number, no form's word) and back after
+// Strings and keys with a lone surrogate, which jsonDecode refuses, are swapped for placeholder
+// text before decoding and restored after, so encoding can refuse them.
 typedef struct {
 	char **texts;
 	size_t *lengths;
@@ -86,7 +84,6 @@ static void show(Json *v, Held *held) {
 		}
 }
 
-// the member of a request, to be changed in place
 static Json **slot(Json *request, const char *key) {
 	for (int i = 0; i < request->object.count; i++)
 		if (strcmp(request->object.members[i].key, key) == 0) return &request->object.members[i].value;
@@ -130,7 +127,6 @@ static void decodeOp(const Json *text) {
 	const char *why = NULL, *whyCheck = NULL;
 	size_t at = 0, atCheck = 0;
 	Json *value = cborDecode(bytes, n, &why, &at);
-	// the check says the same, at the same byte
 	bool checked = cborCheck(bytes, n, &whyCheck, &atCheck);
 	if (checked != (value != NULL) || (!checked && (why != whyCheck || at != atCheck))) {
 		fprintf(stderr, "cborCheck and cborDecode disagree\n");

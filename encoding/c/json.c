@@ -1,5 +1,4 @@
-// json.c: the JSON value, equality and code point helpers; its text is json_text.c.
-// See json.h. Owner: the skeleton (done).
+// json.c: the JSON value, equality and code point helpers. See json.h.
 
 #include "json.h"
 #include "../../changeable/c/whole.h"
@@ -12,7 +11,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-// memory -----------------------------------------------------------------------
 
 void *allocate(size_t size) {
 	void *memory = calloc(1, size ? size : 1);
@@ -65,7 +63,6 @@ void *growArray(void *items, int count, int *capacity, size_t size) {
 	return moved;
 }
 
-// making values ----------------------------------------------------------------
 
 static Json *make(JsonType type) {
 	Json *value = allocate(sizeof *value);
@@ -188,7 +185,6 @@ void jsonAddOfLength(Json *object, const char *key, size_t length, Json *value) 
 	jsonAddTaking(object, copyStringOfLength(key, length), length, value);
 }
 
-/** the index of the member under a key of `length` bytes, or -1 */
 static int memberIndex(const Json *object, const char *key, size_t length) {
 	if (!object || object->type != JSON_OBJECT) return -1;
 	for (int i = 0; i < object->object.count; i++) {
@@ -275,7 +271,6 @@ void jsonFree(Json *value) {
 	if (value) push(&stack, value);
 	while (stack.count) {
 		Json *at = (Json *)stack.items[--stack.count];
-		// held elsewhere too: only this hold goes
 		if (at->refs) {
 			at->refs--;
 			continue;
@@ -305,7 +300,6 @@ void jsonFree(Json *value) {
 	free(stack.items);
 }
 
-// reading values ---------------------------------------------------------------
 
 Json *jsonGetOfLength(const Json *object, const char *key, size_t length) {
 	int at = memberIndex(object, key, length);
@@ -379,13 +373,11 @@ bool jsonMagnitude(const Json *value, bool *negative, const unsigned char **magn
 	return true;
 }
 
-/** whether two numbers are the same: by value, NaN the same as NaN (0 and -0 the same: -0 is 0) */
 static bool jsonSameNumber(double a, double b) {
 	if (isnan(a) || isnan(b)) return isnan(a) && isnan(b);
 	return a == b;
 }
 
-/** two numbers the same: big ones by their bytes */
 static bool sameNumbers(const Json *x, const Json *y) {
 	if (x->big || y->big) {
 		return x->big && y->big && x->bigNegative == y->bigNegative && x->bigLength == y->bigLength &&
@@ -394,13 +386,11 @@ static bool sameNumbers(const Json *x, const Json *y) {
 	return jsonSameNumber(x->number, y->number);
 }
 
-/** two float elements as Object.is has them: a typed array keeps -0 */
 static bool sameElement(double a, double b) {
 	if (isnan(a) || isnan(b)) return isnan(a) && isnan(b);
 	return a == b && signbit(a) == signbit(b);
 }
 
-/** two typed arrays of one kind, element by element: floats as Object.is has them, integers by value */
 static bool sameElements(const Json *x, const Json *y) {
 	if (x->typed.kind != y->typed.kind || x->typed.count != y->typed.count) return false;
 	for (size_t i = 0; i < x->typed.count; i++) {
@@ -415,7 +405,6 @@ static bool sameElements(const Json *x, const Json *y) {
 }
 
 bool jsonEqual(const Json *a, const Json *b) {
-	// pairs to compare, two entries each
 	Stack stack = { NULL, 0, 0 };
 	push(&stack, a);
 	push(&stack, b);
@@ -460,9 +449,7 @@ bool jsonEqual(const Json *a, const Json *b) {
 	return equal;
 }
 
-// code points ------------------------------------------------------------------
-// Every code point starts with a byte that is not a continuation byte
-// (10xxxxxx), in UTF-8 and in the WTF-8 a lone surrogate is held as.
+// A code point starts with any byte that is not a continuation byte (10xxxxxx).
 
 static bool isContinuation(unsigned char byte) {
 	return (byte & 0xc0) == 0x80;
@@ -476,7 +463,6 @@ size_t utf8Count(const char *text, size_t length) {
 	return count;
 }
 
-/** the byte at text[*at] as it would be in plain UTF-8: U+0000, held as C0 80, is 0 */
 static int plainByte(const unsigned char *text, size_t length, size_t *at) {
 	if (text[*at] == 0xc0 && *at + 1 < length && text[*at + 1] == 0x80) {
 		*at += 2;
@@ -486,7 +472,6 @@ static int plainByte(const unsigned char *text, size_t length, size_t *at) {
 }
 
 int utf8Compare(const char *a, size_t aLength, const char *b, size_t bLength) {
-	// plain UTF-8 byte order is code point order; only the C0 80 of U+0000 differs
 	const unsigned char *x = (const unsigned char *)a, *y = (const unsigned char *)b;
 	size_t i = 0, j = 0;
 	while (i < aLength && j < bLength) {

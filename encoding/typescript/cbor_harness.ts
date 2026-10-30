@@ -1,10 +1,7 @@
-// cbor.ts on the line protocol (conformance/typescript/harness.ts): nothing lasts
-// between lines. another implementation joins by speaking this (HARNESS; c/cbor_harness.c).
-// a value: its JSON form (conformance/typescript/form.ts), lone surrogates taken; bytes lowercase hex
-//
-// { op: "encode", value } → { bytes }          or { error: "no-encoding" | "not-a-form" }
-// { op: "decode", bytes } → { value, again }   or { error: "not-an-encoding" }
-//                                                again: the value encoded again, hex
+// cbor.ts on the line protocol (conformance/typescript/harness.ts): one JSON request per line.
+// Values use the JSON form (conformance/typescript/form.ts); bytes are lowercase hex.
+// { op: "encode", value } -> { bytes }  or { error: "no-encoding" | "not-a-form" }
+// { op: "decode", bytes } -> { value, again }  or { error: "not-an-encoding" }  (again: re-encoded hex)
 import { CborError, decode, encode, type Value } from "./cbor.ts"
 import { FormError, revive, toJson } from "../../conformance/typescript/form.ts"
 import { type Answer, type Request, serve } from "../../conformance/typescript/harness.ts"

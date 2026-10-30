@@ -1,6 +1,4 @@
-// the C Ed25519 (ed25519.h): RFC 8032's first test vector (7.1, TEST 1) and what a strict check
-// refuses, as ed25519_test.ts has them. exits 1 at the first thing that is not so.
-// make test-c-ed25519-test (test-check-, test-leaks-)
+// Tests ed25519.h with RFC 8032's first test vector and what a strict check refuses.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

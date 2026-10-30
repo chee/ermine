@@ -1,14 +1,8 @@
-// libFuzzer target (fuzz.sh cbor-model): a value made from the input bytes (numbers from raw bits,
-// strings of every width of code point, lone surrogates as WTF-8, bytes not UTF-8, typed arrays of
-// each kind with any NaN payload, maps with keys twice, stand-ins, deep ones), encoded. Checked:
-// - refused exactly when the model says: a string or key not UTF-8 (a lone surrogate too), a map
-//   holding a key twice, more than CBOR_DEPTH containers one in the next;
-// - taken: decoding gives an equal value, encoding that again the same bytes; the same value with
-//   every map's keys in reverse the same bytes, and into a buffer that grows;
-// - a number alone: a whole one the integer (major type 0 or 1, a bignum past 64 bits, -0 as 00),
-//   modelled from long double and its bits; the rest the shortest float that holds it (_Float16,
-//   float, double), the one NaN f97e00; whole numbers made from bytes (jsonWhole) round trip too;
-// - nothing leaks, ASan and UBSan quiet.
+// libFuzzer target (fuzz.sh cbor-model): builds a value from the input bytes (odd numbers, strings,
+// lone surrogates, NaN payloads, repeated keys, deep nesting) and encodes it. Encoding must be
+// refused exactly when the model says so. Otherwise decoding must give an equal value, with the
+// same bytes again, also with map keys reversed and into a growing buffer. Numbers alone are
+// checked against the model of the shortest encoding.
 #include "cbor.h"
 
 #include <float.h>
@@ -38,12 +32,11 @@ static uint64_t bits(Bytes *b, int n) {
 	return x;
 }
 
-// pieces of text: one to four bytes, U+0000 as json.h holds it, lone surrogates (WTF-8), a pair
-// as WTF-8 halves (no string: CESU), and bytes that are no UTF-8
+// pieces of text: UTF-8 of one to four bytes, U+0000 as json.h holds it, lone surrogates, a
+// surrogate pair as two WTF-8 halves (not a string), and non-UTF-8 bytes
 static const char *const pieces[] = {
 	"a", "\xc3\xa9", "\xe4\xb8\xad", "\xf0\x9f\x98\x80", "\xf0\x9f\x91\x8d\xf0\x9f\x8f\xbd", "\xc0\x80",
 	"\xef\xbf\xbf", "\x7f", "\xc2\x80", "\xdf\xbf", "\xe0\xa0\x80", "\xf4\x8f\xbf\xbf",
-	// not UTF-8 from here
 	"\xed\xa0\xbd", "\xed\xb8\x80", "\xed\xa0\x80", "\xed\xb0\x80", "\xed\xa0\xbd\xed\xb8\x80", "\xff",
 	"\xc1\xbf", "\xe0\x80\x80", "\xf4\x90\x80\x80", "\x80", "\xc3",
 };
@@ -53,8 +46,6 @@ static const char *const pieces[] = {
 static const char *const keys[] = { "", "a", "b", "0", "10", "01", "__proto__", "/", "\xc0\x80", "a\xc0\x80", "\xef\xbf\xbf" "a", "\xf0\x9f\x98\x80" };
 #define KEYS (sizeof keys / sizeof *keys)
 
-// whether the bytes are UTF-8 (with C0 80 for U+0000): each code point decoded, in its shortest
-// form, no surrogate, none past U+10FFFF
 static bool utf8(const unsigned char *s, size_t n) {
 	for (size_t i = 0; i < n;) {
 		unsigned c = s[i], more = c < 0x80 ? 0 : c >> 5 == 6 ? 1 : c >> 4 == 14 ? 2 : c >> 3 == 30 ? 3 : 9;
@@ -75,7 +66,6 @@ static bool utf8(const unsigned char *s, size_t n) {
 	return true;
 }
 
-// a text, and whether it is UTF-8
 static char *text(Bytes *b, size_t *length, bool *good) {
 	char buf[256];
 	size_t n = 0;
@@ -124,7 +114,6 @@ static double number(Bytes *b) {
 	}
 }
 
-// what the model says of a value: whether it has an encoding
 typedef struct {
 	bool good;
 } Model;
@@ -137,7 +126,6 @@ static Json *make(Bytes *b, int depth, Model *m) {
 		case 0: return byte(b) % 3 ? jsonBoolean(byte(b) & 1) : jsonNull();
 		case 1: return jsonNumber(number(b));
 		case 2: {
-			// a whole number of up to 20 bytes, either sign
 			bool negative = byte(b) & 1;
 			unsigned char d[20];
 			size_t n = byte(b) % sizeof d;
@@ -165,7 +153,6 @@ static Json *make(Bytes *b, int depth, Model *m) {
 			return jsonTyped(kind, d, count);
 		}
 		case 6: {
-			// a deep one: many containers, one in the next
 			if (byte(b) % 8) return jsonNull();
 			int n = CBOR_DEPTH - 2 + (int)(byte(b) % 5) - depth;
 			Json *v = jsonNull();
@@ -204,7 +191,6 @@ static Json *make(Bytes *b, int depth, Model *m) {
 	}
 }
 
-// two keys' plain UTF-8 (C0 80 as 00), equal or not
 static int plainCompare(const char *a, size_t al, const char *b, size_t bl) {
 	size_t i = 0, j = 0;
 	while (i < al && j < bl) {
@@ -216,7 +202,6 @@ static int plainCompare(const char *a, size_t al, const char *b, size_t bl) {
 	return (i < al) - (j < bl);
 }
 
-// the same value, every map's members in reverse, shared below
 static Json *reversed(const Json *v) {
 	if (v->type == JSON_ARRAY) {
 		Json *l = jsonArray();
@@ -274,11 +259,9 @@ static void modelWhole(bool negative, const unsigned char *a, size_t n, unsigned
 	*length = h + n;
 }
 
-// a whole double's argument bytes: |x| (or |x| - 1 for a negative), by long double halving
 static size_t argument(double x, unsigned char *a) {
 	unsigned char rev[160];
 	size_t n = 0;
-	// |x| - 1 for a negative is exact in its bytes: take the bytes of |x|, then subtract one
 	long double m = fabsl((long double)x);
 	while (m >= 1) {
 		long double q = floorl(m / 256);
@@ -295,7 +278,6 @@ static size_t argument(double x, unsigned char *a) {
 	return n;
 }
 
-// whole: the integer; else the shortest float that holds x
 static void model(double x, unsigned char *out, size_t *length) {
 	if (isfinite(x) && floor(x) == x) {
 		unsigned char a[160];
@@ -336,7 +318,6 @@ static void model(double x, unsigned char *out, size_t *length) {
 
 int LLVMFuzzerTestOneInput(const unsigned char *data, size_t size) {
 	Bytes b = { data, size, 0 };
-	// a number alone, against the model
 	{
 		double x = number(&b);
 		Json *n = jsonNumber(x);
@@ -348,14 +329,12 @@ int LLVMFuzzerTestOneInput(const unsigned char *data, size_t size) {
 		free(out);
 		jsonFree(n);
 	}
-	// a whole number from bytes: its encoding as modelled, read back the same, as int64 when it fits
 	{
 		bool negative = byte(&b) & 1;
 		unsigned char m[24];
 		size_t k = byte(&b) % sizeof m;
 		for (size_t i = 0; i < k; i++) m[i] = (unsigned char)byte(&b);
 		Json *n = jsonWhole(negative, m, k);
-		// the argument: the magnitude, less one for a negative; -0 is 0
 		unsigned char a[25];
 		size_t i = 0, an;
 		while (i < k && !m[i]) i++;

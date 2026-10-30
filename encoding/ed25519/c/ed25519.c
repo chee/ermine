@@ -1,29 +1,20 @@
-// ed25519.c: ed25519.h on Monocypher 4.0.3 (monocypher/, BSD-2 or CC0;
-// README there): its numbers mod p as ten limbs of 25.5 bits, its points in
-// extended coordinates, its comb for [s]B (the same work for every bit) and
-// its sliding windows for [S]B - [k]A, with SHA-512 (sha2.c) where
-// Monocypher's own EdDSA hashes with BLAKE2b. The checks are this file's:
-// Monocypher's crypto_eddsa_check_equation takes A and R in any encoding and
-// of small order, and multiplies by the cofactor; the strict checks (ed25519.h) take
-// none of those, so verification here is Monocypher's loop with the equation
-// left without the cofactor and R compared as bytes.
+// ed25519.c: ed25519.h on Monocypher 4.0.3 (monocypher/, BSD-2 or CC0), using SHA-512 (sha2.c)
+// where Monocypher's EdDSA uses BLAKE2b. Verification is Monocypher's loop with the strict checks
+// of ed25519.h: no cofactor, A and R canonical and not of small order, R compared as bytes.
 
 #include "ed25519.h"
 #include "sha2.h"
 
 #include <string.h>
 
-// all of monocypher.c, for its static functions (fe_*, ge_*, slide_*); what
-// is not used here is dropped by a linker that drops unused sections
+// all of monocypher.c, for its static functions; the linker drops what is unused
 #include "monocypher/monocypher.c"
 
 // ---------------------------------------------------------------- encodings
 
-// The y of each of the eight points of order dividing 8: 1 for (0, 1), -1
-// for (0, -1), 0 for (sqrt(-1), 0) and (-sqrt(-1), 0), and two for the four
-// of order 8, little-endian. With x = 0 a set sign bit is not canonical, and
-// otherwise both signs are small points: no encoding with one of these y is
-// taken.
+// The y of each of the eight points of order dividing 8, little-endian. With x = 0 a set sign bit
+// is not canonical, and otherwise both signs are small points, so no encoding with one of these
+// y is accepted.
 static const unsigned char smallY[5][32] = {
 	{ 0x01 },
 	{ 0xec, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
@@ -35,9 +26,8 @@ static const unsigned char smallY[5][32] = {
 		0x2a, 0x20, 0x53, 0xfa, 0x2c, 0x39, 0xcc, 0xc6, 0x4e, 0xc7, 0xfd, 0x77, 0x92, 0xac, 0x03, 0x7a },
 };
 
-// Whether in[0 .. 32) may be a point's one canonical encoding (RFC 8032
-// 5.1.2), the point not of small order: y less than p, and not one of
-// smallY. Whether it is on the curve is left to the decoder.
+// Whether in[0 .. 32) may be a point's one canonical encoding (RFC 8032 5.1.2) that is not of
+// small order. Whether it is on the curve is left to the decoder.
 static bool encodingGood(const unsigned char in[32]) {
 	unsigned char y[32];
 	memcpy(y, in, 32);
@@ -54,8 +44,8 @@ static bool encodingGood(const unsigned char in[32]) {
 
 // ---------------------------------------------------------------- Ed25519
 
-// RFC 8032 5.1.5: the seed's SHA-512; its first half, pruned, is the secret
-// scalar a, and its second half the prefix that each signature's r is hashed from
+// RFC 8032 5.1.5: the seed's SHA-512; its pruned first half is the secret scalar a, its second
+// half the prefix that each signature's r is hashed from
 static void expand(const unsigned char seed[32], unsigned char a[32], unsigned char prefix[32]) {
 	unsigned char h[64];
 	ermSha512(seed, 32, h);
@@ -129,9 +119,7 @@ static bool decode(Table table, const unsigned char pub[32]) {
 	return true;
 }
 
-// The checks after A's: S less than L; R encodingGood (an R that is not a
-// point's canonical encoding never equals the one worked out); and [S]B -
-// [k]A encoded is R's bytes, the equation without the cofactor.
+// The checks after A's: S less than L, R canonical, and [S]B - [k]A encodes to R's bytes.
 static bool check(const Table table, const unsigned char pub[32], const unsigned char *message, size_t length,
 	const unsigned char signature[64]) {
 	const unsigned char *s = signature + 32;

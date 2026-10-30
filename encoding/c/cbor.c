@@ -1,4 +1,4 @@
-// cbor.c: values in deterministic CBOR and back. See cbor.h for every choice.
+// cbor.c: deterministic CBOR encoding and decoding of json.h values. See cbor.h.
 
 #include "cbor.h"
 #include "../../changeable/c/whole.h"
@@ -10,21 +10,18 @@
 #include <stdlib.h>
 #include <string.h>
 
-// shared ----------------------------------------------------------------------
 
-/** RFC 8746 tags, by JsonKind (int8, int16, uint16, int32, uint32, int64, uint64, float32, float64); never 64, uint8: bytes are that */
+/** RFC 8746 tags by JsonKind. Uint8 has no tag: bytes are that. */
 #define STAND 0x12345678u // the stand-in's tag, in its head da12345678
 static const unsigned kindTags[JSON_KINDS] = { 72, 77, 69, 78, 70, 79, 71, 85, 86 };
 
-/** the one NaN of each float width, quiet, no payload */
+/** The one NaN of each float width. */
 #define NAN32 UINT32_C(0x7fc00000)
 #define NAN64 UINT64_C(0x7ff8000000000000)
 #define NAN16 0x7e00u
 
-/**
- * Whether the bytes are UTF-8: shortest forms, no surrogates, nothing past
- * U+10FFFF. With `held`, U+0000 as json.h holds it (C0 80) is one more form.
- */
+// UTF-8 in shortest forms, no surrogates, nothing past U+10FFFF. With `held`, C0 80 (json.h's
+// U+0000) is allowed too.
 static bool isUtf8(const unsigned char *s, size_t n, bool held) {
 	size_t i = 0;
 	while (i < n) {
@@ -58,7 +55,6 @@ static bool isUtf8(const unsigned char *s, size_t n, bool held) {
 	return true;
 }
 
-/** a double as a half's bits, when a half holds it exactly (not NaN) */
 static bool halfOf(double d, uint16_t *out) {
 	uint16_t sign = signbit(d) ? 0x8000 : 0;
 	double a = fabs(d);
@@ -71,7 +67,7 @@ static bool halfOf(double d, uint16_t *out) {
 		return true;
 	}
 	if (a < 0x1p-14) {
-		// a subnormal half: a whole number of 2^-24
+		// a subnormal half is a whole number of 2^-24
 		double steps = ldexp(a, 24);
 		if (steps != floor(steps)) return false;
 		*out = sign | (uint16_t)steps;
@@ -97,14 +93,11 @@ static double halfValue(uint16_t h) {
 	return (h & 0x8000) ? -a : a;
 }
 
-/** whether a single holds the double exactly (not NaN) */
 static bool fitsFloat(double d) {
 	return isinf(d) || (fabs(d) <= FLT_MAX && (double)(float)d == d);
 }
 
-// encoding --------------------------------------------------------------------
 
-/** room for `more` bytes past length, when the buffer grows */
 static void grow(CborOut *o, size_t more) {
 	if (!o->grows || o->length + more <= o->capacity) return;
 	size_t c = o->capacity ? o->capacity : 64;
@@ -128,7 +121,6 @@ static void putMany(CborOut *o, const unsigned char *bytes, size_t n) {
 	o->length += n;
 }
 
-/** `count` bytes of a number, most significant first */
 static void putBig(CborOut *o, uint64_t number, int count) {
 	for (int i = count - 1; i >= 0; i--) putByte(o, (unsigned)(number >> (8 * i)) & 0xff);
 }
@@ -159,9 +151,8 @@ void cborPutBytes(CborOut *o, const void *data, size_t length) {
 	putMany(o, data, length);
 }
 
-/** a whole number: major type 0 or 1 in the shortest head, a bignum (tag 2 or 3 over its bytes) past 64 bits */
 static void putWhole(CborOut *o, bool negative, const unsigned char *m, size_t n) {
-	// a negative's argument is its magnitude less one: -1 - n
+	// CBOR stores a negative as -1 - n, so the argument is the magnitude minus one
 	unsigned char *less = NULL;
 	if (negative) {
 		less = allocate(n + 1);
@@ -182,7 +173,6 @@ static void putWhole(CborOut *o, bool negative, const unsigned char *m, size_t n
 	free(less);
 }
 
-/** a number that is no whole one: the shortest float that holds it exactly, the one NaN */
 static void putFloat(CborOut *o, double d) {
 	uint16_t half;
 	if (isnan(d)) {
@@ -222,7 +212,6 @@ void cborPutInteger(CborOut *o, int64_t value) {
 
 void cborPutWhole(CborOut *o, bool negative, const unsigned char *magnitude, size_t length) {
 	while (length && !*magnitude) magnitude++, length--;
-	// as jsonWhole holds it: a double when one holds it exactly
 	if (whole_exact(magnitude, length)) cborPutNumber(o, whole_near(negative, magnitude, length));
 	else putWhole(o, negative, magnitude, length);
 }
@@ -231,7 +220,6 @@ bool cborText(const char *text, size_t length) {
 	return isUtf8((const unsigned char *)text, length, true);
 }
 
-/** how many bytes the text is in plain UTF-8: each C0 80 is one 00 */
 static size_t plainLength(const char *text, size_t length) {
 	size_t plain = length;
 	for (size_t i = 0; i + 1 < length; i++)
@@ -259,7 +247,6 @@ bool cborPutText(CborOut *o, const char *text, size_t length) {
 	return true;
 }
 
-/** the byte at s[*i] in plain UTF-8, moving past it */
 static unsigned plainByte(const unsigned char *s, size_t length, size_t *i) {
 	if (s[*i] == 0xc0 && *i + 1 < length && s[*i + 1] == 0x80) {
 		*i += 2;
@@ -284,7 +271,6 @@ static int keyCompare(const JsonMember *a, const JsonMember *b) {
 	return cborKeyCompare(a->key, a->keyLength, b->key, b->keyLength);
 }
 
-/** the member whose key comes next after member `last` (-1: the first), or -1 */
 static int nextKey(const Json *object, int last) {
 	const JsonMember *members = object->object.members;
 	int best = -1;
@@ -295,7 +281,6 @@ static int nextKey(const Json *object, int last) {
 	return best;
 }
 
-/** a typed array element as the unsigned number of its bits, a NaN as the one NaN */
 static uint64_t elementBits(JsonKind kind, const unsigned char *at) {
 	switch (kind) {
 		case JSON_INT8: return at[0];
@@ -343,8 +328,8 @@ void cborPutTyped(CborOut *o, JsonKind kind, const void *data, size_t count) {
 	}
 }
 
-/** a list or map being written: how many of its members are out, and (a map) the last key written.
- * a big map's members in key order, found once (n log n; nextKey is n each, n² in all) */
+/** A list or map being written: members written so far and, for a big map, its key order.
+ * Big maps are sorted once (n log n); nextKey scans each time, n² in all. */
 typedef struct Writing {
 	const Json *container;
 	int next;
@@ -356,8 +341,7 @@ static int memberCompare(const void *a, const void *b) {
 	return keyCompare(*(const JsonMember *const *)a, *(const JsonMember *const *)b);
 }
 
-/** a map's members sorted by key, when it is big; NULL when small (nextKey does) or out of memory
- * (nextKey does, slowly). *twice: two members with one key */
+// NULL when the map is small or memory runs out; nextKey is used then. *twice: a key repeats.
 static const JsonMember **sortedMembers(const Json *object, bool *twice) {
 	int n = object->object.count;
 	*twice = false;
@@ -372,7 +356,7 @@ static const JsonMember **sortedMembers(const Json *object, bool *twice) {
 	return order;
 }
 
-// No recursion: the lists and maps being written are kept on a stack of their own.
+// No recursion: open lists and maps go on a stack of their own, so nesting is limited only by memory.
 bool cborPut(CborOut *o, const Json *value, const char **why) {
 	Writing *stack = NULL;
 	int depth = 0, room = 0;
@@ -415,7 +399,6 @@ bool cborPut(CborOut *o, const Json *value, const char **why) {
 				break;
 			}
 		}
-		// the next value to write, leaving every container that is done
 		value = NULL;
 		while (depth && !value && !fault) {
 			Writing *top = &stack[depth - 1];
@@ -460,9 +443,7 @@ bool cborEncode(const Json *value, unsigned char *out, size_t capacity, size_t *
 	return ok;
 }
 
-// decoding --------------------------------------------------------------------
-// one walk holds every rule; what it finds goes to a maker (cborRead), json.h's for cborDecode, none
-// for cborCheck
+// One walk holds every rule; what it finds goes to a maker (none when only checking).
 
 typedef struct In {
 	const unsigned char *data;
@@ -474,7 +455,6 @@ typedef struct In {
 	size_t keyRoom;
 } In;
 
-// what stands in for a value that is not made, when only the rules are checked
 static char noValue;
 
 static bool fail(In *in, size_t at, const char *why) {
@@ -492,7 +472,6 @@ static uint64_t getBig(In *in, int count) {
 	return number;
 }
 
-/** a head of major type 0 to 6, its argument in its shortest form; the initial byte is read */
 static bool getArgument(In *in, size_t start, unsigned info, uint64_t *argument) {
 	static const int sizes[4] = { 1, 2, 4, 8 };
 	static const uint64_t least[4] = { 24, 0x100, 0x10000, UINT64_C(0x100000000) };
@@ -509,7 +488,6 @@ static bool getArgument(In *in, size_t start, unsigned info, uint64_t *argument)
 	return true;
 }
 
-/** a byte or text string's length, at most what is left */
 static bool getLength(In *in, size_t start, unsigned info, size_t *length) {
 	uint64_t argument;
 	if (!getArgument(in, start, info, &argument)) return false;
@@ -518,7 +496,6 @@ static bool getLength(In *in, size_t start, unsigned info, size_t *length) {
 	return true;
 }
 
-/** plain UTF-8 as json.h holds text, into out (room for length, one more for each 00, and a NUL): 00 as C0 80, a NUL after; how many bytes before it */
 static size_t held(const unsigned char *s, size_t length, char *out) {
 	size_t o = 0;
 	for (size_t i = 0; i < length; i++) {
@@ -529,14 +506,12 @@ static size_t held(const unsigned char *s, size_t length, char *out) {
 	return o;
 }
 
-/** how many bytes text held so takes, the NUL too */
 static size_t heldRoom(const unsigned char *s, size_t length) {
 	size_t room = length + 1;
 	for (size_t i = 0; i < length; i++) room += s[i] == 0;
 	return room;
 }
 
-/** a text string's contents (its head read), checked and passed; *at where they begin */
 static bool getText(In *in, size_t start, size_t length, size_t *at) {
 	if (!isUtf8(in->data + in->at, length, false)) return fail(in, start, "text that is not UTF-8");
 	*at = in->at;
@@ -575,7 +550,6 @@ static bool getTyped(In *in, size_t start, uint64_t tag, CborItem *item) {
 	return true;
 }
 
-/** a bignum's byte string (its tag read): more than 8 bytes (a plain integer holds the rest), no leading zero */
 static bool getBignum(In *in, size_t start, bool negative, CborItem *item) {
 	size_t inner = in->at, length;
 	if (!left(in)) return fail(in, inner, "the input ends after a tag");
@@ -591,7 +565,7 @@ static bool getBignum(In *in, size_t start, bool negative, CborItem *item) {
 	item->data = m;
 	item->length = length;
 	if (!negative || !in->build) return true;
-	// -1 - n: the magnitude is n + 1
+	// CBOR's -1 - n: the magnitude is n + 1
 	unsigned char *more = item->own = allocate(length + 1);
 	memcpy(more + 1, m, length);
 	for (size_t i = length + 1; i-- > 0;) {
@@ -639,7 +613,6 @@ static bool getSimple(In *in, size_t start, unsigned info, CborItem *item) {
 	return true;
 }
 
-/** One item, read into *item: a scalar, bytes, a typed array, or a list, map or stand-in with its count */
 static bool getItem(In *in, CborItem *item) {
 	size_t start = in->at;
 	if (!left(in)) return fail(in, start, "the input ends where an item should be");
@@ -655,7 +628,6 @@ static bool getItem(In *in, CborItem *item) {
 				item->argument = argument;
 				return true;
 			}
-			// -1 - argument: its magnitude is argument + 1, 2^64 at most
 			unsigned char *m = item->room;
 			size_t n = whole_of_u64(argument, m + 1);
 			memmove(m + 1 + (8 - n), m + 1, n); // right-aligned in m[1..8]
@@ -690,7 +662,6 @@ static bool getItem(In *in, CborItem *item) {
 		case 4:
 		case 5:
 			if (!getArgument(in, start, info, &argument)) return false;
-			// every item is at least a byte: no more than the input can hold
 			if (argument > INT_MAX || argument > left(in) / (major == 5 ? 2 : 1)) return fail(in, start, "more items than the input holds");
 			item->what = major == 4 ? CBOR_LIST : CBOR_MAP;
 			item->count = (size_t)argument;
@@ -708,7 +679,7 @@ static bool getItem(In *in, CborItem *item) {
 	}
 }
 
-/** a list, map or stand-in being filled: how many members it still wants, where the key read for the next is, the last key's bytes */
+/** A list, map or stand-in being filled. */
 typedef struct Filling {
 	void *container;
 	CborWhat what;
@@ -718,7 +689,6 @@ typedef struct Filling {
 	size_t lastStart, lastEnd; // the last key's encoding in the input; lastEnd 0 when none
 } Filling;
 
-/** a map key as json.h holds it, in in->key */
 static const char *heldKey(In *in, const Filling *top, size_t *length) {
 	const unsigned char *s = in->data + top->keyAt;
 	size_t room = heldRoom(s, top->keyLength);
@@ -731,7 +701,7 @@ static const char *heldKey(In *in, const Filling *top, size_t *length) {
 	return in->key;
 }
 
-// No recursion: the lists and maps being filled are kept on a stack of their own.
+// No recursion, as in cborPut.
 void *cborRead(const unsigned char *data, size_t length, const CborMaker *maker, const char **why, size_t *at) {
 	In in = { data, length, 0, NULL, 0, maker != NULL, NULL, 0 };
 	Filling *stack = NULL;
@@ -741,7 +711,6 @@ void *cborRead(const unsigned char *data, size_t length, const CborMaker *maker,
 	while (ok) {
 		Filling *top = depth ? &stack[depth - 1] : NULL;
 		if (top && top->what == CBOR_MAP && !top->keyed) {
-			// a key: a text string after the last key in encoding order
 			size_t start = in.at, textLength;
 			if (!left(&in)) ok = fail(&in, start, "the input ends where a key should be");
 			else if (in.data[in.at] >> 5 != 3) ok = fail(&in, start, "a key that is not a text string");
@@ -763,7 +732,6 @@ void *cborRead(const unsigned char *data, size_t length, const CborMaker *maker,
 			break;
 		}
 		bool container = item.what == CBOR_LIST || item.what == CBOR_MAP || item.what == CBOR_STAND;
-		// a container inside CBOR_DEPTH others
 		if (depth >= CBOR_DEPTH && container) {
 			ok = fail(&in, start, "nested deeper than " CBOR_DEPTH_TEXT);
 			break;
@@ -803,7 +771,6 @@ void *cborRead(const unsigned char *data, size_t length, const CborMaker *maker,
 	return root;
 }
 
-// json.h's maker: cborDecode's values
 
 static void *jsonMake(void *self, const CborItem *item) {
 	(void)self;
@@ -816,7 +783,6 @@ static void *jsonMake(void *self, const CborItem *item) {
 		case CBOR_TEXT: return jsonStringTaking(item->text, item->length);
 		case CBOR_BYTES: return jsonBytes(item->data, item->length);
 		case CBOR_TYPED: {
-			// the elements' bits, as the machine holds that kind
 			size_t size = jsonKindSize(item->kind);
 			unsigned char *data = allocate(item->length);
 			for (size_t i = 0; i < item->count; i++) {

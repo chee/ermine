@@ -1,9 +1,5 @@
-// what the encoding's fuzz tests share (cbor_fuzz_test.ts): seeded numbers, values of every kind,
-// value equality, non-canonical rewrites of an encoding and bytes near one. seeded and
-// deterministic: a seed is a run
-// the rules (cbor.ts): whole numbers are integers (bignums past 64 bits), -0 is 0, other numbers
-// the shortest float; read back a number while safe, a bigint past that. same() compares numbers
-// so; rewrites write an integer as a float, as a bignum, a bignum with a leading zero
+// What the cbor fuzz tests share (cbor_fuzz_test.ts): seeded random values of every kind, value
+// equality, non-canonical rewrites of an encoding, and bytes near one. A seed is a run.
 import { decode, Stand, type Value } from "./cbor.ts"
 import { line, toJson } from "../../conformance/typescript/form.ts"
 
@@ -84,13 +80,11 @@ export const NUMBERS = [
 	-(2n ** 64n) - 1n,
 	2n ** 200n + 3n,
 ]
-// a whole number near an edge: 2^k and its neighbours, either sign, a number or a bigint
 export function whole(pick: Pick): number | bigint {
 	const k = BigInt([7, 8, 15, 16, 31, 32, 52, 53, 54, 63, 64, 65, 100][pick(13)])
 	const n = (pick(2) ? -1n : 1n) * (2n ** k + BigInt(pick(5)) - 2n)
 	return pick(2) ? n : Number(n)
 }
-// a double from 64 random bits, or one a half or a single holds exactly, or a whole number
 export function number(pick: Pick): number | bigint {
 	const v = new DataView(new ArrayBuffer(8))
 	switch (pick(6)) {
@@ -134,12 +128,10 @@ export const PARTS = [
 	'"\\\n',
 	"/",
 ]
-// a string; lone surrogates only when asked
 export function text(pick: Pick, lone: boolean, most = 6): string {
 	const ps = lone ? PARTS : PARTS.filter((p) => p.isWellFormed())
 	let s = ""
 	for (let n = pick(most + 1); n > 0; n--) s += ps[pick(ps.length)]
-	// a high then a low from two parts is a pair: whole, as asked
 	return lone || s.isWellFormed() ? s : s.toWellFormed()
 }
 
@@ -181,12 +173,10 @@ export const KINDS = [
 	Float64Array,
 ] as const
 
-// elements from random bytes (a float NaN with any payload, -0), some set to edges
 export function typed(pick: Pick): Value {
 	const T = KINDS[pick(KINDS.length)]
 	const n = pick(5)
 	const size = T.BYTES_PER_ELEMENT
-	// sometimes a view into a bigger buffer, not at its start
 	const skip = pick(3) === 0 ? pick(3) : 0
 	const buf = new Uint8Array((n + skip + 1) * size)
 	for (let i = 0; i < buf.length; i++) buf[i] = pick(256)
@@ -204,7 +194,6 @@ export function bytes(pick: Pick): Uint8Array {
 	return pick(3) === 0 ? buf.subarray(2, 2 + n) : buf.slice(0, n)
 }
 
-// a value; lone: strings and keys may hold lone surrogates
 export function value(pick: Pick, lone = false, depth = 0): Value {
 	const k = pick(depth >= 4 ? 7 : 11)
 	switch (k) {
@@ -243,7 +232,6 @@ export function value(pick: Pick, lone = false, depth = 0): Value {
 	}
 }
 
-// the same value, made again: maps' keys in another order, typed arrays and bytes in fresh buffers
 export function shuffled(pick: Pick, v: Value): Value {
 	if (v === null || typeof v !== "object") return v
 	if (v instanceof Stand) return new Stand(shuffled(pick, v.kind))
@@ -266,7 +254,6 @@ export function shuffled(pick: Pick, v: Value): Value {
 	return m
 }
 
-// a number as read back: -0 is 0, a whole number past 2^53 - 1 a bigint, a safe bigint a number
 export const canon = (x: number | bigint) =>
 	typeof x === "bigint"
 		? (x >= -(2n ** 53n) + 1n && x <= 2n ** 53n - 1n ? Number(x) : x)
@@ -307,7 +294,6 @@ export const show = (v: unknown) => {
 	return s.length > 300 ? s.slice(0, 300) + "…" : s
 }
 
-// an encoding's items, read plainly (only what encode writes: definite heads, floats, f4-f6)
 export type Item = {
 	at: number
 	body: number
@@ -345,7 +331,6 @@ export function every(i: Item, out: Item[] = []): Item[] {
 	return out
 }
 
-// a head, in the fewest bytes, or in `info`'s width
 export function head(major: number, arg: number | bigint, info?: number): Uint8Array {
 	const n = BigInt(arg)
 	info ??= n < 24n ? Number(n) : n < 0x100n ? 24 : n < 0x10000n ? 25 : n < 0x100000000n ? 26 : 27
@@ -356,7 +341,6 @@ export function head(major: number, arg: number | bigint, info?: number): Uint8A
 	return out
 }
 
-// the bytes with [from, to) replaced
 export const splice = (b: Uint8Array, from: number, to: number, by: Uint8Array | number[]) =>
 	cat(b.subarray(0, from), by, b.subarray(to))
 
@@ -393,13 +377,11 @@ export const UNKNOWN_TAGS = [
 	2 ** 32,
 ]
 
-// non-canonical rewrites of an encoding: each is no encoding. [what, bytes]
 export function rewrites(pick: Pick, b: Uint8Array): [string, Uint8Array][] {
 	const root = items(b)
 	const all = every(root)
 	const out: [string, Uint8Array][] = []
 	const any = <T>(xs: T[]) => xs[pick(xs.length)]
-	// a head longer than it need be
 	const headed = all.filter((i) => i.major !== 7)
 	if (headed.length) {
 		const i = any(headed)
@@ -409,7 +391,6 @@ export function rewrites(pick: Pick, b: Uint8Array): [string, Uint8Array][] {
 			out.push(["a longer head", splice(b, i.at, i.body, head(i.major, i.arg, wider))])
 		}
 	}
-	// an indefinite length
 	const sized = all.filter((i) => i.major >= 2 && i.major <= 5)
 	if (sized.length) {
 		const i = any(sized)
@@ -418,7 +399,6 @@ export function rewrites(pick: Pick, b: Uint8Array): [string, Uint8Array][] {
 			: cat([(i.major << 5) | 31], b.subarray(i.body, i.end), [0xff])
 		out.push(["an indefinite length", splice(b, i.at, i.end, indefinite)])
 	}
-	// a float a longer float holds; a whole one as an integer
 	const floats = all.filter((i) => i.major === 7 && i.body - i.at > 1)
 	if (floats.length) {
 		const i = any(floats)
@@ -433,7 +413,6 @@ export function rewrites(pick: Pick, b: Uint8Array): [string, Uint8Array][] {
 			v.setUint8(0, 0xfb), v.setFloat64(1, x)
 			out.push(["a longer float", splice(b, i.at, i.end, new Uint8Array(v.buffer, 0, 9))])
 		}
-		// a NaN not the one: a payload, a sign, a longer one
 		const nan = any([[0xf9, 0x7e, 0x01], [0xf9, 0xfe, 0x00], [0xf9, 0x7c, 0x01], [
 			0xfa,
 			0x7f,
@@ -443,7 +422,6 @@ export function rewrites(pick: Pick, b: Uint8Array): [string, Uint8Array][] {
 		], [0xfb, 0x7f, 0xf8, 0, 0, 0, 0, 0, 0]])
 		out.push(["another NaN", splice(b, i.at, i.end, nan)])
 	}
-	// an integer as a float (the shortest that holds it), or as a bignum a plain integer holds
 	const ints = all.filter((i) => i.major <= 1)
 	if (ints.length) {
 		const i = any(ints)
@@ -470,20 +448,17 @@ export function rewrites(pick: Pick, b: Uint8Array): [string, Uint8Array][] {
 			splice(b, i.at, i.end, cat([i.major === 0 ? 0xc2 : 0xc3], head(2, 8), raw)),
 		])
 	}
-	// a bignum with a leading zero
 	const bigs = all.filter((i) => i.major === 6 && (i.arg === 2 || i.arg === 3))
 	if (bigs.length) {
 		const t = any(bigs), raw = t.kids[0]
 		const grown = cat(head(2, raw.end - raw.body + 1), [0], b.subarray(raw.body, raw.end))
 		out.push(["a bignum with a leading zero", splice(b, raw.at, raw.end, grown)])
 	}
-	// a simple value not false, true or null
 	{
 		const i = any(all)
 		const simple = any([[0xf7], [0xe0], [0xf3], [0xf8, 0x20], [0xf8, 0x14], [0xfc], [0xff]])
 		out.push(["another simple value", splice(b, i.at, i.end, simple)])
 	}
-	// map keys out of order, twice, not text
 	const maps = all.filter((i) => i.major === 5 && i.arg >= 1)
 	if (maps.length) {
 		const m = any(maps)
@@ -511,19 +486,16 @@ export function rewrites(pick: Pick, b: Uint8Array): [string, Uint8Array][] {
 		])
 		out.push(["a key not text", splice(b, key.at, key.end, not)])
 	}
-	// text that is not UTF-8
 	const texts = all.filter((i) => i.major === 3)
 	if (texts.length) {
 		const t = any(texts)
 		const body = b.subarray(t.body, t.end)
 		const cut = pick(body.length + 1)
-		// cut at a code point's start, so only the bad sequence is bad
 		let at = cut
 		while (at > 0 && at < body.length && (body[at] & 0xc0) === 0x80) at--
 		const bad = cat(body.subarray(0, at), any(BAD_UTF8), body.subarray(at))
 		out.push(["text not UTF-8", splice(b, t.at, t.end, cat(head(3, bad.length), bad))])
 	}
-	// a tag no value has, a typed array's over something not bytes or not whole elements
 	{
 		const i = any(all)
 		const tag = head(6, any(UNKNOWN_TAGS))
@@ -563,20 +535,17 @@ export function rewrites(pick: Pick, b: Uint8Array): [string, Uint8Array][] {
 			])
 		}
 	}
-	// a container saying more than it holds
 	const containers = all.filter((i) => i.major === 4 || i.major === 5)
 	if (containers.length) {
 		const c = any(containers)
 		out.push(["more items than there are", splice(b, c.at, c.body, head(c.major, c.arg + 1))])
 	}
-	// bytes after, a prefix
 	out.push(["bytes after", cat(b, [pick(256)])])
 	if (b.length > 1) out.push(["a prefix", b.subarray(0, 1 + pick(b.length - 1))])
 	out.push(["nothing", new Uint8Array()])
 	return out
 }
 
-// bytes near an encoding: cut, grown and flipped
 export function mutate(pick: Pick, b: Uint8Array): Uint8Array {
 	const out = Array.from(b)
 	for (let n = 1 + pick(3); n > 0; n--) {
@@ -598,7 +567,6 @@ export function mutate(pick: Pick, b: Uint8Array): Uint8Array {
 	return Uint8Array.from(out)
 }
 
-// whether a string or key in it holds a lone surrogate
 export function lone(v: unknown): boolean {
 	if (typeof v === "string") return !v.isWellFormed()
 	if (v instanceof Stand) return lone(v.kind)
@@ -607,7 +575,6 @@ export function lone(v: unknown): boolean {
 	return Object.keys(v).some((k) => !k.isWellFormed() || lone((v as never)[k]))
 }
 
-// a map whose content is the same, keys sorted (answers compare maps by content)
 export const stable = (x: unknown) =>
 	line(
 		x,
@@ -617,7 +584,6 @@ export const stable = (x: unknown) =>
 				: v,
 	)
 
-// what a field may hold that its rule says no to (or yes: an edge)
 export const JUNK: unknown[] = [
 	null,
 	true,

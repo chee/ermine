@@ -1,5 +1,5 @@
-// json_text.c: a value's JSON text (json_text.h): the parser, jsonDecode's "/" forms and the
-// printer. Apart from json.c, so what never reads or writes text links none of it.
+// json_text.c: the JSON parser, the "/" forms and the printer. See json_text.h.
+// Separate from json.c so code that never reads or writes text doesn't link it.
 
 #include "json_text.h"
 #include "../../changeable/c/whole.h"
@@ -11,14 +11,12 @@
 #include <stdlib.h>
 #include <string.h>
 
-// the typed arrays' kinds as their JSON form names them, in JsonKind's order
 static const char *const kindNames[JSON_KINDS] = { "int8", "int16", "uint16", "int32", "uint32", "int64", "uint64", "float32", "float64" };
 
 static bool isContinuation(unsigned char byte) {
 	return (byte & 0xc0) == 0x80;
 }
 
-// values in JSON (conformance/typescript/form.ts) ---------------------------------------
 
 static const char base64Digits[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
@@ -27,7 +25,8 @@ static int base64Digit(char c) {
 	return at ? (int)(at - base64Digits) : -1;
 }
 
-/** bytes from base64, standard alphabet, no padding, in the one spelling of those bytes (the bits past the last octet zero); NULL otherwise */
+// Base64 must be in its one spelling: standard alphabet, no padding, the bits past the last
+// byte zero. Anything else is NULL.
 static Json *bytesOf(const Json *text) {
 	if (!jsonIsString(text) || text->stringLength % 4 == 1) return NULL;
 	size_t n = text->stringLength, k = 0;
@@ -53,7 +52,6 @@ static Json *bytesOf(const Json *text) {
 	return value;
 }
 
-/** NaN, Infinity or -Infinity, the words JSON has no number for; false for anything else */
 static bool numberWord(const Json *word, double *out) {
 	const char *text = jsonText(word);
 	if (!text) return false;
@@ -64,11 +62,6 @@ static bool numberWord(const Json *word, double *out) {
 	return true;
 }
 
-/**
- * one element of a typed array's list, by its kind: a whole number in range;
- * a 64-bit one as a decimal string; a float a number, or "NaN", "Infinity",
- * "-Infinity" (as the shared vectors write it). False when it is not one
- */
 static bool elementOf(int kind, const Json *e, char *at) {
 	if (kind == JSON_INT64 || kind == JSON_UINT64) {
 		const char *text = jsonText(e);
@@ -102,11 +95,6 @@ static bool elementOf(int kind, const Json *e, char *at) {
 	return true;
 }
 
-/**
- * a typed array from its kind's name and the list of its elements (the
- * shared vectors' form); NULL when the kind is unknown or an element is not
- * one of its kind
- */
 static Json *typedOf(const char *name, size_t nameLength, const Json *list) {
 	int kind = 0;
 	while (kind < JSON_KINDS && !(strlen(kindNames[kind]) == nameLength && memcmp(kindNames[kind], name, nameLength) == 0)) kind++;
@@ -129,12 +117,10 @@ static bool isKey(const JsonMember *member, const char *key) {
 	return member->keyLength == strlen(key) && memcmp(member->key, key, member->keyLength) == 0;
 }
 
-/** an object whose only key is "/" */
 static bool isSlashMap(const Json *value) {
 	return jsonIsObject(value) && value->object.count == 1 && isKey(&value->object.members[0], "/");
 }
 
-/** a whole number from decimal digits, a '-' first or not (and no leading zero when `strict`); NULL when not that */
 static Json *wholeOf(const char *text, size_t length, bool strict) {
 	bool negative = length && text[0] == '-';
 	const char *digits = text + negative;
@@ -149,7 +135,6 @@ static Json *wholeOf(const char *text, size_t length, bool strict) {
 	return value;
 }
 
-/** a whole number past 2^53 - 1 either way, in decimal: the one spelling ({"/":{"bigint":"…"}}); a safe one is plain digits, so NULL */
 static Json *bigintOf(const Json *text) {
 	if (!jsonIsString(text)) return NULL;
 	Json *value = wholeOf(text->string, text->stringLength, true);
@@ -160,7 +145,6 @@ static Json *bigintOf(const Json *text) {
 	return value;
 }
 
-/** the value one "/" form other than map stands for: bytes, a number, a stand-in (its kind still to decode), or a typed array; NULL when malformed */
 static Json *formOf(const JsonMember *form) {
 	double number;
 	if (isKey(form, "bytes")) return bytesOf(form->value);
@@ -170,7 +154,6 @@ static Json *formOf(const JsonMember *form) {
 	return typedOf(form->key, form->keyLength, form->value);
 }
 
-/** here becomes what made held (made itself goes), and the form it was is let go of; keep, a part of that form, stays */
 static void becomes(Json *here, Json *made, Json *keep) {
 	Json *form = allocate(sizeof *form);
 	*form = *here;
@@ -180,7 +163,7 @@ static void becomes(Json *here, Json *made, Json *keep) {
 	free(made);
 }
 
-// No recursion: the places still to decode are kept on a stack of their own.
+// No recursion: what is left to decode waits on a stack of its own.
 bool jsonDecode(Json **value) {
 	Json ***stack = NULL;
 	int count = 0, capacity = 0;
@@ -197,12 +180,10 @@ bool jsonDecode(Json **value) {
 				stack[count++] = &here->array.items[i];
 			}
 		} else if (isSlashMap(here)) {
-			// one of the forms: a map with one key, the form's name
 			Json *form = here->object.members[0].value;
 			if (!jsonIsObject(form) || form->object.count != 1) {
 				ok = false;
 			} else if (isKey(&form->object.members[0], "map")) {
-				// a map whose only key is "/", as data: its value is decoded in turn
 				Json *map = form->object.members[0].value;
 				ok = isSlashMap(map);
 				if (ok) {
@@ -215,7 +196,6 @@ bool jsonDecode(Json **value) {
 				ok = made != NULL;
 				if (ok) becomes(here, made, made->type == JSON_STAND ? made->stand.kind : NULL);
 				if (ok && here->type == JSON_STAND) {
-					// its kind is decoded in turn
 					stack = growArray(stack, count, &capacity, sizeof *stack);
 					stack[count++] = &here->stand.kind;
 				}
@@ -232,7 +212,6 @@ bool jsonDecode(Json **value) {
 	return ok;
 }
 
-/** the length of the well-formed UTF-8 sequence at text[0], or 0 */
 static size_t utf8SequenceLength(const unsigned char *text, size_t available) {
 	unsigned char lead = text[0];
 	size_t length;
@@ -260,7 +239,6 @@ static size_t utf8SequenceLength(const unsigned char *text, size_t available) {
 	return length;
 }
 
-/** writes a code point (a surrogate too, as WTF-8) as UTF-8; returns how many bytes */
 static int utf8Encode(uint32_t code, char *out) {
 	if (code < 0x80) {
 		out[0] = (char)code;
@@ -284,7 +262,6 @@ static int utf8Encode(uint32_t code, char *out) {
 	return 4;
 }
 
-// the parser -------------------------------------------------------------------
 
 typedef struct Parser {
 	const unsigned char *text;
@@ -366,7 +343,6 @@ static Json *parseNumber(Parser *parser) {
 	}
 	const char *text = (const char *)parser->text + start;
 	size_t length = parser->at - start;
-	// digits alone: a whole number, exactly
 	if (!memchr(text, '.', length) && !memchr(text, 'e', length) && !memchr(text, 'E', length) && length > 15) {
 		return wholeOf(text, length, false);
 	}
@@ -378,7 +354,7 @@ static Json *parseNumber(Parser *parser) {
 		return NULL;
 	}
 	Json *value = jsonNumber(number);
-	// -0 read as written: a float typed array's element keeps it; a number is 0 (written 0, encoded 00)
+	// -0 stays as written so a float typed array can hold it; as a plain number it is 0
 	value->number = number;
 	return value;
 }
@@ -390,7 +366,6 @@ static int hexValue(unsigned char c) {
 	return -1;
 }
 
-/** four hex digits at the position, or -1 (the position is then unmoved) */
 static int parseHex4(Parser *parser) {
 	if (parser->at + 4 > parser->length) return -1;
 	int code = 0;
@@ -403,7 +378,6 @@ static int parseHex4(Parser *parser) {
 	return code;
 }
 
-/** the text of a string from its opening quote, NUL-terminated, and its length; NULL on failure */
 static char *parseStringText(Parser *parser, size_t *length) {
 	parser->at++;
 	Bytes out = { NULL, 0, 0 };
@@ -446,7 +420,6 @@ static char *parseStringText(Parser *parser, size_t *length) {
 						return NULL;
 					}
 					if (code >= 0xd800 && code <= 0xdbff && parser->at + 6 <= parser->length && parser->text[parser->at] == '\\' && parser->text[parser->at + 1] == 'u') {
-						// a high surrogate followed by a low one is one code point
 						size_t before = parser->at;
 						parser->at += 2;
 						int low = parseHex4(parser);
@@ -496,7 +469,6 @@ static Json *parseString(Parser *parser) {
 	return jsonStringTaking(text, length);
 }
 
-/** a string, true, false, null or a number at the position; NULL (and a why) when there is none */
 static Json *parseScalar(Parser *parser) {
 	unsigned char c = peek(parser);
 	switch (c) {
@@ -522,7 +494,6 @@ typedef struct Open {
 	size_t keyLength;
 } Open;
 
-/** an object's next key and its colon, into the open object */
 static bool parseKey(Parser *parser, Open *open) {
 	skipWhitespace(parser);
 	if (peek(parser) != '"') {
@@ -540,7 +511,7 @@ static bool parseKey(Parser *parser, Open *open) {
 	return true;
 }
 
-/** a whole value into the open list or object; a repeated key keeps the last value, as JSON.parse does */
+// A repeated key keeps the last value, as JSON.parse does.
 static void putInto(Open *open, Json *value) {
 	Json *container = open->container;
 	if (container->type == JSON_ARRAY) {
@@ -552,16 +523,14 @@ static void putInto(Open *open, Json *value) {
 	open->key = NULL;
 }
 
-// No depth limit and no recursion: a line that is one JSON object is a
-// request, however deep (JSON.parse takes it too), so the lists and objects
-// being parsed are kept on a stack of their own.
+// No depth limit and no recursion: a request line may nest as deep as JSON.parse allows,
+// so open containers wait on a stack of their own.
 Json *jsonParse(const char *text, size_t length, char **why) {
 	Parser parser = { (const unsigned char *)text, length, 0, NULL };
 	Open *opens = NULL;
 	int depth = 0, capacity = 0;
 	Json *value = NULL;
 	for (;;) {
-		// a value starts here: a scalar is whole at once, a list or object opens
 		skipWhitespace(&parser);
 		unsigned char c = peek(&parser);
 		if (c == '[' || c == '{') {
@@ -579,7 +548,6 @@ Json *jsonParse(const char *text, size_t length, char **why) {
 		} else if (!(value = parseScalar(&parser))) {
 			goto failed;
 		}
-		// the value is whole: put it in its container, and close every container that ends after it
 		for (;;) {
 			if (depth == 0) goto parsed;
 			Open *open = &opens[depth - 1];
@@ -611,7 +579,6 @@ parsed:
 	}
 	fail(&parser, "trailing characters");
 failed:
-	// the open containers are not yet in each other: each is freed on its own
 	jsonFree(value);
 	for (int i = 0; i < depth; i++) {
 		jsonFree(opens[i].container);
@@ -622,7 +589,6 @@ failed:
 	return NULL;
 }
 
-// the printer ------------------------------------------------------------------
 
 void jsonNumberText(double number, char out[32]) {
 	if (isnan(number) || isinf(number)) {
@@ -633,12 +599,10 @@ void jsonNumberText(double number, char out[32]) {
 		strcpy(out, "0"); // -0 too
 		return;
 	}
-	// whole and below 1e21: its digits, as JSON.stringify writes them
 	if (number == floor(number) && fabs(number) < 1e21) {
 		whole_js_digits(number, out);
 		return;
 	}
-	// the fewest digits from 15 that read back as the same double; %.17g always does
 	for (int precision = 15; precision <= 17; precision++) {
 		snprintf(out, 32, "%.*g", precision, number);
 		if (strtod(out, NULL) == number) return;
@@ -649,7 +613,6 @@ static void putText(Bytes *bytes, const char *text) {
 	putBytes(bytes, text, strlen(text));
 }
 
-/** as JSON.stringify: " \ and \b \f \n \r \t escaped, other controls as \u00xx, lone surrogates as \udxxx, the rest raw */
 static void putString(Bytes *bytes, const char *text, size_t length) {
 	putBytes(bytes, "\"", 1);
 	const unsigned char *c = (const unsigned char *)text;
@@ -684,7 +647,6 @@ static void putString(Bytes *bytes, const char *text, size_t length) {
 	putBytes(bytes, "\"", 1);
 }
 
-/** a number in its JSON form: -0 as -0, NaN and the infinities as the words `words` puts them in */
 static void putNumber(Bytes *bytes, double number, const char *before, const char *after) {
 	char spelled[32];
 	if (isnan(number) || isinf(number)) {
@@ -717,7 +679,6 @@ static void putBase64(Bytes *bytes, const unsigned char *data, size_t length) {
 	putText(bytes, "\"");
 }
 
-/** a typed array's elements as a list (the shared vectors' form): 64-bit ones as decimal strings, a float's NaN and infinities as words */
 static void putElements(Bytes *bytes, const Json *value) {
 	size_t size = jsonKindSize(value->typed.kind);
 	char spelled[32];
@@ -741,7 +702,6 @@ static void putElements(Bytes *bytes, const Json *value) {
 	putText(bytes, "]");
 }
 
-/** a scalar, bytes, a typed array in its JSON form */
 static void putScalar(Bytes *bytes, const Json *value) {
 	switch (value->type) {
 		case JSON_NULL:
@@ -751,7 +711,6 @@ static void putScalar(Bytes *bytes, const Json *value) {
 			putText(bytes, value->boolean ? "true" : "false");
 			break;
 		case JSON_NUMBER: {
-			// a whole number past 2^53 - 1: its digits, in the bigint form
 			bool negative;
 			unsigned char scratch[128];
 			const unsigned char *m;
@@ -765,7 +724,6 @@ static void putScalar(Bytes *bytes, const Json *value) {
 				free(digits);
 				break;
 			}
-			// -0 is 0
 			putNumber(bytes, value->number == 0 ? 0 : value->number, "{\"/\":{\"number\":\"", "\"}}");
 			break;
 		}
@@ -795,14 +753,12 @@ typedef struct Printing {
 	int next;
 } Printing;
 
-// No recursion: the lists and objects being printed are kept on a stack of their own.
 char *jsonPrint(const Json *value) {
 	Bytes bytes = { NULL, 0, 0 };
 	Printing *stack = NULL;
 	int depth = 0, capacity = 0;
 	while (value) {
 		if (value->type == JSON_ARRAY || value->type == JSON_OBJECT) {
-			// a map whose only key is "/" is data, not a form: it is escaped
 			if (isSlashMap(value)) putText(&bytes, "{\"/\":{\"map\":");
 			putBytes(&bytes, value->type == JSON_ARRAY ? "[" : "{", 1);
 			stack = growArray(stack, depth, &capacity, sizeof *stack);
@@ -814,7 +770,6 @@ char *jsonPrint(const Json *value) {
 		} else {
 			putScalar(&bytes, value);
 		}
-		// the next value to print, closing every container that is done
 		value = NULL;
 		while (depth && !value) {
 			Printing *top = &stack[depth - 1];

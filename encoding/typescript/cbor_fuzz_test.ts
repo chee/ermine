@@ -1,18 +1,7 @@
-// the cbor fuzz: values of every kind (numbers at each float's edges, strings with every width of
-// code point and lone surrogates, typed arrays of each kind with NaN and -0 elements, maps of
-// tricky keys, deep and big ones) and bytes near an encoding. checked:
-// - round trip: decode(encode(v)) is v (maps by content), encode again the same bytes; a copy with
-//   its keys in another order the same bytes
-// - numbers: whole ones the integer (a bignum past 64 bits), against a model on bigints; the rest
-//   the shortest float, against a model on Math.f16round and Math.fround
-// - refused: each non-canonical rewrite of an encoding (a longer head, an indefinite length, a
-//   longer float, an integer as a float or as a bignum a plain integer holds, a bignum with a
-//   leading zero, keys out of order or twice, a key not text, bad UTF-8, an unknown tag or simple
-//   value, a NaN with a payload, part of a typed array element, bytes after, a prefix); bytes cut,
-//   grown and flipped are refused or are an encoding exactly
-// - across: the harness (HARNESS, the C one; default the TypeScript, against itself) answers
-//   each request as cbor_harness.ts does: same bytes, same refusals, same values back
-// a few dozen seeds (fuzz runs small; SEEDS for more). today's rules: see fuzz_values.ts
+// The cbor fuzz: random values of every kind and bytes near an encoding, over a few dozen seeds
+// (SEEDS for more). Checks round trips (decode(encode(v)) is v, same bytes with keys reordered),
+// numbers against a model on bigints and Math.fround, refusal of every non-canonical rewrite, and
+// that the harness (HARNESS, e.g. the C one; default the TypeScript) answers as cbor_harness.ts.
 import { assert, assertEquals, assertThrows } from "@std/assert"
 import { CborError, decode, DEPTH, encode, Stand, type Value } from "./cbor.ts"
 import { answer } from "./cbor_harness.ts"
@@ -44,7 +33,6 @@ const subject = command("cbor")
 
 // the model ---------------------------------------------------------------------
 
-// a whole number: major type 0 or 1 in the fewest bytes, a bignum past 64 bits (RFC 8949 3.4.3)
 function integer(n: bigint): string {
 	const negative = n < 0n, m = negative ? -1n - n : n
 	const major = negative ? 0x20 : 0
@@ -65,8 +53,6 @@ function integer(n: bigint): string {
 	return (negative ? "c3" : "c2") + len + h
 }
 
-// whole: the integer; else the shortest float that holds x, as RFC 8949 4.2.2 has it: f16, f32,
-// f64; the one NaN f97e00
 function model(x: number | bigint): string {
 	if (typeof x === "bigint") return integer(x)
 	if (Number.isInteger(x)) return integer(BigInt(x))
@@ -110,7 +96,6 @@ Deno.test(`cbor fuzz: ${SEEDS * 50} numbers, the integer or the shortest float, 
 			assertEquals(hex(encode(x)), model(x), `${x}`)
 			const back = decode(encode(x))
 			assert(Object.is(back, canon(x)) || (x !== x && Number.isNaN(back)), `${x}`)
-			// a number while safe, a bigint past that
 			const big = typeof back === "bigint"
 			assertEquals(
 				big,
@@ -209,7 +194,6 @@ Deno.test("cbor fuzz: what is not a value has no encoding", () => {
 Deno.test(`cbor fuzz: ${DEPTH} containers deep is a value, one more is not`, () => {
 	for (let seed = 1; seed <= 6; seed++) {
 		const { pick } = rand(seed + 5000)
-		// d containers, one in the next; the last an empty list or map, or holding null
 		const nest = (d: number): Value => {
 			let v: Value = [null, [], {}][pick(3)]
 			if (v !== null) d--
@@ -224,7 +208,6 @@ Deno.test(`cbor fuzz: ${DEPTH} containers deep is a value, one more is not`, () 
 		assert(same(decode(b), ok))
 		const deeper = nest(DEPTH + 1)
 		assertThrows(() => encode(deeper), CborError)
-		// the same bytes, made by hand: refused when read
 		const bytesOver = cat(new Uint8Array(DEPTH + 1).fill(0x81), [0xf6])
 		assertThrows(() => decode(bytesOver), CborError)
 		assert(
@@ -238,7 +221,6 @@ Deno.test(`cbor fuzz: ${DEPTH} containers deep is a value, one more is not`, () 
 
 // across: the harness against cbor_harness.ts here ---------------------------------------------
 
-// the bytes near a value: rewrites, mutations
 function near(pick: Pick, b: Uint8Array): Uint8Array[] {
 	return [...rewrites(pick, b).map(([, r]) => r), mutate(pick, b), mutate(pick, b)]
 }
@@ -247,7 +229,6 @@ async function across(requests: Record<string, unknown>[]) {
 	const got = await ask(subject, requests)
 	const wrong: string[] = [], counts: Record<string, number> = {}
 	requests.forEach((r, i) => {
-		// as read from a line, as the harness's answer is (whole numbers exactly: json.ts)
 		const want = read(line(answer(read(line(r)) as never))) as Record<string, unknown>
 		const kind = `${r.op} ${want.error ?? "taken"}`
 		counts[kind] = (counts[kind] ?? 0) + 1
@@ -271,7 +252,6 @@ Deno.test(`cbor fuzz: ${SEEDS} seeds across, encoding values (lone surrogates to
 			requests.push({ op: "encode", value: toJson(value(pick, n % 3 === 0)) })
 		}
 	}
-	// the edges: every number alone, each key alone, a big map, a long text
 	for (const x of NUMBERS) requests.push({ op: "encode", value: toJson(x) })
 	for (const k of KEYS) requests.push({ op: "encode", value: toJson({ [k]: k }) })
 	for (const p of PARTS) requests.push({ op: "encode", value: toJson({ [p]: [p, p + p] }) })
@@ -292,7 +272,6 @@ Deno.test(`cbor fuzz: ${SEEDS} seeds across, decoding bytes near encodings`, asy
 			for (const m of near(pick, b)) requests.push({ op: "decode", bytes: hex(m) })
 		}
 	}
-	// random bytes, short
 	const { pick } = rand(8000)
 	for (let n = 0; n < 500; n++) {
 		requests.push({
@@ -300,7 +279,6 @@ Deno.test(`cbor fuzz: ${SEEDS} seeds across, decoding bytes near encodings`, asy
 			bytes: hex(Uint8Array.from({ length: 1 + pick(12) }, () => pick(256))),
 		})
 	}
-	// deep: as deep as can be, one more
 	for (const d of [DEPTH, DEPTH + 1]) {
 		for (const open of [0x81, 0xa1]) {
 			const key = [0x61, 0x6b]
