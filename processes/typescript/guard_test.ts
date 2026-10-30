@@ -1,6 +1,3 @@
-// the guard end to end: a composed world (table, paths, scheduler, places) and protect's policies.
-// each test reads and writes as a process layer would: asking the guard, then calling places and
-// the table itself, with a scope open
 import { assertEquals, assertInstanceOf, assertThrows } from "@std/assert"
 import createEntry from "@ermine/graph/entry"
 import update from "@ermine/changeable/update"
@@ -41,9 +38,7 @@ function world() {
 	const value = (id: Id, v: unknown) =>
 		hosted(() => table.sub("value", id, createEntry<unknown>(v, createChangeHeader(s))))
 	const reset = (id: Id, v: unknown) => hosted(() => edit("value", id, [{ path: [], value: v }]))
-	// a thing: one given, or an id alone
 	const thing = (x: Thing | Id): Thing => typeof x === "object" ? x : { id: x }
-	// a guarded read of a value, and a guarded write of one
 	const read = (g: ReturnType<typeof guard>, x: Thing | Id) => {
 		g.read(target(thing(x), "value"))
 		return l.readValue("value", thing(x).id)
@@ -52,7 +47,6 @@ function world() {
 		g.write("edit", target(thing(x), "value", []))
 		edit("value", thing(x).id, [{ path: [], value: v }])
 	}
-	// a compute of a process's, made in its scope, its results kept
 	function watch(process: Scope, f: () => unknown) {
 		const seen: unknown[] = []
 		let runs = 0
@@ -71,7 +65,6 @@ const tryout = (f: () => unknown) => {
 	}
 }
 
-// a policy that writes down what it was asked
 function recording(then: Policy) {
 	const asks: Parameters<Policy>[0][] = []
 	const policy: Policy = (ask, read) => (asks.push(ask), then(ask, read))
@@ -98,14 +91,12 @@ Deno.test("guard: reads and writes are asked of the policy: who is the scope ope
 		["read", "value", path],
 		["edit", "value", path],
 	])
-	// who: the actor, and the frame open itself (shared, not copied)
 	assertEquals(asks.map((a) => a.who), [
 		{ actor: "notes", frame: notes.frame },
 		{ actor: "notes", frame: notes.frame },
 		{ actor: "notes", frame: notes.frame },
 	])
 	assertEquals(asks[0].from?.path, ["apps", "notes"])
-	// an id alone: no path
 	asks.length = 0
 	w.s.runWithScope(notes, () => w.read(g, "T"))
 	assertEquals([asks[0].target.id, asks[0].target.path], ["T", undefined])
@@ -117,11 +108,9 @@ Deno.test("guard: a write is asked as the nearest actor: one under a scope namin
 	w.value("rules", [{ actor: "chee", op: "edit" }])
 	const g = w.guard({ may: rules })
 	const juno = w.s.createRootScope({ actor: "juno" })
-	// a scope under juno's with no actor is juno's
 	const quiet = w.s.createScope({ why: "save" }, juno)
 	assertEquals(tryout(() => w.s.runWithScope(quiet, () => w.write(g, "A", 2))), "refused")
 	assertEquals(w.table.get("value", "A")?.value, 1)
-	// one naming chee is chee's, the nearest
 	const named = w.s.createScope({ actor: "chee" }, juno)
 	w.s.runWithScope(named, () => w.write(g, "A", 3))
 	assertEquals(w.table.get("value", "A")?.value, 3)
@@ -196,11 +185,10 @@ Deno.test("guard: policies are colourless: a policy reads an access node, pendin
 	const plain = w.watch(chee, () => w.read(w.guard(), "A"))
 	w.s.pulse()
 	assertEquals([asking.seen, plain.seen], [[], ["x"]])
-	// a background check writes the answer, as a host does
 	w.value("access", "allow")
 	w.s.pulse()
 	assertEquals([asking.seen, asking.runs(), plain.runs()], [["x"], 2, 1])
-	// both nodes are read, tracked: revoke the rules and it reruns, refused (its last value kept)
+	// Both nodes are read and tracked: revoking the rules reruns it, refused (its last value kept).
 	w.reset("rules", [])
 	w.s.pulse()
 	assertEquals([asking.runs(), asking.seen], [3, ["x"]])
@@ -244,7 +232,6 @@ Deno.test("guard: the three: where the asker is, the path to the target, the id"
 	])
 	const at = (name?: string) => w.guard({ may: rules, from: name ? ["apps", name] : undefined })
 	const chee = w.s.createRootScope({ actor: "chee" })
-	// the thing at a path, asked through the guard
 	const ids = (g: ReturnType<typeof at>, path: string[]) =>
 		w.s.runWithScope(
 			chee,
@@ -258,8 +245,6 @@ Deno.test("guard: the three: where the asker is, the path to the target, the id"
 	assertEquals(ids(at("notes"), ["trash", "a"]), [REFUSED])
 	assertEquals(ids(at("notes"), ["docs", "secret"]), [REFUSED])
 	assertEquals(ids(at("notes"), ["trash", "secret"]), [REFUSED])
-	// a host, at no place: from-grants do not match it
 	assertEquals(ids(at(), ["docs", "a"]), [REFUSED])
-	// by id alone, no path: the path grant does not match
 	assertEquals(tryout(() => w.s.runWithScope(chee, () => w.read(at("notes"), "D"))), "refused")
 })

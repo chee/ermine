@@ -1,5 +1,3 @@
-// a process's life (start.ts) on a real scheduler, table and paths: places rooted at R, asked the
-// processes' rows and children; the host's scope { actor: "host" }, the processes' owner under it
 import { assert, assertEquals, assertStrictEquals } from "@std/assert"
 import type { Entry } from "@ermine/graph/entry"
 import { createScheduler, PENDING, type Scope } from "@ermine/reactivity"
@@ -34,7 +32,6 @@ function world() {
 		return p
 	}
 	const attrs = (p: Process) => table.get("attributes", p.id)?.value as Record<string, unknown>
-	// its status: the status table's, not its attributes (places' status.ts)
 	const status = (p: Process) => table.get("status", p.id)?.value as Record<string, unknown>
 	return { s, table, places, life, start, attrs, status, hosted }
 }
@@ -168,6 +165,5 @@ Deno.test("stop: from inside body, with the process body was given: the row out,
 	})
 	assertEquals(log, ["stopped"])
 	assertEquals(p.scope.state === "alive", false)
-	// its path is free
 	assertEquals(w.start(w.places, "a").at, ["a"])
 })

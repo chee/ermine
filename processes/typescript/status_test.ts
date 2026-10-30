@@ -5,7 +5,6 @@ import { createPaths } from "@ermine/reactivity/paths"
 import { createPlaces } from "@ermine/places"
 import { createStatus, isPending, PENDING, status } from "./status.ts"
 
-// a world: each computer's status written on its own node as its runs end
 function world() {
 	const s = createScheduler()
 	s.onTrackingEnd((k) => places.release(k))
@@ -70,7 +69,6 @@ Deno.test("status: a computation returning the scheduler's PENDING is pending to
 	s.runWithScope(o, () => s.createComputer(() => WAIT, () => {}))
 	s.pulse()
 	assertEquals(status(places, "C"), PENDING)
-	// only C has a status, in the status table (not its attributes)
 	assert(table.get("status", "C") !== undefined)
 	assertEquals([...table.get("C")].map(([part]) => part), ["status"])
 })

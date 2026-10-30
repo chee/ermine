@@ -1,35 +1,5 @@
-// runs: each computer's latest run, on a table of the runs' own (not the graph's table, not
-// places'), by the computer's node id. replaced each run; a history layer keeps older ones (chee
-// 10-15). nothing saves this table today.
-//
-//   n        the scheduler's run number
-//   frame    the run's own frame, by reference ({ run, mark }, then the computer's, then those
-//            above); a run that changed nothing has one too. given while it ran, its start not
-//            seen: the computer's
-//   started  and ended: ms since 1970, fractional
-//   end      done | pending | failed | looping (the scheduler's onRunEnd)
-//   error    failed: what it threw, as thrown (any value); looping: an Error "looping"
-//   act      an effect's, once its act has run after this run: { end: "done" } or { end: "failed",
-//            error } (what it threw, as thrown); none until then, and none for a run not acted
-//            on or of a compute. a newer run's record has none of its own again
-//   reads    first-read order, each once, as places' describe names it: { part, id, path, keys?,
-//            change }; change: the entry's header as the run first read the key (a run that
-//            reads a node and then writes it names the change before its write), the same object
-//            (no copy). unnamed: { key }
-//   writes   landing order, each time: { part, id, change } (taken out: no change); a write is the
-//            run's when it lands with the run open (its code, set, effect act, teardown)
-//
-// a run's end is a write to the runs' table (runs are writes): n, started and ended every run, the
-// rest only when they differ (the field kept as it was, so a reader of reads reruns only when
-// they do). not recorded: untracked reads (outside a run, after an await, an effect's act), the
-// value (a memo's is on its node).
-//
-// read: read(id, field?), the policy asked first as reading the computer's node (guard given),
-// then each field read tracked: one key a field a record, marked when that field changes, with the
-// computer as the writer: what reads a record is due after the computer, and a loop through
-// records (a record's reader whose own record its writer reads) is the scheduler's to see
-// (causes), as any other. no table event, no header, no places commit.
-// a computer gone: drop(id), its record out, its readers marked.
+// Each computer's latest run, on a table of the runs' own keyed by the computer's node id.
+// Reads are tracked one key per field, marked with the computer as the writer.
 import type { ChangeHeader, Frame } from "@ermine/graph/entry"
 import type { Key as Step } from "@ermine/changeable/apply"
 import type { Fact, Places } from "@ermine/places"
@@ -38,7 +8,6 @@ import type { Target } from "@ermine/protect"
 import type { Computer, Ended, More, Scheduler } from "@ermine/reactivity"
 import type { Id, Key, Table } from "@ermine/graph/table"
 
-// a read, named: where, and the change there as the run first read it
 export type Read = {
 	readonly part: Key
 	readonly id: Id
@@ -47,25 +16,21 @@ export type Read = {
 	readonly change: ChangeHeader | undefined
 } | { readonly key: unknown }
 
-// a write: where it landed, and its change (a table event taking it out: none)
 export type Write = {
 	readonly part: Key
 	readonly id: Id
 	readonly change: ChangeHeader | undefined
 }
 
-// an effect's act, after its run
 export type Act = { readonly end: "done" } | { readonly end: "failed"; readonly error: unknown }
 const ACT_DONE: Act = Object.freeze({ end: "done" })
 
 export type Run = {
 	readonly n: number
 	readonly frame: Frame
-	// none: given while it ran, its start not seen
 	readonly started?: number
 	readonly ended: number
 	readonly end: Exclude<Ended, "stopped">
-	// as thrown: any value (looping: an Error)
 	readonly error?: unknown
 	readonly act?: Act
 	readonly reads: readonly Read[]
@@ -85,7 +50,6 @@ export const FIELDS: readonly Field[] = [
 	"writes",
 ]
 
-// what asks the policy (places' guard): a no or a pending throws
 export type Asks = { read: (...targets: Target[]) => void }
 
 export type Setup = {
@@ -95,31 +59,21 @@ export type Setup = {
 		Scheduler,
 		"getRun" | "onRunStart" | "onRunEnd" | "onEffect" | "onTrack" | "track" | "mark"
 	>
-	// a record on its way to being held, by the computer's node id: keep(run) holds it, as given or
-	// changed; not called, not held (a feature's onRecord). none: held
 	hold?: (id: Id, run: Run, keep: (run: Run) => void) => void
 }
 
 export type Runs = {
-	// the computer's runs written by its node's id
 	give: (computer: Computer, id: Id) => void
-	// a computer's latest run, or one field of it; none: undefined. the guard (the reader's) asked
-	// as reading the node; each field read tracked
 	read: {
 		(id: Id, guard?: Asks): Run | undefined
 		<F extends Field>(id: Id, field: F, guard?: Asks): Run[F] | undefined
 	}
-	// the node's record out (its computer gone), its readers told
 	drop: (id: Id) => void
-	// stop listening
 	stop: () => void
 }
 
-// milliseconds since 1970, fractional
 const now = () => performance.timeOrigin + performance.now()
 
-// a computer's run as it goes: its number, its start, its writes so far, how many the record holds
-// saw: the change at each key's first track in the run (made when the first is tracked)
 type Going = {
 	n: number
 	frame?: Frame
@@ -129,14 +83,12 @@ type Going = {
 	saw?: Map<unknown, ChangeHeader | undefined>
 }
 
-// a record, and its keys: one a field, made the first time read
 type Held = { run: Run | undefined; keys: Partial<Record<Field, object>> }
 
 export function createRuns(setup: Setup): Runs {
 	const { places, table, scheduler: s } = setup
 	const ids = new WeakMap<Computer, Id>()
 	const going = new WeakMap<Computer, Going>()
-	// the runs' table
 	const records = new Map<Id, Held>()
 
 	function held(id: Id): Held {
@@ -148,7 +100,6 @@ export function createRuns(setup: Setup): Runs {
 		return h.keys[f] ??= {}
 	}
 
-	// a fact landing with a run open of a computer given: that run's write
 	function landed(f: Fact) {
 		const run = s.getRun()
 		if (run === undefined) return
@@ -158,7 +109,7 @@ export function createRuns(setup: Setup): Runs {
 		}
 	}
 
-	// the run's reads, each once, in the order first read: a few, looked through; more, a set
+	// Each read once, in first-read order; a few are scanned, more use a set.
 	function once(reads: readonly unknown[]): unknown[] {
 		if (reads.length < 16) {
 			const out: unknown[] = []
@@ -168,7 +119,6 @@ export function createRuns(setup: Setup): Runs {
 		return [...new Set(reads)]
 	}
 
-	// the reads named, unless they are the ones there already (then those)
 	function named(
 		keys: readonly unknown[],
 		was: readonly Read[] | undefined,
@@ -196,12 +146,10 @@ export function createRuns(setup: Setup): Runs {
 		return same ? old! : out
 	}
 
-	// the record written, through hold when given
 	function write(c: Computer, id: Id, run: Run) {
 		if (setup.hold) setup.hold(id, run, (r) => put(c, id, r))
 		else put(c, id, run)
 	}
-	// the record held: the fields that differ marked, the computer their writer
 	function put(c: Computer, id: Id, run: Run) {
 		const h = held(id)
 		const was = h.run
@@ -236,14 +184,12 @@ export function createRuns(setup: Setup): Runs {
 			writes: sameWrites(was?.writes, g.writes) ? was!.writes : g.writes.slice(),
 		}
 		g.written = g.writes.length
-		// pending: it may land done, naming the changes as first read
 		if (ended !== "pending") g.saw = undefined
 		write(c, id, run)
 	}
 
 	const offs = [
 		places.watchAll(landed),
-		// the change a key has when the run first tracks it
 		s.onTrack((key, run) => {
 			const g = going.get(run.computer)
 			if (g === undefined || g.n !== run.n) return
@@ -259,11 +205,9 @@ export function createRuns(setup: Setup): Runs {
 			const id = ids.get(c)
 			if (id === undefined || ended === "stopped" || c.state !== "alive") return
 			let g = going.get(c)
-			// given while it ran: its start not seen
 			if (g === undefined || g.n !== n) going.set(c, g = { n, writes: [], written: 0 })
 			record(c, id, g, ended, reads, more)
 		}),
-		// an effect's act ran: its end, and what it wrote, in the record
 		s.onEffect((c, n, more) => {
 			const id = ids.get(c)
 			if (id === undefined) return
@@ -281,7 +225,6 @@ export function createRuns(setup: Setup): Runs {
 	function read(id: Id, a?: Field | Asks, b?: Asks) {
 		const field = typeof a === "string" ? a : undefined
 		const guard = typeof a === "string" ? b : a
-		// the policy: as reading the computer's node
 		guard?.read(target({ id }))
 		const h = held(id)
 		if (field !== undefined) {

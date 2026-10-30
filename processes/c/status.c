@@ -1,4 +1,4 @@
-// Status (status.h), in C.
+// Status; see status.h.
 #include "status.h"
 
 #include <stdlib.h>
@@ -14,7 +14,6 @@ static char *xdup(const char *s) { return strcpy(xalloc(strlen(s) + 1), s); }
 typedef struct {
 	sc_computer *c;
 	char *id;
-	// its last act failed: the status is the act's
 	int act_failed;
 } given;
 
@@ -57,7 +56,6 @@ const op_value *cst_status(pl *p, tb_key id) {
 }
 int cst_pending(pl *p, tb_key id) { return cst_is_pending(cst_status(p, id)); }
 
-// what a write of a status refers to: kept by the node till its next update
 typedef struct {
 	op_patch patches[2];
 	op_key keys[1];
@@ -71,11 +69,9 @@ static void block_free(void *b) {
 	free(k);
 }
 
-// the status written, with the computer open: status NULL: none; nothing when it is already so
 typedef struct {
 	cst *s;
 	const char *id;
-	// taken by the write
 	op_value *status;
 } writing;
 
@@ -100,7 +96,6 @@ static void write_in_scope(void *data) {
 		return;
 	}
 	if (s->write != NULL) {
-		// as status.ts: a node with no map is written whole, else the key put or taken out
 		op_key key = {.type = OP_STR_KEY, .s = CST_ATTRIBUTE};
 		op_patch patch;
 		op_value *whole = NULL;
@@ -115,7 +110,6 @@ static void write_in_scope(void *data) {
 		s->write(s->write_ctx, CST_TABLE, id, &patch, 1, &h);
 		op_free(whole);
 		op_free(w->status);
-		// the header's block rides on the node now there, till its next update; no node: none needs it
 		nd_entry *now = tb_get(s->table, tb_string(CST_TABLE), id);
 		if (now != NULL) pl_hold_also(s->places, now, made, pl_made_free);
 		else pl_made_free(made);
@@ -176,14 +170,12 @@ static void run_end(sc_computer *c, unsigned n, sc_ended ended, const void *cons
 	case SC_DONE: status = NULL; break;
 	default: return;
 	}
-	// done leaves a failed act's; any other end is the status
 	if (status == NULL && g->act_failed) return;
 	g->act_failed = 0;
 	writing w = {s, id, status};
 	sc_run_with_scope(c, write_in_scope, &w);
 }
 
-// an effect's act ran (error: what it threw): a failure is the status; the next success takes it away
 static void acted(sc_computer *c, unsigned n, const char *error, void *data) {
 	(void)n;
 	cst *s = data;
@@ -195,8 +187,6 @@ static void acted(sc_computer *c, unsigned n, const char *error, void *data) {
 	sc_run_with_scope(c, write_in_scope, &w);
 }
 
-// a computer freed: its node forgotten (the reference's WeakMap by computer), so a new one at its
-// address is given none
 static void computer_freed(sc_scope *o, void *data) {
 	cst *s = data;
 	for (size_t i = 0; i < s->nids; i++) {

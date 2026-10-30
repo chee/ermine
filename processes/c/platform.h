@@ -1,6 +1,4 @@
-// what ermine's C asks of a platform, in one place: random bytes and the clock. each is a macro a
-// build may define before this is included (-DPF_RANDOM(b,n)=my_random(b,n), -DPF_NOW_MS()=my_ms()),
-// else the platform's own: ESP-IDF's esp_fill_random; arc4random_buf; clock_gettime
+// What ermine's C asks of a platform: random bytes and the clock. Define PF_RANDOM / PF_NOW_MS to override.
 #ifndef PLATFORM_H
 #define PLATFORM_H
 
@@ -19,7 +17,6 @@
 
 #ifndef PF_NOW_MS
 #include <time.h>
-// milliseconds since 1970, fractional
 static inline double pf_now_ms(void) {
 	struct timespec t;
 	clock_gettime(CLOCK_REALTIME, &t);

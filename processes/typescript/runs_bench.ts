@@ -1,8 +1,5 @@
 // deno run processes/typescript/runs_bench.ts
-// what recording each run costs (runs.ts): a pulse rerunning computers that read through places,
-// with nothing recorded, with status.ts alone, with runs.ts, with both. medians of up to 21
-// rounds: µs per pulse, and per run where the pulse runs many. the host's write each pulse is
-// made with a header of its own (no site captured), so it costs the same in every shape
+// What recording each run costs: a pulse rerunning computers, with nothing recorded, status.ts, runs.ts, both.
 import createEntry, { type ChangeHeader } from "@ermine/graph/entry"
 import update from "@ermine/changeable/update"
 import { createTable, type Key } from "@ermine/graph/table"
@@ -14,8 +11,6 @@ import { createStatus } from "./status.ts"
 
 type Shape = "none" | "status" | "runs" | "both"
 
-// n computers, each reading the shared node "a" at x, then its own node at x, then "b" whole;
-// each pulse the host writes a's x, so every one runs again
 function world(n: number, shape: Shape) {
 	const s = createScheduler()
 	s.onTrackingEnd((k) => places.release(k))
@@ -54,7 +49,6 @@ function world(n: number, shape: Shape) {
 	}
 }
 
-// 21 rounds, or as many past 5 as fit in two seconds
 function median(f: () => void, calls: number): number {
 	for (let i = 0; i < calls; i++) f()
 	const times: number[] = []

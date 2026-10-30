@@ -1,4 +1,4 @@
-// Guard (guard.h), in C.
+// The guard asks the protect policy before reads and writes; see guard.h.
 #include "guard.h"
 
 #include <stdio.h>
@@ -31,15 +31,12 @@ struct gd {
 	pl *places;
 	tb_table *table;
 	const pr_policy *may;
-	// where the asker stands: a path, its names copied (from_given: it is placed somewhere)
 	int from_given;
 	const char **from;
 	size_t nfrom;
-	// the box it is in: its folder's id, copied (NULL: not said)
 	char *box;
 	int (*caller)(void *ctx, const char *const **from, size_t *nfrom, tb_key *box);
 	void *caller_ctx;
-	// a typed array's element a reader returns, a number made each time
 	op_value scratch;
 };
 
@@ -74,9 +71,6 @@ void gd_free(gd *g) {
 	free(g);
 }
 
-// the policy's reads --------------------------------------------------------------------------
-
-// the steps of a path, an op_value list of strings and whole numbers, as keys; the caller frees
 static op_key *steps_of(const op_value *path, size_t *n) {
 	*n = path != NULL && path->type == OP_LIST ? path->count : 0;
 	op_key *keys = xalloc(*n * sizeof *keys);
@@ -88,7 +82,6 @@ static op_key *steps_of(const op_value *path, size_t *n) {
 	return keys;
 }
 
-// a read made for a run asking: told, so the run tracks it
 static const op_value *told_reader(void *ctx, const char *part, tb_key id, const op_value *path,
 	const op_value *at) {
 	(void)at;
@@ -99,7 +92,6 @@ static const op_value *told_reader(void *ctx, const char *part, tb_key id, const
 	free(keys);
 	return v;
 }
-// a write's: told no one
 static const op_value *quiet_reader(void *ctx, const char *part, tb_key id, const op_value *path,
 	const op_value *at) {
 	(void)at;
@@ -112,16 +104,12 @@ static const op_value *quiet_reader(void *ctx, const char *part, tb_key id, cons
 	return v;
 }
 
-// asking ----------------------------------------------------------------------------------------
-
 static pr_target target_of(const gd_target *t) {
 	pr_target target = {.part = t->part, .field = t->field, .id = t->thing.id};
 	target.path = t->thing.path, target.npath = t->thing.npath;
 	return target;
 }
 
-// one target asked from a place (from_given 0: at none) in a box (all NULL: not said), told (reads)
-// or not (writes), a placement's node beside it (NULL: none). *reason: why a no
 static gd_answer asked_from(gd *g, int told, const char *op, const gd_target *t,
 	const gd_target *node, int from_given, const char *const *from, size_t nfrom, tb_key box,
 	const char **reason, pr_grant *grant) {
@@ -134,19 +122,15 @@ static gd_answer asked_from(gd *g, int told, const char *op, const gd_target *t,
 	ask.from.box = box;
 	pr_answer a = pr_ask_of(g->may, &ask, told ? told_reader : quiet_reader, g);
 	op_free(who);
-	// a read the policy told that said the run must end
 	if (pl_status(g->places) != SC_OK) return GD_FAILED;
 	*reason = a.reason;
 	*grant = a.grant;
 	return a.verdict == PR_YES ? GD_OK : a.verdict == PR_NO ? GD_REFUSED : GD_PENDING;
 }
 
-// one target asked as guard.ts' asked and both: from where the asker is placed, and in an action's
-// call the same again from the caller's place: the first no; else a pending; else the first answer
 static gd_answer asked(gd *g, int told, const char *op, const gd_target *t, const gd_target *node,
 	const char **reason, pr_grant *grant) {
 	*grant = (pr_grant){0};
-	// a stand-in is refused, never asked
 	if (gd_is_refused(t->thing.id) || (node != NULL && gd_is_refused(node->thing.id))) {
 		return *reason = "refused", GD_REFUSED;
 	}
@@ -159,7 +143,6 @@ static gd_answer asked(gd *g, int told, const char *op, const gd_target *t, cons
 		!g->caller(g->caller_ctx, &from, &nfrom, &box)) {
 		return first;
 	}
-	// already asked from the caller's place (an execute is asked as the caller): once is enough
 	int same = g->from_given == (from != NULL);
 	if (same && from != NULL) {
 		same = g->nfrom == nfrom;

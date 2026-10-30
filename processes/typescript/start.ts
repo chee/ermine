@@ -1,32 +1,5 @@
-// start: a process's life and its stop, at a path in places. a process is a
-// scheduler scope with one path (/work/clock). what runs in it is its starter's: this knows no
-// programs, chains, loaders, builds or types
-//
-//   const processes = createProcesses({ scheduler, table, places, scopes })
-//   const p = processes.start(places, "/clock", { args, folder, pin }, (inside) => {
-//     inside.give(computer)                // its status on the process's node
-//     return () => {}                      // called at its stop
-//   })
-//   // { id: "proc:3fa9c1d2e4b5a6f7-1", at: ["clock"], folder: [], scope }, or { refused: "taken", at: ["clock"] }
-//   processes.stop(p)
-//
-// start(places, at, opts, body): at, folder: paths from the places' root, names or a string ("." here, ".." back one); folder default: at's folder. refused "taken",
-// nothing made: a process already at exactly the path (above or under it is fine; whether it may is protect's). else, in order:
-//   1. its node's id (setup.id's, else proc:<boot>-<n>), then a scope { process: at, node: id } (given the node,
-//      scopes.ts) under options.under (none: the owner); started from outside the graph (no run open,
-//      no frame up the chain holding locations), its info holds locations too: every line of the
-//      stack of the call into start, or options.build
-//   2. the row: addProcess at the path, committed to the places given
-//   3. node attributes: options.attributes, then ermine.process.args, .folder, .pin (processes' own
-//      win); its status PENDING, in the status table (places' status.ts)
-//   4. body, scope open, given give(computer, { run }): the computer's status (with run: its
-//      latest run) on the node. a function returned: called at stop
-// stop(p): body's return (scope open), the row out, the scope torn down, its run record out. its
-// scope torn down from above (under's, the owner's): what is under it first, then the same. twice:
-// nothing. every step runs; the first error is thrown after
-// writes: each with the process's scope open, its frame the process's (started where its locations say)
-// open: pid("clock") not built (at is a plain path); args as strings; folder always written, never
-// checked to be there
+// A process's life and its stop at a path in places. A process is a scheduler scope with one
+// path. It knows no programs, loaders or types.
 import createEntry, { type ChangeHeader } from "@ermine/graph/entry"
 import { type Id, type Path, type Places, PlacesError, type Writer } from "@ermine/places"
 import { parse } from "@ermine/places/path"
@@ -39,12 +12,10 @@ import { addProcess, removeProcess } from "./processes.ts"
 import { createRuns, type Runs } from "./runs.ts"
 import type { ScopeNodes } from "./scopes.ts"
 
-// the attributes written on a process's node
 export const ARGS = "ermine.process.args"
 export const FOLDER = "ermine.process.folder"
 export const PIN = "ermine.process.pin"
 
-// a process: its node, its path from its root, its folder (the one it is in), its scope
 export type Process = {
 	readonly id: Id
 	readonly at: Path
@@ -52,30 +23,21 @@ export type Process = {
 	readonly scope: Scope
 }
 
-// what body is given
 export type Inside = Process & {
 	readonly args: readonly string[]
-	// the computer's status on the process's node; run: its latest run too
 	give: (computer: Computer, options?: { run?: boolean }) => void
 }
 
 export type Options = {
 	args?: readonly string[]
 	folder?: Address
-	// written as ermine.process.pin; none: not written
 	pin?: unknown
-	// written first, in the node's one attributes entry: a name processes' own write too is theirs
 	attributes?: Readonly<Record<string, unknown>>
-	// the scope its scope is made under: torn down, the process goes. none: the owner
 	under?: Scope
-	// the location of the call into start, known without a stack (a build's): stands in for the
-	// capture when started from outside the graph
 	build?: Location
-	// the function called from outside, so a capture starts at its caller (capture's cut)
 	cut?: unknown
 }
 
-// body's: what to do at the stop
 export type Body = (inside: Inside) => (() => unknown) | void
 
 export type Refused = { readonly refused: "taken"; readonly at: Path }
@@ -86,34 +48,21 @@ export type Setup = {
 	// where status.ts' writes are committed: the host's. with
 	// describe and watchAll, give's run is written too (runs.ts)
 	places: Pick<Places, "commit"> & Partial<Pick<Places, "describe" | "watchAll">>
-	// scope nodes (scopes.ts): each process's scope given its node (its entries go with the scope)
 	scopes: Pick<ScopeNodes, "give">
-	// the scope the processes' are made under; torn down, every process goes. none: one made now
-	// under the scope open, its info [["processes", "start"]]
 	owner?: Scope
-	// none: each write made here (places' commit, table.add); given (places' Writer): every write
-	// of a start or stop (the row, the node's attributes, statuses') handed to it to do and say
 	write?: Writer
-	// a new process's node id, the host's (unique for as long as its nodes are kept). none:
-	// "proc:<boot>-<n>", boot 16 hex random once per createProcesses, n from 1 (most of it the same
-	// each time, so it packs small)
 	id?: () => Id
-	// the clock a start's or stop's writes take their time from, ms since 1970; none: Date.now
 	now?: () => number
 }
 
 export type Processes = {
 	start: (places: Places, at: Address, options?: Options, body?: Body) => Process | Refused
 	stop: (p: Process) => void
-	// a process's latest run by its node's id (runs.ts); none without describe and watchAll
 	runs?: Runs["read"]
 }
 
-// an address: a string ("a/b", "../c", "/d"; path.ts' parse) or steps, each a name, ".", ".." or "/"
 export type Address = string | Path
 
-// the names an address comes to from where you are (names from the root): "." here, ".." back one
-// (at the root: stays there), "/" back to the root
 export function inside(address: Address, from: Path = []): string[] {
 	const names = [...from]
 	for (const step of typeof address === "string" ? parse(address) : address) {
@@ -125,13 +74,11 @@ export function inside(address: Address, from: Path = []): string[] {
 	return names
 }
 
-// a process's path and its folder, from what start is given
 export function pathsOf(at: Address, folder?: Address): { at: Path; folder: Path } {
 	const path = inside(at)
 	return { at: path, folder: folder === undefined ? path.slice(0, -1) : inside(folder) }
 }
 
-// a process inside: what body gave back, until it is called; its row still at its root
 type State = Process & {
 	readonly places: Places
 	done?: () => unknown
@@ -139,7 +86,6 @@ type State = Process & {
 	rowed: boolean
 }
 
-// process ids: proc:<boot>-<n>, boot 16 hex random once per maker, n from 1
 export function processIds(): () => string {
 	const boot = Array.from(
 		crypto.getRandomValues(new Uint8Array(8)),
@@ -171,10 +117,8 @@ export function createProcesses(setup: Setup): Processes {
 	})
 	const states = new WeakMap<Process, State>()
 
-	// the header of a write made now (places' createChangeHeader)
 	const headerOf = (): ChangeHeader => createChangeHeader(s, { now: setup.now })
 
-	// f with the process's scope open; torn down already (its own teardown): open, as it is
 	const within = <T>(p: State, f: () => T): T =>
 		p.scope.state === "alive" ? s.runWithScope(p.scope, f) : f()
 
@@ -186,8 +130,6 @@ export function createProcesses(setup: Setup): Processes {
 	): Process | Refused {
 		const { at, folder } = pathsOf(address, options.folder)
 		const id: Id = makeId()
-		// its writes' headers: made with its scope open, so its frame (and the locations in it, if it
-		// began outside the graph) is theirs
 		const header = headerOf
 		const locations = locationsHere(s, options.build, options.cut)
 		const scope = s.createScope(
@@ -216,7 +158,6 @@ export function createProcesses(setup: Setup): Processes {
 			if (options.args !== undefined) attrs[ARGS] = options.args
 			attrs[FOLDER] = folder
 			if (options.pin !== undefined) attrs[PIN] = options.pin
-			// its status in the status table, not its attributes (places' status.ts)
 			const status = { [STATUS]: PENDING }
 			s.runWithScope(scope, () => {
 				if (setup.write) {
@@ -237,7 +178,6 @@ export function createProcesses(setup: Setup): Processes {
 			if (o?.run) runs?.give(c, id)
 		}
 		const inside: Inside = { ...process, args, give }
-		// stop given it, as it is given the process
 		states.set(inside, p)
 		try {
 			const done = s.runWithScope(scope, () => body(inside))
@@ -249,8 +189,6 @@ export function createProcesses(setup: Setup): Processes {
 		return process
 	}
 
-	// what body gave back, once; the row taken out, once (taken out already: nothing). every step
-	// runs; the first error is thrown after
 	function end(p: State) {
 		let failed: { error: unknown } | undefined
 		if (!p.ended) {
@@ -280,8 +218,8 @@ export function createProcesses(setup: Setup): Processes {
 		if (failed) throw failed.error
 	}
 
-	// core candidate (scheduler): a teardown that runs before what is under its scope goes, so a
-	// scope torn down from above stops what body made while its computers are still there
+	// Runs before what is under the scope goes, so a scope torn down from above stops what body
+	// made while its computers are still there.
 	function stop(process: Process) {
 		const p = states.get(process)
 		if (p === undefined) return

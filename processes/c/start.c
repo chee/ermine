@@ -1,4 +1,4 @@
-// Start (start.h), in C.
+// Starting and stopping processes; see start.h.
 #include "start.h"
 
 #include <stdio.h>
@@ -22,7 +22,6 @@ static void *xalloc(size_t n) {
 }
 static char *xdup(const char *s) { return strcpy(xalloc(strlen(s) + 1), s); }
 
-// "proc:<boot>-<n>": boot 16 hex, from the system's random bytes once per pr, n from 1
 static char *proc_id(const unsigned char boot[8], unsigned long n) {
 	char *id = xalloc(sizeof "proc:" + 16 + 1 + 20);
 	int at = sprintf(id, "proc:");
@@ -41,43 +40,32 @@ struct pr_process {
 	op_value *at_value;
 	char **folder;
 	size_t nfolder;
-	// its scope's: ["process", at], [CH_NODE, id], and, started from outside the graph, ["locations", the call's]
 	sc_pair info[3];
 	op_value *id_value;
 	sc_scope *scope;
-	// the places it runs in, and their root (copied)
 	pl *places;
 	char *root;
-	// stop and its data, until called; its row still at its root
 	void (*stop)(pr_process *p, void *data);
 	void *data;
 	int ended, rowed;
-	// let go of by its holder (pr_drop): freed as its scope is. slot: where it is in all
 	int dropped;
 	size_t slot;
-	// the locations of its start's caller's and its stop's (file NULL: none; for a stop, torn down
-	// from above, processes' own)
 	ch_location site, stop_site;
 };
 
 struct pr {
 	pr_setup s;
-	// the processes' owner: setup.owner, or its own (owned 1), its info [["processes", "start"]]
 	sc_scope *owner;
 	sc_pair owner_info;
 	int owned;
 	cst *statuses;
-	// setup.runs: give's runs, on the runs' table (runs.h); else NULL
 	crn *runs;
 	pr_process **all;
 	size_t n, cap;
 	int halted;
-	// a dropped process's scope freed: the process goes. the dropped, by their scope
 	sc_listener *freed;
 	pm dropped;
-	// the last start refused: its path is the refusal's, till the next start (or pr_free)
 	pr_process *refused;
-	// the default ids: this pr's boot, and how many made
 	unsigned char boot[8];
 	unsigned long made;
 };
@@ -93,7 +81,6 @@ static void process_free(pr_process *p) {
 	free(p);
 }
 
-// out of all, and freed
 static void process_gone(pr *s, pr_process *p) {
 	pr_process *last = s->all[--s->n];
 	s->all[p->slot] = last;
@@ -101,7 +88,6 @@ static void process_gone(pr *s, pr_process *p) {
 	process_free(p);
 }
 
-// a scope freed: a dropped process whose it was goes (its info borrowed its at and id till now)
 static void scope_freed(sc_scope *o, void *data) {
 	pr *s = data;
 	pr_process *p = pm_get(&s->dropped, o);
@@ -153,7 +139,6 @@ void pr_give(pr *s, pr_process *p, sc_computer *c, int run) {
 	if (run && s->runs != NULL) crn_give(s->runs, c, tb_string(p->id));
 }
 
-// names steps come to from the root: "." here, ".." back one (at the root: stays), "/" the root; copied
 char **pr_names(const char *const *steps, size_t n, size_t *out) {
 	const char **names = xalloc((n + 1) * sizeof *names);
 	size_t k = 0;
@@ -190,7 +175,6 @@ static op_value *names_value(char *const *names, size_t n) {
 	return list;
 }
 
-// f with the process's scope open; torn down already (its own teardown): open, as it is
 static void within(pr_process *p, void (*f)(void *data), void *data) {
 	if (sc_scope_alive(p->scope)) sc_run_with_scope(p->scope, f, data);
 	else f(data);
@@ -201,8 +185,6 @@ static void commit_changed(pr *s, const pl_changed *changed) {
 	else pl_commit(s->s.places, changed);
 }
 
-// one write handed to setup.write; its header's block held on the node it landed on (none there: a
-// writer that held it back), holder's, as the writes made here hold theirs
 static void handed(pr *s, pl *holder, const char *part, const char *id, const op_patch *patches,
 	size_t n, const ch_header *h, pl_made *made) {
 	s->s.write(s->s.write_ctx, part, tb_string(id), patches, n, h);
@@ -211,14 +193,11 @@ static void handed(pr *s, pl *holder, const char *part, const char *id, const op
 	pl_made_free(made);
 }
 
-// the row ----------------------------------------------------------------------------------------------
-
 typedef struct {
 	pr_process *p;
 	int code;
 } rowing;
 
-// names[from..n) nested round leaf: {a: {b: leaf}}
 static op_value *nested(char *const *names, size_t from, size_t n, op_value *leaf) {
 	for (size_t i = n; i-- > from;) {
 		op_value *m = op_map();
@@ -228,14 +207,11 @@ static op_value *nested(char *const *names, size_t from, size_t n, op_value *lea
 	return leaf;
 }
 
-// whether the node at names under v is a map with a name in it
 static int level_under(const op_value *v, char *const *names, size_t n) {
 	for (size_t i = 0; i < n && v != NULL; i++) v = v->type == OP_MAP ? op_get(v, names[i]) : NULL;
 	return v != NULL && v->type == OP_MAP && v->count > 0;
 }
 
-// add_row as the writer has it: the patch pr_add makes (processes.c), refused the same way, handed
-// over instead of made. 0, or the code
 static int hand_row(pr_process *p, const ch_header *h, pl_made *made) {
 	pr *s = p->owner;
 	if (p->nat == 0) return PL_NOT_A_NAME;
@@ -243,9 +219,6 @@ static int hand_row(pr_process *p, const ch_header *h, pl_made *made) {
 		if (!pl_is_name(p->at[i])) return PL_NOT_A_NAME;
 	}
 	const nd_entry *there = tb_get(s->s.table, tb_string(PR_PART), tb_string(p->root));
-	// the first level the part has no map for or no key at: the rest goes there. a leaf above the
-	// path becomes a level (its id under "", the rest beside it); a level of processes under the path
-	// takes this one under "" (processes.c)
 	size_t at = 0;
 	op_value *value = NULL;
 	if (there != NULL) {
@@ -291,7 +264,6 @@ static int hand_row(pr_process *p, const ch_header *h, pl_made *made) {
 	return 0;
 }
 
-// remove_row as the writer has it: pr_remove's patch (the highest level left empty), handed over
 static int hand_unrow(pr_process *p, const ch_header *h, pl_made *made) {
 	pr *s = p->owner;
 	const nd_entry *there = tb_get(s->s.table, tb_string(PR_PART), tb_string(p->root));
@@ -307,7 +279,6 @@ static int hand_unrow(pr_process *p, const ch_header *h, pl_made *made) {
 		counts[i] = v->count;
 		v = op_get(v, p->at[i]);
 	}
-	// a process with processes under it: its id is under "" in its level
 	if (v != NULL && v->type == OP_MAP && op_get(v, "") != NULL) {
 		counts[n++] = v->count;
 		v = op_get(v, "");
@@ -392,7 +363,6 @@ static void call_stop(void *data) {
 	stop(p, p->data);
 }
 
-// stop, once; the row taken out, once
 static void end(pr_process *p) {
 	if (!p->ended) {
 		p->ended = 1;
@@ -410,22 +380,17 @@ static char *end_teardown(void *data) {
 	return NULL;
 }
 
-// its run record out, last
 static char *drop_teardown(void *data) {
 	pr_process *p = data;
 	if (p->owner->runs != NULL) crn_drop(p->owner->runs, tb_string(p->id));
 	return NULL;
 }
 
-// start ------------------------------------------------------------------------------------------------
-
 typedef struct {
 	pr_process *p;
 	const pr_options *o;
 } starting;
 
-// the node's one attributes entry: options.attributes' pairs, then processes' own over them; its
-// status its status table entry
 static void make_attributes(void *data) {
 	starting *c = data;
 	pr_process *p = c->p;
@@ -458,8 +423,6 @@ static void make_attributes(void *data) {
 		pl_hold(s->s.places, node, made, pl_made_free);
 		tb_add(s->s.table, tb_string("attributes"), tb_string(p->id), node);
 	}
-	// its status PENDING, in the status table, not its attributes (places' status.h): a header of
-	// its own, as the entry borrows it
 	ch_header sh;
 	pl_made *smade;
 	bad = pl_header(s->s.places, NULL, 0, p->site.file != NULL ? &p->site : NULL, &sh, &smade);
@@ -510,8 +473,6 @@ pr_process *pr_start_at(pr *s, pl *where, const char *const *steps, size_t nstep
 	p->id_value = op_str(p->id);
 	p->info[0] = (sc_pair){"process", p->at_value};
 	p->info[1] = (sc_pair){CH_NODE, p->id_value};
-	// from outside the graph (no run open, no frame up the chain holding locations): the call's
-	// location in its info too
 	size_t ninfo = 2;
 	op_value *locations = NULL;
 	if (file != NULL && sc_get_run(s->s.scheduler) == NULL &&
@@ -532,8 +493,7 @@ pr_process *pr_start_at(pr *s, pl *where, const char *const *steps, size_t nstep
 	rowing row = {p, 0};
 	sc_run_with_scope(p->scope, add_row, &row);
 	if (row.code != 0) {
-		// refused: the scope torn down and the maker's hold let go (the scope freed), the process
-		// made no more (its pieces, which the scope's info and the refusal borrow, freed at the next start)
+		// Refused: the pieces the scope's info and the refusal borrow are freed at the next start.
 		free(sc_teardown(p->scope));
 		sc_release(p->scope);
 		p->ended = 1;
@@ -564,7 +524,6 @@ void pr_let_go(pr *s, pr_process *p) {
 	if (p->dropped) return;
 	p->dropped = 1;
 	pm_set(&s->dropped, p->scope, p);
-	// the maker's hold: the scope freed once nothing else holds it, and p with it
 	sc_release(p->scope);
 }
 
@@ -588,7 +547,6 @@ void pr_free(pr *s) {
 	if (s == NULL) return;
 	cst_free(s->statuses);
 	crn_free(s->runs);
-	// a process never stopped: its stop (no scope open: the scheduler is gone)
 	for (size_t i = 0; i < s->n; i++) {
 		pr_process *p = s->all[i];
 		if (p->ended) continue;

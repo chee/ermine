@@ -1,40 +1,16 @@
-// guard harness: the reference guard (guard.ts) on the line protocol, one JSON request per line
-// in, one answer per line out (conformance/typescript/harness.ts). state lasts for the process:
-// the world (world_harness.ts), guards and computes by name.
-//
-// policy: "yes" | "pending" | {no: reason} | {grants: [part, id]} | {all: [policy]}
-//   | {any: [policy]} | {only: [op], policy} | {denyid: id} (no "denied id" for that target id)
-//   | {denynode: id} (no "denied node" when the ask's node, a placement's, is that id)
-//   | {access: [part, id]}  the value there: none pending, "allow" yes, else no "closed"
-//   | {whois: [actor, reader]}  yes for that actor and reader, else no "whois"
-// ts (a start): an id, or {"at": path} asked through the guard (refused: REFUSED). from: a path
-//
-// { op: "guard", name, may?, from?, box?, caller? } → {}   box: the box the asker is in (its folder's id)
-//   caller: {from?, box?}, an action's call always open: every ask made again from there, unless
-//   it is from there already
-// { op: "eval", guard, scope?, e, detail? } → { value } | { error: "refused", reason, op, grant?, field? }
-//   detail: true adds to a refusal grant?: {part, id, index}, the grant that decided, and field?:
-//   the field of the target refused
-//                                         | { error: "pending" } | { error: code }
-// { op: "watch", name, scope, guard, f, then?, effect? } → {}   a compute running f each run
-//    (world: state); then: run in its set, {"given":null} the value; effect: true, an effect + act
-// { op: "asks" }                        → { asks }   every policy ask since last asked, whole:
-//                                         { op, target: {part?, id?, field?, path?}, who: {actor,
-//                                         reader?, frame} (the frame as a header's: world_harness.ts),
-//                                         from?: {path?, box?} }
-//
-// programs: the world's plain forms (world_harness.ts), and
-//   {"get":path,"full"?:true}       the id there, asked; null none; full: [id, name, from?]
-//   {"members":path,"full"?:true}   member ids there, asked (REFUSED if refused); full: [id, name, from?]
-//   {"ask":[[name,id,from?]],"at"?:path}  members given, asked as members asks them: [id, name, from?]
-//   {"read":[ts,part,path?]}        the value, asked; null none
-//   {"edit":[ts,part,patches]}      each patch asked by its path (and a move's), written; summed up
-//   {"place":[[ts,name],id]}        the slot asked, then id placed; null
-//   {"name":[[ts,name],id,ops?]}    a node given a name (guard's place): "place" asked of the slot
-//                                   with the node beside, then each of ops (none: read, edit) of the
-//                                   node; then placed; null
-//   {"try":e}                       e; refused: "refused"; pending: "pending"; error: its code
-//   {"given":null}                  in then: the value
+// The reference guard (guard.ts) on the line protocol: one JSON request per line in, one answer out.
+// policy: "yes" | "pending" | {no: reason} | {grants: [part, id]} | {all: [policy]} | {any: [policy]}
+//   | {only: [op], policy} | {denyid: id} | {denynode: id} | {access: [part, id]} | {whois: [actor, reader]}
+// { op: "guard", name, may?, from?, box?, caller? } → {}
+// { op: "eval", guard, scope?, e, detail? } → { value } | { error: "pending" } | { error: code }
+//   | { error: "refused", reason, op, grant?, field? }   (detail: true adds grant and field)
+// { op: "watch", name, scope, guard, f, then?, effect? } → {}
+// { op: "asks" } → { asks }   every policy ask since last asked
+// programs, besides the world's:
+//   {"get":path,"full"?:true}  {"members":path,"full"?:true}  {"ask":[[name,id,from?]],"at"?:path}
+//   {"read":[ts,part,path?]}  {"edit":[ts,part,patches]}  {"place":[[ts,name],id]}
+//   {"name":[[ts,name],id,ops?]}  {"try":e}  {"given":null} (in then: the value)
+// ts (a start): an id, or {"at": path} asked through the guard (refused: REFUSED).
 import { PENDING } from "@ermine/reactivity"
 import { all, any, grants, no, only, pending, type Policy, yes } from "@ermine/protect"
 import type { Member, Path } from "@ermine/places"
@@ -97,13 +73,11 @@ function policy(p: Json): Policy {
 	}
 	throw new Error("unknown policy")
 }
-// who asked, as the world shows a header: its frame's infos
 const shownWho = (who: unknown) => {
 	if (who === undefined) return who
 	const { frame, ...rest } = who as { frame?: Frame }
 	return frame === undefined ? rest : { ...rest, frame: show(frame) }
 }
-// a policy that writes down what it is asked
 const recording = (p: Policy): Policy => (ask, read) => {
 	asked.push({
 		op: ask.op,
@@ -121,14 +95,12 @@ const full = (m: Member) => m.from === undefined ? [shown(m), m.name] : [shown(m
 
 type Ctx = { g: Guard; given?: Json }
 
-// the member at a path, asked through the guard; nothing there: undefined
 function guarded(c: Ctx, path: Path): Member | undefined {
 	const at = get(places, path)
 	if (at === undefined) return undefined
 	return c.g.members([{ name: path.at(-1) ?? "", id: at }], path.slice(0, -1))[0]
 }
 
-// the thing a start names
 function start(c: Ctx, ts: Json): Thing {
 	if (typeof ts === "string") return { id: id(ts) }
 	const path = (ts as Request).at as Path

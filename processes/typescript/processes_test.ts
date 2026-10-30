@@ -1,5 +1,3 @@
-// processes at paths on a real scheduler, table and places given [processes(R), children]: read
-// through lib.ts
 import { assert, assertEquals, assertThrows } from "@std/assert"
 import createEntry from "@ermine/graph/entry"
 import { type Computer, createScheduler } from "@ermine/reactivity"
@@ -14,7 +12,6 @@ function world() {
 	const s = createScheduler()
 	const table = createTable((part, id) => places.onTableChange(part as Key, id))
 	const paths = createPaths<unknown>()
-	// the rows' contributor, its steps counted (asked)
 	let steps = 0
 	const trie = processes("R")
 	const counted: Contributor = {
@@ -45,7 +42,6 @@ function world() {
 			}))
 		return w
 	}
-	// R/work/clock is saved (C0, with on/reset); P is a process's node, with its own on/reset
 	function tree() {
 		kids("R", { work: "W" })
 		kids("W", { clock: "C0", notes: "N" })
@@ -64,7 +60,6 @@ function world() {
 		s,
 		table,
 		places,
-		// the steps the rows were asked since last asked
 		asked: () => {
 			const n = steps
 			steps = 0
@@ -98,7 +93,6 @@ Deno.test("a process at /work/clock shadows the saved clock; at its stop the sav
 		{ id: "P", from: "process" },
 		{ id: "C0", from: "children" },
 	])
-	// the folder's saved children are as they were
 	assertEquals(w.table.get("children", "W")!.value, { clock: "C0", notes: "N" })
 	w.s.pulse()
 	w.stop(["work", "clock"])
@@ -117,7 +111,6 @@ Deno.test("./on/reset under a process: the process's own children, inside its no
 	w.stop(["work", "clock"])
 	w.s.pulse()
 	assertEquals(deep.values, ["RS0", "PRS", "RS0"])
-	// a process where nothing is saved: its inside is all there is
 	w.start(["work", "timer"], "P")
 	assertEquals(get(w.places, ["work", "timer", "on", "reset"]), "PRS")
 	assertEquals([...list(w.places, ["work", "timer"])], ["on"])
@@ -188,7 +181,6 @@ Deno.test("list(/work) merges the rows' names with the saved ones, each once, an
 	w.s.pulse()
 	w.start(["work", "timer"], "T")
 	w.s.pulse()
-	// one clock: the process's, first
 	w.start(["work", "clock"], "P")
 	w.s.pulse()
 	assertEquals(members(w.places, ["work"]), [
@@ -205,7 +197,6 @@ Deno.test("list(/work) merges the rows' names with the saved ones, each once, an
 		"clock:process,notes:children,timer:process",
 		"clock:process,notes:children",
 	])
-	// deeper, through a saved folder: the level is no name of its own
 	w.start(["work", "notes", "pad"], "Q")
 	w.s.pulse()
 	assertEquals([names.value, [...list(w.places, ["work", "notes"])]], ["clock,notes", ["pad"]])
@@ -229,7 +220,6 @@ Deno.test("lookup by a bare name from inside /work finds the process there", () 
 		["work", "notes", "timer"],
 		["work", "timer"],
 	])
-	// a walk from an id alone, its path not known: the rows have nothing
 	assertEquals([...w.places.walk(["timer"], "W")], [])
 })
 
@@ -239,7 +229,6 @@ Deno.test("a walk goes on through a level of the rows as if it were a folder, wi
 	w.start(["dev", "clock"], "P")
 	assertEquals(get(w.places, ["dev", "clock"]), "P")
 	assertEquals(get(w.places, ["dev", "clock", "on", "reset"]), "PRS")
-	// the level itself is no id
 	assertEquals(get(w.places, ["dev"]), undefined)
 	assertEquals(get(w.places, ["dev", "nothing"]), undefined)
 	w.stop(["dev", "clock"])

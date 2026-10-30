@@ -1,4 +1,4 @@
-// Scope nodes (scopes.h), in C.
+// Scope nodes; see scopes.h.
 #include "scopes.h"
 
 #include <stdlib.h>
@@ -14,7 +14,6 @@ static void *xalloc(size_t n) {
 }
 static char *xdup(const char *s) { return strcpy(xalloc(strlen(s) + 1), s); }
 
-// a scope's node: the map's value, and the teardown's data
 typedef struct {
 	sn *owner;
 	sc_scope *scope;
@@ -45,8 +44,7 @@ void sn_free(sn *s) {
 	free(s);
 }
 
-// the entries at the id go, one table event each. the parts are copied first: the table's scratch
-// changes with each deletion, and a string key is its copy, gone with the entry
+// The parts are copied first because the table's scratch changes with each deletion.
 static char *teardown(void *data) {
 	given *g = data;
 	sn *s = g->owner;

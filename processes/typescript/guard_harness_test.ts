@@ -1,6 +1,4 @@
-// what the guard suite checks besides its scenarios (conformance/run.ts runs those): the harness
-// answers an unknown op as an error and goes on, and the fuzzer. the harness asked is HARNESS, else the TypeScript
-// adapter (guard_harness.ts)
+// Harness errors on unknown ops, and the fuzzer. HARNESS names the harness, else the TypeScript one.
 import { assert, assertEquals } from "@std/assert"
 import { ask, command, reference } from "../../conformance/typescript/ask.ts"
 import type { Request } from "../../conformance/typescript/harness.ts"
@@ -19,13 +17,8 @@ Deno.test("guard: an unknown op, or a malformed request, is an error, and the ha
 	assertEquals(answers.slice(1, 4), [{}, {}, { value: 1 }])
 })
 
-// the fuzzer: a value with keys and strings of every kind, grants by actor, op and field (those
-// strings too), and edits and reads tried through the guard, ranged string edits cut by code
-// points. an implementation is held to the reference, step by step (the same answers, errors too);
-// the reference alone is only run. a few dozen seeds
 const SEEDS = 24
 const STEPS = 40
-// string parts: ASCII, BMP, pairs, a pair and a modifier, lone halves (a high then a low: a pair), U+0000
 const PARTS = ["a", "b", "xy", "é", "中", "😀", "👍🏽", "\uD83D", "\uDE00", "\u0000"]
 const KEYS = ["s", "😀", "\uD83D", "\uDE00", "\u0000"]
 const ACTORS = ["chee", "😀\uD83D", "\uDE00"]
@@ -48,7 +41,6 @@ function sequence(seed: number): Request[] {
 			if (pick(8) === 0) g.deny = true
 			return g
 		})
-	// a span, in code points: mostly in the string, now and then past its end
 	const span = () => {
 		const a = pick(6)
 		return [a, a + pick(3)]

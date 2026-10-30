@@ -1,6 +1,4 @@
-// status (status.h) on the places harness (places_harness.c, built as a library: PH_LIB): its
-// requests and programs, and status's (typescript/status_harness.ts says them). a harness built on
-// this one (SH_LIB, runs') takes sh_answer for status's and places', and has its own loop
+// Status on the places harness; requests and programs are in typescript/status_harness.ts.
 #include <string.h>
 
 #include "status.h"
@@ -10,7 +8,6 @@
 static cst *statuses;
 static bool formed;
 
-// a status as the requests tell it: "pending", { error: message }, or null
 static op_value *status_json(const op_value *status) {
 	if (cst_is_pending(status)) return op_str("pending");
 	const char *message = cst_error(status);
@@ -20,7 +17,6 @@ static op_value *status_json(const op_value *status) {
 	return o;
 }
 
-// {"status":id}: statusOf, tracked
 static op_value *status_form(const op_value *e, ph_eval *c, bool *handled) {
 	const op_value *x = op_get(e, "status");
 	if (x == NULL) return NULL;
@@ -63,7 +59,6 @@ op_value *sh_answer(const op_value *r) {
 	return ph_answer(r);
 }
 
-// after the last line, before the builder's own
 void sh_finish(void) {
 	cst_stop(statuses);
 	ph_finish();
