@@ -2062,7 +2062,7 @@ static char *writer_gone(void *data) {
 
 static const char *const MARK_KEYS[3] = {"caller", "handler", "call"};
 
-int es_create_writer_at(es_context *c, op_value **writer, const ch_location *site) {
+int es_create_writer(es_context *c, op_value **writer) {
 	es_ermine *e = c->ermine;
 	struct es_actions *x = e->actions;
 	*writer = NULL;

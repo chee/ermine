@@ -123,6 +123,10 @@ typedef struct {
 	size_t nqueue, capqueue, head;
 	held_t *held;
 	size_t nheld, capheld;
+	// settled at once by a generator: the maker's hold, kept till the world goes so the call's
+	// promise is still one when watched
+	es_promise **spent;
+	size_t nspent, capspent;
 	char *next, *pending;
 	long counter;
 	deny_t *deny;
@@ -1075,6 +1079,7 @@ static es_out gen_run(es_context *c, void *ctx, const op_value *const *args, siz
 		if (g->failed) es_promise_reject(g->result, g->failure);
 		else es_promise_resolve(g->result, g->returned);
 		g->returned = NULL;
+		ES_PUSH(W->spent, W->nspent, W->capspent, g->result);
 	} else {
 		es_promise_release(g->result);
 	}
@@ -2220,6 +2225,8 @@ static void world_free(world_t *w) {
 	world_t *was = W;
 	W = w;
 	for (size_t i = 0; i < w->nheld; i++) es_promise_release(w->held[i].promise);
+	for (size_t i = 0; i < w->nspent; i++) es_promise_release(w->spent[i]);
+	free(w->spent);
 	if (w->e != NULL) es_free(w->e);
 	for (size_t i = 0; i < w->nenvs; i++) {
 		env_t *e = w->envs[i];
