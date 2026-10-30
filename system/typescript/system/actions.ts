@@ -15,8 +15,6 @@ import { here } from "./setting.ts"
 import { type Caller, SendError, type System } from "./shapes.ts"
 import { build } from "./tree.ts"
 
-// public (mod.ts exports them): each runs its implementation below, named with As, as the
-// context it finds (acting.ts' go)
 export const createAction: System["createAction"] = /* @__PURE__ */ marked(
 	function createAction(path, fn) {
 		return go(createAction, "createAction", true, createActionAs, path, fn)
@@ -54,8 +52,6 @@ export function createActionAs(
 		inner.put({ part: "value", id, path, patches: whole(fn) })
 		return id
 	})
-	// kept while own is: own going takes it out, unless a later placement took over. its frame:
-	// the handler's, under own's
 	methods.set(made, {
 		fn,
 		scope: own,
@@ -67,19 +63,15 @@ export function createActionAs(
 	return handle(inner, n)
 }
 
-// a generator action (a function*; an async function* is refused by createAction: a catch round
-// a rejected yield in one runs with nothing open) is stepped by the system [Solid 2.0's action]:
-// each step runs with the call's frame, so a write after a `yield` carries it and is allowed; `yield
-// promise` waits for the promise (a throw comes back in at the yield). the call gives a promise of
-// the generator's return
+// A generator action is stepped by the system, each step under the call's frame, so a write after
+// a `yield` is allowed. `yield promise` waits for the promise. The call gives a promise of the
+// return. An async function* is refused by createAction.
 type Steps = Iterator<unknown, unknown, unknown>
 const isGenerator = (fn: unknown) =>
 	Object.prototype.toString.call(fn) === "[object GeneratorFunction]"
-// the parent going while it waits at a yield: the generator is returned (its finally blocks run,
-// with nothing open: a write there fails as it does after any end), and the promise rejects: gone.
-// each step is the call's (open as the record's) till the generator finishes: run in under (what
-// it makes is under's) with the call's frame. its life: a scope of its own under under, gone as it
-// finishes, so its teardown doesn't pile up on under
+// If the parent goes while it waits at a yield, the generator is returned (its finally blocks run
+// with nothing open) and the promise rejects. Its scope is its own under `under`, so its teardown
+// does not pile up there.
 function stepped(
 	inner: Inner,
 	under: Scope,
@@ -104,7 +96,6 @@ function stepped(
 			if (finished) return
 			finished = true
 			const gone = new ErmineError("gone", "gone: what this action ran in has ended")
-			// after the teardown, with nothing open: a write in a finally block fails as after any end
 			queueMicrotask(() => {
 				try {
 					it?.return?.(undefined)
@@ -117,7 +108,6 @@ function stepped(
 			let r: IteratorResult<unknown>
 			enterScheduler(s)
 			try {
-				// the first step makes the iterator (with the call's frame too)
 				r = calls.during(g, () =>
 					s.runWith(under, call, () => {
 						it ??= make()
@@ -147,13 +137,10 @@ export function executeActionAs(inner: Inner, p: Target, ...args: unknown[]): un
 	const n = nodeOf(inner, p)
 	const id = idOf(inner, n)
 	const at = n.path !== undefined ? { path: n.path } : { id: n.id }
-	// in a run, the computer waits; else whoever this context is
 	const run = s.getRun()
 	const caller = (run?.computer.info.node as Id | undefined) ?? inner.node
-	// tracked in a run, so the handler coming reruns it
 	const fn = id === undefined ? undefined : places.readValue("value", id)
 	if (fn === undefined) {
-		// kept while the caller is: a computer's with it, else the context's. the path: from the root
 		calls.wait(caller, at, run?.computer ?? scope)
 		throw PENDING
 	}
@@ -162,16 +149,11 @@ export function executeActionAs(inner: Inner, p: Target, ...args: unknown[]): un
 	}
 	calls.answered(caller, at)
 	const k = calls.next()
-	// the placement's scope while the node still holds what was placed; else (its owner gone, or
-	// a function written there by edit) the sender's, as any function value
+	// The placement's scope while the node still holds what was placed, else the sender's.
 	const placed = methods.get(id!)
-	// the call's frame: the caller on the call's changes, its own field: its node, and the actor its
-	// writes carry (the handler's writes are the handler's: their actor its own). a frame owns
-	// nothing [marks-2026-10-27; scope and frame, 10-28]: what the action makes belongs to under,
-	// the scope it runs in. it is under the handler's frame (placed: so its writes take the
-	// handler's frame), else under's. where it was called from (the click) is a walk up its frame
-	// to the locations: its own when it is called from outside the graph (no run open, no frame up
-	// the chain holding locations), else the starter's
+	// The call's frame holds the caller, its node and the actor its writes carry. It owns nothing:
+	// what the action makes belongs to `under`. Where it was called from is found by walking up its
+	// frames to the locations.
 	const own = placed !== undefined && placed.fn === fn ? placed : undefined
 	const under = own?.scope ?? scope
 	const locations = base.locations()
@@ -191,7 +173,6 @@ export function executeActionAs(inner: Inner, p: Target, ...args: unknown[]): un
 		handler: { id: id!, change: table.get("value", id!)?.change },
 		args,
 	})
-	// a pulse is asked for as it returns (go), and here as it throws and as a promise settles
 	let out: unknown
 	try {
 		out = isGenerator(fn)
@@ -207,7 +188,6 @@ export function executeActionAs(inner: Inner, p: Target, ...args: unknown[]): un
 	return out
 }
 
-// the call open now: its frame's info names its caller (the call's frame, made alone)
 export function getCallerAs(inner: Inner): Caller | undefined {
 	const { s, scope } = here(inner)
 	const o = callAbove(s.getCurrentFrame() ?? scope.frame)

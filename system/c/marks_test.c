@@ -1,7 +1,6 @@
-// what a review of marks (writers, started children, cleanup; marks are frames since 10-28) proved in
-// C and the harness cannot show:
-// memory used after it was freed, under AddressSanitizer. each case is a probe the reviewer ran, kept.
-// make test-marks-system, test-check-marks-system (the sanitizers)
+// Probes from a review of marks (writers, started children, cleanup) that the harness cannot show:
+// memory used after it was freed, under AddressSanitizer. make test-marks-system,
+// test-check-marks-system.
 #include "ermine.h"
 
 #include <stdio.h>
@@ -63,13 +62,11 @@ static es_out plain(es_context *c, void *ctx) {
 	return es_out_of(NULL);
 }
 
-// f lets its own writer go (a timer that fired)
 static int drops_itself(void *ctx) {
 	(void)ctx;
 	es_drop_writer(E, WRITER);
 	return 0;
 }
-// f stops the process the writer was made in
 static int stops_parent(void *ctx) {
 	(void)ctx;
 	es_stop(STARTED, "bye");
@@ -104,7 +101,6 @@ static void case_parent_stopped_in_f(void) {
 	finish();
 }
 
-// a writer made in an action, used under the call's mark (its own scope), dropped by f
 static void case_marked_writer_dropped_in_f(void) {
 	fresh();
 	es_refused no = {0};
@@ -121,7 +117,6 @@ static void case_marked_writer_dropped_in_f(void) {
 	finish();
 }
 
-// no function: not-a-function, as the TypeScript says
 static void case_no_function(void) {
 	fresh();
 	es_refused no = {0};
@@ -135,7 +130,6 @@ static void case_no_function(void) {
 	finish();
 }
 
-// a child whose setup unplaces its own node
 static es_out kid_unplaces(es_context *c, void *ctx) {
 	(void)ctx;
 	CHECK(es_unplace(c, es_text("/code/kid")) == 0);
@@ -203,7 +197,6 @@ static void case_child_promise_settles(void) {
 	finish();
 }
 
-// a child with its promise out, its parent ended: the record waits, then close
 static void case_parent_ends_child_pending(void) {
 	fresh();
 	es_refused no = {0};
@@ -215,7 +208,6 @@ static void case_parent_ends_child_pending(void) {
 	finish();
 }
 
-// close with a parent in procs above its children
 static es_out parent_two(es_context *c, void *ctx) {
 	(void)ctx;
 	es_child k;
@@ -242,7 +234,6 @@ static void case_close_with_children(void) {
 	es_free(E);
 }
 
-// a writer made, a child started, in what has ended: gone
 static void case_ended_owner(void) {
 	fresh();
 	es_refused no = {0};
@@ -262,7 +253,6 @@ static void case_ended_owner(void) {
 	finish();
 }
 
-// stop and status are for the child the caller started
 static void case_child_of_another(void) {
 	fresh();
 	es_refused no = {0};
@@ -330,8 +320,8 @@ static void case_cleanup_through_action(void) {
 	finish();
 }
 
-// addTeardown in an action is not-here (it would pile onto the scope that placed it, one a call); in
-// setup it is added as ever
+// addTeardown in an action is not-here (it would pile onto the scope that placed it, one per call);
+// in setup it is added as usual
 static int teardown_in_action = -1;
 static void torn(void *ctx, const char *why) { (void)ctx, (void)why; }
 static es_out adds_teardown(es_context *c, void *ctx, const op_value *const *args, size_t n) {
@@ -360,8 +350,7 @@ static void case_teardown_not_in_an_action(void) {
 	finish();
 }
 
-// a writer is a power, never data: shown as "[writer]" in a call's args and returned, where a record is
-// shown (es_show, es_call_view_of)
+// a writer is a power, never data: shown as "[writer]" in a call's args and returned
 static es_handle *ACTION;
 static es_out setup_keeping(es_context *c, void *ctx) {
 	(void)ctx;
@@ -406,8 +395,8 @@ static void case_writer_hidden_in_records(void) {
 	finish();
 }
 
-// a program's start taken says where only: a stopped child's row a feature held is no business of the
-// starter's (the host's own start names it)
+// a program's start that is taken says where only: a stopped child's row that a feature held is
+// not the starter's business (the host's own start names it)
 static int hold_rows;
 static int row_holder_write(void *ctx, es_context *o, const es_write *w, es_write_next *next) {
 	(void)ctx;
@@ -470,8 +459,8 @@ static void case_taken_names_no_holder_to_a_program(void) {
 	finish();
 }
 
-// a writer's own mark never carries userActivated: a writer made inside a writer run while the page is user-activated
-// does not run its changes as activated, unless it is when it is called
+// a writer's own mark never carries userActivated: a writer made inside a writer run while the page
+// is user-activated does not run its changes as activated, unless it is when it is called
 static int event_now;
 static int in_event(void *ctx) {
 	(void)ctx;
@@ -538,7 +527,6 @@ static void case_writer_mark_has_no_user_activated(void) {
 
 // a child's stop is asked as the starter, whoever calls it: the policy sees the starter's context
 static op_value *START_WHO, *STOP_WHO;
-// the node of the nearest frame holding one, up a who's frames (the starter's): NULL: none
 static const char *who_node(const op_value *who) {
 	const op_value *frames = who != NULL ? op_get(who, "frame") : NULL;
 	for (size_t i = 0; frames != NULL && i < frames->count; i++) {

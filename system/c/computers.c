@@ -1,22 +1,6 @@
-// computers (system/computing.ts' createMemo, createEffect; system/status.ts' getStatus), in C: memos, effects, their nodes and
-// names, status, runs. B's job, function by function (ermine.h says each):
-//   state: es_computers_new, es_computers_free, es_computer_forget (the memos, computers, contexts and
-//     awaiting sets; each context's names for what its owners' runs made)
-//   computers: es_create_memo_at, es_create_effect_at ({ early }). the node placed at its name, its
-//     scope written (ES_SCOPE); made again by its owner's next run: claimed (sc_claim), new code; a name
-//     not made again goes after the run with its node, status and run; a second at a name in one run:
-//     ES_ALREADY_THERE. status given (cst_give) and runs (crn_give); onCreateFunction told; a promise
-//     given ends the run pending (the computer awaiting till it settles)
-//   known: es_is_computer, es_is_memo, es_computer_context, es_awaiting
-//   status: es_get_status, es_status_free (ownStatus: done, failed, looping, pending and what it waits
-//     on; held; then onStatus), es_latest_run
-//
-// what B asks of the others (the header says each): A's es_resolve, es_inside, es_owner,
-// es_place_under, es_folder_slot, es_context_put, es_node_of, es_id_of, es_seen_in,
-// es_handle_make; C's es_calls_made, es_calls_waits; D's es_new_id, es_queue_pulse,
-// es_enter, es_hook_status, es_held_*, es_promise_*. es_hook_status gives a status of its own
-// (es_status_free); one that shares the base's pieces is fine. es_computers_free runs while the
-// scheduler is still there (it lets go of the promises it made).
+// Memos and effects (createMemo, createEffect), their nodes and names, and status. ermine.h
+// declares the functions. es_computers_free runs while the scheduler is still there, because it
+// lets go of the promises it made.
 #include "ermine.h"
 
 #include <stdbool.h>
@@ -25,27 +9,22 @@
 typedef struct made made;
 typedef struct bridge bridge;
 
-// a promise a compute gave, as the scheduler's: settled as the program's promise settles. let go of
-// once the pulse is over (the scheduler's run may not have taken it yet), or at close
+// a promise a compute gave, settled as the program's promise settles; let go after the pulse or at close
 struct bridge {
 	struct es_computers *x;
 	sc_promise *sp;
-	// the node whose awaiting it ends
 	char *id;
 	int settled;
 };
 
-// a memo or effect made (Made): its code, in place (a run of its owner making it again gives it
-// new code). holds: the creating call, and each cleanup on its owner still to come; it is let go of
-// with the last
+// a memo or effect made: its code, in place (its owner running again gives it new code). Held by
+// the creating call and by each cleanup still to come on its owner; let go with the last.
 struct made {
 	struct es_computers *x;
-	// the context that made it (NULL once that is let go of)
 	es_context *cx;
 	sc_scope *own;
 	sc_computer *c;
 	char *id;
-	// its id as its CH_NODE pair's value: alive as long as the scheduler's scope is
 	op_value *id_value;
 	char **path;
 	size_t npath;
@@ -58,26 +37,21 @@ struct made {
 	void *equal_ctx;
 	unsigned holds;
 	int gone, given, awaiting;
-	// awaiting is a generator's, paused at a promise
 	int pausing;
-	// the bridge of the latest promise it gave: an earlier one settling late leaves awaiting alone
 	void *awaiting_for;
-	// in its owner's bin (a hold of its own)
 	int binned;
-	// its place in x->all
 	size_t at;
 };
 
-// what is made at one path of a context (its names), in the order made
 typedef struct {
 	made **v;
 	size_t n, cap;
 } madelist;
 
-// what an owner made and has not let go: one teardown on the owner asks after them all, again as
-// it runs (a cleanup of that run, run once the next run is done: it finds a computer claimed,
-// alive, and leaves it; one not made again is dead, and its node and name go), and as the owner
-// goes (what is under it first). a memo or effect stopped is out of its owner's bin at once
+// what an owner made and has not let go. One teardown on the owner asks after them all when the
+// owner runs again (run once the next run is done: a computer claimed again is left alone, one not
+// made again is dead and its node and name go) and when the owner goes. A stopped memo or effect
+// leaves its owner's bin at once.
 typedef struct {
 	struct es_computers *x;
 	sc_scope *own;
@@ -88,26 +62,20 @@ typedef struct {
 
 struct es_computers {
 	es_ermine *e;
-	// the bins, by owner
 	pm bins;
-	// every one made and not gone, by its node's id
 	es_map by_id;
-	// every one not let go of yet
 	made **all;
 	size_t nall, capall;
-	// the id values computers were made with, by the computer, once its made is let go of: the
-	// scheduler borrows its info, so each goes as its computer is freed
+	// the id values computers were made with (the scheduler borrows its info), freed with their computer
 	pm ids;
 	bridge **bridges;
 	size_t nbridges, capbridges;
 	sc_listener *after, *freed;
-	// the scope an effect's act is running in now (an act makes nothing)
 	sc_scope *acting;
 };
 
-// state ----------------------------------------------------------------------------------------------
+// state ----------
 
-// the settled promises' bridges let go of: a pulse is over, so the scheduler has taken what it will
 static void sweep(struct es_computers *x) {
 	size_t k = 0;
 	for (size_t i = 0; i < x->nbridges; i++) {
@@ -125,7 +93,6 @@ static void sweep(struct es_computers *x) {
 
 static void after_pulse(void *data) { sweep(data); }
 
-// a computer freed: the id value its info borrowed goes
 static void computer_freed(sc_scope *o, void *data) {
 	struct es_computers *x = data;
 	op_value *id = pm_get(&x->ids, o);
@@ -151,12 +118,10 @@ static void bin_leave(made *m);
 static void free_made(made *m) {
 	struct es_computers *x = m->x;
 	bin_leave(m);
-	// a context let go of after this (close) must not find it
 	named_del(m);
 	if (es_map_get(&x->by_id, m->id) == m) es_map_del(&x->by_id, m->id);
 	x->all[m->at] = x->all[--x->nall];
 	x->all[m->at]->at = m->at;
-	// its computer let go (the maker's hold), its id value kept till that is freed
 	if (m->c != NULL) {
 		pm_set(&x->ids, m->c, m->id_value);
 		sc_release(m->c);
@@ -197,7 +162,6 @@ void es_computers_free(struct es_computers *x) {
 		m->holds = 1;
 		release(m);
 	}
-	// what is left is the scheduler's still, freed with it (no info is read after)
 	for (size_t i = 0; i < x->ids.cap; i++)
 		if (x->ids.keys[i] != NULL) op_free(x->ids.vals[i]);
 	pm_clear(&x->ids);
@@ -206,7 +170,6 @@ void es_computers_free(struct es_computers *x) {
 	free(x);
 }
 
-// the names a context's owners' runs made, by their path
 static es_map *named_of(es_context *c, int create) {
 	if (c->named == NULL && create) c->named = es_alloc(sizeof(es_map));
 	return c->named;
@@ -228,7 +191,6 @@ void es_computer_forget(es_context *c) {
 
 
 
-// the one made at key under own, still alive: the first
 static made *made_at(es_context *c, const char *key, sc_scope *own) {
 	es_map *named = named_of(c, 0);
 	madelist *l = named == NULL ? NULL : es_map_get(named, key);
@@ -267,7 +229,7 @@ static void named_del(made *m) {
 	}
 }
 
-// what is known ---------------------------------------------------------------------------------------
+// what is known ----------
 
 static made *live(es_ermine *e, const char *id) {
 	made *m = e->computers == NULL ? NULL : es_map_get(&e->computers->by_id, id);
@@ -291,7 +253,7 @@ int es_awaiting(es_ermine *e, const char *id) {
 	return m != NULL && m->awaiting;
 }
 
-// its code running ---------------------------------------------------------------------------------------
+// its code running ----------
 
 // a result as the scheduler's equal has it: Object.is, scalars by content, anything else by identity
 static bool same_value(const op_value *a, const op_value *b) {
@@ -312,7 +274,6 @@ static bool computer_equal(const void *p, const void *q, void *data) {
 	return same_value(p, q);
 }
 
-// a promise settled: its node no longer awaiting, and the scheduler's told
 static void settled(void *ctx, int ok, const op_value *value, const char *error) {
 	bridge *b = ctx;
 	made *m = es_map_get(&b->x->by_id, b->id);
@@ -322,18 +283,16 @@ static void settled(void *ctx, int ok, const op_value *value, const char *error)
 	else sc_reject(b->sp, es_dup(error != NULL ? error : "error"));
 }
 
-// m's code run: what it gave as the scheduler has it. a promise marks its node awaiting till it
-// settles; PENDING and a failure leave that as it was (the reference throws them)
+// m's code run, giving what the scheduler expects. A promise marks the node awaiting until it
+// settles; PENDING and a failure leave that as it was.
 static sc_out ran(made *m, es_out r);
 
-// a paused generator's step: the awaiting flag is its while it waits
 typedef struct {
 	made *m;
 	bridge *b;
 	es_step step;
 } paused;
 
-// let go: its computer may be gone already, so nothing of it is touched (computer_f clears the flag)
 static void paused_quit(void *data) {
 	paused *k = data;
 	k->step.quit(k->step.ctx);
@@ -363,7 +322,6 @@ static sc_out ran(made *m, es_out r) {
 	if (r.kind == ES_OUT_PAUSE) {
 		es_promise *p = es_promise_of(m->x->e, r.value);
 		if (p == NULL) {
-			// no promise of ours to wait for: the generator gets its value back at once
 			return ran(m, r.step.next(m->cx, r.step.ctx, 1, r.value, NULL));
 		}
 		op_free(r.value);
@@ -410,9 +368,7 @@ static sc_out computer_f(void *previous, void *data) {
 	made *m = data;
 	es_ermine *e = m->x->e;
 	if (m->cx == NULL) return (sc_out){.kind = SC_FAILED, .error = es_dup("closed")};
-	// a paused generator of an earlier run was let go: no longer awaiting
 	if (m->pausing) m->awaiting = m->pausing = 0;
-	// an early effect's first run is inside its making: its status and run record are given from here
 	if (m->early && !m->given) {
 		m->given = 1;
 		sc_computer *self = sc_run_computer(sc_get_run(e->scheduler));
@@ -422,13 +378,11 @@ static sc_out computer_f(void *previous, void *data) {
 	return ran(m, m->f(m->cx, m->ctx, previous));
 }
 
-// the error string a code left, for the scheduler
 static char *failure(int code) {
 	const es_error *t = es_thrown();
 	return es_dup(t->message != NULL ? t->message : es_code_name(code));
 }
 
-// the result written to its node, when there is one to say (whole(v))
 static char *write_value(made *m, const op_value *v) {
 	es_ermine *e = m->x->e;
 	if (m->cx == NULL) return NULL;
@@ -450,7 +404,6 @@ static char *computer_act(void *value, void *previous, void *data) {
 	char *bad = write_value(m, value);
 	if (bad != NULL) return bad;
 	if (m->act == NULL || m->cx == NULL) return NULL;
-	// an act makes nothing: the scope open is the effect's, and it cleans up with es_cleanup
 	struct es_computers *x = m->x;
 	sc_scope *was = x->acting;
 	x->acting = sc_get_current_scope(x->e->scheduler);
@@ -480,7 +433,7 @@ int es_not_in_act(es_ermine *e, sc_scope *own, const char *fn) {
 	return es_fail_ermine(ES_IN_ACT, "%s in an effect's act: an act makes nothing", fn);
 }
 
-// its node and name gone ------------------------------------------------------------------------------------
+// its node and name gone ----------
 
 // m's name taken out of its folder, if it is still m's there, and every part of its node out of the table
 static char *drop(made *m) {
@@ -493,7 +446,6 @@ static char *drop(made *m) {
 	es_context *c = m->cx;
 	if (c != NULL) bad = es_unplace_names(c, m->id);
 	if (c != NULL) {
-		// every part at the node (the table's scratch is changed by each delete: names copied first)
 		size_t n = 0;
 		const tb_entry *at = tb_at(e->table, tb_string(m->id), &n);
 		char **parts = es_alloc((n + 1) * sizeof *parts);
@@ -514,7 +466,6 @@ static char *drop(made *m) {
 	return bad;
 }
 
-// m's node and name go once its computer has
 static char *settle(made *m) {
 	if (!(m->c != NULL && sc_scope_alive(m->c)) && !m->gone) {
 		m->gone = 1;
@@ -523,7 +474,6 @@ static char *settle(made *m) {
 	return NULL;
 }
 
-// m out of its owner's bin (its hold there is the caller's to let go of)
 static void bin_leave(made *m) {
 	if (!m->binned) return;
 	bin *b = pm_get(&m->x->bins, m->own);
@@ -542,7 +492,6 @@ static char *bin_run(void *data) {
 	b->armed = 0;
 	char *bad = NULL;
 	int alive = sc_scope_alive(b->own);
-	// newest first
 	for (size_t i = b->n; i-- > 0;) {
 		made *m = b->v[i];
 		char *err = settle(m);
@@ -568,8 +517,8 @@ static char *bin_run(void *data) {
 	return bad;
 }
 
-// m's computer's scope torn down now, its teardowns told "ended" (the maker's process lives on: they
-// would be told "replaced"), its node and name gone. asked by remove and unplace (nodes.c)
+// m's scope torn down now, its teardowns told "ended", its node and name gone (asked by remove and
+// unplace). The maker's process lives on, so they are not told "replaced".
 void es_stop_computer(es_ermine *e, const char *id) {
 	made *m = live(e, id);
 	if (m == NULL) return;
@@ -587,14 +536,12 @@ void es_stop_computer(es_ermine *e, const char *id) {
 		m->gone = 1;
 		free(drop(m));
 	}
-	// out of its owner's bin now: the owner keeps nothing of it
 	if (m->binned) {
 		bin_leave(m);
 		release(m);
 	}
 }
 
-// m asked after when its owner runs again and as it goes: in its owner's bin, once
 static void hold(made *m) {
 	struct es_computers *x = m->x;
 	bin *b = pm_get(&x->bins, m->own);
@@ -614,9 +561,8 @@ static void hold(made *m) {
 	}
 }
 
-// making one --------------------------------------------------------------------------------------------------
+// making one ----------
 
-// the CH_NODE key's id of frame o or the nearest frame under it with one; NULL: none
 static const op_value *node_above(const ch_frame *o) {
 	for (; o != NULL; o = o->parent) {
 		const op_value *v = ch_frame_get(o, CH_NODE);
@@ -633,8 +579,7 @@ typedef struct {
 	const op_value *above;
 } placing;
 
-// a computer's node placed at its path, its scope written (own's CH_NODE key, or the nearest above with
-// one; none: not written)
+// a computer's node placed at its path, its scope written (own's CH_NODE id, or the nearest above)
 static int place_node(void *data) {
 	placing *p = data;
 	es_context *c = p->c;
@@ -662,7 +607,6 @@ typedef struct {
 	made *m;
 	sc_def def;
 	int effect;
-	// made from outside the graph: where, in its info (inside: its frames say); NULL: none
 	op_value *locations;
 } creating;
 
@@ -685,14 +629,12 @@ static void set_code(made *m, es_compute f, es_act act, void *ctx, const es_comp
 	m->equal_ctx = o != NULL ? o->equal_ctx : NULL;
 }
 
-// made again the same: the same functions (C's code has no text; what ctx holds is what a closure
-// holds, and not read), so its claim is not due [chee 10-28: nominal Adapton; "we expect staleness
-// when we use values that are not reactive"]
+// made again the same: C's code has no text and what ctx holds is not read, so the claim is not
+// due
 static int same_code(const made *m, es_compute f, es_act act, const es_computed_options *o) {
 	return m->f == f && m->act == act && m->equal == (o != NULL ? o->equal : NULL);
 }
 
-// a new one: its node placed, its computer made and given its status and run record
 static int create(es_context *c, int memo, es_names *path, char **key, es_compute f, es_act act,
 	void *ctx, const es_computed_options *o, es_node_data *nd, es_handle **out, const ch_location *site) {
 	es_ermine *e = c->ermine;
@@ -724,7 +666,6 @@ static int create(es_context *c, int memo, es_names *path, char **key, es_comput
 	ES_PUSH(x->all, x->nall, x->capall, m);
 	es_map_set(&x->by_id, id, m);
 	named_add(m);
-	// the creating call's hold, and the first cleanup on its owner
 	m->holds = 1;
 	hold(m);
 	es_calls_made(e, memo ? "memo" : m->early ? "early" : "effect", id, (const char *const *)m->path,
@@ -774,9 +715,9 @@ static int make(es_context *c, int memo, es_at name, es_compute f, es_act act, v
 	if (m == NULL) {
 		code = create(c, memo, &path, &key, f, act, ctx, o, &nd, out, site);
 	} else if (!(same_code(m, f, act, o) ? sc_claim_same(m->c) : sc_claim(m->c))) {
-		// made at this path under own before: claimed, given the new code (a parent's rerun does not
-		// destroy its children). as own's run starts, what its earlier runs made is old (the
-		// scheduler's); one not old was made in this run, or own has had no run since: already-there
+		// made at this path under own before: claimed and given the new code (a parent's rerun does not
+		// destroy its children). As own's run starts what its earlier runs made is old; one not old was
+		// made in this run, or own has had no run since: already there
 		char *at = es_join(CP(path.names), path.n);
 		code = es_fail(ES_ALREADY_THERE, "already-there (%s)", at);
 		free(at);
@@ -807,7 +748,7 @@ int es_create_effect_at(es_context *c, es_at name, es_compute f, es_act act, voi
 	return code;
 }
 
-// status -----------------------------------------------------------------------------------------------------------
+// status ----------
 
 static void free_waiting(es_waiting *w, size_t n) {
 	for (size_t i = 0; i < n; i++) {
@@ -826,7 +767,6 @@ void es_status_free(es_status *s) {
 	*s = (es_status){0};
 }
 
-// what a status handed on by onStatus (shown) no longer shares with the base's is let go of
 static void release_unshared(es_status *st, const es_status *shown) {
 	if (st->held_feature != shown->held_feature) free(st->held_feature);
 	if (st->error != shown->error) free(st->error);
@@ -834,7 +774,6 @@ static void release_unshared(es_status *st, const es_status *shown) {
 	if (st->more != shown->more) op_free(st->more);
 }
 
-// the policy asked, as reading the node's status
 static int ask_status(es_context *t, const char *id, const es_node_data *n) {
 	if (!t->guarded) return 0;
 	op_value *field = op_list();
@@ -851,13 +790,11 @@ static int ask_status(es_context *t, const char *id, const es_node_data *n) {
 	return code;
 }
 
-// a field of the status table's entry at id, tracked
 static const op_value *status_field(pl *places, const char *id, const char *field) {
 	op_key key = {.type = OP_STR_KEY, .s = field};
 	return pl_read(places, tb_string(CST_TABLE), tb_string(id), &key, 1);
 }
 
-// an error's message, as a program is shown it
 static char *error_text(const op_value *v) {
 	const char *m = cst_error(v);
 	if (m != NULL) return es_dup(m);
@@ -865,7 +802,6 @@ static char *error_text(const op_value *v) {
 	return es_dup("error");
 }
 
-// a path from the root, for a waiting (has_path 0: nothing reaches it), the names copied
 static void waiting_path_of(es_waiting *w, const char *const *path, size_t n) {
 	w->has_path = 1;
 	w->npath = n;
@@ -878,14 +814,12 @@ static void waiting_path(es_waiting *w, int found, es_names *names) {
 	es_names_free(names);
 }
 
-// whether a path the waiter at owner recorded is from another root than c's: it is shown to c as none
 static int other_world(es_context *c, const char *owner) {
 	es_context *o = es_computer_context(c->ermine, owner);
 	if (o == NULL) o = es_process_context_of(c->ermine, owner);
 	return o != NULL && strcmp(pl_root(o->places).string, pl_root(c->places).string) != 0;
 }
 
-// a send's wait as c sees it: where the send went (its path from the root, or the node it named)
 static void wait_of(es_context *c, const char *owner, const es_wait *w, es_waiting *out) {
 	es_names names = {0};
 	*out = (es_waiting){.kind = ES_WAIT_SEND, .since = w->since};
@@ -895,7 +829,6 @@ static void wait_of(es_context *c, const char *owner, const es_wait *w, es_waiti
 	else waiting_path(out, es_seen_in(c->ermine, c, w->id, &names), &names);
 }
 
-// a path an op_value list holds, the names copied
 static int list_names(const op_value *list, char ***out, size_t *n) {
 	if (list == NULL || list->type != OP_LIST) return 0;
 	char **names = es_alloc((list->count + 1) * sizeof *names);
@@ -908,7 +841,6 @@ static int list_names(const op_value *list, char ***out, size_t *n) {
 	return 1;
 }
 
-// a wait a process's status says (written as start goes pending): a send's as wait_of, the rest as it is
 static void said_of(es_context *c, const char *owner, const op_value *w, es_waiting *out) {
 	*out = (es_waiting){.kind = ES_WAIT_PENDING};
 	if (w == NULL) return;
@@ -937,7 +869,6 @@ static void said_of(es_context *c, const char *owner, const op_value *w, es_wait
 		out->kind = ES_WAIT_NODE;
 		out->has_path = list_names(node, &out->path, &out->npath);
 	} else if (missing != NULL) {
-		// a node it read that wasn't there: its path from the root
 		out->kind = ES_WAIT_NODE;
 		char **abs;
 		size_t nabs;
@@ -960,7 +891,6 @@ static void peek(void *ctx) {
 	p->pending = cst_pending(p->places, tb_string(p->id));
 }
 
-// a process's (or any node nothing computes) status
 static int plain_status(es_context *c, const char *id, const op_value *v, es_status *st) {
 	es_ermine *e = c->ermine;
 	if (v == NULL) {
@@ -991,19 +921,17 @@ static int plain_status(es_context *c, const char *id, const op_value *v, es_sta
 	return 0;
 }
 
-// a memo's or effect's status, from its latest run
 // whether key wants field k (key NULL: every field)
 static int wants(const char *key, const char *k) { return key == NULL || strcmp(key, k) == 0; }
 
-// the computer's latest run, one field of it read and told; CRN_STOP: the run must end
 static int run_field(es_ermine *e, const char *id, crn_field field, const crn_run **r) {
 	if (e->runs == NULL) return 0;
 	return crn_read(e->runs, NULL, NULL, tb_string(id), field, r, NULL, NULL);
 }
 
-// key: the field wanted (NULL: all); the run record is read field by field, only those it takes: n
-// for n, end for state and phase, act for phase, reads for waiting [the hedgehog2's wall 3, 10-28:
-// a reader of state reran at every run, n moving; chee: "yeah do that"]
+// key: the field wanted (NULL: all). The run record is read field by field, only what the field
+// takes (n for n, end for state and phase, act for phase, reads for waiting), so a reader of state
+// is not rerun at every run
 static int computer_status(es_context *c, const char *id, const op_value *v, const char *key,
 	es_status *st) {
 	es_ermine *e = c->ermine;
@@ -1038,7 +966,6 @@ static int computer_status(es_context *c, const char *id, const op_value *v, con
 	if (run_field(e, id, CRN_READS, &r) == CRN_STOP) return ES_STOP;
 	es_waiting *waiting = NULL;
 	size_t nwaiting = 0, cap = 0;
-	// the pending memos it read
 	for (size_t i = 0; r != NULL && r->reads != NULL && i < r->reads->n; i++) {
 		const crn_saw *w = &r->reads->items[i];
 		if (!w->named || w->part == NULL || w->id == NULL || w->spot || w->keys) continue;
@@ -1063,7 +990,6 @@ static int computer_status(es_context *c, const char *id, const op_value *v, con
 		ES_PUSH(waiting, nwaiting, cap, item);
 	}
 	es_waits_free(waits, n);
-	// the nodes it read that weren't there, in this run
 	const es_missing *missing = es_missing_of(e, id);
 	if (missing != NULL && r != NULL && missing->has_n && missing->n == r->n) {
 		for (size_t i = 0; i < missing->npaths; i++) {
@@ -1087,7 +1013,6 @@ static int computer_status(es_context *c, const char *id, const op_value *v, con
 	return 0;
 }
 
-// the base's status, read and asked as c
 static int own_status(es_context *c, const es_node_data *n, const char *id, const char *key,
 	es_status *st) {
 	es_ermine *e = c->ermine;
@@ -1105,7 +1030,6 @@ static int own_status(es_context *c, const es_node_data *n, const char *id, cons
 	return computer_status(c, id, v, key, st);
 }
 
-// the base's, then what features show (onStatus)
 int es_get_status(es_context *c, es_target x, es_status *out) { return es_get_status_of(c, x, NULL, out); }
 
 int es_get_status_of(es_context *c, es_target x, const char *key, es_status *out) {
@@ -1137,7 +1061,6 @@ int es_get_status_of(es_context *c, es_target x, const char *key, es_status *out
 
 int es_latest_run(es_ermine *e, const char *id, const crn_run **out) {
 	*out = NULL;
-	// a track that says stop leaves none: the run it was read in ends at its next read
 	if (e->runs == NULL ||
 		crn_read(e->runs, NULL, NULL, tb_string(id), CRN_ALL, out, NULL, NULL) != 0) {
 		*out = NULL;

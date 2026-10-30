@@ -21,8 +21,6 @@ import {
 } from "./tree.ts"
 import type { System } from "./shapes.ts"
 
-// public (mod.ts exports them): each runs its implementation below, named with As, as the
-// context it finds (acting.ts' go)
 export const place: System["place"] = /* @__PURE__ */ marked(function place(path, x) {
 	return go(place, "place", true, placeAs, path, x)
 })
@@ -32,7 +30,6 @@ export const unplace: System["unplace"] = /* @__PURE__ */ marked(function unplac
 export const rename: System["rename"] = /* @__PURE__ */ marked(function rename(from, to) {
 	return go(rename, "rename", true, renameAs, from, to)
 })
-// unplaced and its entries gone, every part's (asked "remove")
 export const remove: System["remove"] = /* @__PURE__ */ marked(function remove(x) {
 	return go(remove, "remove", true, removeAs, x)
 })
@@ -48,16 +45,14 @@ export function placeAs(inner: Inner, p: string | Path, x: Target) {
 	})
 }
 
-// a name out of its folder; a process's node there (named by its row): the process stopped, which
-// takes the row, and so the name [chee 10-27: "that should probably kill the process yes"]. a name a
-// box's binding gives is not the folder's to take out: nothing-there, the saved child it shadows left
+// Taking a name out of a folder stops the process whose row names it. A name that a box's binding
+// gives is not the folder's to take out: that is nothing-there.
 export function unplaceAs(inner: Inner, p: string | Path) {
 	const { base, places, inside, resolve, ask } = here(inner)
 	inside(() => {
 		const path = resolve(p)
 		const id = get(places, path)
 		if (runningAt(base, path, id)) {
-			// asked as placing there is: the folder's slot, or (a folder only its rows name) the node
 			const folder = parentOf(inner, path)
 			ask("place", folder === undefined ? aimed(id!, path) : slotAt(path, folder))
 			return base.stop(id!)
@@ -100,7 +95,6 @@ export function removeAs(inner: Inner, x: Target) {
 		const id = needId(inner, n)
 		ask("remove", aimed(id, n.path))
 		const below = under(inner, id)
-		// a running process's node: the process stopped first (its row out), then its entries gone
 		if (base.processes.has(id)) base.stop(id)
 		else if (n.path !== undefined && n.path.length) {
 			const [, name] = slot(inner, n.path)

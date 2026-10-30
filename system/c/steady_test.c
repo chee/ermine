@@ -1,11 +1,9 @@
-// steady use: what each row does, again and again, levels off. leaks (conformance/leaks.sh) sees
-// only what is lost at es_close; this sees what is held while the ermine runs: a scope, a handle,
-// a view or a record kept for each round, where the reference's WeakMaps let each go [chee 10-26:
-// "the C should "garbage collect" via something like a weakmap"]. each row on an ermine of its
-// own: WARM rounds, then two windows of ROUNDS: the first's most in use over where it began, and
-// the second's over the first's, each a round; the second must be under LIMIT. prints both; exits 1
-// when a row grows. the counts: the allocator's (macOS' zone statistics, glibc's mallinfo2);
-// elsewhere nothing is measured and every row passes
+// Steady use: what each row does, again and again, levels off. leaks (conformance/leaks.sh) sees
+// only what is lost at es_close; this sees what is held while the ermine runs, such as a scope,
+// handle, view or record held for each round. Each row runs on its own ermine: WARM rounds, then
+// two windows of ROUNDS; the second window's growth over the first's, per round, must be under
+// LIMIT. Exits 1 when a row grows. Counts come from the allocator (macOS zone statistics, glibc
+// mallinfo2); elsewhere nothing is measured and every row passes.
 #include "ermine.h"
 
 #include <stdio.h>
@@ -13,9 +11,8 @@
 #if defined(__APPLE__)
 #include <malloc/malloc.h>
 #include <unistd.h>
-// the nano zone counts what it holds for its size classes as in use: its numbers wander by
-// hundreds of kilobytes. off (before the first malloc: the variable, then this program again), the
-// counts are the blocks'
+// the nano zone counts what it holds for its size classes as in use, so its numbers wander by
+// hundreds of kilobytes. Turned off (before the first malloc), the counts are the blocks'
 static void counted(char **argv) {
 	const char *nano = getenv("MallocNanoZone");
 	if (nano != NULL && strcmp(nano, "0") == 0) return;
@@ -118,7 +115,6 @@ static es_out act_fn(es_context *c, void *ctx, const op_value *const *args, size
 	return es_out_of(op_num(1));
 }
 
-// an action that makes a writer and gives it
 static es_out writer_fn(es_context *c, void *ctx, const op_value *const *args, size_t n) {
 	(void)ctx, (void)args, (void)n;
 	op_value *runner;
@@ -127,7 +123,6 @@ static es_out writer_fn(es_context *c, void *ctx, const op_value *const *args, s
 	return es_out_of(runner);
 }
 
-// an action that makes a node and a memo under it
 static es_out mk_fn(es_context *c, void *ctx, const op_value *const *args, size_t n) {
 	(void)args, (void)n;
 	es_handle *h;
@@ -142,7 +137,6 @@ static es_out kid_setup(es_context *c, void *ctx) {
 	return es_out_of(NULL);
 }
 
-// an action that starts a process and stops it
 static es_out kid_fn(es_context *c, void *ctx, const op_value *const *args, size_t n) {
 	(void)args, (void)n;
 	world *w = ctx;
@@ -193,7 +187,6 @@ static void make(world *w, in_memo memo) {
 	es_pulse(w->host);
 }
 
-// /a written: the memo runs again
 static void write_a(world *w, long i) {
 	op_value *v = op_num((double)i);
 	op_patch p = {.has_value = 1, .value = v};
@@ -243,7 +236,6 @@ static const struct {
 	[ROW_MAKE_REMOVE] = {"memos made at a node, node removed", IN_NOTHING},
 };
 
-// every part at id taken out, as the host
 static void remove_node(world *w, const char *id) {
 	size_t n;
 	const tb_entry *at = tb_at(w->e->table, tb_string(id), &n);
@@ -292,7 +284,7 @@ static void round_of(world *w, row r, long i) {
 	}
 	case ROW_RESTART: {
 		// the stopped process's node, and the action's it placed, are data the host keeps, as the
-		// reference's table does: taken out here (by id: a handle a new name each round would be kept),
+		// reference's table does: taken out here (by id: a handle a new name each round would be held),
 		// so what is left is what the C holds of its own
 		char *id = es_dup(pr_id(w->started->process));
 		// its action called once, so a call record is held for it
@@ -362,7 +354,6 @@ int main(int argc, char **argv) {
 	counted(argv);
 	const char *rounds = getenv("STEADY_ROUNDS");
 	if (rounds != NULL && atol(rounds) > 0) ROUNDS = WARM = atol(rounds);
-	// a row's name given: that row alone
 	const char *only = argc > 1 ? argv[1] : NULL;
 	int failed = 0;
 	if (!MEASURED) printf("no allocator counts here: nothing measured\n");
@@ -373,7 +364,7 @@ int main(int argc, char **argv) {
 		long i = 1;
 		for (; i <= WARM; i++) round_of(&w, (row)r, i);
 		// the most in use in each window, looked at every 64 rounds: what is let go of now and then
-		// (a sweep) rises and falls under it, what is kept raises it window on window
+		// (a sweep) rises and falls under it, what is held raises it window on window
 		size_t at = used(), most[2] = {0, 0};
 		for (int k = 0; k < 2; k++) {
 			for (long j = 0; j < ROUNDS; j++, i++) {

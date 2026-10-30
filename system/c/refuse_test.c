@@ -1,6 +1,6 @@
-// a refused start (the path is taken): the scope it made is let go of at once, freed by the
-// scheduler, not held till es_close. a feature counts the scheduler's frees. make test-refuse-system
-// (and its -check, with the sanitizers)
+// A refused start (the path is taken): the scope it made is let go at once, freed by the
+// scheduler, not held until es_close. A feature counts the scheduler's frees. make
+// test-refuse-system and its -check.
 #include "ermine.h"
 
 #include <stdio.h>

@@ -1,123 +1,66 @@
-// @ermine/system (ermine.ts, system/) on the line protocol: one JSON request per line in, one answer per line out, in
-// order. one ermine per run (a plain one, or the last "ermine" asked): root "R", the host's scope
-// { actor: "test" }, new ids "n1", "n2", … in order, a process's id "proc:<name>". pulses as the
-// harness chooses: after every request the asked-for ones run, till none is asked.
-// node: { path, part } | { id, part }.
+// Line protocol for @ermine/system: one JSON request per line in, one answer per line out. One
+// ermine per run: root "R", host scope { actor: "test" }, ids "n1", "n2", ..., process ids
+// "proc:<name>". After every request the asked-for pulses run until none is asked.
+// node: { path, part } | { id, part }
+// { op: "ermine", features?, deny?, uuid?, calls?, at?, args? } -> {}
+//     features: names ("inline" or another harness's own) or test features (below)
+//     deny: [{ op, path?, id?, from?, pending? }] refuses (or marks pending) matching ops
+//     uuid: use uuidv7 ids; calls: "never" holds no call records; at, args: the host's node
+// { op: "features" } -> { features }
+// { op: "late", feature } -> {}              a test feature adds a hook now
+// { op: "uuid", path } -> { v7 }             whether the id there is a uuidv7
+// { op: "node" } -> { id, attributes }       the host's node
+// { op: "context", process? } -> { at, folder, args, process?, scope }   scope: "process" | "host"
+// { op: "o", process?, within?, call } -> { value? }   call on a context (default the host's):
+//     ["resolve", p], ["write", part, id | { id, path }, patches], ["remove", part, id | {id, path}],
+//     ["ask", op, id, part], ["within"], ["api", call] (a @ermine/system function as that context)
+// { op: "host", call, as? } -> { value? }    a function of the ermine object, as the host
+// { op: "code", at, program, back?, throws?, promise? } -> {}   run program's steps as a setup;
+//     its value is back's expr, or it throws text, or (promise) a promise settled at "settle"
+// { op: "start", name, at, program?, args?, in? } -> { id } | { refused, held? }
+//     program: the node holding a code step's program (default at); in: a name in "placed"
+// { op: "stop", name, why? } -> {}
+// { op: "status", name } -> { status }
+// { op: "close" } -> {}
+// { op: "record", kind: "run" | "call", id } -> { record? }
+// { op: "waits" } -> { waits }               [{ caller, path?, id? }]
+// { op: "slot", feature, process } -> { value? }
+// { op: "do", process, call, as? } -> { value }   call [fn, ...args] from outside
+// { op: "withWriter", process, name, steps?, back? } -> { value? }   call the process's writer
+// { op: "activation", active } -> {}         whether the page is user-activated
+// { op: "settle" } -> {}                     settle every promise made, then what settles after
+// { op: "log", name } -> { values }; { op: "pulse" }; { op: "kids", id, value };
+// { op: "put", part, id, value }; { op: "saved", part, id, path? }; { op: "id", path };
+// { op: "frame", part, id } -> { frame }     the entry's change's frames, innermost first;
+//     { op: "callframe", id } -> { frame }   where the handler's latest call was made from
+// A call that gave a promise logs how it settled to "promised".
 //
-// the ermine:
-// { op: "ermine", features?, deny?, uuid?, calls?, at?, args? } → {}   features: names
-//    ("inline": one written in this
-//    file, listing no files; another
-//    harness adds its own: named, below) or
-//    test features (below); deny: [{ op, path?, id?, from?, pending? }] refused (pending: true: pending) (every field given
-//    matching; from: the asker's place; box: the box it is in, its root's id);
-//    uuid: uuidv7 ids; calls: "never" (a feature holding no call records, onRecord). deny: by path, or { op, id } by id; at, args: the host's node's
-// { op: "features" }                       → { features }   ermine.features
-// { op: "late", feature }                  → {}   a test feature adding a hook now (late: true)
-// { op: "uuid", path }                     → { v7 }   whether the id there is a uuidv7
-// { op: "node" }                           → { id, attributes }   the host's node
-// { op: "context", process? }               → { at, folder, args, process?, scope }   ermine.getProcessContext's;
-//    scope: whether it is the process's scope ("process") or the host's ("host")
-// { op: "o", process?, within?, call }    → { value? }   the context's (none: the host's): ["resolve",
-//    p], ["write", part, id or { id, path }, patches], ["remove", part, id or { id, path }], ["ask", op, id, part],
-//    ["within"] (whether its scope is the one open in f), ["api", call] (one of @ermine/system's
-//    functions, given that context)
-// { op: "host", call, as? }                → { value? }   one of the ermine object's functions,
-//    as the host
-// { op: "code", at, program, back?, throws?, promise? } → {}   a program (its node, at, holding
-//    it too), a setup running
-//    program's steps with its api: its value back's (an expr), or it throws text, or (promise) a
-//    promise of back's, settled at the next "settle"
-// { op: "start", name, at, program?, args?, in? } → { id } | { refused, held? }   ermine.start(fn,
-//    at, …): fn the program a code step made at program (none: at); in: a name in placed (below):
-//    the places it lives in
-// { op: "stop", name, why? }               → {}
-// { op: "status", name }                   → { status }   the start's handle's status()
-// { op: "close" }                          → {}
-// { op: "record", kind: "run" | "call", id } → { record? }   the latest, shown (below)
-// { op: "waits" }                          → { waits }   [{ caller, path?, id? }]
-// { op: "slot", feature, process }         → { value? }   a test feature's slot at the process
-// { op: "do", process, call, as? }         → { value }   call [fn, ...args] from outside
-// { op: "withWriter", process, name, steps?, back? } → { value? }   the writer the process's env holds
-//    at name, given a function (steps, then back's value), called with nothing open
-// { op: "activation", active }             → {}   whether the page is user-activated now
-//    (false), none (null) from now on
-// a call (host, do) that gave a promise: how it settled is logged to "promised"
-// { op: "settle" }                         → {}   every promise the harness made settled, then
-//    whatever settles after them
-// { op: "log", name } → { values }; { op: "pulse" }; { op: "kids", id, value }; { op: "put", part,
-//    id, value }; { op: "saved", part, id, path? }; { op: "id", path }; { op: "frame", part, id }
-//    → { frame }: the entry's change's frame, its frames' infos innermost first (frames.ts); a
-//    locations key is one string in a list, the nearest line outside ermine's files: computer (a
-//    memo or effect made at define's line), handler (an action made at handler's line), program (the
-//    harness's other lines), other, none; { op: "callframe", id } → { frame }: the handler id's
-//    latest call's, where it was called from
+// A test feature: { name, needs?, onTable?, onRead?, onWrite?, onTeardown?, onRecord?, onStatus?,
+// slot?, early?, late? }. Each hook logs [name, hook, ...] to "hooks", then does what its value says:
+// "log" calls next, "drop" does not, "throw" throws "<name> threw", onWrite "refuse" throws a
+// Refusal, onRead "add" adds an item, onWrite "copy" passes a copy, onTeardown "why" prefixes why
+// with "<name>:", onStatus "add" adds the field <name>. Limits: only "host", ids, parts, takes,
+// times: n.
 //
-// a test feature: { name, needs?, onTable?, onRead?, onWrite?, onTeardown?, onRecord?, onStatus?, slot?,
-// early?, late? }. early: its setup reads places (not made yet); late: it keeps its FeatureAPI.
-// each hook logs [name, hook, …] to the log "hooks", then: "log" next as given; "drop" no next;
-// "throw" throws "<name> threw"; onWrite "refuse" throws a Refusal; only: "host", it acts on the
-// host's context's writes alone; ids: [id], parts: [part], it acts on writes to those alone; takes:
-// on writes taking something out alone (logged with "gone" when an entry goes); times: n, on the
-// first n it matches alone; onRead "add": next with { value: name, from: { kind: "test" } }
-// added; onWrite "copy": next with a copy of the write; onTeardown "why": next with why
-// "<name>:<why>"; onStatus "add": next, then the field <name>: true added. slot: true, its onWrite
-// counts the writes of each context in its slot.
-// onCreateFunction: each made, logged to "onCreateFunction" [kind, id, process].
-// what is logged: onWrite [name, hook, part, id]; onRead [name, hook, id]; onTeardown [name, hook,
-// why]; onRecord [name, hook, "run" | "call", id, end]; onStatus [name, hook, id]; onTable [name,
-// hook].
-//
-// program: steps { do: [fn, ...args], as? }; "$x" in an arg is name x (results, an action's args
-// $0…). fn: one of @ermine/system's functions, called as it is, or one of these forms:
-//   ["createMemo", name, options, expr]       createMemo(name, () => expr); options.equal "json":
-//                                             compared as JSON; options.gen: steps, a generator
-//                                             compute ({do:["yield", expr]} yields, "as" what comes
-//                                             back), expr its value after them
-//   ["createEffect", name, expr, log, "throws"?, options?]   createEffect(name, () => expr, (v) =>
-//                                             log v; throws: then throws "act <v>"; options:
-//                                             { early })
-//   ["createAction", path, steps, expr?]      createAction(path, (...args) => steps; expr given
-//                                             back)
-//   ["createAction", path, steps, expr?, "gen"]   a generator action: steps run in order;
-//                                             {do:["yield", expr]} yields expr's value ("as": what
-//                                             comes back)
-//   ["caught", log, steps]                    steps run; an error they throw logged as its code
-//   ["addTeardown", log, tag?]                addTeardown((why) => log why, or "<tag>:<why>")
-//   ["getStatus", target, key?]               getStatus(target), shown; key: that field alone (an
-//                                             error as its message)
-//   ["explain", target, key?]                 explain(target, key), shown
-//   ["peep", expr]                            peep(() => expr): read untracked
-//   ["ref", path, value]                      ref(path, () => value)
-//   ["log", log, expr]                        expr's value logged and given back
-//   ["start", name, at, program?, options?]  start(program, at, options): name its name here, program
-//                                             the node holding it (default at)
-//   ["stopped", started, why?]                started's stop(why)
-//   ["withWriter", runner, steps, expr?]           a writer (createWriter's) given a function: steps, then
-//                                             expr's value
-//   ["laterThrow", text]                      a promise rejected with text, at "settle"
-//   ["later", expr]                           a promise of expr's value, settled at "settle"
-//   ["if", test, then, else?], ["throw", text], ["each", expr, path], ["pick", expr, path] (the
-//                                             value at path in expr's), ["is", a, b], ["keys", expr], ["inc", n] (n + 1)
-//   ["explaincall", target, key?]             the keys of explain's writer.call, sorted (none: null)
-//   ["explainargs", target]                   explain's writer.call: { args, returned } (a handle
-//                                             in them: "a handle"; none a call: null)
-//   ["explainfrom", target, i?]               explain of readAll(target)[i].from.change, shown
-//   ["share", path, name]                     createAction(path, f), f one function per name across
-//                                             the whole run: it gives back the node key's id of the
-//                                             nearest scope above the one open as it runs
-//   any library function another harness adds (libraries, below)
-// expr: [fn, ...args], ["all", expr, …], ["whole", expr] ([{ path: [], value }]), "$x", or any other
-// value as it is
-// shown: status { state, error?: its message, phase?, waiting?, n?, held? }; explain { writer?: "computer" |
-// "method" | "outside", computer?, method?, n? (its record still holding it), locations? (outside: the
-// nearest up its frames, as frame shows them), fallback?, held? }; a call's record { n, frame,
-// caller, handler, args, end, returned?, error?, reads: [[part, id]], writes: [[part, id]], made?:
-// [[kind, id]] }; a run's { n, frame, end, error?, writes: [[part, id]], held? }. an error as its message,
-// PENDING "PENDING", a function "function"
-// errors: PlacesError { error: code }, Refusal "refused" (a hook's: { error, feature, hook }), SendError "not-a-method", PENDING
-// "pending", ErmineError its code, FeatureError { error: "feature", feature, hook, cause }, else
-// { error: text }
+// program: steps { do: [fn, ...args], as? }; "$x" in an arg is the name x. fn is a @ermine/system
+// function or one of:
+//   ["createMemo", name, options, expr]        options.equal "json"; options.gen: a generator compute
+//   ["createEffect", name, expr, log, "throws"?, options?]
+//   ["createAction", path, steps, expr?, "gen"?]
+//   ["caught", log, steps]                     logs the code of an error the steps throw
+//   ["addTeardown", log, tag?]
+//   ["getStatus", target, key?]  ["explain", target, key?]  ["peep", expr]  ["ref", path, value]
+//   ["log", log, expr]  ["start", name, at, program?, options?]  ["stopped", started, why?]
+//   ["withWriter", runner, steps, expr?]  ["laterThrow", text]  ["later", expr]
+//   ["if", test, then, else?]  ["throw", text]  ["each", expr, path]  ["pick", expr, path]
+//   ["is", a, b]  ["keys", expr]  ["inc", n]
+//   ["explaincall", target, key?]  ["explainargs", target]  ["explainfrom", target, i?]
+//   ["share", path, name]                      an action; gives the node key id of the nearest scope
+//   any library function another harness adds
+// expr: [fn, ...args], ["all", expr, ...], ["whole", expr], "$x", or any other value as it is.
+// Answers show errors as their message, PENDING as "PENDING", functions as "function". Error answers:
+// PlacesError { error: code }, Refusal "refused", SendError "not-a-method", PENDING "pending",
+// ErmineError its code, FeatureError { error: "feature", feature, hook, cause }, else { error: text }.
 import { userActivation } from "./event_fixture.ts"
 import createEntry from "@ermine/graph/entry"
 import { at } from "@ermine/places"
@@ -155,11 +98,9 @@ import { type Classify, show } from "../../conformance/typescript/frames.ts"
 type Env = Map<string, unknown>
 type Step = { do: [string, ...unknown[]]; as?: string }
 
-// the repository's files, but this one: ermine's, whoever's lines a stack starts with
 const REPO = new URL("../../", import.meta.url).href
 const inApi = (l: Location) => l.file.startsWith(REPO) && l.file !== import.meta.url
 
-// locations shown as the nearest line outside ermine's files, named (frames.ts' Classify)
 const classify: Classify = (locations) => {
 	const at = locations.find((l) => !inApi(l))
 	if (at === undefined) return "none"
@@ -173,21 +114,16 @@ type Made = {
 	hostSys: Sys
 	logs: Map<string, unknown[]>
 	later: (() => void)[]
-	// the promises the harness made, to settle
 	held: (() => void)[]
 	slots: Map<string, (o: ProcessContext | undefined) => unknown>
-	// the programs code steps made, by the path they were written at (from the root)
 	programs: Map<string, () => unknown>
 	host: Env
-	// the functions "share" places, by name
 	shared: Map<string, () => unknown>
-	// the next process's id, and its name while it starts
 	next?: string
 	pending?: string
 }
 
 let w: Made | undefined
-// a test feature's hook added after createErmine (late: true)
 const late = new Map<string, () => void>()
 
 function log(name: string, v: unknown) {
@@ -227,7 +163,6 @@ function make(o: Request = {}): Made {
 			})()
 			: testFeature(f as Record<string, unknown>, { log, slots, late })
 	)
-	// calls: "never": no call record held, by a hook not passing them on
 	if (o.calls === "never") features.push(noCalls)
 	const made: Made = {
 		ermine: undefined as never,
@@ -245,8 +180,6 @@ function make(o: Request = {}): Made {
 	made.ermine = createErmine({
 		root: "R",
 		info: { actor: "test" },
-		// the harness's own last (innermost): pulses run when a scenario says, each function made
-		// logged, and ids counted (n1, n2 …; uuid: the base's)
 		features: [...features, {
 			name: HARNESS,
 			setup: (f) => {
@@ -273,10 +206,7 @@ function make(o: Request = {}): Made {
 
 const world = () => w ?? make()
 
-// the features asked for by name ("inline"; another harness adds its own), and the
-// library functions a program may call beside @ermine/system's (another harness adds its own): each given the names, its raw arguments, and the harness's arg,
-// expr and run (steps), and run with its caller's scope open (they call @ermine/system's
-// functions, which find it)
+// The features and library functions a program may use. Another harness adds its own.
 export const named = new Map<string, Feature>()
 export type Library = (
 	env: Env,
@@ -289,9 +219,7 @@ export type Library = (
 ) => unknown
 export const libraries = new Map<string, Library>()
 
-// what another harness adds beside the ops above: extra ops (a request of its own, the ermine
-// given, an answer back), and places a start may be asked to live in, by name (the "start" op's
-// "in"; what a program starts lives where it does) [boxes: box, put, take, look, names]
+// What another harness adds: extra ops and places a start may live in.
 export const ops = new Map<
 	string,
 	(r: Request, ermine: Ermine) => Record<string, unknown>
@@ -304,7 +232,6 @@ const placesOf = (name: unknown): { places?: Places } => {
 	return { places }
 }
 
-// a feature written here, beside the programs
 const inline: Feature = {
 	name: "inline",
 	setup: (f) =>
@@ -314,7 +241,6 @@ const inline: Feature = {
 		}),
 }
 
-// "$x": the name x, anywhere in an argument (inside lists and maps too); anything else as it is
 function arg(env: Env, a: unknown): unknown {
 	if (typeof a === "string" && a.startsWith("$")) return env.get(a.slice(1))
 	if (Array.isArray(a)) return a.map((x) => arg(env, x))
@@ -331,7 +257,6 @@ function expr(api: Sys, env: Env, e: unknown): unknown {
 	if (typeof e === "string" || !Array.isArray(e)) return arg(env, e)
 	const [fn, ...args] = e as [string, ...unknown[]]
 	if (fn === "all") return args.map((x) => expr(api, env, x))
-	// a whole value's patches, the value expr's
 	if (fn === "whole") return [{ path: [], value: expr(api, env, args[0]) }]
 	if (fn === "if") {
 		if (expr(api, env, args[0]) === true) return expr(api, env, args[1])
@@ -348,14 +273,12 @@ function expr(api: Sys, env: Env, e: unknown): unknown {
 	return call(api, env, [fn, ...args])
 }
 
-// a promise a call gave: how it settled is logged to "promised" ([value], or ["rejected", message])
 function watched(v: unknown) {
 	if (v instanceof Promise) {
 		v.then((x) => log("promised", [x]), (x) => log("promised", ["rejected", message(x)]))
 	}
 }
 
-// a promise of f's value, settled at the next "settle"
 function promised(f: () => unknown): Promise<unknown> {
 	return new Promise((resolve, reject) =>
 		world().held.push(() => {
@@ -380,9 +303,6 @@ function call(api: Sys, env: Env, [fn, ...raw]: [string, ...unknown[]]): unknown
 		}
 		case "createAction": {
 			const [path, steps, back, kind] = raw as [string, Step[], unknown, "gen"?]
-			// its steps run as the call open then (imported's), never reopening the maker's scope.
-			// a generator action: steps run in order; ["yield", expr] yields expr's value (a
-			// promise is waited for) and takes what comes back as its value
 			if (kind !== undefined) {
 				const body = (args: unknown[]) => {
 					const inner: Env = new Map(env)
@@ -450,8 +370,6 @@ function call(api: Sys, env: Env, [fn, ...raw]: [string, ...unknown[]]): unknown
 			const c = items[(arg(env, raw[1]) as number | undefined) ?? 0]?.from.change
 			return c === undefined ? undefined : explained(api.explain(c as never))
 		}
-		// start(program, at, options?) as a program: name is the new process's name here (id
-		// proc:<name>), program the node holding its program (default at); gives start's result
 		case "start": {
 			const [name, at, program, opts] = raw.map((a) => arg(env, a)) as [
 				string,
@@ -486,7 +404,6 @@ function call(api: Sys, env: Env, [fn, ...raw]: [string, ...unknown[]]): unknown
 				m.pending = pending
 			}
 		}
-		// steps run, an error they throw logged to log as its code (else its message)
 		case "caught": {
 			try {
 				run(api, new Map(env), raw[1] as Step[])
@@ -495,12 +412,10 @@ function call(api: Sys, env: Env, [fn, ...raw]: [string, ...unknown[]]): unknown
 			}
 			return undefined
 		}
-		// the stop of what start gave, called with why
 		case "stopped":
 			return (arg(env, raw[0]) as { stop: (why?: string) => void }).stop(
 				arg(env, raw[1]) as string,
 			)
-		// a writer (createWriter's) given a function: steps, then expr's value
 		case "withWriter": {
 			const later = arg(env, raw[0]) as (f: () => unknown) => unknown
 			return later(() => {
@@ -515,7 +430,6 @@ function call(api: Sys, env: Env, [fn, ...raw]: [string, ...unknown[]]): unknown
 			})
 		case "later":
 			return promised(() => expr(api, env, raw[0]))
-		// peep(f): its expression read untracked
 		case "peep":
 			return api.peep(() => expr(api, env, raw[0]))
 		case "inc":
@@ -540,14 +454,11 @@ function call(api: Sys, env: Env, [fn, ...raw]: [string, ...unknown[]]): unknown
 			return { args: mark(w.call.args), returned: mark(w.call.returned ?? null) }
 		}
 		default: {
-			// a library's (another harness adds them), in its caller's scope
 			const library = libraries.get(fn)
 			if (library !== undefined) {
 				return api.within(() =>
 					library(env, raw, {
 						arg,
-						// a program's steps and expressions, for a function the library keeps and calls later:
-						// run as the scope open then (imported's), never the host's
 						expr: (e, x) => expr(imported, e, x),
 						run: (e, steps) => run(imported, e, steps),
 					})
@@ -560,15 +471,10 @@ function call(api: Sys, env: Env, [fn, ...raw]: [string, ...unknown[]]): unknown
 	}
 }
 
-// a function's target: ["info", x] the attributes of x, else the argument as it is
-// what steps call: @ermine/system's functions; within, the caller's scope opened round a library's
-// call
 type Sys = System & { within: <T>(f: () => T) => T }
 const names = Object.keys(system).filter((k) =>
 	typeof (system as Record<string, unknown>)[k] === "function"
 ) as (keyof System)[]
-// the functions, each run in within's scope (the host's, process 0's: ermine.within; a process's:
-// its context's)
 const opened = (within: <T>(f: () => T) => T): Sys => {
 	const out: Record<string, unknown> = { within }
 	for (const k of names) {
@@ -577,16 +483,13 @@ const opened = (within: <T>(f: () => T) => T): Sys => {
 	}
 	return out as Sys
 }
-// a program's: the imported ones (setup is given nothing), found from the scope open
 const imported: Sys = {
 	...(system as unknown as System),
 	within: (f) => f(),
 } as Sys
-// the host's: in its scope
 const hostSystem = (e: Ermine): Sys => opened(e.within)
 
-// the host's steps: a node written as { id?, path?, part } is minted a handle, as the host may
-// (ermine.handleOf); a process's stay as written (an object no handle: not-a-handle)
+// The host's steps mint handles for nodes, as the host may.
 function minted(e: Ermine, x: unknown): unknown {
 	if (Array.isArray(x)) return x.map((y) => minted(e, y))
 	if (x === null || typeof x !== "object") return x
@@ -596,22 +499,17 @@ function minted(e: Ermine, x: unknown): unknown {
 	return node ? e.handleOf(x as never) : x
 }
 
-// an action made: the function whose line a location classifies as "handler"
 // deno-lint-ignore no-explicit-any
 function handler(api: Sys, path: string, fn: (...a: any[]) => unknown) {
-	// called here, not through opened's wrapper (its line would be every call's)
 	return api.within(function handler() {
 		return system.createAction(path, fn)
 	})
 }
 
-// a memo or effect made: the function whose line a location classifies as "computer"
 function define(api: Sys, env: Env, fn: string, raw: unknown[]): unknown {
 	if (fn === "createMemo") {
 		const [name, options, e] = raw as [string, Record<string, unknown>, unknown]
 		const equal = options?.equal === "json" ? json : undefined
-		// options.gen: a generator compute, its steps run in order ({ do: ["yield", expr] } yields
-		// expr's value, "as" what comes back), then e its value
 		if (Array.isArray(options?.gen)) {
 			const steps = options.gen as Step[]
 			const { gen: _, ...rest } = options
@@ -631,9 +529,6 @@ function define(api: Sys, env: Env, fn: string, raw: unknown[]): unknown {
 		}
 		return api.createMemo(name, () => expr(api, env, e), { ...options, equal } as never)
 	}
-	// createEffect's fifth: its options: early; act: steps run in the act, an error they throw
-	// logged to caught as its code (else its message); cleanup: the act returns a function logging
-	// [cleanup, v]; returns: the act returns that value as it is
 	const [name, e, to, throws, options] = raw as [
 		string,
 		unknown,
@@ -664,12 +559,9 @@ function run(api: Sys, env: Env, steps: readonly Step[]) {
 	}
 }
 
-// shown: plain, for an answer. an error's text as the base gives it (its hint left out: the C gives
-// none)
 const message = (e: unknown) =>
 	e === PENDING ? "PENDING" : e instanceof Error ? e.message : String(e)
 function plain(v: unknown): unknown {
-	// a handle: what it reaches, as the host sees it (the harness's eyes; programs can't)
 	if (isHandle(v)) return plain(w?.ermine.dataOf(v)?.node ?? "a handle of no ermine")
 	if (v === PENDING) return "PENDING"
 	if (typeof v === "symbol") return String(v.description ?? v.toString())
@@ -750,17 +642,13 @@ const runShown = (r: Run) =>
 		},
 	})
 
-// the harness's later calls, run till none is asked for
 function drain() {
 	const later = world().later
 	while (later.length) later.shift()!()
 }
 
-// a setup from the request: the program's steps with its api
 function code(r: Request) {
 	const steps = (r.program ?? []) as Step[]
-	// a setup is given nothing: its program calls @ermine/system's functions, found from the scope
-	// open
 	return () => {
 		const api = imported
 		const env: Env = new Map()
@@ -775,7 +663,6 @@ function code(r: Request) {
 	}
 }
 
-// a path from the root, as a key: "/a/b"
 const rooted = (p: string | readonly string[]) =>
 	"/" + (typeof p === "string" ? p.split("/") : p).filter((n) => n !== "").join("/")
 
@@ -823,7 +710,6 @@ async function answer(r: Request): Promise<Record<string, unknown>> {
 			return { v7 }
 		}
 		case "node": {
-			// the harness's own feature not shown, as in features
 			const attrs = e.table.get("attributes", e.id)?.value as
 				| Record<string, unknown>
 				| undefined
@@ -853,8 +739,6 @@ async function answer(r: Request): Promise<Record<string, unknown>> {
 			const p = r.process === undefined ? undefined : m.running.get(r.process)?.started.process
 			const o = e.getProcessContext(p as Process | undefined)!
 			const [fn, ...a] = r.call as [string, ...unknown[]]
-			// within: true, the call made with the context's scope opened (as feature code acting as a
-			// process does: a process's context with nothing open throws nothing-open)
 			const as = <T>(f: () => T): T => r.within === true ? o.within(f) : f()
 			switch (fn) {
 				case "resolve":
@@ -931,7 +815,6 @@ async function answer(r: Request): Promise<Record<string, unknown>> {
 			return v === undefined ? {} : { value: v }
 		}
 		case "do": {
-			// the process doing it: its scope opened (its imported functions find it)
 			const p = m.running.get(r.process)
 			if (p?.api === undefined) throw new Error(`no process ${r.process}`)
 			const context = e.getProcessContext(p.started.process)
@@ -941,15 +824,12 @@ async function answer(r: Request): Promise<Record<string, unknown>> {
 			if (r.as !== undefined) p.env.set(r.as, v)
 			return v === undefined ? {} : { value: plain(v) }
 		}
-		// a writer called with nothing open, as a timer or a listener would: call [withWriter,
-		// name, steps, expr?] as the process's env has it
 		case "withWriter": {
 			const p = m.running.get(r.process)
 			if (p === undefined) throw new Error(`no process ${r.process}`)
 			const v = call(imported, p.env, ["withWriter", `$${r.name}`, r.steps ?? [], r.back])
 			return v === undefined ? {} : { value: plain(v) }
 		}
-		// whether a person just interacted with the page
 		case "activation":
 			userActivation.active = r.active === true
 			return {}
@@ -998,7 +878,6 @@ async function answer(r: Request): Promise<Record<string, unknown>> {
 	}
 }
 
-// the harness's own feature's name: not shown as a scenario's
 const HARNESS = "harness"
 const noCalls: Feature = {
 	name: "no-calls",
@@ -1007,7 +886,6 @@ const noCalls: Feature = {
 
 named.set("inline", inline)
 
-// the harness on stdin and stdout
 export const serveErmine = () =>
 	serve(async (r) => {
 		try {

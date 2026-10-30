@@ -1,7 +1,6 @@
-// what a review found that the harness cannot show (it needs a scope torn down as a wait is made, a
-// hook calling next twice, a handler failing with no text). each is
-// checked here, and the memory ones under AddressSanitizer. make test-review-system,
-// test-check-review-system (the sanitizers)
+// Cases from a review that the harness cannot show (a scope torn down as a wait is made, a hook
+// calling next twice, a handler failing with no text); the memory ones run under AddressSanitizer.
+// make test-review-system, test-check-review-system.
 #include "ermine.h"
 
 #include <stdio.h>
@@ -17,7 +16,6 @@ static int failed;
 		} \
 	} while (0)
 
-// a wait made by a scope as it goes: taken out at once, its waiter let go of with nothing read after
 typedef struct {
 	es_ermine *e;
 	sc_scope *scope;
@@ -47,7 +45,6 @@ static void wait_in_a_scope_going(void) {
 	es_free(e);
 }
 
-// an action begun by the host, its records told to a hook that calls next as the test says
 typedef struct {
 	// 0: the same record twice. 1: the record, then a changed one
 	int mode;
@@ -71,7 +68,6 @@ static es_out answers(es_context *c, void *ctx, const op_value *const *args, siz
 	(void)c, (void)ctx, (void)args, (void)n;
 	return es_out_of(op_num(1));
 }
-// no text: the thrown error says what
 static es_out fails_with_no_text(es_context *c, void *ctx, const op_value *const *args, size_t n) {
 	(void)c, (void)ctx, (void)args, (void)n;
 	es_fail(ES_FAILED, "boom");
@@ -134,7 +130,6 @@ static es_out gives_a_promise(es_context *c, void *ctx, const op_value *previous
 	given[ngiven++] = p;
 	return es_out_of(es_promise_value(p));
 }
-// kept running by an effect reading the memo
 static es_out reads_the_memo(es_context *c, void *ctx, const op_value *previous) {
 	(void)ctx, (void)previous;
 	const op_value *v;

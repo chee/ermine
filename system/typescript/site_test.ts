@@ -1,6 +1,5 @@
-// where a change came from, from outside the graph (index.ts says the rule): a call given a build
-// location keeps it, nothing captured; anything else made from outside, the stack there; made
-// inside, nothing: the frames say, up to the process or call that began outside
+// Where a change came from. A call given a build location keeps it with no capture; other writes
+// from outside the graph capture the stack; writes made inside capture nothing.
 import { assert, assertEquals, assertNotEquals, assertStrictEquals } from "@std/assert"
 import { createErmine } from "./ermine.ts"
 import {
@@ -27,7 +26,6 @@ const changeAt = (e: E, name: string): ChangeHeader => {
 	return e.table.get("value", kids[name])!.change as ChangeHeader
 }
 const here = new URL(import.meta.url).href
-// this file's nearest line among the locations a change came from
 const lineOf = (c: ChangeHeader) => locationsOf(c.frame)?.find((l) => l.file === here)?.line
 
 Deno.test("site: a call from outside given a build location keeps it alone, nothing captured; a call in its arguments has the stack", () => {
@@ -39,7 +37,6 @@ Deno.test("site: a call from outside given a build location keeps it alone, noth
 	assertEquals(changeAt(e, "x").frame.info.locations, [
 		{ file: "file:///program.ts", line: 12, column: 3, external: true },
 	])
-	// the call in the arguments has none given: the stack there, ermine's own lines too
 	const y = locationsOf(changeAt(e, "y").frame)!
 	assert(y.length > 1 && y.some((l) => l.file === here))
 	assertEquals(y.every((l) => l.external), true)
@@ -78,8 +75,6 @@ Deno.test("site: a computer made from outside through a call given a build locat
 	})
 	e.within(() => pulse())
 	assertEquals(e.within(() => read("/m")), 1)
-	// the write is by the run: its frame the run's own, under the computer's, which began outside
-	// at the build location
 	const m = changeAt(e, "m")
 	assertEquals(m.frame.parent?.info.locations, [{
 		file: "file:///program.ts",
@@ -91,7 +86,6 @@ Deno.test("site: a computer made from outside through a call given a build locat
 	e.close()
 })
 
-// the line after the one calling this
 const nextLine = () => frames(new Error().stack!)[1].line + 1
 
 Deno.test("site: a write or make in a setup has the process's frame: where it was started, from outside, whichever line wrote it", () => {
@@ -109,19 +103,15 @@ Deno.test("site: a write or make in a setup has the process's frame: where it wa
 	const header = (name: string) => changeAt(e, name)
 	const memo = e.table.get("value", get(e.places, ["p", "m"])!)!.change as ChangeHeader
 	const effect = e.table.get("value", get(e.places, ["p", "fx"])!)!.change as ChangeHeader
-	// a setup's write: nothing captured at it; its frame has no locations, the process's does
 	for (const c of [header("a"), header("b"), memo]) {
 		assertEquals(c.frame.info.locations, undefined)
 		assertEquals(lineOf(c), started)
 	}
-	// the effect's act wrote b: its frame the computer's, whose frame is under the process's
 	assertEquals(lineOf(effect), started)
 	assertEquals(lineOf(header("b")), started)
 	e.close()
 })
 
-// the captures a process of n writes, n patches and n memos in its setup makes while it starts
-// (the limit raised to Infinity is a capture's: header.ts, start.ts)
 function captures(n: number): number {
 	const was = Object.getOwnPropertyDescriptor(Error, "stackTraceLimit")!
 	let count = 0
@@ -166,17 +156,14 @@ Deno.test("site: two processes have a frame each; the host keeps each call's; an
 	const a = lineOf(changeAt(e, "a"))!
 	const b = lineOf(changeAt(e, "b"))!
 	assertNotEquals(a, b)
-	// the host: each call its own
 	e.within(() => {
 		ensureNode("/h1", 0)
 		ensureNode("/h2", 0)
 	})
 	assertNotEquals(lineOf(changeAt(e, "h1")), lineOf(changeAt(e, "h2")))
-	// an action's call, called in a setup: inside, the frames go up through its handler's to q's
 	e.start(() => executeAction("/q/on/put"), "/r")
 	assertEquals(lineOf(changeAt(e, "b")), b)
 	assertEquals(changeAt(e, "b").frame.info.call, 1)
-	// a handler the host made, called from outside: the call began there, its line (the click)
 	let made = 0
 	e.within(() => {
 		made = nextLine()
@@ -188,9 +175,6 @@ Deno.test("site: two processes have a frame each; the host keeps each call's; an
 		executeAction("/on/h", 1)
 	})
 	assertEquals(lineOf(changeAt(e, "h1")), called)
-	// called in a setup: not a click, and the handler's frames (the host's, none with locations)
-	// are all the call is under, so its write is from outside too: the stack at the write, where
-	// the handler's own line is nearest
 	e.start(() => executeAction("/on/h", 2), "/s")
 	assertEquals(lineOf(changeAt(e, "h1")), made)
 	e.close()

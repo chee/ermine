@@ -26,7 +26,6 @@ import {
 import { countOf } from "./system_fixture.ts"
 import { manual } from "./manual_fixture.ts"
 
-// the program a test wrote at a node (ensureNode), as start takes it: its function
 const programAt = (e: { within: <T>(f: () => T) => T }, at: string) =>
 	e.within(() => read(at)) as () => unknown
 
@@ -170,7 +169,6 @@ Deno.test("@ermine/system: with nothing open (a listener, a timer), a handle thr
 		})
 	)
 	e.start(programAt(e, "/code/p"), "/code/p")
-	// a timer: nothing open, as a DOM listener's click
 	const outcome = await new Promise<unknown[]>((done) =>
 		setTimeout(() => {
 			const out: unknown[] = []
@@ -266,7 +264,6 @@ Deno.test("@ermine/system: one ermine's handler run inside another's action find
 	a.within(() => executeAction("/code/a/go"))
 	assertEquals(a.within(() => list("/code")), ["a"])
 	assertEquals(b.within(() => list("/code")), ["b", "b-note"])
-	// and back: a's action, sent from inside b's, writes in a
 	a.start(() => void createAction("on/mark", () => ensureNode("./a-mark", 1)), "/code/m")
 	b.start(
 		() => void createAction("go", () => a.within(() => executeAction("/code/m/on/mark"))),
@@ -333,7 +330,6 @@ Deno.test("@ermine/system: a memo's earlier promise settling late leaves it awai
 			read("/k")
 			return new Promise<number>((r) => settle.push(r))
 		})
-		// kept running by an effect reading it
 		createEffect("e", () => {
 			try {
 				read("./m")

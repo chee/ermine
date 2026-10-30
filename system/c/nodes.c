@@ -1,29 +1,12 @@
-// nodes (system/, context.ts, handles.ts), in C: contexts, handles, paths and seen, reads and writes
-// of nodes, the placement asks. A's job, function by function (ermine.h says each):
-//   contexts: es_context_new, es_context_free, es_resolve, es_within, es_inside, es_owner,
-//     es_context_write_at, es_context_remove_at, es_context_ask, es_context_put, es_context_writer.
-//     context.ts' createProcessContext: land, headerOf, the guard
-//   handles: es_mint, es_handle_lookup, es_handle_in, es_handle_make, es_handle_by_id,
-//     es_node_data_copy, es_node_data_free (handles.ts: opaque, data in the ermine's table)
-//   paths and seen: es_nodes_new, es_nodes_free, es_running_set, es_running_clear, es_seen_in,
-//     es_names_free (system/addressing.ts' up, seenIn: up through the names, then a process's path)
-//   shared: es_node_of, es_id_of, es_id_through, es_ask_placing, es_place_under,
-//     es_build, es_folder_slot
-//   reads: es_get_node, es_has_node, es_read, es_read_attributes, es_read_children, es_read_all,
-//     es_read_all_attributes, es_read_all_children, es_read_entries, es_peep, es_list, es_get_args,
-//     es_children_free, es_versions_free, es_items_free
-//   writes: es_ensure_node_at, es_create_node_at, es_ref_at, es_patch_at, es_patch_attributes_at,
-//     es_patch_children_at, es_place_at, es_unplace_at, es_rename_at, es_remove_at
-//   the placement asks: place, then read and edit of the node (es_ask_placing)
-// a failure is a code and es_thrown(): a PlacesError's message is "code" or "code (at)", an
-// ErmineError's "code: message", a Refusal's "op refused: reason"
+// Nodes: contexts, handles, paths and seen, reads and writes of nodes, and the placement asks.
+// ermine.h declares the functions. A failure is a code with es_thrown() set: a PlacesError's
+// message is "code" or "code (at)", an ErmineError's "code: message", a Refusal's "op refused:
+// reason".
 #include "ermine.h"
 
 #include <stdio.h>
 
-// the arrays places' functions take
 
-// 0, or the code of an ermine closed
 #define ALIVE(c) \
 	do { \
 		int alive_ = es_alive((c)->ermine); \
@@ -35,9 +18,8 @@
 		if (code_) return code_; \
 	} while (0)
 
-// failures -------------------------------------------------------------------------------------------
+// failures ----------
 
-// a PlacesError: "nothing-there", or "nothing-there (n7)" with the name asked about
 static int places_fail(int code, const char *at) {
 	const char *name = es_code_name(code);
 	return at == NULL ? es_fail(code, "%s", name) : es_fail(code, "%s (%s)", name, at);
@@ -52,12 +34,11 @@ static int not_patches(void) {
 		"not-patches: patchChildren: one name a patch, { path: [name], value: node } or { path: [name] }");
 }
 
-// the reads told since the last ask said the run must end now
 static int check(es_context *c) {
 	return pl_status(c->places) == SC_OK ? 0 : es_fail(ES_STOP, "%s", "");
 }
 
-// names ------------------------------------------------------------------------------------------------
+// names ----------
 
 static void names_init(es_names *p) {
 	p->names = es_alloc(sizeof(char *));
@@ -92,14 +73,12 @@ void es_names_free(es_names *names) {
 	*names = (es_names){0};
 }
 
-// a string's steps (path.ts' parse): a leading "/" is the root, empty pieces are skipped
 static void parse(const char *s, es_names *out) {
 	size_t k;
 	char **steps = es_parse_steps(s, &k);
 	for (size_t i = 0; i < k; i++) names_add(out, steps[i]);
 	pr_names_free(steps, k);
 }
-// one step of processes' inside: "." skipped, ".." takes back a name (none left: stays at "/"), "/" starts again
 static void plan_step(es_names *r, const char *step) {
 	if (strcmp(step, ".") == 0) return;
 	if (strcmp(step, "/") == 0) {
@@ -133,7 +112,7 @@ int es_resolve(es_context *c, es_at p, es_names *out) {
 	return 0;
 }
 
-// node data ---------------------------------------------------------------------------------------------
+// node data ----------
 
 es_node_data es_node_data_copy(const es_node_data *n) {
 	es_node_data c = {0};
@@ -156,7 +135,6 @@ void es_node_data_free(es_node_data *n) {
 	*n = (es_node_data){0};
 }
 
-// a node at a path (the names taken), or at an id
 static es_node_data node_at_path(es_names *names, const char *part) {
 	es_node_data d = {0};
 	d.has_path = 1;
@@ -173,9 +151,8 @@ static es_node_data node_at_id(const char *id, const char *part) {
 	return d;
 }
 
-// the state ------------------------------------------------------------------------------------------------
+// the state ----------
 
-// a process's node, where it runs: its path from the root
 typedef struct {
 	es_names at;
 } running_rec;
@@ -187,14 +164,12 @@ struct es_handle {
 struct es_nodes {
 	es_ermine *ermine;
 	es_map running;
-	// what each reader waits on, a node it read that was not there: es_missing, by reader. only a
-	// computer's, for its latest run, and a process's while its setup runs (setting)
+	// what each reader waits on (es_missing, by reader): only a computer's, for its latest run, and a
+	// process's while its setup runs
 	es_map missing;
-	// the processes whose setup is running now, by node
 	es_map setting;
 	es_context **contexts;
 	size_t ncontexts, capcontexts;
-	// every handle by what it names (handle_name): one a name
 	es_map named;
 };
 
@@ -227,7 +202,6 @@ void es_nodes_free(struct es_nodes *x) {
 	for (size_t i = 0; i < x->missing.n; i++) missing_free(x->missing.vals[i]);
 	es_map_free(&x->missing);
 	es_map_free(&x->setting);
-	// every handle, with the ermine
 	es_map_free(&x->named);
 	es_ermine *e = x->ermine;
 	for (size_t i = 0; i < e->handles.cap; i++) {
@@ -237,17 +211,16 @@ void es_nodes_free(struct es_nodes *x) {
 		free(h);
 	}
 	pm_clear(&e->handles);
-	// contexts not let go yet (es_context_free took the rest out)
 	e->nodes = NULL;
 	while (x->ncontexts) es_context_free(x->contexts[--x->ncontexts]);
 	free(x->contexts);
 	free(x);
 }
 
-// handles ------------------------------------------------------------------------------------------------
+// handles ----------
 
-// what a handle names, as one string: its part, then its path's names or its id, each its length
-// first (a name may hold any byte but NUL)
+// what a handle names as one string: its part, then its path's names or its id, each with its
+// length first (a name may hold any byte but NUL)
 static char *handle_name(const es_node_data *n) {
 	const char *part = n->part != NULL ? n->part : "";
 	size_t len = strlen(part) + 32;
@@ -262,10 +235,9 @@ static char *handle_name(const es_node_data *n) {
 	return s;
 }
 
-// one handle a name: a handle is what it names and nothing else (a name, not power), so the same
-// name is the same handle, made once and kept till close. the reference's are new each time, kept
-// while referenced (a WeakMap); in C a program's pointer is not seen, so they are never let go, and
-// steady use names the same nodes, not more [builder's pick, 10-26]
+// One handle per name: a handle is what it names and nothing else, so the same name is the same
+// handle, made once and held until close. In C a program's pointer is not seen, so they are never
+// let go; steady use names the same nodes, not more.
 es_handle *es_mint(es_ermine *e, const es_node_data *node) {
 	struct es_nodes *x = state(e);
 	char *name = handle_name(node);
@@ -291,8 +263,6 @@ es_handle *es_handle_in(es_ermine *e, const op_value *v) {
 	return h != NULL && pm_has(&e->handles, h) ? h : NULL;
 }
 
-// a handle for n: a place (its path from the root) or a node by id. no maker: a handle names a
-// place, whoever made it
 es_handle *es_handle_make(es_context *c, const es_node_data *n) { return es_mint(c->ermine, n); }
 
 es_handle *es_handle_by_id(es_context *c, const char *id, const char *part) {
@@ -302,7 +272,6 @@ es_handle *es_handle_by_id(es_context *c, const char *id, const char *part) {
 	return h;
 }
 
-// a handle for the names (taken), made by c
 static es_handle *handle_at(es_context *c, es_names *names, const char *part) {
 	es_node_data n = node_at_path(names, part);
 	es_handle *h = es_handle_make(c, &n);
@@ -310,7 +279,7 @@ static es_handle *handle_at(es_context *c, es_names *names, const char *part) {
 	return h;
 }
 
-// contexts ------------------------------------------------------------------------------------------------
+// contexts ----------
 
 
 es_context *es_context_new(es_ermine *e, const es_context_options *o) {
@@ -362,7 +331,7 @@ void es_context_free(es_context *c) {
 	free(c);
 }
 
-// f with a scope open ----------------------------------------------------------------------------------
+// f with a scope open ----------
 
 typedef struct {
 	es_thunk f;
@@ -382,8 +351,8 @@ int es_within(es_context *c, es_thunk f, void *ctx) {
 	return t.code;
 }
 
-// nothing open: a process's is nothing-open (its functions are called from its setup, runs, acts and
-// calls; after an await, a timer, a listener: nothing is open); the host's falls back to its own scope
+// nothing open: a process's functions are called from its setup, runs, acts and calls, so after an
+// await, a timer or a listener nothing is open. The host falls back to its own scope
 int es_inside(es_context *c, es_thunk f, void *ctx) {
 	ALIVE(c);
 	if (sc_get_current_scope(c->ermine->scheduler) != NULL) return f(ctx);
@@ -405,7 +374,7 @@ sc_scope *es_owner(es_context *c) {
 	return o != NULL ? o : c->scope;
 }
 
-// asking ---------------------------------------------------------------------------------------------------
+// asking ----------
 
 static int answered(gd_answer a, const gd_refusal *why) {
 	switch (a) {
@@ -427,7 +396,6 @@ static int ask_read(es_context *c, gd_target t) {
 	gd_refusal why = {0};
 	return answered(gd_read(c->guard, &t, 1, &why), &why);
 }
-// whether the policy refuses reading t (asked as read asks: a pending answer is PENDING)
 static int refused(es_context *c, gd_target t, int *no) {
 	*no = 0;
 	if (!c->guarded) return 0;
@@ -442,7 +410,6 @@ gd_thing es_thing_of(const char *id, const es_node_data *n) {
 	if (n != NULL && n->has_path) t.path = CP(n->path), t.npath = n->npath;
 	return t;
 }
-// steps as an op_value list, for a target's field
 static op_value *field_of(const op_key *path, size_t n) {
 	op_value *l = op_list();
 	for (size_t i = 0; i < n; i++) {
@@ -451,8 +418,7 @@ static op_value *field_of(const op_key *path, size_t n) {
 	}
 	return l;
 }
-// the slot of the name last in path, in the folder parent: what placing there changes. *field: the
-// caller's, op_free
+// the slot of the name last in path, in the folder parent: what placing there changes. *field is the caller's
 static gd_target slot_at(const char *parent, const char *const *path, size_t npath,
 	op_value **field) {
 	gd_thing t = {.id = tb_string(parent), .path = path, .npath = npath - 1};
@@ -473,9 +439,8 @@ int es_ask_slot(es_context *c, const char *parent, const char *const *path, size
 static int up_go(es_ermine *e, const pl *places, const char *root, const char *at, es_map *visited,
 	es_names *out);
 
-// ids and nodes ----------------------------------------------------------------------------------------------
+// ids and nodes ----------
 
-// the id at a path, tracked; *out NULL: nothing there. borrowed from the table
 static int get_id(es_context *c, const char *const *path, size_t n, const char **out) {
 	tb_key k;
 	*out = pl_get(c->places, path, n, &k) ? k.string : NULL;
@@ -530,7 +495,7 @@ int es_id_through(es_context *c, es_target x, char **out) {
 	return code;
 }
 
-// the placement asks ---------------------------------------------------------------------------------------
+// the placement asks ----------
 
 int es_ask_placing(es_context *c, const gd_target *slot, es_target x, const char *id) {
 	if (!c->guarded) return 0;
@@ -548,9 +513,8 @@ int es_ask_placing(es_context *c, const gd_target *slot, es_target x, const char
 	return answered(a, &why);
 }
 
-// patches ------------------------------------------------------------------------------------------------------
+// patches ----------
 
-// the patches placing, unplacing and moving make, in stack room: built here, borrowed for the write
 typedef struct {
 	op_patch p[2];
 	op_key key[4];
@@ -561,7 +525,6 @@ static void pset_free(pset *s) {
 	for (size_t i = 0; i < 2; i++) op_free(s->own[i]);
 	*s = (pset){0};
 }
-// a patch at the path [name] (key k), with a value, or taking the name out
 static void pset_name(pset *s, size_t k, const char *name, op_value *value) {
 	s->key[k] = (op_key){.type = OP_STR_KEY, .s = name};
 	op_patch *p = &s->p[s->n++];
@@ -573,7 +536,6 @@ static void pset_name(pset *s, size_t k, const char *name, op_value *value) {
 	}
 }
 
-// the entry's value is a map; a name in it
 static int is_map(const nd_entry *e) { return e != NULL && e->value != NULL && e->value->type == OP_MAP; }
 static const char *child_of(const nd_entry *children, const char *name) {
 	if (!is_map(children)) return NULL;
@@ -581,7 +543,6 @@ static const char *child_of(const nd_entry *children, const char *name) {
 	return v != NULL && v->type == OP_STR ? v->str : NULL;
 }
 
-// place's patches, checked as place checks: children may be none (made by them)
 static int placing(const nd_entry *children, const char *name, const char *id, pset *s) {
 	*s = (pset){0};
 	if (!pl_is_name(name)) return places_fail(ES_NOT_A_NAME, name);
@@ -595,7 +556,6 @@ static int placing(const nd_entry *children, const char *name, const char *id, p
 	pset_name(s, 0, name, op_str(id));
 	return 0;
 }
-// unplace's patches, checked as unplace checks
 static int unplacing(const nd_entry *children, const char *name, pset *s) {
 	*s = (pset){0};
 	if (child_of(children, name) == NULL) return places_fail(ES_NOTHING_THERE, name);
@@ -603,16 +563,14 @@ static int unplacing(const nd_entry *children, const char *name, pset *s) {
 	return 0;
 }
 
-// whole value as one patch
 static op_patch whole(const op_value *v) {
 	op_patch p = {0};
 	if (v != NULL) p.has_value = 1, p.value = v;
 	return p;
 }
 
-// writing ---------------------------------------------------------------------------------------------------------
+// writing ----------
 
-// patches a node's change refers to: copied, held till the node's next update
 typedef struct block block;
 struct block {
 	op_patch *patches;
@@ -666,7 +624,6 @@ static block *block_new(const op_patch *src, size_t n) {
 	return b;
 }
 
-// a write a hook changed: its frame one more on top, { ES_FEATURES: the hooks }
 typedef struct {
 	ch_frame *frame;
 	op_value *list;
@@ -678,8 +635,8 @@ static void featured_free(void *p) {
 	free(f);
 }
 
-// the change a write lands with: its writer's, or made now; a write a hook changed, that one with a
-// frame more on top naming the hooks. *made: the block of a header made now; *fx: the frame made
+// the change a write lands with: its writer's, or made now; for a write a hook changed, that one
+// with a frame more on top naming the hooks. *made: the block of a header made now; *fx: the frame
 static int header_of(es_ermine *e, const es_write *w, ch_header *h, pl_made **made,
 	featured **fx) {
 	*made = NULL;
@@ -697,7 +654,6 @@ static int header_of(es_ermine *e, const es_write *w, ch_header *h, pl_made **ma
 	return 0;
 }
 
-// holds on a node's change: the first replaces the node's last, the rest are added
 static void hold(es_ermine *e, const nd_entry *entry, int *first, void *blk,
 	void (*release)(void *)) {
 	if (blk == NULL) return;
@@ -705,7 +661,6 @@ static void hold(es_ermine *e, const nd_entry *entry, int *first, void *blk,
 	else pl_hold_also(e->places, entry, blk, release);
 }
 
-// what a part holds when nothing is there: attributes and a status are maps, so {}; a value, nothing
 static op_value *empty(const char *part) {
 	return strcmp(part, "attributes") == 0 || strcmp(part, CST_TABLE) == 0 ? op_map() : NULL;
 }
@@ -720,7 +675,6 @@ static int land(void *ctx, const es_write *w) {
 	es_ermine *e = ctx;
 	tb_key part = tb_string(w->part), id = tb_string(w->id);
 	nd_entry *entry = tb_get(e->table, part, id);
-	// an action's node going, or written over: its record let go
 	void *held = entry != NULL && strcmp(w->part, "value") == 0
 		? es_action_held(e, entry->value) : NULL;
 	if (w->gone) {
@@ -751,8 +705,8 @@ static int land(void *ctx, const es_write *w) {
 		nd_entry *fresh = nd_make_entry(v, &h);
 		op_free(v);
 		tb_add(e->table, part, id, fresh);
-		// the places' till it is out of the table (taken out, or written over whole): then let go
-		// of after a pulse (pl_sweep)
+		// the places' till it is out of the table (taken out, or written over whole), then let go after a
+		// pulse (pl_sweep)
 		pl_own_in(e->places, fresh, e->table);
 		hold(e, fresh, &first, made, pl_made_free);
 		hold(e, fresh, &first, fx, featured_free);
@@ -760,7 +714,6 @@ static int land(void *ctx, const es_write *w) {
 	}
 	block *b = block_new(w->patches, w->npatches);
 	size_t failed = 0;
-	// children and process rows change as places changes them (readers keep what they read)
 	int bad = strcmp(w->part, "children") == 0 || strcmp(w->part, PR_PART) == 0
 		? pl_update_entry(pl_crow(e->places), entry, b->patches, b->n, h, &failed)
 		: nd_update(entry, b->patches, b->n, h, &failed);
@@ -783,7 +736,6 @@ typedef struct {
 	es_context *c;
 	const es_write *w;
 } putting;
-// a write that changes nothing is not landed
 static int put_land(void *ctx, const es_write *x) {
 	if (!x->gone && x->npatches == 0) return 0;
 	return land(ctx, x);
@@ -803,7 +755,6 @@ void es_context_writer(es_context *c, const char *part, tb_key id, const op_patc
 	es_context_put(c, &w);
 }
 
-// one write at a node, asked "edit" first; remove: the entry taken out
 typedef struct {
 	es_context *c;
 	const char *part;
@@ -812,7 +763,6 @@ typedef struct {
 	size_t n;
 	int gone;
 } writing;
-// f run inside c with site as the write's site, then a pulse queued unless it failed
 static int in_pulse(es_context *c, es_thunk f, void *ctx, const ch_location *site) {
 	const ch_location *was = es_enter(c->ermine, site);
 	int code = es_inside(c, f, ctx);
@@ -844,7 +794,7 @@ int es_context_remove_at(es_context *c, const char *part, const es_aim *at, cons
 	return write_run(c, part, at, NULL, 0, 1, site);
 }
 
-// placing and building ----------------------------------------------------------------------------------------
+// placing and building ----------
 
 int es_place_under(es_context *c, const char *parent, const char *name, const char *id,
 	const char *const *path, size_t npath) {
@@ -908,7 +858,7 @@ int es_folder_slot(es_context *c, const char *const *path, size_t npath, nd_entr
 	return 0;
 }
 
-// seen --------------------------------------------------------------------------------------------------------------
+// seen ----------
 
 void es_running_set(es_ermine *e, const char *process, const char *const *at, size_t nat) {
 	struct es_nodes *x = state(e);
@@ -922,7 +872,6 @@ void es_running_set(es_ermine *e, const char *process, const char *const *at, si
 	r->at = names_of(at, nat);
 }
 
-// whether a process runs at path, its node id
 static int running_at(es_ermine *e, const char *id, char *const *path, size_t n) {
 	if (id == NULL) return 0;
 	running_rec *r = es_map_get(&state(e)->running, id);
@@ -941,8 +890,8 @@ void es_running_clear(es_ermine *e, const char *process) {
 }
 
 // the names from root down to id, up id's names now (places' names, the latest placed first at each
-// step; a process's node, named by its row: where it runs). 1 and
-// *out; 0: nothing reaches it from root. read untracked
+// step; a process's node is named by its row). 1 and *out; 0: nothing reaches it from root. Read
+// untracked
 static int up_go(es_ermine *e, const pl *places, const char *root, const char *at, es_map *visited,
 	es_names *out) {
 	if (strcmp(at, root) == 0) return names_init(out), 1;
@@ -977,7 +926,7 @@ int es_seen_in(es_ermine *e, es_context *reader, const char *id, es_names *out) 
 	return 0;
 }
 
-// getNode, ensureNode, createNode, ref --------------------------------------------------------------------------
+// getNode, ensureNode, createNode, ref ----------
 
 int es_get_node(es_context *c, es_at p, es_handle **out) {
 	es_names path;
@@ -995,7 +944,6 @@ typedef struct {
 	void *ctx;
 	int built;
 } ensuring;
-// the node at the path, made (with the folders on the way) if missing
 static int ensure_in(void *p) {
 	ensuring *s = p;
 	const char *there;
@@ -1066,9 +1014,8 @@ int es_create_node_at(es_context *c, es_at folder, const op_value *value, es_han
 	return 0;
 }
 
-// reads ----------------------------------------------------------------------------------------------------------------
+// reads ----------
 
-// x's node as t resolves it, its part as given (NULL: its own)
 static int node_part(es_context *t, es_target x, const char *part, es_node_data *n) {
 	TRY(es_node_of(t, x, n));
 	if (part != NULL) {
@@ -1078,13 +1025,11 @@ static int node_part(es_context *t, es_target x, const char *part, es_node_data 
 	return 0;
 }
 
-// the computer's node whose run is open, else NULL
 static const char *computer_node(sc_computer *computer) {
 	const op_value *v = ch_frame_get(sc_scope_frame(computer), CH_NODE);
 	return v != NULL && v->type == OP_STR ? v->str : NULL;
 }
 
-// the names as one text, each once: every name with its length before it
 static char *names_key(const char *const *names, size_t n) {
 	size_t len = 1;
 	for (size_t i = 0; i < n; i++) len += strlen(names[i]) + 21;
@@ -1093,9 +1038,8 @@ static char *names_key(const char *const *names, size_t n) {
 	return s;
 }
 
-// path (as c sees it) waited on by the reader now: a computer's (in its run now), else a setup's (the
-// context's node, its setup running); anyone else's is shown nowhere, so not held. held from the root,
-// shown to each asker as it sees it
+// path (as c sees it) waited on by the reader now: a computer's (in its run now), else a setup's.
+// Anyone else's is shown nowhere, so not held. Held from the root, shown to each asker as it sees it
 static void wait_for(es_context *c, const char *const *path, size_t npath) {
 	es_ermine *e = c->ermine;
 	struct es_nodes *x = state(e);
@@ -1104,8 +1048,8 @@ static void wait_for(es_context *c, const char *const *path, size_t npath) {
 	const char *key = computer != NULL ? computer : c->node;
 	if (computer == NULL && !es_map_has(&x->setting, c->node)) return;
 	int has_n = computer != NULL;
-	// the number this run will have: its computer's latest record's and one (that record read, tracked,
-	// as system/reading.ts' waitFor reads it)
+	// the number this run will have: its computer's latest record's, plus one (that record is read and
+	// tracked, as system/reading.ts' waitFor reads it)
 	const crn_run *latest = NULL;
 	if (has_n) es_latest_run(e, computer, &latest);
 	unsigned n = has_n ? (latest != NULL ? latest->n : 0) + 1 : 0;
@@ -1156,7 +1100,6 @@ void es_setting(es_ermine *e, const char *process, int running) {
 	}
 }
 
-// the value at key of x's part, tracked; none: *out NULL; a pending memo with no value: PENDING
 static int read_part(es_context *c, es_target x, const char *part, const op_key *key, size_t nkey,
 	const op_value **out) {
 	es_ermine *e = c->ermine;
@@ -1165,8 +1108,7 @@ static int read_part(es_context *c, es_target x, const char *part, const op_key 
 	TRY(node_part(c, x, part, &n));
 	const char *id;
 	if (!es_id_of(c, &n, &id)) {
-		// a node not there: pending, as a memo with no value is ("not there yet" one way) [chee 10-25:
-		// "i think a missing node should also throw pending"], the read tracked so its coming reruns
+		// a node not there is pending, as a memo with no value is. The read is tracked so its coming reruns
 		// it, and said where the reader waits
 		int code = check(c);
 		if (!code && n.has_path && c->peeping == 0) wait_for(c, CP(n.path), n.npath);
@@ -1212,7 +1154,6 @@ void es_versions_free(es_versions *v) {
 	*v = (es_versions){0};
 }
 
-// read's, from its entry's change; then what features show (onRead). each item's change as its view
 static int versions_part(es_context *c, es_target x, const char *part, const op_key *key,
 	size_t nkey, es_versions *out) {
 	es_ermine *e = c->ermine;
@@ -1246,7 +1187,6 @@ static int versions_part(es_context *c, es_target x, const char *part, const op_
 	if (items.items != shown_out.items) free(items.items);
 	es_node_data_free(&n);
 	if (code) return es_versions_free(&shown_out), code;
-	// a feature's item with a change: its view
 	for (size_t i = 0; i < shown_out.n; i++) {
 		es_from *f = &shown_out.items[i].from;
 		if (f->change != NULL && f->view == NULL) f->view = es_change_view_of(e, f->change);
@@ -1255,7 +1195,6 @@ static int versions_part(es_context *c, es_target x, const char *part, const op_
 	return 0;
 }
 
-// children's ids turned handles (no ids given out): each version's value, a new map
 static int handles_for(es_context *t, es_versions *v) {
 	for (size_t i = 0; i < v->n; i++) {
 		es_version *it = &v->items[i];
@@ -1300,7 +1239,6 @@ static void items_push(es_items *l, const op_value *value, const char *from, es_
 	l->items[l->n++] = (es_item){.value = value, .from = from, .node = node, .refused = no};
 }
 
-// every node x's path reaches. a refused one keeps its place, with no value and no node
 int es_read_entries(es_context *c, es_target x, es_items *out) {
 	es_ermine *e = c->ermine;
 	*out = (es_items){0};
@@ -1315,7 +1253,6 @@ int es_read_entries(es_context *c, es_target x, es_items *out) {
 			else if (!code) {
 				if (c->peeping == 0) es_calls_read(e, n.part, n.id, NULL, 0, 1, 0);
 				const op_value *v = pl_read(c->places, tb_string(n.part), tb_string(n.id), NULL, 0);
-				// a node there by id, with or without a value (as by a path); nothing under that id: none
 				size_t held;
 				tb_at(e->table, tb_string(n.id), &held);
 				if (v != NULL || held > 0) {
@@ -1339,7 +1276,6 @@ int es_read_entries(es_context *c, es_target x, es_items *out) {
 				all.items[i].from, es_handle_by_id(c, id, n.part), 0);
 		}
 	} else if (n.npath == 0) {
-		// the root: no name in a folder to ask by, so the node itself, as read asks
 		for (size_t i = 0; i < all.n && !code; i++) {
 			const char *id = all.items[i].id.string;
 			int no;
@@ -1394,7 +1330,6 @@ int es_has_node(es_context *c, es_target x, int *out) {
 	return 0;
 }
 
-// f with nothing it reads tracked; a pending memo it reads ends it, as none
 typedef struct {
 	es_thunk f;
 	void *ctx;
@@ -1451,7 +1386,6 @@ int es_list(es_context *c, es_target x, es_names *out) {
 	return 0;
 }
 
-// x's children, each as a handle (reached by this process's path, so its own to hold)
 int es_read_children(es_context *c, es_target x, es_children *out) {
 	*out = (es_children){0};
 	es_node_data n;
@@ -1468,7 +1402,6 @@ int es_read_children(es_context *c, es_target x, es_children *out) {
 	for (size_t i = 0; i < names.n && !code; i++) {
 		const char *at = NULL;
 		const op_value *kid = kids != NULL && kids->type == OP_MAP ? op_get(kids, names.names[i]) : NULL;
-		// a name's node as its path reaches it (a process's node, named by its row), else the entry's
 		if (n.has_path && at == NULL) {
 			es_names p = names_of(CP(n.path), n.npath);
 			names_add(&p, names.names[i]);
@@ -1493,7 +1426,7 @@ const char *const *es_get_args(es_context *c, size_t *n) {
 	return CP(c->args);
 }
 
-// patch ------------------------------------------------------------------------------------------------------------
+// patch ----------
 
 typedef struct {
 	es_context *c;
@@ -1502,7 +1435,6 @@ typedef struct {
 	const op_patch *patches;
 	size_t n;
 } patching;
-// the part patched: asked "edit" first, the write the node's side makes
 static int patch_in(void *p) {
 	patching *s = p;
 	es_node_data n;
@@ -1533,9 +1465,8 @@ int es_patch_attributes_at(es_context *c, es_target x, const op_patch *patches, 
 	return patch_part(c, x, "attributes", patches, n, site);
 }
 
-// patchChildren ------------------------------------------------------------------------------------------------------
+// patchChildren ----------
 
-// a patch's value as a target: a handle, a string path, or a list of steps (anything else is no handle)
 static int target_of_value(es_context *c, const op_value *v, es_target *x, es_names *own) {
 	*own = (es_names){0};
 	es_handle *h = es_handle_in(c->ermine, v);
@@ -1549,11 +1480,10 @@ static int target_of_value(es_context *c, const op_value *v, es_target *x, es_na
 		}
 		return *x = es_on_path(es_steps(CP(own->names), own->n)), 0;
 	}
-	// a stand-in that is no handle of this ermine's, or any other value
 	return not_a_handle();
 }
 
-// place, unplace, rename, remove ----------------------------------------------------------------------------------
+// place, unplace, rename, remove ----------
 
 typedef struct {
 	es_context *c;
@@ -1590,7 +1520,7 @@ int es_place_at(es_context *c, es_at p, es_target x, const ch_location *site) {
 }
 
 // a saved child of a folder that something else shadows at its path (a box's binding) is not the
-// process's to move or take out: nothing-there (system/tree.ts' notShadowed)
+// process's to move or take out: nothing-there
 static int not_shadowed(es_context *c, const es_names *path, const nd_entry *children, const char *name) {
 	const char *saved = child_of(children, name), *there;
 	if (saved == NULL) return 0;
@@ -1602,7 +1532,7 @@ static int not_shadowed(es_context *c, const es_names *path, const nd_entry *chi
 }
 
 // every name that holds id taken out of its folder, as the folder is now (not by a path, which a
-// removed folder no longer gives): a computer's node going (computers.c). errors: the first
+// removed folder no longer gives); returns the first error's text
 char *es_unplace_names(es_context *c, const char *id) {
 	size_t n;
 	const pl_slot *slots = pl_names_of(c->places, tb_string(id), &n);
@@ -1632,9 +1562,9 @@ char *es_unplace_names(es_context *c, const char *id) {
 	return bad;
 }
 
-// every memo, effect and action made at a node and under it: each id given stopped (system/made.ts'
-// stopMade). a computer's scope torn down, teardowns told ended, its node and name gone; an action's
-// node value taken out, then its placement let go. the process that made them keeps running
+// every memo, effect and action made at a node and under it, each id given stopped: a computer's
+// scope torn down, its node and name gone; an action's node value taken out, then its placement let
+// go. The process that made them keeps running
 static void stop_made(es_context *c, char *const *ids, size_t n) {
 	es_ermine *e = c->ermine;
 	for (size_t i = 0; i < n; i++) {
@@ -1653,7 +1583,6 @@ static void stop_made(es_context *c, char *const *ids, size_t n) {
 	}
 }
 
-// id and every node under it (by the children parts), each once, in a list
 typedef struct {
 	char **v;
 	size_t n, cap;
@@ -1678,7 +1607,6 @@ static void idlist_free(idlist *l) {
 	pr_names_free(l->v, l->n);
 	es_map_free(&l->seen);
 }
-// those of l no name reaches from the root now (keep: this one always), stopped
 static void stop_unreached(es_context *c, idlist *l, const char *keep) {
 	char **stop = es_alloc((l->n + 1) * sizeof *stop);
 	size_t k = 0;
@@ -1721,7 +1649,6 @@ static int children_in(void *p) {
 		nd_entry *children = tb_get(e->table, tb_string("children"), tb_string(folder));
 		pset ps;
 		if (p->has_value && p->value != NULL) {
-			// a path in a patch: the caller's, resolved as the caller resolves it
 			es_target v;
 			es_names own;
 			code = target_of_value(s->c, p->value, &v, &own);
@@ -1737,7 +1664,6 @@ static int children_in(void *p) {
 			es_names_free(&own);
 			free(id);
 		} else {
-			// a process running at the name (a row names it, no entry): stopped, as unplace does
 			const char *at = NULL;
 			char **names = NULL;
 			int running = 0;
@@ -1765,7 +1691,6 @@ static int children_in(void *p) {
 					code = es_context_put(s->c, &w);
 					pset_free(&ps);
 				}
-				// gone is what no name reaches from the root now: one reached by another name stays
 				if (!code) stop_unreached(s->c, &below, NULL);
 				idlist_free(&below);
 			}
@@ -1782,8 +1707,8 @@ int es_patch_children_at(es_context *c, es_target x, const op_patch *patches, si
 	return in_pulse(c, children_in, &s, site);
 }
 
-// a name out of its folder; a process's node there (named by its row): the process stopped, which
-// takes the row, and so the name (unplace, system/names.ts)
+// a name out of its folder; a process's node there (named by its row): the process is stopped,
+// which takes the row, and so the name
 static int unplace_in(void *v) {
 	tree *s = v;
 	es_context *c = s->c;
@@ -1792,7 +1717,6 @@ static int unplace_in(void *v) {
 	const char *at, *folder;
 	if (path.n && get_id(c, CP(path.names), path.n, &at) == 0 &&
 		running_at(c->ermine, at, path.names, path.n)) {
-		// asked as placing there is: the folder's slot, or (a folder only its rows name) the node
 		char *id = es_dup(at);
 		int code = get_id(c, CP(path.names), path.n - 1, &folder);
 		if (!code) {
@@ -1823,7 +1747,6 @@ static int unplace_in(void *v) {
 			code = es_context_put(c, &w);
 			pset_free(&ps);
 		}
-		// gone is what no name reaches from the root now: one reached by another name stays
 		if (!code) stop_unreached(c, &below, NULL);
 		idlist_free(&below);
 	}
@@ -1835,8 +1758,8 @@ int es_unplace_at(es_context *c, es_at p, const ch_location *site) {
 	return in_pulse(c, unplace_in, &s, site);
 }
 
-// move's patches, checked as move checks: the one it goes into first; to the same name: none. each is
-// the entry (0 the source's, 1 the target's) and its patches
+// move's patches, checked as move checks: the one it goes into first; to the same name: none. Each
+// is the entry (0 the source's, 1 the target's) and its patches
 typedef struct {
 	pset ps[2];
 	int entry[2];
@@ -1925,12 +1848,10 @@ static int remove_in(void *v) {
 	TRY(es_node_of(c, s->x, &n));
 	const char *found;
 	int code = need_id(c, &n, &found);
-	// the id outlives its entries: the table lets go of its key with the last
 	char *id = code ? NULL : es_dup(found);
 	if (!code) code = ask(c, "remove", gd_target_of(es_thing_of(id, &n), NULL, NULL));
 	idlist below = {0};
 	if (!code) under(e, id, &below);
-	// a running process's node: the process stopped first (its row out), then its entries gone
 	if (!code && es_map_get(&state(e)->running, id) != NULL) code = es_stop_node(e, id);
 	else if (!code && n.has_path && n.npath) {
 		nd_entry *children;
@@ -1951,7 +1872,6 @@ static int remove_in(void *v) {
 		} else es_clear_thrown();
 	}
 	if (!code) {
-		// every part the node has, taken out (the parts copied: each write changes the table)
 		size_t count;
 		const tb_entry *at = tb_at(e->table, tb_string(id), &count);
 		char **parts = es_alloc((count + 1) * sizeof *parts);
@@ -1966,8 +1886,8 @@ static int remove_in(void *v) {
 		crn_drop(e->runs, tb_string(id));
 		es_calls_drop(e, id);
 		es_held_drop(e, id);
-		// what was made at it and under it stops (the node itself always; what is under it, unless a
-		// name still reaches it)
+		// what was made at it and under it stops (the node itself always; what is under it, unless a name
+		// still reaches it)
 		stop_unreached(c, &below, id);
 	}
 	idlist_free(&below);

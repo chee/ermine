@@ -1,5 +1,5 @@
-// what the suite (conformance/ermine) can't say on the line protocol: the base's own files, a
-// made-up context, close() with every teardown held, two onTable layers stacked
+// What the conformance suite cannot say on the line protocol: the base's own files, a made-up
+// context, close() with every teardown held, and two stacked onTable layers.
 import {
 	addTeardown,
 	createAction,
@@ -118,7 +118,6 @@ Deno.test("two onTable layers stack: table events and commits go through both, i
 	e.close()
 })
 
-// a scheduler whose registerTeardown calls are counted, by scope
 function counted() {
 	const s = createScheduler()
 	const on = new Map<unknown, number>()
@@ -251,7 +250,6 @@ Deno.test("close() runs every step when one throws, throws the first error at th
 	assertEquals(registrations(scheduler), 1)
 	boom = true
 	assertThrows(() => e.close(), Error, "boom")
-	// every step ran: unregistered, and closed (a second close is nothing)
 	assertEquals(registrations(scheduler), 0)
 	assertThrows(() => e.within(() => read("/")), ErmineError, "closed")
 	e.close()

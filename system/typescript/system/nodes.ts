@@ -9,8 +9,6 @@ import { here } from "./setting.ts"
 import { build } from "./tree.ts"
 import type { System } from "./shapes.ts"
 
-// public (mod.ts exports them): each runs its implementation below, named with As, as the
-// context it finds (acting.ts' go)
 export const getNode: System["getNode"] = /* @__PURE__ */ marked(function getNode(path) {
 	return go(getNode, "getNode", false, getNodeAs, path)
 })
@@ -31,20 +29,15 @@ export const ref: System["ref"] = /* @__PURE__ */ marked(function ref(path, make
 	return go(ref, "ref", true, refAs, path, make)
 })
 
-// the node at p, as a handle: made nothing
 export function getNodeAs(inner: Inner, p: string | Path): Node {
 	const { resolve } = here(inner)
 	return nodeAt(inner, resolve(p))
 }
 
-// the node at p, made (with the folders on the way) if missing: holding value, or nothing (no
-// value); there already: as it is
 export function ensureNodeAs(inner: Inner, p: string | Path, value?: unknown): Node {
 	return refAs(inner, p, () => value)
 }
 
-// a new node under folder, named by a fresh name of its own: drawn as an id is, but never its id
-// (a name is what list gives, and a process holds no ids)
 export function createNodeAs(inner: Inner, folder: string | Path, value: unknown): Node {
 	const { newId, inside, resolve } = here(inner)
 	const id = newId()
@@ -62,6 +55,5 @@ export function refAs<T>(inner: Inner, p: string | Path, made: () => T): Node {
 	return nodeAt(inner, path)
 }
 
-// whether a node is there: one that readEntries gives, the policy not refusing it
 export const hasNodeAs = (inner: Inner, x: Target) =>
 	readEntriesAs(inner, x).some((i) => i.refused !== true)

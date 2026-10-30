@@ -1,29 +1,10 @@
-// the C ermine (ermine.h) on the line protocol of typescript/ermine_harness.ts, which documents it
-// and the programs (conformance/c/harness.h has the loop). E's job, one request at a time:
-//   the world: one ermine per run (a plain one, or the last "ermine" asked): root "R", the host's
-//     scope { actor: "test" }, new ids "n1", "n2", … in order, a process's id "proc:<name>"; a
-//     schedule that queues, run after every request till none is asked for
-//   every op: ermine, features, late, uuid, node, context, o (resolve, write, remove, ask, within,
-//     api), host, code, start, stop, status, close, record, waits,
-//     slot, do, settle, log, pulse, saved, id, metadata, caller, site
-//   programs as data steps: { do: [fn, ...args], as? }, "$x" in an arg, the forms (createMemo,
-//     createEffect, createAction, addTeardown, getStatus, explain, peep, ref, log, later, if,
-//     throw, each, pick, is, keys, whole, inc, explaincall, explainargs, explainfrom, share), and every es_
-//     function called as it is. a program is an es_program whose ctx holds its steps; a memo's
-//     function an es_compute whose ctx holds its expression; an action's an es_action whose ctx
-//     holds its steps. a program's calls find their context with es_found (the imported
-//     functions), the host's and a context op's use the context given
-//   handles minted for the host's steps (a map of only id, path, part: es_handle_of), and shown in
-//     answers as what they reach ("plain")
-//   the test features of features_fixture.ts (an es_feature whose ctx holds the spec), their logs
-//   "plain" answers: statuses, explains, records, errors as the TypeScript harness shows them
-//     ({ error: code }, "refused", "feature" with feature, hook and cause, "pending", else the text)
-// memory: every line is retained (hh_retain): the steps a memo, action or process keeps point into
-// it, so the lines are let go of at hh_finish. an environment lives as long as anything that captured
-// it, and what a step made for a memo, action, process or feature as long as the ermine: both the
-// world's, freed with it (world_free, when a new ermine replaces it, and at hh_finish), after es_free.
-// values held are op_ref'd. a site is the line that made it: a memo's or effect's is define's (the "computer" site),
-// any other write here a "program" one.
+// The C ermine (ermine.h) on the line protocol of typescript/ermine_harness.ts, which documents
+// every op and the program steps. conformance/c/harness.h has the loop.
+//
+// Every request line is retained (hh_retain) because the steps a memo, action or process keeps point
+// into it. Environments and what steps made live as long as the world and are freed with it, after
+// es_free. A site is the line that made the write: define's for a memo or effect ("computer"),
+// otherwise "program".
 #define _POSIX_C_SOURCE 200809L
 #include "../../conformance/c/protocol_harness.h"
 #include "ermine.h"
@@ -42,23 +23,21 @@
 int (*hx_op)(const op_value *request, es_ermine *e, op_value **res);
 pl *(*hx_places)(const char *name);
 
-// --- the world -----------------------------------------------------------------------------------
+// --- the world ----------
 
-// what a step's function acts as: the context given (the host's, a context op's), else the one the
-// scope open finds, as the imported functions of @ermine/system do. host: remove and pulse too
+// what a step's function acts as: the context given (the host's, or a context op's), else the one
+// the scope open finds, as the imported functions of @ermine/system do
 typedef struct {
 	es_context *fixed;
 	int host;
 } sys_t;
 
-// the names a program's steps set, under the one that made it (an action's args are "0", "1" …)
 typedef struct env env_t;
 struct env {
 	es_map vars;
 	env_t *parent;
 };
 
-// a process the harness started: its start, and the environment its setup ended with
 typedef struct {
 	es_started *started;
 	// its node's id; started is NULL for one a program started (its record is freed with its scope)
@@ -67,7 +46,6 @@ typedef struct {
 	int has_api;
 } running_t;
 
-// a program a code step made: its steps, and what it gives back
 typedef struct {
 	const op_value *steps;
 	const op_value *back;
@@ -75,7 +53,6 @@ typedef struct {
 	int promise;
 } program_t;
 
-// a promise the harness made, settled at the next "settle" with expr's value (none: undefined)
 typedef struct {
 	es_promise *promise;
 	sys_t sys;
@@ -88,13 +65,11 @@ typedef struct {
 	void *data;
 } queued_t;
 
-// a deny entry of the request: every field given must match
 typedef struct {
 	char *op, *path, *id, *from, *box;
 	int pending;
 } deny_t;
 
-// a test feature: its spec, and what its hooks keep
 typedef struct {
 	char *name;
 	const op_value *spec;
@@ -104,7 +79,6 @@ typedef struct {
 	op_value *held;
 } tf_t;
 
-// something the world holds on to: let go with free, else dtor
 typedef struct {
 	void *p;
 	void (*dtor)(void *p);
@@ -123,8 +97,7 @@ typedef struct {
 	size_t nqueue, capqueue, head;
 	held_t *held;
 	size_t nheld, capheld;
-	// settled at once by a generator: the maker's hold, kept till the world goes so the call's
-	// promise is still one when watched
+	// settled at once by a generator: the maker's hold lasts until the world goes
 	es_promise **spent;
 	size_t nspent, capspent;
 	char *next, *pending;
@@ -136,9 +109,7 @@ typedef struct {
 	sc_pair info;
 	char **args;
 	size_t nargs;
-	// what the host says of the person's event: 1 a person just interacted with the page
 	int event;
-	// what the world made and holds on to, let go with it
 	owned_t *owned;
 	size_t nowned, capowned;
 	env_t **envs;
@@ -149,7 +120,6 @@ static world_t *W;
 static hh_line **lines;
 static size_t nlines, caplines;
 
-// memory the world holds on to: a step's state, a feature, a process: freed when the world is
 static void *own_with(void *p, void (*dtor)(void *p)) {
 	owned_t o = {p, dtor};
 	ES_PUSH(W->owned, W->nowned, W->capowned, o);
@@ -158,8 +128,7 @@ static void *own_with(void *p, void (*dtor)(void *p)) {
 static void *own(void *p) { return own_with(p, NULL); }
 static void *owned_alloc(size_t n) { return own(es_alloc(n)); }
 
-// an environment lives as long as anything that captured it (a memo, an action, a promise, a process):
-// the world's
+// an environment lives as long as anything that captured it (a memo, an action, a promise, a process)
 static env_t *env_new(env_t *parent) {
 	env_t *e = es_alloc(sizeof *e);
 	e->parent = parent;
@@ -172,14 +141,13 @@ static op_value *env_get(const env_t *e, const char *name) {
 	}
 	return NULL;
 }
-// takes v
 static void env_set(env_t *e, const char *name, op_value *v) {
 	op_value *old = es_map_get(&e->vars, name);
 	es_map_set(&e->vars, name, v);
 	op_free(old);
 }
 
-// --- small things ----------------------------------------------------------------------------------
+// --- small things ----------
 
 static int fail(const char *format, ...) __attribute__((format(printf, 1, 2)));
 static int fail(const char *format, ...) {
@@ -202,11 +170,9 @@ static op_value *names_value(const es_names *names) {
 
 static int is_str(const op_value *v) { return v != NULL && v->type == OP_STR; }
 
-// a value a field holds in a request map, else NULL
 static const op_value *field(const op_value *map, const char *key) {
 	return map != NULL && map->type == OP_MAP ? op_get(map, key) : NULL;
 }
-// a spec flag: given and not false or null
 static int flag(const op_value *spec, const char *key) {
 	const op_value *v = field(spec, key);
 	return v != NULL && v->type != OP_NULL && !(v->type == OP_BOOL && !v->bool_);
@@ -215,7 +181,6 @@ static const char *text(const op_value *spec, const char *key) {
 	const op_value *v = field(spec, key);
 	return is_str(v) ? v->str : NULL;
 }
-// a string field, else ""
 static const char *str_or(const op_value *spec, const char *key) {
 	const char *s = text(spec, key);
 	return s != NULL ? s : "";
@@ -230,7 +195,6 @@ static void log_push(const char *name, op_value *v) {
 	op_push(list, v != NULL ? v : op_null());
 }
 
-// the hooks' log: [name, hook, …more]
 static void say(const tf_t *t, const char *hook, const char *a, const char *b, const char *c) {
 	op_value *row = op_list();
 	op_push(row, op_str(t->name));
@@ -241,7 +205,6 @@ static void say(const tf_t *t, const char *hook, const char *a, const char *b, c
 	log_push("hooks", row);
 }
 
-// a path as text, "/a/b", its empty names gone
 static char *rooted(const char *p) {
 	char *out = es_alloc(strlen(p) + 2), *w = out;
 	*w++ = '/';
@@ -261,7 +224,7 @@ static char *rooted(const char *p) {
 	return out;
 }
 
-// --- values: shown, and looked into ---------------------------------------------------------------------
+// --- values: shown, and looked into ----------
 
 static op_value *locations_shown(const op_value *locations);
 static op_value *view_value(const es_change_view *v) {
@@ -278,15 +241,14 @@ static op_value *node_value(const es_node_data *n) {
 	op_set(m, "part", op_str(n->part));
 	return m;
 }
-// a stand-in a program may look into, as the object it is: a change view. new; NULL: none
 static op_value *expand(const op_value *v) {
 	const es_change_view *view = es_live_of(v, "view");
 	if (view != NULL) return view_value(view);
 	return NULL;
 }
 
-// v as an answer shows it: a handle what it reaches, a promise {}, a function "function", a view
-// as its fields, a list and a map through. new
+// v as an answer shows it: a handle as what it reaches, a promise {}, a function "function", a view
+// as its fields, lists and maps through. new
 static op_value *plain(const op_value *v) {
 	if (v == NULL) return NULL;
 	if (v->type == OP_STAND) {
@@ -338,8 +300,7 @@ static op_value *plain(const op_value *v) {
 	return op_ref((op_value *)v);
 }
 
-// the value at a path in v, as places' at: a name into a map, a number (or a number's text) into a
-// list. new; NULL: nothing there
+// the value at a path in v, as places' at: a name into a map, a number (or its text) into a list. new
 static op_value *value_at(const op_value *v, const op_value *path) {
 	op_value *cur = op_ref((op_value *)v);
 	for (size_t i = 0; path != NULL && path->type == OP_LIST && i < path->count && cur != NULL; i++) {
@@ -364,8 +325,7 @@ static op_value *value_at(const op_value *v, const op_value *path) {
 	return cur;
 }
 
-// Object.is: scalars by value, anything else by identity (a handle, promise or function by what it
-// holds)
+// Object.is: scalars by value, anything else by identity (a handle, promise or function by what it holds)
 static int same_value(const op_value *a, const op_value *b) {
 	if (a == b) return 1;
 	if (a == NULL || b == NULL || a->type != b->type) return 0;
@@ -386,7 +346,6 @@ static int same_value(const op_value *a, const op_value *b) {
 	}
 }
 
-// "$x" anywhere in an argument (inside lists and maps too)
 static int has_name(const op_value *a) {
 	if (a == NULL) return 0;
 	if (a->type == OP_STR) return a->str[0] == '$';
@@ -397,7 +356,6 @@ static int has_name(const op_value *a) {
 	}
 	return 0;
 }
-// "$x" is the name x (undefined when unset), anywhere in an argument; anything else as it is. new
 static op_value *arg(const env_t *env, const op_value *a) {
 	if (a == NULL) return NULL;
 	if (!has_name(a)) return op_ref((op_value *)a);
@@ -418,9 +376,8 @@ static op_value *arg(const env_t *env, const op_value *a) {
 	return map;
 }
 
-// --- what an argument is -------------------------------------------------------------------------------
+// --- what an argument is ----------
 
-// a path: text, or a list of names
 static int at_of(const op_value *v, es_at *out) {
 	if (is_str(v)) {
 		*out = es_text(v->str);
@@ -439,7 +396,6 @@ static int at_of(const op_value *v, es_at *out) {
 }
 #define NOT_A_HANDLE \
 	"not-a-handle: a node is given by @ermine/system's functions (getNode, ensureNode, createMemo …) or a path, never written as an object"
-// a target: a handle (one of this ermine's), else a path; an object no handle: not-a-handle
 static int target_of(const op_value *v, es_target *out) {
 	if (v != NULL && v->type == OP_STAND) {
 		const es_handle *h = W->e != NULL ? es_handle_in(W->e, v) : NULL;
@@ -455,7 +411,6 @@ static int target_of(const op_value *v, es_target *out) {
 	}
 	return es_fail(ES_NOT_A_HANDLE, NOT_A_HANDLE);
 }
-// a read's key: a list of names and numbers; none given: no key
 static int keys_of(const op_value *v, const op_key **out, size_t *n) {
 	*out = NULL;
 	*n = 0;
@@ -472,7 +427,6 @@ static int keys_of(const op_value *v, const op_key **out, size_t *n) {
 	*n = v->count;
 	return 0;
 }
-// patches: a list of { path, value?, move? }
 static int patches_of(const op_value *v, const op_patch **out, size_t *n) {
 	if (v == NULL || v->type != OP_LIST) {
 		return es_fail(ES_NOT_PATCHES, "not-patches: patch takes patches: [{ path, value }]");
@@ -484,7 +438,7 @@ static int patches_of(const op_value *v, const op_patch **out, size_t *n) {
 	return 0;
 }
 
-// --- results, as a program is given them ----------------------------------------------------------------
+// --- results, as a program is given them ----------
 
 static op_value *version_value(const es_version *v) {
 	op_value *m = op_map();
@@ -522,7 +476,6 @@ static op_value *items_value(const es_items *items) {
 	return list;
 }
 
-// a path as a node is seen: names, or null when outside
 static op_value *path_value(int has_path, char *const *path, size_t n) {
 	return has_path ? strs(n, (const char *const *)path) : op_null();
 }
@@ -572,9 +525,9 @@ static op_value *status_value(const es_status *st) {
 	return m;
 }
 
-// where locations are, named, as frames.ts' Classify has it: the nearest line outside ermine's
-// files: "computer" for the line define made, "handler" for the line an action was made at, else
-// "program" (the harness's own lines); any other file "other"; none outside ermine's: "none"
+// where locations are, named, as frames.ts' Classify has it: "computer" for the line define made,
+// "handler" for the line an action was made at, "program" for the harness's own lines, "other" for
+// any other file, and "none" when none is outside ermine's files
 static const char *classify(const op_value *locations) {
 	if (locations == NULL || locations->type != OP_LIST) return "none";
 	static const char *const ours[] = {"nodes.c", "computers.c", "actions.c", "host.c"};
@@ -600,8 +553,7 @@ static op_value *locations_shown(const op_value *locations) {
 	return list;
 }
 
-// a frame as the harness shows it: its infos, innermost first, each as it is but locations, which
-// is one name in a list (frames.ts' show)
+// a frame as the harness shows it: its infos, innermost first, with locations as one name in a list
 static op_value *frame_shown(const ch_frame *frame) {
 	op_value *list = op_list();
 	for (const ch_frame *f = frame; f != NULL; f = f->parent) {
@@ -616,7 +568,6 @@ static op_value *frame_shown(const ch_frame *frame) {
 	return list;
 }
 
-// an explain, as the harness shows it; none for none
 static op_value *explained_value(const es_explained *x) {
 	if (x == NULL) return NULL;
 	op_value *m = op_map();
@@ -648,9 +599,8 @@ static op_value *explained_value(const es_explained *x) {
 	return m;
 }
 
-// --- errors, as an answer shows them ----------------------------------------------------------------------
+// --- errors, as an answer shows them ----------
 
-// { error }, from the code a function returned and what it threw
 static op_value *error_value(int code) {
 	op_value *m = op_map();
 	const es_error *t = es_thrown();
@@ -681,7 +631,7 @@ static op_value *error_value(int code) {
 	return m;
 }
 
-// --- the interpreter ------------------------------------------------------------------------------------------
+// --- the interpreter ----------
 
 static int expr(sys_t sys, env_t *env, const op_value *e, op_value **out);
 static int call_form(sys_t sys, env_t *env, const op_value *form, op_value **out);
@@ -707,17 +657,15 @@ static int run_steps(sys_t sys, env_t *env, const op_value *steps) {
 	return 0;
 }
 
-// a value's JSON, as JSON.stringify gives it ("undefined" for none)
 static char *json_of(const op_value *v) { return v == NULL ? es_dup("undefined") : op_json_text(v); }
 
-// a memo or effect: its expression, and the effect's log
 typedef struct {
 	sys_t sys;
 	env_t *env;
 	const op_value *expr;
 	const char *to;
 	int throws;
-	// an effect's act: steps to run in it (an error they throw logged to caught), a cleanup it gives
+	// an effect's act: steps to run in it (an error they throw is logged to caught), a cleanup it gives
 	// (logs [cleanup, v]), a value it returns as it is
 	const op_value *act, *returns;
 	const char *caught, *cleanup;
@@ -802,7 +750,6 @@ static int comp_equal(void *ctx, const op_value *a, const op_value *b) {
 	free(y);
 	return same;
 }
-// a cleanup an act gave: logs its name, with the value the act was given
 typedef struct {
 	const char *log;
 	op_value *value;
@@ -818,14 +765,12 @@ static void cleanup_free(void *p) {
 	free(k);
 }
 
-// what an error is logged as: its code, else its message
 static op_value *code_text(int code) {
 	const es_error *t = es_thrown();
 	if (code == ES_FAILED) return op_str(t->message != NULL ? t->message : "");
 	return op_str(es_code_name(code));
 }
 
-// what typeof says of a value
 static const char *type_of(const op_value *v) {
 	if (v == NULL) return "undefined";
 	switch (v->type) {
@@ -860,8 +805,7 @@ static int comp_act(es_context *c, void *ctx, const op_value *value, const op_va
 		own_with(cl, cleanup_free);
 		TRY(es_cleanup(c, cleanup_run, cl));
 	}
-	// C's act gives no value: the one an interpreted act is to return is checked here, as the
-	// TypeScript checks what it returned
+	// C's act gives no value, so the one an interpreted act is to return is checked here
 	if (k->has_returns) {
 		return es_fail_ermine(ES_BAD_CLEANUP,
 			"an effect's act returned %s: return a function (its cleanup), or nothing",
@@ -870,7 +814,6 @@ static int comp_act(es_context *c, void *ctx, const op_value *value, const op_va
 	return 0;
 }
 
-// createMemo, createEffect: the node's site is this function's line
 static int define(sys_t sys, env_t *env, const char *fn, const op_value *const *raw, size_t n,
 	op_value **out) {
 	CTX(fn);
@@ -905,7 +848,6 @@ static int define(sys_t sys, env_t *env, const char *fn, const op_value *const *
 	return 0;
 }
 
-// an action: its steps, and what it gives back
 typedef struct {
 	sys_t sys;
 	env_t *env;
@@ -933,25 +875,21 @@ static es_out act_run(es_context *c, void *ctx, const op_value *const *args, siz
 	return es_out_of(v);
 }
 
-// a generator action: C has no generators, so the system does not step one. its steps run in order, a
-// {do: ["yield", expr]} waiting for the promise expr gives, and the rest of it runs in the scope and
-// the call's frame it began in (held), as the TypeScript's stepped steps do. the call gives a
-// promise of its return
+// a generator action: C has no generators, so its steps run in order, a {do: ["yield", expr]}
+// waiting for the promise expr gives, and the rest runs in the scope and call frame it began in
+// (held). The call gives a promise of its return
 typedef struct {
 	act_t *a;
 	env_t *inner;
 	size_t at;
-	// where the value a yield waited for goes
 	const char *as;
 	es_promise *result;
 	// where it runs: what the action makes is under scope's; a change it makes is the call's frame's
 	sc_scope *scope;
 	ch_frame *frame;
-	// the promise a yield waited for, how it settled
 	int ok;
 	op_value *value;
 	char *error;
-	// the end: how the result is to be settled
 	int finished, failed;
 	op_value *returned;
 	char *failure;
@@ -972,7 +910,6 @@ static void gen_resumed(void *ctx, int ok, const op_value *value, const char *er
 	g->value = ok ? op_ref((op_value *)value) : NULL;
 	free(g->error);
 	g->error = ok ? NULL : es_dup(error != NULL ? error : "error");
-	// nothing is open as a promise settles: the rest goes back in the call's frame
 	if (g->scope == NULL) {
 		g->finished = g->failed = 1;
 		g->failure = es_dup("gone: what this action ran in has ended");
@@ -986,7 +923,6 @@ static void gen_resumed(void *ctx, int ok, const op_value *value, const char *er
 	g->returned = NULL;
 }
 
-// a yield's value is back (or its throw: the generator has no catch, so it ends with it)
 static int gen_resume(void *ctx) {
 	gen_t *g = ctx;
 	if (!g->ok) {
@@ -1000,7 +936,6 @@ static int gen_resume(void *ctx) {
 	return gen_steps(g);
 }
 
-// from the step at, to the next yield that waits, or the end
 static int gen_steps(gen_t *g) {
 	act_t *k = g->a;
 	while (k->steps != NULL && g->at < k->steps->count) {
@@ -1075,7 +1010,7 @@ static es_out gen_run(es_context *c, void *ctx, const op_value *const *args, siz
 	gen_steps(g);
 	op_value *p = es_promise_value(g->result);
 	if (g->finished) {
-		// settled at once: kept (a settled promise let go of is data), the world's
+		// settled at once: held (a settled promise let go of is data), the world's
 		if (g->failed) es_promise_reject(g->result, g->failure);
 		else es_promise_resolve(g->result, g->returned);
 		g->returned = NULL;
@@ -1086,7 +1021,6 @@ static es_out gen_run(es_context *c, void *ctx, const op_value *const *args, siz
 	return es_out_of(p);
 }
 
-// "share": one function per name, giving the node of the nearest frame under the one open
 static es_out share_run(es_context *c, void *ctx, const op_value *const *args, size_t nargs) {
 	(void)c;
 	(void)ctx;
@@ -1099,14 +1033,12 @@ static es_out share_run(es_context *c, void *ctx, const op_value *const *args, s
 	return es_out_of(op_null());
 }
 
-// a promise the harness makes, settled at "settle" with the expression's value
 static op_value *promised(sys_t sys, env_t *env, const op_value *e) {
 	held_t h = {es_promise_new(W->e), sys, env, e};
 	ES_PUSH(W->held, W->nheld, W->capheld, h);
 	return es_promise_value(h.promise);
 }
 
-// a promise a call gave: how it settled is logged to "promised" ([value], or ["rejected", message])
 static void watched_run(void *ctx, int ok, const op_value *value, const char *error) {
 	(void)ctx;
 	op_value *row = op_list();
@@ -1148,12 +1080,10 @@ static void td_run(void *ctx, const char *why) {
 	log_push(k->log, op_str_take(s, strlen(s)));
 }
 
-// ref's maker: the value given
 static op_value *ref_make(void *ctx) { return op_ref(ctx); }
 
-// --- the process api, as a step calls it ----------------------------------------------------------------------
+// --- the process api, as a step calls it ----------
 
-// a step's function: its arguments (with "$x" given), the context it acts as, what it gives back
 typedef int (*api_fn)(sys_t sys, op_value *const *a, size_t n, op_value **out);
 
 static int api_get_node(sys_t sys, op_value *const *a, size_t n, op_value **out) {
@@ -1193,7 +1123,6 @@ static int api_create_node(sys_t sys, op_value *const *a, size_t n, op_value **o
 	return 0;
 }
 
-// read and readAttributes: the value, as a program holds it
 static int read_with(sys_t sys, const char *name, op_value *const *a, size_t n, op_value **out,
 	int (*f)(es_context *, es_target, const op_key *, size_t, const op_value **)) {
 	CTX(name);
@@ -1296,7 +1225,6 @@ static int api_patch_children(sys_t sys, op_value *const *a, size_t n, op_value 
 	return es_patch_children(c, x, ps, np);
 }
 
-// explain: the change at x (or a change a program was shown), who made it. none: *ex NULL
 static int explain_ex(sys_t sys, const char *name, op_value *const *a, size_t n, es_explained **ex) {
 	CTX(name);
 	*ex = NULL;
@@ -1409,7 +1337,6 @@ static int api_pulse(sys_t sys, op_value *const *a, size_t n, op_value **out) {
 	return es_pulse(c);
 }
 
-// @ermine/system's functions by name; host: the ermine object's only
 static const struct {
 	const char *name;
 	api_fn fn;
@@ -1443,7 +1370,6 @@ static const struct {
 	{"pulse", api_pulse, 1},
 };
 
-// names sorted
 static void sort_names(const char **names, size_t count) {
 	for (size_t i = 1; i < count; i++) {
 		for (size_t j = i; j > 0 && strcmp(names[j - 1], names[j]) > 0; j--) {
@@ -1491,7 +1417,6 @@ static int explain_call(sys_t sys, env_t *env, const op_value *const *raw, size_
 	return code;
 }
 
-// explainfrom: explain of readAll(target)[i].from.change
 static int explain_from(sys_t sys, env_t *env, const op_value *const *raw, size_t nraw, op_value **out) {
 	CTX("readAll");
 	op_value *t = arg(env, nraw > 0 ? raw[0] : NULL), *i = arg(env, nraw > 1 ? raw[1] : NULL);
@@ -1515,7 +1440,6 @@ static int explain_from(sys_t sys, env_t *env, const op_value *const *raw, size_
 	return code;
 }
 
-// the keys of a map, sorted ([] for anything else)
 static op_value *keys_value(const op_value *v) {
 	op_value *x = expand(v);
 	const op_value *m = x != NULL ? x : v;
@@ -1536,7 +1460,6 @@ static int form_status(sys_t sys, env_t *env, const op_value *const *raw, size_t
 	es_target x;
 	es_status st;
 	op_value *t = arg(env, nraw > 0 ? raw[0] : NULL);
-	// a key: that field alone (getStatus(x, key))
 	op_value *k = nraw > 1 ? arg(env, raw[1]) : NULL;
 	const char *key = k != NULL && k->type == OP_STR ? k->str : NULL;
 	int code = target_of(t, &x);
@@ -1560,8 +1483,6 @@ static int form_status(sys_t sys, env_t *env, const op_value *const *raw, size_t
 	return 0;
 }
 
-// [fn, ...args]: the forms, then the process api. new value in *out (NULL: undefined)
-// a writer given a function: steps, then expr's value
 typedef struct {
 	sys_t sys;
 	env_t *env;
@@ -1588,7 +1509,6 @@ static int form_bound(sys_t sys, env_t *env, const op_value *const *raw, size_t 
 	return 0;
 }
 
-// what start gave, for stop and status: the process by its id
 typedef struct {
 	char *id;
 } child_t;
@@ -1598,7 +1518,7 @@ static void child_free(void *p) {
 	free(k);
 }
 
-// start(program, at, options?) as a program: name is the new process's name here (its id proc:<name>),
+// start(program, at, options?) as a program: name is the new process's name (its id proc:<name>),
 // program the node holding its program (default at); gives start's result
 static int form_start(sys_t sys, env_t *env, const op_value *const *raw, size_t nraw, op_value **out) {
 	CTX("start");
@@ -1666,7 +1586,6 @@ static int form_start(sys_t sys, env_t *env, const op_value *const *raw, size_t 
 	return code;
 }
 
-// the stop of what start gave, called with why
 static int form_stopped(sys_t sys, env_t *env, const op_value *const *raw, size_t nraw, op_value **out) {
 	(void)out;
 	CTX("stop");
@@ -1679,8 +1598,8 @@ static int form_stopped(sys_t sys, env_t *env, const op_value *const *raw, size_
 	return code;
 }
 
-// an action made: the line its handler's site is, when none is known ("handler" to site_of). the steps
-// it runs are run as the call open then (act_run uses the call's frame, never the maker's scope)
+// an action made: the line its handler's site is, when none is known. Its steps run as the call
+// open then (act_run uses the call's frame, never the maker's scope)
 static int handler(es_context *c, es_at at, es_action fn, void *ctx, es_handle **h) {
 	return es_create_action(c, at, fn, ctx, h);
 }
@@ -1803,7 +1722,6 @@ static int call_form(sys_t sys, env_t *env, const op_value *form, op_value **out
 #undef R
 }
 
-// an expression: [fn, ...args], ["all", expr, …], "$x", or any other value as it is. new
 static int expr(sys_t sys, env_t *env, const op_value *e, op_value **out) {
 	*out = NULL;
 	if (e == NULL || e->type != OP_LIST) {
@@ -1828,7 +1746,6 @@ static int expr(sys_t sys, env_t *env, const op_value *e, op_value **out) {
 		*out = list;
 		return 0;
 	}
-	// a whole value's patches, the value expr's
 	if (strcmp(fn, "whole") == 0) {
 		op_value *v = NULL;
 		TRY(expr(sys, env, X(0), &v));
@@ -1880,9 +1797,8 @@ static int expr(sys_t sys, env_t *env, const op_value *e, op_value **out) {
 	return call_form(sys, env, e, out);
 }
 
-// --- the world's pieces ----------------------------------------------------------------------------------------
+// --- the world's pieces ----------
 
-// a new node's id: the next process's while one starts, else n1, n2 …
 static char *world_id(void *ctx) {
 	(void)ctx;
 	if (W->next != NULL) {
@@ -1903,7 +1819,6 @@ static void world_schedule(void *ctx, void (*f)(void *data), void *data) {
 	queued_t q = {f, data};
 	ES_PUSH(W->queue, W->nqueue, W->capqueue, q);
 }
-// the pulses asked for, run till none is
 static void drain(void) {
 	while (W->head < W->nqueue) {
 		queued_t q = W->queue[W->head++];
@@ -1920,7 +1835,6 @@ static void world_created(void *ctx, const es_created *made) {
 	log_push("onCreateFunction", row);
 }
 
-// deny: every field given must match what is asked
 static char *joined(const char *const *path, size_t n) {
 	size_t size = 1;
 	for (size_t i = 0; i < n; i++) size += strlen(path[i]) + 1;
@@ -1959,7 +1873,7 @@ static pr_answer deny_run(void *ctx, const pr_ask *ask, const pr_read *read) {
 	return (pr_answer){.verdict = PR_YES};
 }
 
-// --- the test features (features_fixture.ts) ------------------------------------------------------------------
+// --- the test features (features_fixture.ts) ----------
 
 static int boom(const tf_t *t) { return fail("%s threw", t->name); }
 static int is_how(const tf_t *t, const char *hook, const char *how) {
@@ -2094,7 +2008,6 @@ static int tf_record(void *ctx, const es_recorded *r, es_record_next *next) {
 	if (is_how(t, "onRecord", "drop")) return 0;
 	return es_next_record(next, r);
 }
-// the late hook: it passes everything on
 static int tf_pass(void *ctx, es_context *o, const es_write *w, es_write_next *next) {
 	(void)ctx;
 	return es_next_write(next, o, w);
@@ -2120,7 +2033,6 @@ static int tf_setup(void *ctx, es_feature_api *f) {
 	return 0;
 }
 
-// "inline": a feature written here, listing no files
 static int inline_write(void *ctx, es_context *o, const es_write *w, es_write_next *next) {
 	(void)ctx;
 	op_value *row = op_list();
@@ -2145,7 +2057,6 @@ static void tf_free(void *p) {
 	free(t);
 }
 
-// a feature as a request gives it: a name, or a spec
 static int feature_of(const op_value *f, const es_feature **out) {
 	if (is_str(f)) {
 		if (strcmp(f->str, "inline") == 0) {
@@ -2173,7 +2084,7 @@ static int feature_of(const op_value *f, const es_feature **out) {
 	return 0;
 }
 
-// --- a world made ------------------------------------------------------------------------------------------------
+// --- a world made ----------
 
 // the ermine of a request (ermine's options), replacing the world
 static int make(const op_value *r) {
@@ -2218,8 +2129,8 @@ static int make(const op_value *r) {
 	return es_create(&o, &w->e);
 }
 
-// a world let go: its ermine (closed, if it is not), then what it held on to. its steps point
-// into the retained lines, which go last, at hh_finish
+// a world let go: its ermine (closed, if it is not), then what it held on to. Its steps point into
+// the retained lines, which go last, at hh_finish
 static void world_free(world_t *w) {
 	if (w == NULL) return;
 	world_t *was = W;
@@ -2267,7 +2178,6 @@ static running_t *running_named(const char *name) {
 	return name != NULL ? es_map_get(&W->running, name) : NULL;
 }
 
-// the context a request's process names (none: the host's); NULL: the process is not running
 static es_context *context_of(const op_value *r) {
 	const char *name = text(r, "process");
 	if (name == NULL) return es_get_process_context(W->e, NULL);
@@ -2276,7 +2186,6 @@ static es_context *context_of(const op_value *r) {
 	return es_process_context_of(W->e, p->id);
 }
 
-// a node written as { id?, path?, part } in a host's step is minted a handle, as the host may
 static int minted(const op_value *x, op_value **out) {
 	*out = NULL;
 	if (x == NULL) return 0;
@@ -2320,7 +2229,7 @@ static int minted(const op_value *x, op_value **out) {
 	return 0;
 }
 
-// --- programs --------------------------------------------------------------------------------------------------------
+// --- programs ----------
 
 static es_out program_run(es_context *c, void *ctx) {
 	(void)c;
@@ -2342,7 +2251,6 @@ static es_out program_run(es_context *c, void *ctx) {
 	return es_out_of(v);
 }
 
-// the harness's promises settled: each given its expression's value, outside any scope
 static void settle_all(void) {
 	while (W->nheld > 0) {
 		held_t *batch = W->held;
@@ -2366,7 +2274,7 @@ static void settle_all(void) {
 	}
 }
 
-// --- records, as an answer shows them ---------------------------------------------------------------------------------
+// --- records, as an answer shows them ----------
 
 static op_value *pair_value(const char *part, const char *id) {
 	op_value *p = op_list();
@@ -2418,7 +2326,7 @@ static op_value *run_shown(const crn_run *r, const char *held) {
 	return m;
 }
 
-// --- the ops ------------------------------------------------------------------------------------------------------------
+// --- the ops ----------
 
 static op_value *with_value(op_value *v) {
 	op_value *m = op_map();
@@ -2460,7 +2368,6 @@ static int scope_run(void *ctx) {
 	return 0;
 }
 
-// an id, or { id, path }: what a write is at
 static int aim_of(const op_value *x, es_aim *aim) {
 	*aim = (es_aim){0};
 	if (is_str(x)) {
@@ -2480,7 +2387,6 @@ static int aim_of(const op_value *x, es_aim *aim) {
 	return 0;
 }
 
-// the op "o": a process context's own
 static int op_o(const op_value *r, op_value **res) {
 	es_context *c = context_of(r);
 	if (c == NULL) return fail("no context");
@@ -2530,7 +2436,6 @@ static int op_o(const op_value *r, op_value **res) {
 	return fail("no context function %s", fn);
 }
 
-// the op "start"
 static int op_start(const op_value *r, op_value **res) {
 	const char *name = text(r, "name");
 	if (name == NULL) return fail("start needs a name");
@@ -2608,13 +2513,11 @@ static int op_start(const op_value *r, op_value **res) {
 	return 0;
 }
 
-// the nodes of the table, as the harness reads them
 static const nd_entry *entry_of(const op_value *r) {
 	const char *part = text(r, "part"), *id = text(r, "id");
 	if (part == NULL || id == NULL) return NULL;
 	return tb_get(W->e->table, tb_string(part), tb_string(id));
 }
-// a uuidv7: 8-4-4-4-12 hex, the version 7 and the variant 8 to b
 static int is_uuid7(const char *s) {
 	if (strlen(s) != 36) return 0;
 	for (size_t i = 0; i < 36; i++) {
@@ -2627,7 +2530,6 @@ static int is_uuid7(const char *s) {
 	return s[14] == '7' && (s[19] == '8' || s[19] == '9' || s[19] == 'a' || s[19] == 'b');
 }
 
-// the id at a path from the root: 1 and *id, 0 none
 static int id_at(const op_value *path, const char **id) {
 	if (path == NULL || path->type != OP_LIST) return 0;
 	const char **steps = hh_take((path->count + 1) * sizeof *steps);
@@ -2721,7 +2623,6 @@ static int op_saved(const op_value *r, op_value **res) {
 	return 0;
 }
 
-// kids and put: a table entry set, as the host's scope makes its change (table.sub)
 typedef struct {
 	const char *part, *id;
 	const op_value *value;
@@ -2829,8 +2730,8 @@ static int answer(const op_value *r, op_value **res) {
 	if (strcmp(op, "stop") == 0) {
 		running_t *p = running_named(text(r, "name"));
 		if (p == NULL || p->id == NULL) return fail("no process %s", str_or(r, "name"));
-		// the host, not the starter, stops a child here: as its node is unplaced (a child's own stop is
-		// the starter's, es_child_stop)
+		// the host, not the starter, stops a child here, as its node is unplaced (a child's own stop is the
+		// starter's, es_child_stop)
 		if (p->started == NULL) es_stop_node(e, p->id);
 		else TRY(es_stop(p->started, text(r, "why")));
 		*res = op_map();

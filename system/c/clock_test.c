@@ -1,6 +1,5 @@
-// the clock es_create is given: every change's time is read from it (whole seconds of its ms), for a
-// host write, a patch, a process started and the nodes it makes. make test-clock-system,
-// test-check-clock-system (the sanitizers)
+// The clock es_create is given: every change's time is read from it, for a host write, a patch, a
+// process started and the nodes it makes. make test-clock-system, test-check-clock-system.
 #include "ermine.h"
 
 #include <stdio.h>
@@ -24,7 +23,6 @@ static int64_t fixed(void *ctx) {
 	return MS;
 }
 
-// the ids made (malloc'd for the ermine: it frees them), so every node can be looked at
 typedef struct {
 	char ids[64][16];
 	int n;
@@ -44,7 +42,6 @@ static es_out setup(es_context *c, void *ctx) {
 	return es_out_of(NULL);
 }
 
-// every entry of every node whose id was made, its change time
 static int times_are_the_clock(es_ermine *e, ids_t *t) {
 	int seen = 0;
 	for (int i = 0; i < t->n; i++) {

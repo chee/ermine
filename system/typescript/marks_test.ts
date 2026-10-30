@@ -1,6 +1,4 @@
-// marks (marks-2026-10-27; marks are frames since 10-28: scope and frame): what the conformance
-// scenarios can't say on the line protocol: the
-// stand-in for navigator.userActivation is defined before @ermine/system loads (event_fixture.ts)
+// What the conformance scenarios cannot say on the line protocol about marks and frames.
 import { userActivation } from "./event_fixture.ts"
 import { assert, assertEquals, assertThrows } from "@std/assert"
 import { no, type Policy, yes } from "@ermine/protect"
@@ -25,7 +23,6 @@ import { manual } from "./manual_fixture.ts"
 const programAt = (e: { within: <T>(f: () => T) => T }, at: string) =>
 	e.within(() => read(at)) as () => unknown
 
-// a process whose setup is f, started at at
 function started(f: () => unknown, features = [manual], may?: Policy) {
 	const e = createErmine({ features, ...may && { may } })
 	e.within(() => ensureNode("/code/p", f))
@@ -78,7 +75,6 @@ Deno.test("marks: createWriter in an action, the writer's changes carry the call
 	e.close()
 })
 
-// the line after the one calling this
 const nextLine = () => Number(new Error().stack!.split("\n")[2].match(/:(\d+):\d+\)?$/)![1]) + 1
 
 Deno.test("marks: each write through a writer has the writer's frames [chee 10-28]: made in setup, the process's start up them", () => {
@@ -112,7 +108,6 @@ Deno.test("marks: a writer the host made: its writes, in a timer too, come from 
 			done()
 		}, 5)
 	)
-	// the writer has no locations of its own: the write is from outside, the stack there
 	const here = e.within(() => explain("/t"))?.change?.locations?.find((l) =>
 		l.file.endsWith("marks_test.ts")
 	)
@@ -152,7 +147,6 @@ Deno.test("marks: navigator.userActivation or its getter replaced after load gai
 	userActivation.active = true
 	withWriter!(() => patch("/k", [{ path: [], value: 1 }]))
 	assertEquals(changed(), true)
-	// nobody did; a program replaces navigator.userActivation and the getter after the module loaded
 	userActivation.active = false
 	const nav = globalThis.navigator
 	const had = Object.getOwnPropertyDescriptor(nav, "userActivation")

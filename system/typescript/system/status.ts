@@ -16,15 +16,12 @@ import { computerAt } from "./made.ts"
 import { here } from "./setting.ts"
 import { type Status, type System, WAITING, type Waiting } from "./shapes.ts"
 
-// public (mod.ts exports them): each runs its implementation below, named with As, as the
-// context it finds (acting.ts' go)
 export const getStatus = /* @__PURE__ */ marked(function getStatus(x: Target, key?: string) {
 	return go(getStatus, "getStatus", false, getStatusAs, x, key)
 }) as System["getStatus"]
 
-// the base's, then what features show (onStatus). key: that field alone, the base reading only
-// what it takes [the hedgehog2's wall 3, 10-28: a reader of state reran at every run, n moving;
-// chee: "yeah do that"]
+// The base's status, then what features show (onStatus). With `key`, only that field is read, so
+// a reader of state does not rerun each time n moves.
 export function getStatusAs(inner: Inner, x: Target): Status | undefined
 export function getStatusAs(inner: Inner, x: Target, key: string | undefined): unknown
 export function getStatusAs(inner: Inner, x: Target, key?: string): unknown {
@@ -39,8 +36,6 @@ export function getStatusAs(inner: Inner, x: Target, key?: string): unknown {
 	return key === undefined ? status : status?.[key]
 }
 
-// a path the waiter at owner recorded, as inner sees it: the path itself when both look from one
-// root (the owner's world is its places' root: a computer's context's, a process's), else none
 const recordedBy = (inner: Inner, owner: Id, p: Path): Path | null => {
 	const { base } = here(inner)
 	const root = computerAt(base.made, owner)?.inner.places.root ??
@@ -48,8 +43,6 @@ const recordedBy = (inner: Inner, owner: Id, p: Path): Path | null => {
 	return root === undefined || root === inner.places.root ? p : null
 }
 
-// a send's wait as this process sees it: where the send went (its path from the root, or the node
-// it named: its path, none: null)
 const waitOf = (
 	inner: Inner,
 	owner: Id,
@@ -58,8 +51,6 @@ const waitOf = (
 	send: (w.path !== undefined ? recordedBy(inner, owner, w.path) : seen(inner, w.id!)) ?? null,
 	since: w.since,
 })
-// a wait a process's status says (written as start goes pending): a send's as waitOf, the rest as
-// it is
 const saidOf = (inner: Inner, owner: Id, w: unknown): Waiting => {
 	if (w !== null && typeof w === "object" && "missing" in w) {
 		return { node: recordedBy(inner, owner, (w as { missing: Path }).missing) }
@@ -75,19 +66,16 @@ const saidOf = (inner: Inner, owner: Id, w: unknown): Waiting => {
 	return w as Waiting
 }
 
-// id's status entry patched (a status is a table of its own, never the node's attributes): a key set
-// to a value, or taken out (none). core's status writes a computer's own as its runs end
+// Patches id's status entry (a table of its own): a key set to a value, or taken out.
 export const putStatus = (inner: Inner, id: Id, patches: readonly Patch[]) =>
 	inner.put({ part: STATUS_TABLE, id, patches })
 export const setKey = (key: string, value?: unknown): Patch =>
 	value === undefined ? { path: [key] } : { path: [key], value }
 
-// the key a status is read by
 const STATUS_KEY = [STATUS]
 
-// asked, read and told as inner sees it. key: the field wanted (none: all); a computer's run record
-// is read field by field, only those it takes: n for n, end for state and phase, act for phase,
-// reads for waiting
+// Asked, read and told as inner sees it. A computer's run record is read field by field, only
+// those the key needs.
 function ownStatus(inner: Inner, n: NodeData, id: Id, key?: string): Status {
 	const { base, calls, runs, places } = here(inner)
 	mayRead(inner, id, n.path, STATUS_TABLE, STATUS_KEY)

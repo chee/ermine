@@ -1,44 +1,25 @@
-// actions (system/actions.ts' createAction, executeAction; system/explaining.ts' explain …; calls.ts), in C: actions, the call frame,
-// call records, getCaller, explain and its views, teardowns, promises. C's job, function by function
-// (ermine.h says each):
-//   state: es_actions_new, es_actions_free, es_is_action (each action placed, by its node: the
-//     function and the scope open when it was placed)
-//   actions: es_create_action_at (the function a stand-in in the node's value), es_execute_action_at
-//     (the call frame, waits, PENDING, the record held as the handler's latest, a promise's call lasts
-//     till it settles), es_get_caller, es_add_teardown (the why)
-//   explain: es_explain, es_explain_attributes, es_explain_children, es_explain_view, es_explained_free;
-//     the views: es_change_view_of, es_view_change, es_run_view_of, es_call_view_of, es_run_view_free,
-//     es_call_view_free, es_show (handles shown as paths), es_caller_free
-//   calls.ts: es_calls_new, es_calls_free, es_calls_next, es_calls_begin, es_calls_end,
-//     es_calls_calling, es_calls_open, es_calls_read, es_calls_made, es_calls_latest, es_calls_wait,
-//     es_calls_answered, es_calls_waits, es_waits_free, es_calls_stop
-//   promises: es_promise_new, es_promise_release, es_promise_value, es_promise_resolve,
-//     es_promise_reject, es_promise_then (held by the maker and each then; settled and let go: freed)
+// Actions, the call frame, call records, getCaller, explain and its views, teardowns, writers and
+// promises. ermine.h declares the functions.
 //
-// a call going (es_going) is held by its scope: the scope's own teardown, the last it runs, lets it go,
-// and a promise out holds it till it settles. a call frame's info is { caller: { node, actor }, handler,
-// call }, op_values the calls state keeps till the scope is freed (a scope borrows its info). a
-// record holds its caller's context (its scope's hold), so the context lasts as the record does.
-// a track the scheduler answers SC_STOP to, in latest and waits, is let go: the TypeScript's track
-// does not stop a run, and these give no code.
+// A call going (es_going) is held by its scope: the scope's last teardown lets it go, and a promise
+// out holds it until it settles. A call frame's info is { caller: { node, actor }, handler, call }
+// and is held by the calls state because a scope borrows its info. A record holds its caller's
+// context. A track answered SC_STOP in latest and waits is let go, since the TypeScript's track
+// does not stop a run.
 #include "ermine.h"
 
 #include <stdio.h>
 
 #include "../../processes/c/platform.h"
 
-// milliseconds since 1970, fractional
 static double now(void) { return PF_NOW_MS(); }
 
 
-// a pair of the info that is an op_value of this type
 static const op_value *value_of(const sc_scope *o, const char *key, op_type type) {
 	const op_value *v = es_pair_of(o, key);
 	return v != NULL && v->type == type ? v : NULL;
 }
 
-// the actor a write made now would carry: the first the frame open (none: the context's) or one under
-// it gives
 static const op_value *actor_here(es_context *c) {
 	for (ch_frame *o = es_open_frame(c); o != NULL; o = o->parent) {
 		const op_value *a = ch_frame_get(o, "actor");
@@ -51,7 +32,7 @@ static char *opt_dup(const char *s) { return s == NULL ? NULL : es_dup(s); }
 static char *text(tb_key k) { return es_dup(k.string != NULL ? k.string : ""); }
 
 
-// --- keys, changes ---------------------------------------------------------------------------------------
+// --- keys, changes ----------
 
 static op_key *keys_copy(const op_key *k, size_t n) {
 	if (n == 0) return NULL;
@@ -70,7 +51,6 @@ static void keys_free(op_key *k, size_t n) {
 	free(k);
 }
 
-// a path as an op_value list of its steps (a guard target's field)
 static op_value *keys_value(const op_key *k, size_t n) {
 	op_value *list = op_list();
 	for (size_t i = 0; i < n; i++) {
@@ -81,8 +61,7 @@ static op_value *keys_value(const op_key *k, size_t n) {
 	return list;
 }
 
-// a header's pieces as a value, held (the caller's to op_free): places' own (pl_change_value, made once
-// a header and shared by identity); one places didn't make, built here
+// a header as a value, held (the caller's to op_free): places' own shared value, else one built here
 static op_value *change_value(es_ermine *e, const ch_header *h) {
 	const op_value *shared = pl_change_value(e->places, h);
 	if (shared != NULL) return op_ref((op_value *)shared);
@@ -94,9 +73,8 @@ static op_value *change_value(es_ermine *e, const ch_header *h) {
 	return m;
 }
 
-// the value at key nearest up a change's frames (the change value's list of infos, innermost
-// first), stopping after the first holding CH_NODE (what is above a node's scope is not its); NULL:
-// none
+// the value at key nearest up a change's frames, stopping after the first one holding CH_NODE;
+// NULL: none
 static const op_value *nearest(const op_value *change, const char *key) {
 	const op_value *frames = change != NULL ? op_get(change, "frame") : NULL;
 	if (frames == NULL || frames->type != OP_LIST) return NULL;
@@ -109,8 +87,7 @@ static const op_value *nearest(const op_value *change, const char *key) {
 	return NULL;
 }
 
-// the locations nearest up a change's frames: where, from outside the graph, what made it began;
-// NULL: none
+// the locations nearest up a change's frames (where, from outside the graph, it began); NULL: none
 static const op_value *locations_of(const op_value *change) {
 	const op_value *frames = change != NULL ? op_get(change, "frame") : NULL;
 	if (frames == NULL || frames->type != OP_LIST) return NULL;
@@ -121,13 +98,12 @@ static const op_value *locations_of(const op_value *change) {
 	return NULL;
 }
 
-// the change of the entry at (part, id) in the table written to, held; NULL: no entry
 static op_value *change_at(es_ermine *e, const char *part, const char *id) {
 	const nd_entry *there = tb_get(e->table, tb_string(part), tb_string(id));
 	return there == NULL ? NULL : change_value(e, &there->change);
 }
 
-// --- the state -------------------------------------------------------------------------------------------
+// --- the state ----------
 
 typedef struct {
 	void (*fn)(void *ctx, int ok, const op_value *value, const char *error);
@@ -135,25 +111,24 @@ typedef struct {
 } then_cb;
 
 struct es_promise {
-	// 0 out, 1 resolved, 2 rejected
 	int state;
 	op_value *value;
 	char *error;
 	then_cb *cbs;
 	size_t n, cap;
-	// its holds: its maker's (es_promise_release), and each then not told yet. settled and none
-	// left: freed. serial: its stand-in's, so one left of a freed promise names no other. x NULL: the
-	// ermine closed; held by its maker still, it settles nothing and is freed as the maker lets go
+	// its holds: its maker's (es_promise_release) and each then not yet told; with none left it is
+	// freed. serial names its stand-in, so a stand-in of a freed promise names no other. x is NULL once
+	// the ermine has closed.
 	size_t holds;
 	uint64_t serial;
 	size_t at;
 	struct es_actions *x;
 };
 
-// an action's record: the function a node's stand-in names. let go when its node's value stops being
-// that stand-in (taken out, written over) or the scope that placed it goes; then dead, its gen up (so a
-// stand-in held elsewhere, copied or placed, names an older one and is no action), its slot used
-// again. a slot is never freed before close, so a stand-in's pointer is safe to look at
+// an action's record: the function a node's stand-in names. It is let go when the node's value
+// stops being that stand-in or the scope that placed it goes. Then its gen goes up, so older
+// stand-ins name nothing, and the slot is reused. Slots are never freed before close, so a
+// stand-in's pointer is safe to look at.
 typedef struct {
 	es_function f;
 	uint32_t gen;
@@ -161,9 +136,8 @@ typedef struct {
 	size_t index;
 } fnslot;
 
-// a frame a handler or a writer owns [chee 10-28]: made alone under its scope's own frame as it is
-// made; a handler's info { handler: its node }, a writer's none. its owner holds it, and each frame
-// made under it (a call's) holds it as their parent, so it outlasts its owner while one goes
+// a frame a handler or a writer owns, made alone under its scope's frame. Its owner holds it, and
+// each frame made under it holds it as parent, so it can outlast its owner.
 typedef struct hframe {
 	ch_frame *frame;
 	op_value *id;
@@ -190,8 +164,6 @@ static void hframe_drop(hframe *h) {
 	free(h);
 }
 
-// an action placed: the function (its slot, and the gen it had), the scope that placed it, the context
-// it was placed as, and its handler's frame
 typedef struct {
 	es_function *fn;
 	uint32_t gen;
@@ -207,10 +179,9 @@ static void placed_free(placed *p) {
 }
 
 typedef struct writer_rec writer_rec;
-// a writer: where it was made (its parent: what it makes and asks as belongs to it), and the
-// mark it was made under (an action's call frame: its caller, handler and call), held. it is freed as its
-// parent goes, or when the program lets it go (es_drop_writer); a stand-in of one freed is gone (the
-// serial tells it from a later one at its address). a parent has one teardown for all it made
+// a writer: where it was made (its parent) and the mark it was made under, held. It is freed when
+// its parent goes or the program lets it go (es_drop_writer). The serial tells a stand-in of a freed
+// one from a later one at its address.
 typedef struct writer_owner writer_owner;
 struct writer_rec {
 	struct es_actions *x;
@@ -220,7 +191,6 @@ struct writer_rec {
 	uint64_t serial;
 	op_value *mark[3];
 	size_t nmark;
-	// its own frame, under its parent's: its site where createWriter was called; each run is under it
 	hframe *frame;
 };
 struct writer_owner {
@@ -231,19 +201,15 @@ struct writer_owner {
 };
 
 struct es_actions {
-	// each action placed, by its node: gone with that scope
 	es_map methods;
-	// the (scope, node) pairs that have their teardown registered: one per pair, however often placed
 	es_map placers;
-	// every record made, live or dead; the dead ones' places, to use again; the records' addresses
 	fnslot **fns;
 	size_t nfns, capfns;
 	size_t *dead;
 	size_t ndead, capdead;
 	pm known;
-	// a change's view, made once: change → view, and the views (a view not in it is no view of this
-	// ermine's). a view lasts while its change does (the reference's WeakMap by the header): one
-	// whose change only it holds goes at a pulse's end, once there are twice as many as were left
+	// a change's view, made once: change → view, and the views. A view whose change only it holds goes
+	// at a pulse's end, once there are twice as many as were left
 	pm views, viewed;
 	es_change_view **allviews;
 	size_t nviews, capviews, swept;
@@ -251,9 +217,7 @@ struct es_actions {
 	es_promise **promises;
 	size_t npromises, cappromises;
 	uint64_t serials;
-	// the promises made, by address: a stand-in of kind promise is one of them, or data
 	pm made;
-	// the writers alive, by address; the parents that made some, by scope
 	pm writers, owners;
 };
 
@@ -286,7 +250,6 @@ void es_actions_free(struct es_actions *x) {
 	pm_clear(&x->viewed);
 	for (size_t i = 0; i < x->npromises; i++) {
 		es_promise *p = x->promises[i];
-		// the thens not told are dropped; the maker's hold keeps the promise till it lets go
 		p->holds -= p->n;
 		free(p->cbs);
 		p->cbs = NULL;
@@ -310,9 +273,8 @@ void es_actions_free(struct es_actions *x) {
 
 int es_is_action(es_ermine *e, const char *id) { return es_map_has(&e->actions->methods, id); }
 
-// --- action records --------------------------------------------------------------------------------------
+// --- action records ----------
 
-// a record for f/ctx: a dead one's slot, else a new one
 static fnslot *fn_new(struct es_actions *x, es_action fn, void *ctx) {
 	fnslot *s;
 	if (x->ndead > 0) {
@@ -328,14 +290,12 @@ static fnslot *fn_new(struct es_actions *x, es_action fn, void *ctx) {
 	return s;
 }
 
-// the stand-in for a record: the function's, and its gen
 static op_value *fn_value(const fnslot *s) {
 	op_value *v = es_function_value(&s->f);
 	op_set(v->items[0], "gen", op_num((double)s->gen));
 	return v;
 }
 
-// the live record a value is the stand-in of; NULL: it is none (or let go)
 static fnslot *fn_of(struct es_actions *x, const op_value *v) {
 	fnslot *s = (fnslot *)es_function_of(v);
 	if (s == NULL || !pm_has(&x->known, s) || !s->live) return NULL;
@@ -343,7 +303,6 @@ static fnslot *fn_of(struct es_actions *x, const op_value *v) {
 	return gen != NULL && gen->type == OP_NUM && gen->num == (double)s->gen ? s : NULL;
 }
 
-// a record let go: dead, its gen up, its slot there to use again
 static void fn_forget(struct es_actions *x, fnslot *s) {
 	if (!s->live) return;
 	s->live = 0;
@@ -363,7 +322,7 @@ void es_action_let_go(es_ermine *e, void *held, const op_value *now) {
 	fn_forget(x, held);
 }
 
-// --- promises --------------------------------------------------------------------------------------------
+// --- promises ----------
 
 es_promise *es_promise_new(es_ermine *e) {
 	struct es_actions *x = e->actions;
@@ -397,7 +356,6 @@ static void promise_free(es_promise *p) {
 	free(p);
 }
 
-// settled and held by nothing: out of the made, freed
 static void promise_let_go(es_promise *p) {
 	if (p->x == NULL) {
 		if (p->holds == 0) promise_free(p);
@@ -418,7 +376,6 @@ void es_promise_release(es_promise *p) {
 	promise_let_go(p);
 }
 
-// the callbacks, in the order added, once; each let go of its hold after
 static void settled(es_promise *p) {
 	size_t n = p->n;
 	for (size_t i = 0; i < n; i++) {
@@ -464,7 +421,7 @@ void es_promise_then(es_promise *p,
 	p->holds++;
 }
 
-// --- views -----------------------------------------------------------------------------------------------
+// --- views ----------
 
 const es_change_view *es_change_view_of(es_ermine *e, const op_value *change) {
 	struct es_actions *x = e->actions;
@@ -486,9 +443,8 @@ const es_change_view *es_change_view_of(es_ermine *e, const op_value *change) {
 	return v;
 }
 
-// the views whose change only they hold, let go: nothing else names that change now (no node, no
-// record), so the view is named by none either but a program still holding a read's from, which
-// is borrowed till the node changes. at a pulse's end, as there come to be twice as many
+// the views whose change only they hold, let go (a program may still hold a read's from, which is
+// borrowed until the node changes). Run at a pulse's end, once there are twice as many as were left
 static void views_sweep(void *data) {
 	struct es_actions *x = data;
 	if (x->nviews < 2 * x->swept + 64) return;
@@ -512,9 +468,8 @@ const op_value *es_view_change(es_ermine *e, const es_change_view *v) {
 	return v->change;
 }
 
-// --- records as a process sees them ------------------------------------------------------------------------
+// --- records as a process sees them ----------
 
-// a record's read or write: the part, and the node's path from the root (none: nothing reaches it)
 static void touched(es_context *c, es_touched *out, const char *part, const char *id) {
 	es_names names;
 	out->part = es_dup(part);
@@ -525,7 +480,6 @@ static void touched(es_context *c, es_touched *out, const char *part, const char
 	}
 }
 
-// the path of a node as c sees it, for a writer or a made one
 static void path_of(es_context *c, const char *id, int *has, char ***path, size_t *npath) {
 	es_names names;
 	if (es_seen_in(c->ermine, c, id, &names)) {
@@ -585,8 +539,7 @@ void es_run_view_free(es_run_view *v) {
 	free(v);
 }
 
-// v as c is shown it: a handle the path it reaches as c sees it (none: null), never the handle; lists
-// and plain maps looked through
+// v as c is shown it: handles become the path c sees them at (null if none); lists and maps are walked
 op_value *es_show(es_context *c, const op_value *v) {
 	if (v == NULL) return NULL;
 	es_ermine *e = c->ermine;
@@ -660,10 +613,9 @@ void es_call_view_free(es_call_view *v) {
 	free(v);
 }
 
-// --- explain ---------------------------------------------------------------------------------------------
+// --- explain ----------
 
-// the change's writer, one step: a computer (by the run it names), an action (by the call), or code
-// outside any
+// the change's writer, one step: a computer (by its run), an action (by its call), or code outside
 static void writer_of(es_context *c, const op_value *change, es_explained *out) {
 	es_ermine *e = c->ermine;
 	const es_change_view *view = es_change_view_of(e, change);
@@ -718,7 +670,6 @@ void es_explained_free(es_explained *x) {
 	free(x);
 }
 
-// the read of the node asked of the policy, as the node's side is: the guard's read
 static int ask_read(es_context *t, const char *id, const es_node_data *n, const op_key *key,
 	size_t nkey) {
 	if (!t->guarded) return 0;
@@ -735,7 +686,6 @@ static int ask_read(es_context *t, const char *id, const es_node_data *n, const 
 	return code;
 }
 
-// the node n explained: its entry's change, and a write held there
 static int explain_node(es_context *c, const es_node_data *n, const op_key *key,
 	size_t nkey, es_explained **out) {
 	es_ermine *e = c->ermine;
@@ -762,7 +712,6 @@ static int explain_node(es_context *c, const es_node_data *n, const op_key *key,
 		return 0;
 	}
 	writer_of(c, change, x);
-	// the view holds the change now
 	op_free(change);
 	*out = x;
 	return 0;
@@ -780,7 +729,6 @@ int es_explain(es_context *c, es_target x, const op_key *key, size_t nkey, es_ex
 	return code;
 }
 
-// the same node's attributes or children: its part changed, no handle made
 static int explain_part(es_context *c, es_target x, const char *part, es_explained **out) {
 	*out = NULL;
 	int code = es_alive(c->ermine);
@@ -817,14 +765,12 @@ int es_explain_view(es_context *c, const es_change_view *v, es_explained **out) 
 	return 0;
 }
 
-// --- the call records (calls.ts) ----------------------------------------------------------------------------
+// --- the call records (calls.ts) ----------
 
-// a handler's latest call. its address is the key a read of it tracks
 typedef struct {
 	es_call *call;
 } held;
 
-// a send waiting: the wait, the run (a computer's) it was made in
 typedef struct {
 	es_wait wait;
 	char *key;
@@ -832,7 +778,6 @@ typedef struct {
 	unsigned run;
 } target;
 
-// a caller's waits, in the order made
 typedef struct {
 	char *caller;
 	target *items;
@@ -842,15 +787,12 @@ typedef struct {
 struct es_going {
 	struct es_calls *x;
 	unsigned n;
-	// its call's frame, made alone and its (the calls' map has it till the call ends), with the
-	// values its info borrows: both freed with the record
+	// its call's frame (the calls' map has it until the call ends) and the values its info borrows
 	ch_frame *frame;
 	struct call_info *info;
-	// the run open as it began (a send from a memo or effect): what is done in it is the call's
 	int has_run;
 	sc_computer *computer;
 	unsigned run_n;
-	// its record so far
 	char *caller;
 	es_context *context;
 	char *handler;
@@ -865,9 +807,7 @@ struct es_going {
 	size_t nwrites, capwrites;
 	es_made *made;
 	size_t nmade, capmade;
-	// the call's end holds one, a promise out one more
 	size_t refs;
-	// its handler gone while it went: told onRecord as it ends, never held
 	int gone;
 };
 
@@ -876,28 +816,21 @@ struct es_calls {
 	int keep;
 	int closing;
 	unsigned n;
-	// the calls going, innermost last
 	es_going **stack;
 	size_t nstack, capstack;
-	// call frame → going, and every going alive
 	pm frames, live;
-	// handler → held
 	es_map records;
 	waiter **waiting;
 	size_t nwaiting, capwaiting;
-	// the waits' list: its address is the key waits() tracks
 	char list;
-	// the (scope, caller, run) with a teardown registered to take a caller's waits out
 	es_map armed;
 	pl_watch *watch;
 	sc_listener *ended;
 };
 
-// a call frame's info: { caller, handler, call }, borrowed by the frame, held here till it is freed
 typedef struct call_info {
 	op_value *values[4];
 	size_t n;
-	// the handler's frame the call frame is under, held till it is freed
 	hframe *up;
 } call_info;
 
@@ -916,7 +849,6 @@ static void call_read_free(es_call_read *r) {
 
 static void call_free(es_call *c) {
 	if (c == NULL) return;
-	// the caller's context held while the record is (its scope's hold)
 	if (c->context != NULL) sc_release(c->context->scope);
 	ch_frame_free(c->frame);
 	free(c->caller);
@@ -942,7 +874,6 @@ static void call_free(es_call *c) {
 	free(c);
 }
 
-// a record as a copy of its own: the pieces it holds copied or held
 static es_call *call_copy(const es_call *c) {
 	es_call *o = es_alloc(sizeof *o);
 	o->n = c->n;
@@ -1045,7 +976,6 @@ static void going_release(es_going *g) {
 	if (--g->refs == 0) going_free(g);
 }
 
-// the writes a call made: told by places, to the call open
 static void landed(const pl_fact *fact, void *ctx);
 static void run_ended(sc_computer *c, unsigned n, sc_ended ended, const void *const *reads,
 	size_t nreads, const sc_more *more, void *data);
@@ -1094,7 +1024,6 @@ void es_calls_free(struct es_calls *x) {
 
 unsigned es_calls_next(es_ermine *e) { return ++e->calls->n; }
 
-// the innermost call, when what runs now is its: no run begun inside it since
 static es_going *open_call(struct es_calls *x) {
 	if (x->nstack == 0) return NULL;
 	es_going *g = x->stack[x->nstack - 1];
@@ -1127,7 +1056,6 @@ static waiter *waiter_of(struct es_calls *x, const char *caller) {
 	return NULL;
 }
 
-// a caller's waits gone, its entry too: 1 if it had any
 static int waiter_drop(struct es_calls *x, const char *caller) {
 	for (size_t i = 0; i < x->nwaiting; i++) {
 		if (strcmp(x->waiting[i]->caller, caller) != 0) continue;
@@ -1139,7 +1067,6 @@ static int waiter_drop(struct es_calls *x, const char *caller) {
 	return 0;
 }
 
-// a computer's waits left from its earlier runs go as a run ends without them
 static void run_ended(sc_computer *c, unsigned n, sc_ended ended, const void *const *reads,
 	size_t nreads, const sc_more *more, void *data) {
 	(void)ended;
@@ -1166,7 +1093,6 @@ static void run_ended(sc_computer *c, unsigned n, sc_ended ended, const void *co
 	if (gone) mark_list(x);
 }
 
-// a call over: its frame is no longer looked up, and the hold its beginning took is let go
 static void call_over(es_going *g) {
 	pm_delete(&g->x->frames, g->frame);
 	going_release(g);
@@ -1218,12 +1144,10 @@ int es_calls_calling(es_ermine *e, ch_frame *frame, es_calling_view *out) {
 	return 0;
 }
 
-// a record on its way to being held
 typedef struct {
 	struct es_calls *x;
 	es_call *owned;
 	int held;
-	// its handler gone: not held
 	int gone;
 } keeping;
 
@@ -1251,7 +1175,6 @@ static void keep_record(void *ctx, const es_recorded *r) {
 	sc_mark(x->e->scheduler, keys, 1, sc_get_run(x->e->scheduler));
 }
 
-// what a record says beyond the call so far
 typedef struct {
 	int has_returned;
 	op_value *returned;
@@ -1292,7 +1215,6 @@ static int record(es_going *g, const char *end, const more_of *m) {
 	return code;
 }
 
-// the promise a call returned settled: its record ends
 static void call_settled(void *ctx, int ok, const op_value *value, const char *error) {
 	es_going *g = ctx;
 	more_of m = {0};
@@ -1309,7 +1231,6 @@ static void call_settled(void *ctx, int ok, const op_value *value, const char *e
 	going_release(g);
 }
 
-// a call ended: held as its handler's latest. the hook's code
 static int end_call(es_ermine *e, es_going *g, const es_out *out) {
 	struct es_calls *x = e->calls;
 	for (size_t i = 0; i < x->nstack; i++) {
@@ -1341,7 +1262,6 @@ static int end_call(es_ermine *e, es_going *g, const es_out *out) {
 
 void es_calls_end(es_ermine *e, es_going *g, const es_out *out) { end_call(e, g, out); }
 
-// a read as one string: the same read in a call is recorded once
 static char *read_key(const char *part, const char *id, const op_key *path, size_t npath,
 	int has_path, int keys) {
 	size_t len = strlen(part) + strlen(id) + 16;
@@ -1404,7 +1324,6 @@ void es_calls_drop(es_ermine *e, const char *id) {
 		es_going *g = x->live.keys[i] != NULL ? x->live.vals[i] : NULL;
 		if (g != NULL && strcmp(g->handler, id) == 0) g->gone = 1;
 	}
-	// the slot goes with its record (its address is what readers track: told once more, then gone)
 	held *h = es_map_get(&x->records, id);
 	if (h == NULL) return;
 	const void *keys[1] = {h};
@@ -1414,7 +1333,6 @@ void es_calls_drop(es_ermine *e, const char *id) {
 	free(h);
 }
 
-// a wait's target as one string: its path, or its id
 static char *target_key(const es_aim *at) {
 	if (!at->has_path) {
 		size_t len = strlen(at->id) + 2;
@@ -1433,7 +1351,6 @@ static char *target_key(const es_aim *at) {
 	return k;
 }
 
-// a teardown that takes a caller's waits out as its scope goes
 typedef struct {
 	struct es_calls *x;
 	sc_scope *scope;
@@ -1452,9 +1369,8 @@ static char *armed_gone(void *data) {
 	return NULL;
 }
 
-// the scope told to take caller's waits out as it goes: each (caller, run) once per scope. a computer's
-// teardown runs after its next run too (it still alive: the waits are run_ended's then); one registered
-// per run, so none piles up
+// the scope told to take caller's waits out as it goes, once per (caller, run). A computer's
+// teardown also runs after its next run, so one is registered per run and none piles up
 static void arm(struct es_calls *x, sc_scope *scope, const char *caller, int has_run, unsigned run) {
 	size_t len = strlen(caller) + 64;
 	char *tag = es_alloc(len);
@@ -1504,7 +1420,6 @@ void es_calls_wait(es_ermine *e, const char *caller, const es_aim *at, sc_scope 
 	t.wait.since = now();
 	ES_PUSH(w->items, w->n, w->cap, t);
 	mark_list(x);
-	// last: a scope going takes the wait out at once, the waiter with it
 	arm(x, scope, caller, has_run, run);
 }
 
@@ -1556,11 +1471,10 @@ void es_waits_free(es_wait *waits, size_t n) {
 	free(waits);
 }
 
-// --- actions ---------------------------------------------------------------------------------------------
+// --- actions ----------
 
-// the placement of id by own, lasting while own does: own going takes it out, unless a later placement took
-// over. one teardown per (own, node), however often it is placed; a computer's cleanup after a run (own
-// still alive) passes it on to the next run's
+// the placement of id by own, lasting while own does; own going takes it out unless a later
+// placement took over. One teardown per (own, node); a computer's cleanup after a run passes it on
 typedef struct {
 	struct es_actions *x;
 	es_ermine *e;
@@ -1589,7 +1503,6 @@ static char *placed_gone(void *data) {
 		return NULL;
 	}
 	es_map_del(&x->methods, k->id);
-	// its call record goes with it
 	es_calls_drop(k->e, k->id);
 	// its record with the scope, unless the node's value was already let go and the slot used again
 	fnslot *slot = (fnslot *)p->fn;
@@ -1599,8 +1512,8 @@ static char *placed_gone(void *data) {
 	return NULL;
 }
 
-// an action stopped by its node: its placement let go (the node's value is the caller's to take
-// out first), its call record with it; its function's record with it unless the slot was used again
+// an action stopped by its node: its placement and call record let go (the caller takes the node's
+// value out first), and its function's record too unless the slot was reused
 int es_stop_action(es_ermine *e, const char *id) {
 	struct es_actions *x = e->actions;
 	placed *p = es_map_get(&x->methods, id);
@@ -1620,7 +1533,6 @@ typedef struct {
 	char *id;
 } creating;
 
-// the node at the path made holding the function, or its value replaced (asked "edit")
 static int do_create(void *ctx) {
 	creating *m = ctx;
 	es_context *c = m->c;
@@ -1668,7 +1580,6 @@ static int create_action(es_context *c, es_at p, es_action fn, void *ctx, es_han
 		es_names_free(&path);
 		return code;
 	}
-	// lasting while own does
 	placed *was = es_map_get(&x->methods, m.id);
 	placed *entry = es_alloc(sizeof *entry);
 	entry->fn = &f->f;
@@ -1714,7 +1625,6 @@ int es_create_action_at(es_context *c, es_at p, es_action fn, void *ctx, es_hand
 	return code;
 }
 
-// the execute ask, run in the call frame
 typedef struct {
 	es_context *c;
 	const char *id;
@@ -1729,7 +1639,6 @@ static void do_ask(void *ctx) {
 	a->code = es_context_ask(a->c, "execute", &target, 1);
 }
 
-// the action's function, run in the call's frame
 typedef struct {
 	es_context *c;
 	es_function *f;
@@ -1743,7 +1652,6 @@ static void do_run(void *ctx) {
 	r->out = r->f->fn(r->c, r->f->ctx, r->args, r->nargs);
 }
 
-// a call over, its frame let go: the record's end (a promise's when it settles)
 typedef struct {
 	es_ermine *e;
 	es_going *g;
@@ -1759,10 +1667,9 @@ static void call_ended(void *ctx, int ok, const op_value *value, const char *err
 	free(g);
 }
 
-// the call's frame: its info { caller: { node, actor }, handler, call }, the values held by the
-// record till it is freed (a frame borrows its info), made alone under the scope the call runs in
-// (under's own frame), or under the handler's frame (up: the placed function is the one called, so its
-// writes take the handler's site). the record frees it (call_over lets go the hold its beginning took)
+// the call's frame: its info is held by the record until it is freed. Made alone under the scope
+// the call runs in, or under the handler's frame so the placed function's writes take the handler's
+// site
 static ch_frame *call_frame(es_context *c, const char *id, unsigned k, sc_scope *under, hframe *up,
 	call_info **held) {
 	es_ermine *e = c->ermine;
@@ -1771,8 +1678,6 @@ static ch_frame *call_frame(es_context *c, const char *id, unsigned k, sc_scope 
 	const op_value *actor = actor_here(c);
 	if (actor != NULL) op_set(caller, "actor", op_ref((op_value *)actor));
 	op_value *handler = op_str(id), *call = op_num((double)k);
-	// called from outside the graph (no run open, no frame up the chain holding locations): where, in
-	// the call's frame; inside, its frames say
 	op_value *locations = NULL;
 	es_outside(e, &locations);
 	sc_pair pairs[4] = {{"caller", caller}, {"handler", handler}, {"call", call}};
@@ -1787,7 +1692,6 @@ static ch_frame *call_frame(es_context *c, const char *id, unsigned k, sc_scope 
 	return frame;
 }
 
-// the action f found at n (id): asked "execute" in a call frame, run there, its record held
 static int call_action(es_context *c, const es_node_data *n, const char *id,
 	es_function *f, const op_value *const *args, size_t nargs, op_value **out, const ch_location *site) {
 	es_ermine *e = c->ermine;
@@ -1796,8 +1700,8 @@ static int call_action(es_context *c, const es_node_data *n, const char *id,
 	placed *p = es_map_get(&e->actions->methods, id);
 	int mine = p != NULL && p->fn == f && p->gen == ((fnslot *)f)->gen;
 	unsigned k = es_calls_next(e);
-	// what the action makes is under's; what a change it makes is made as is the call's, under the
-	// handler's frame. where it was called from (the click): found up the caller's frame open, else site
+	// what the action makes belongs to under, and its writes are made as the call, under the handler's
+	// frame. Where it was called from (the click) comes from the open frame, else site
 	sc_scope *under = mine ? p->scope : c->scope;
 	(void)site;
 	call_info *held;
@@ -1872,19 +1776,16 @@ static int execute_action(es_context *c, es_target x, const op_value *const *arg
 	es_ermine *e = c->ermine;
 	int code = es_alive(e);
 	if (code) return code;
-	// the action: resolved and asked as c, the caller
 	es_node_data n;
 	code = es_node_of(c, x, &n);
 	if (code) return code;
 	const char *found;
 	char *id = es_id_of(c, &n, &found) ? es_dup(found) : NULL;
 	es_aim at = {n.has_path ? NULL : n.id, n.has_path, (const char *const *)n.path, n.npath};
-	// in a run, the computer waits; else whoever this context is
 	sc_run *run = sc_get_run(e->scheduler);
 	sc_computer *computer = run == NULL ? NULL : sc_run_computer(run);
 	const op_value *by = computer == NULL ? NULL : value_of(computer, CH_NODE, OP_STR);
 	const char *caller = by != NULL ? by->str : c->node;
-	// tracked in a run, so the handler coming reruns it
 	const op_value *value =
 		id != NULL ? pl_read(c->places, tb_string("value"), tb_string(id), NULL, 0) : NULL;
 	if (pl_status(c->places) != SC_OK) {
@@ -1917,13 +1818,11 @@ int es_execute_action_at(es_context *c, es_target x, const op_value *const *args
 	return code;
 }
 
-// a pair of a frame's info that is an op_value of this type
 static const op_value *frame_value_of(const ch_frame *o, const char *key, op_type type) {
 	const op_value *v = ch_frame_get(o, key);
 	return v != NULL && v->type == type ? v : NULL;
 }
 
-// the call open now: its frame's info names its caller (execute's call frame)
 int es_get_caller(es_context *c, es_caller *out) {
 	es_ermine *e = c->ermine;
 	*out = (es_caller){0};
@@ -1966,7 +1865,7 @@ void es_caller_free(es_caller *c) {
 	c->has_process = 0;
 }
 
-// --- teardowns ---------------------------------------------------------------------------------------------
+// --- teardowns ----------
 
 typedef struct {
 	es_context *c;
@@ -1993,7 +1892,6 @@ static char *torn(void *data) {
 	return err;
 }
 
-// fn as own goes
 static int teardown_on(es_context *c, sc_scope *own, es_teardown fn, void *ctx) {
 	tearing *t = es_alloc(sizeof *t);
 	t->c = c;
@@ -2016,7 +1914,6 @@ int es_add_teardown(es_context *c, es_teardown fn, void *ctx) {
 	sc_scope *own = es_owner(c);
 	code = es_not_in_act(e, own, "addTeardown");
 	if (code) return code;
-	// in an action: a call's frame is open between the frame open and own's
 	ch_frame *ours = sc_scope_frame(own);
 	for (ch_frame *o = sc_get_current_frame(e->scheduler); o != NULL && o != ours; o = o->parent) {
 		if (ch_frame_get(o, "call") != NULL) {
@@ -2032,14 +1929,13 @@ int es_cleanup(es_context *c, es_teardown fn, void *ctx) {
 	int code = es_alive(e);
 	if (code) return code;
 	sc_scope *act = es_acting(e);
-	// an action called from the act is between: what it makes is its owner's, not the effect's
 	if (act == NULL || es_owner(c) != act) {
 		return es_fail_ermine(ES_NOT_HERE, "a cleanup is given from an effect's act");
 	}
 	return teardown_on(c, act, fn, ctx);
 }
 
-// --- writer ------------------------------------------------------------------------------------------------------
+// --- writer ----------
 
 static void writer_free(writer_rec *b) {
 	hframe_drop(b->frame);
@@ -2047,7 +1943,6 @@ static void writer_free(writer_rec *b) {
 	free(b);
 }
 
-// a parent gone: every writer made in it
 static char *writer_gone(void *data) {
 	writer_owner *o = data;
 	for (size_t i = 0; i < o->n; i++) {
@@ -2083,7 +1978,6 @@ int es_create_writer(es_context *c, op_value **writer) {
 	b->parent = own;
 	b->serial = ++x->serials;
 	b->frame = hframe_new(c, NULL, own);
-	// the mark it is made under: the frame open when it is not own's (a call's, a writer's run's)
 	ch_frame *at = sc_get_current_frame(e->scheduler);
 	if (at != NULL && at != sc_scope_frame(own)) {
 		for (size_t i = 0; i < 3; i++) {
@@ -2110,7 +2004,6 @@ int es_create_writer(es_context *c, op_value **writer) {
 	return 0;
 }
 
-// the writer a value is the stand-in of; NULL: none (*gone 1: one that ended)
 static writer_rec *writer_found(es_ermine *e, const op_value *v, int *gone) {
 	*gone = 0;
 	writer_rec *b = es_live_of(v, "runner");
@@ -2172,10 +2065,8 @@ int es_with_writer(es_ermine *e, const op_value *writer, es_thunk f, void *ctx) 
 	under->refs++;
 	ch_frame *frame = under->frame;
 	call_info *info = NULL;
-	// f may free b (it lets its writer go, or stops what it was created in): nothing of b is read after it
 	int own_mark = b->nmark > 0 || during;
 	if (own_mark) {
-		// a frame of its own for this run: the writer's info, and userActivated
 		info = es_alloc(sizeof *info);
 		sc_pair pairs[4];
 		size_t n = 0;

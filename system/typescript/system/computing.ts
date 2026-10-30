@@ -10,8 +10,6 @@ import { acting, insideOnly, notInAct, owner, teardown } from "./scopes.ts"
 import { here } from "./setting.ts"
 import type { System } from "./shapes.ts"
 
-// public (mod.ts exports them): each runs its implementation below, named with As, as the
-// context it finds (acting.ts' go)
 export const createMemo: System["createMemo"] = /* @__PURE__ */ marked(
 	function createMemo(name, f, options) {
 		return go(createMemo, "createMemo", true, createMemoAs, name, f as never, options as never)
@@ -34,7 +32,6 @@ export const createEffect: System["createEffect"] = /* @__PURE__ */ marked(funct
 		options as never,
 	)
 })
-// the pending pulse, now (in a pulse: nothing)
 export const pulse: System["pulse"] = /* @__PURE__ */ marked(function pulse() {
 	return go(pulse, "pulse", false, pulseAs)
 })
@@ -51,8 +48,8 @@ export function createMemoAs<T>(
 	return makeComputer(inner, "memo", name, f, undefined, options)
 }
 
-// an effect at its own node at name: f tracked, act(value, before) after the round; early: run and
-// acted at once, and later acts before other effects'
+// An effect at its own node: f is tracked, and act runs after the round. An early effect runs and
+// acts at once, and later acts before other effects'.
 export function createEffectAs<T>(
 	inner: Inner,
 	name: string | Path,
@@ -64,9 +61,8 @@ export function createEffectAs<T>(
 	return makeComputer(inner, early === true ? "early" : "effect", name, f, act, o)
 }
 
-// a memo, an effect or an early effect. an early one runs, and acts, inside createEffect: before
-// its computer is given back, so its first run gives the status and the run record its node, from
-// inside it (runs.ts: a run given while it ran)
+// An early effect runs and acts inside createEffect, so its first run gives its node the status and
+// run record from inside.
 function makeComputer<T>(
 	inner: Inner,
 	kind: "memo" | "effect" | "early",
@@ -92,8 +88,8 @@ function makeComputer<T>(
 	}
 	const then = (v: T, before: T | undefined) => {
 		set(v)
-		// an act makes nothing, and may return its cleanup: run before the next act, and as the
-		// effect goes. anything else returned is refused, as Solid does
+		// An act may return a cleanup, run before the next act and when the effect goes. Anything else
+		// returned is refused, as Solid does.
 		const sc = s.getCurrentScope()
 		if (sc !== undefined) acting.add(sc)
 		let cleanup: unknown
@@ -111,7 +107,6 @@ function makeComputer<T>(
 		}
 		teardown(inner, sc, () => (cleanup as () => unknown)())
 	}
-	// made from outside the graph: where, in its info (inside: its frames say)
 	const locations = base.locations()
 	const info = { node: id, ...locations !== undefined && { locations } }
 	let given = false
@@ -158,5 +153,4 @@ function makeComputer<T>(
 	return handle(inner, n)
 }
 
-// the pending pulse, now (in a pulse: nothing)
 export const pulseAs = (inner: Inner) => here(inner).base.pulse()

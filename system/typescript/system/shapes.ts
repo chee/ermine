@@ -6,18 +6,14 @@ import type { Location } from "@ermine/changeable/stacktrace"
 import type { Call } from "../calls.ts"
 import type { Inner, Node, Patch, Step, Target, Version, Why } from "../context.ts"
 
-// the info key a write made through a writer has while the page is user-activated
-// (a ChangeView's userActivated)
+// The info key a write made through a writer has while the page is user-activated.
 export const USER_ACTIVATED = "userActivated"
 
-// the attribute a memo's or effect's node holds its scope in: the node key's id of the nearest
-// scope above it with one, written once as the node is made (beside status.ts')
+// The attribute holding the node key of the nearest enclosing scope that has one.
 export const SCOPE = "ermine.computer.scope"
-// what a pending process waits on, written by what started it (ermine's start)
 export const WAITING = "ermine.process.waiting"
 
-// one node a path reaches: its value, where it was found, and a handle to it (reached by this
-// process's own path, so its to hold); refused by the policy: no value, no handle
+// One node a path reaches: its value, where it was found and a handle. A refused one has neither.
 export type Item = {
 	readonly value: unknown
 	readonly from: string
@@ -25,8 +21,6 @@ export type Item = {
 	readonly refused?: true
 }
 
-// what a pending one waits on: a memo it read that is pending (its node), a send to nothing, a
-// process's code not at its path yet, a promise, or nothing it says (it gave PENDING itself)
 export type Waiting =
 	| { readonly node: Path | null }
 	| { readonly code: Path }
@@ -34,19 +28,15 @@ export type Waiting =
 	| "a promise"
 	| "PENDING"
 
-// a write a feature's onWrite held back, shown where it would have shown: its status write, or a
-// stopped process's row's removal [chee: "Held, with a trace", "Held, and shown"]
+// A write a feature's onWrite held back, shown where it would have shown.
 export type Held = { readonly feature: string; readonly write: "status" | "row" }
 
 export type Status = {
 	readonly state: "done" | "pending" | "failed" | "looping"
-	// what it shows is so because a feature held a write back
 	readonly held?: Held
 	readonly error?: unknown
-	// failed: in its run, or in an effect's act
 	readonly phase?: "run" | "act"
 	readonly waiting?: readonly Waiting[]
-	// a computer's latest run's: a value from an older run is stale
 	readonly n?: number
 	// what to do, where ermine has advice (the hints feature, hints.ts)
 	readonly hint?: string
@@ -54,24 +44,15 @@ export type Status = {
 	readonly [field: string]: unknown
 }
 
-// what made a change, one step: a computer (a memo or effect; run: its latest record, when that
-// still holds the change), a method (call: its record while it is the handler's latest, whether or not it holds the write), a feature's
-// thing writing as itself (a scope whose info holds node and feature: a pipe), or code outside any
-// (locations: where it began, from outside the graph, the nearest up its frames, top of the stack
-// first)
-// nodes named by their path from the root (seen; none: moved,
-// or placed by no functions): no ids [chee 10-25: "i'm not sure the process api should be able to do
-// anything by id"; "not quite true when there is sync"]
+// What made a change: a computer, a method, a feature writing as itself, or code outside the
+// graph (locations). Nodes are named by path from the root, never by id.
 export type Writer =
 	| { readonly kind: "computer"; readonly path?: Path; readonly run?: RunView }
 	| { readonly kind: "method"; readonly path?: Path; readonly call?: CallView }
 	| { readonly kind: "outside"; readonly locations?: readonly Location[] }
-	// pipe-extension: core gap. a feature's thing that writes as itself (a scope whose info holds
-	// node and feature): the feature's name, and its node's path
+	// pipe-extension: core gap. A feature writing as itself: its name and its node's path.
 	| { readonly kind: "feature"; readonly feature: string; readonly path?: Path }
-// a record's read or write, as the process asking sees it
 export type Touched = { readonly part: Key; readonly path?: Path }
-// a run's record, as a process sees it (runs.ts' Run, its nodes by path)
 export type RunView = {
 	readonly n: number
 	readonly started?: number
@@ -82,7 +63,6 @@ export type RunView = {
 	readonly reads: readonly Touched[]
 	readonly writes: readonly Touched[]
 }
-// a call's record, as a process sees it (calls.ts' Call, its nodes by path; no caller: getCaller)
 export type CallView = {
 	readonly n: number
 	readonly args: readonly unknown[]
@@ -95,24 +75,17 @@ export type CallView = {
 	readonly writes: readonly Touched[]
 	readonly made?: readonly { readonly kind: "memo" | "effect" | "early"; readonly path?: Path }[]
 }
-// who called the action running now [chee 10-25: "oh well, it should"]: the actor its writes carry,
-// and its process's node by path (none: nothing reaches it)
+// Who called the running action: the actor its writes carry and its process's node by path.
 export type Caller = { readonly actor: unknown; readonly process?: Path }
 
-// a change as a process sees it: when, who, and where it began from outside the graph; explain
-// takes it back to its change (one view per change, base.views). its frames (node ids) stay the
-// host's
+// A change as a process sees it; explain takes it back to its change.
 export type ChangeView = {
 	readonly time: number
 	readonly actor: unknown
-	// the nearest locations up its frames, top of the stack first: every line, ermine's own too
 	readonly locations?: readonly Location[]
-	// made through a writer (createWriter) that ran while navigator.userActivation.isActive
-	// (useractivation.ts): a person had just interacted with the page, no more
+	// Made through a writer while the page was user-activated.
 	readonly userActivated?: true
 }
-// a change explained: it and its writer. held (a node's only): the latest write there a feature
-// held back, since the change (no change: only that)
 export type Explained =
 	| {
 		readonly change: ChangeView
@@ -132,24 +105,16 @@ export class SendError extends Error {
 	}
 }
 
-// what a writer runs as: where it was made, and the mark it was made under (an action's call: its
-// info, never the user-activated flag; setup: none, the scope's own), and its own frame
+// What a writer runs as: its scope, the mark it was made under, and its own frame.
 export type WriterAs = {
 	readonly inner: Inner
-	// what f's makings and asks belong to: the scope createWriter was called in
 	readonly parent: Scope
-	// the info of the frame it was made under (an action's call), when not that scope's own: its
-	// runs are made in a frame of that info under the scope's
 	readonly mark: Scope["info"] | undefined
-	// the writer's own frame, made as createWriter was called, under that scope's: its runs are
-	// under it
 	readonly frame: Frame
 }
-// a writer: withWriter(f) runs f as the parent createWriter was called in, its writes carrying the
-// frame it was made under [marks-2026-10-27; scope and frame, frames in the graph, 10-29]
+// A writer: withWriter(f) runs f as the scope createWriter was called in.
 export type WithWriter = <T>(f: () => T) => T
 
-// what start gives a program: where the process is, its stop and its status; or taken
 export type Starting = {
 	readonly process: { readonly at: Path; readonly folder: Path }
 	readonly stop: (why?: Why) => void
@@ -194,7 +159,6 @@ export type System = {
 	createAction: (path: string | Path, fn: (...args: any[]) => unknown) => Node
 	executeAction: (path: Target, ...args: unknown[]) => unknown
 	getCaller: () => Caller | undefined
-	// key: that field alone, read and told alone (a reader of state isn't run again when only n moves)
 	getStatus: {
 		(x: Target): Status | undefined
 		<K extends keyof Status & string>(x: Target, key: K): Status[K] | undefined
