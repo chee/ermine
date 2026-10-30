@@ -1,6 +1,5 @@
-// what the crow suite checks besides its scenarios (conformance/run.ts runs those): the harness
-// answers an unknown op as an error and goes on. the harness asked is HARNESS, else the TypeScript
-// adapter (crow_harness.ts)
+// Besides its scenarios (conformance/run.ts), the crow suite checks that the harness answers an
+// unknown op with an error and goes on. Uses HARNESS, else crow_harness.ts.
 import { assert, assertEquals } from "@std/assert"
 import { ask, command } from "../../conformance/typescript/ask.ts"
 import { createHarness } from "./crow_harness.ts"

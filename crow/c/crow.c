@@ -7,12 +7,11 @@
 
 #include "../../changeable/c/ptrmap.h"
 
-// a set of containers, each held by it (op_ref): open addressing, linear probing, no tombstones
+// A set of containers, each held by it (op_ref): open addressing, linear probing, no tombstones.
 typedef struct {
 	op_value **slots;
 	size_t capacity; // 0 or a power of two
 	size_t count;
-	// NULL, or each container in the set → the set (kept in step: the owner map)
 	pm *owner;
 } set;
 
@@ -34,7 +33,6 @@ static void put(set *s, op_value *v) {
 		}
 	}
 }
-// holds v (not in the set)
 static void add(set *s, op_value *v) {
 	if (2 * (s->count + 1) > s->capacity) {
 		set big = {calloc(s->capacity ? 2 * s->capacity : 16, sizeof(op_value *)),
@@ -48,13 +46,11 @@ static void add(set *s, op_value *v) {
 	put(s, op_ref(v));
 	if (s->owner != NULL) pm_set(s->owner, v, s);
 }
-// v taken out of the set, its hold given to the caller; NULL when it was not in it
 static op_value *out(set *s, const op_value *v) {
 	if (!has(s, v)) return NULL;
 	size_t mask = s->capacity - 1, i = where(s, v);
 	while (s->slots[i] != v) i = (i + 1) & mask;
 	op_value *held = s->slots[i];
-	// close the gap: a later item of the run moves back into it unless its home is past the gap
 	s->slots[i] = NULL;
 	for (size_t j = i;;) {
 		j = (j + 1) & mask;
@@ -70,7 +66,6 @@ static op_value *out(set *s, const op_value *v) {
 	if (s->owner != NULL) pm_delete(s->owner, held);
 	return held;
 }
-// 1 and let go of when v was in it
 static int del(set *s, const op_value *v) {
 	op_value *held = out(s, v);
 	if (held == NULL) return 0;
@@ -93,7 +88,6 @@ typedef struct {
 	size_t at; // where it is in records
 } record;
 
-// a container a write let go of before it landed, and the set it was in (its hold kept)
 typedef struct {
 	set *in;
 	op_value *v;
@@ -104,8 +98,8 @@ struct cr_crow {
 	size_t count, capacity;
 	pm owner; // an owned container → the set it is in
 	pm by_root; // a root → its record
-		// in a write, before it lands (noting): what it let go of, put back if it is refused, so
-	// ownership changes only once the write has
+	// While a write is applying (noting): what it let go of, put back if it is refused, so
+	// ownership changes only once the write has.
 	gone *gone;
 	size_t ngone, gone_capacity;
 	bool noting;
@@ -139,13 +133,12 @@ void cr_let_go(cr_crow *u, const void *root) {
 	free(r);
 }
 
-// containers: what a write can change in place
 static int container(const op_value *v) {
 	return v != NULL && (v->type == OP_LIST || v->type == OP_MAP || v->type == OP_TYPED);
 }
 
-// a shallow copy: the same items, one reference on each, a map's keys shared. a typed array's
-// elements copied
+// A shallow copy: the same items with one reference on each, a map's keys shared; a typed
+// array's elements are copied.
 static op_value *copy(const op_value *v) {
 	if (v->type == OP_TYPED) return op_typed(v->kind, v->data, op_length(v));
 	op_value *c;
@@ -162,14 +155,13 @@ static op_value *copy(const op_value *v) {
 	return c;
 }
 
-// the copies one write made owned, for a write that is refused to let go of
 typedef struct {
 	op_value **copies;
 	size_t count, capacity;
 } made;
 
-// v when it is not a container or is owned; else its copy, owned (one hold for the caller: the
-// tree's)
+// v if it is not a container or is already owned, otherwise its owned copy (one hold for the
+// caller: the tree's).
 static op_value *take(set *mine, made *m, op_value *v) {
 	if (!container(v) || has(mine, v)) return v;
 	op_value *c = copy(v);
@@ -183,19 +175,15 @@ static op_value *take(set *mine, made *m, op_value *v) {
 	return c;
 }
 
-// a write's: what it owns, and the copies it made
 typedef struct {
 	set *mine;
 	made made;
 } owning;
-// op_apply's owned: the container to change in place
 static op_value *owned(op_value *v, void *data) {
 	owning *o = data;
 	return take(o->mine, &o->made, v);
 }
 
-// what a write took out (its undo holds it) no longer owned: owned containers are connected from
-// the root, so only those are walked, under the top (a span's undo: a list made for it)
 static void let_go(set *mine, const op_value *v, int top) {
 	if (!container(v)) return;
 	int owned = del(mine, v);
@@ -203,7 +191,6 @@ static void let_go(set *mine, const op_value *v, int top) {
 	for (size_t i = 0; i < v->count; i++) let_go(mine, v->items[i], 0);
 }
 
-// held, out of in, noted: its hold the note's
 static void note(cr_crow *u, set *in, op_value *held) {
 	if (u->ngone == u->gone_capacity) {
 		u->gone_capacity = u->gone_capacity ? 2 * u->gone_capacity : 16;
@@ -213,7 +200,6 @@ static void note(cr_crow *u, set *in, op_value *held) {
 	u->gone[u->ngone++] = (gone){in, held};
 }
 
-// v, in in, let go of; noting, noted (its hold kept)
 static void leave(cr_crow *u, set *in, const op_value *v) {
 	if (!u->noting) {
 		del(in, v);
@@ -223,8 +209,8 @@ static void leave(cr_crow *u, set *in, const op_value *v) {
 	if (held != NULL) note(u, in, held);
 }
 
-// what is owned under v let go, v too: owned copies are connected from the root, so only those
-// are walked
+// Lets go of what is owned under v, and v. Owned copies are connected from the root, so only
+// those are walked.
 static void drop(cr_crow *u, op_value *v) {
 	if (!container(v)) return;
 	set *in = pm_get(&u->owner, v);
@@ -247,10 +233,10 @@ static int is_given(const given *g, const op_value *v) {
 	return 0;
 }
 
-// every container in v let go, in every root's set; at one handed, what is owned under it, no
-// deeper. seen: the containers walked, made at the first step into a container (a value a run
-// made may share, or loop), so a flat one makes none; held, so none is freed and its address
-// reused while the walk goes on
+// Lets go of every container in v, in every root's set. At a handed subtree, only what is owned
+// under it. seen is made at the first step into a container (a value a run made may share or
+// loop), so a flat value makes none. It holds its containers so none is freed and its address
+// reused during the walk.
 static void let_all(cr_crow *u, op_value *v, const given *g, set **seen) {
 	if (!container(v)) return;
 	if (is_given(g, v)) {
@@ -291,9 +277,7 @@ void cr_let_go_in(cr_crow *u, const op_value *value, const op_value *const *subt
 
 int cr_update(cr_crow *u, const void *root, const op_value *value, const op_patch *patches, size_t n,
 	op_value **after, op_undo *undo_out, size_t *failed) {
-	// what is let go of before the op_apply is noted, and put back if it is refused
 	u->noting = true;
-	// what a patch puts is the caller's from now: nothing in it owned
 	for (size_t i = 0; i < n; i++)
 		if (patches[i].has_value && container(patches[i].value)) cr_let_go_in(u, patches[i].value, NULL, 0);
 	record *r = find(u, root);
@@ -311,19 +295,14 @@ int cr_update(cr_crow *u, const void *root, const op_value *value, const op_patc
 		u->records[u->count++] = r;
 		pm_set(&u->by_root, root, r);
 	}
-	// one op_apply, in place where owned: what a patch changes that is not owned yet is copied
-	// (take) as it lands, in the tree the patches before it left (one may move a subtree, or put a
-	// value in, that the next writes under)
 	owning o = {r->owned, {0}};
 	op_undo undo = {0};
 	op_apply_options options = {.undo = &undo, .in_place = 1, .owned = owned, .data = &o};
 	int code = op_apply((op_value *)value, patches, n, &options, after, failed);
 	u->noting = false;
 	if (code != OP_OK) {
-		// the copies it made are no longer wanted: each let go of, now nothing holds it but the set
 		for (size_t j = 0; j < o.made.count; j++) del(o.mine, o.made.copies[j]);
 		free(o.made.copies);
-		// what it let go of first owned again, where it was
 		for (size_t j = 0; j < u->ngone; j++)
 			add(u->gone[j].in, u->gone[j].v), op_free(u->gone[j].v);
 		u->ngone = 0;

@@ -1,8 +1,6 @@
-// what the harness suites check besides their scenarios: the harness asked against the TypeScript one
-// run here, request by request: random values (maps, lists, strings, typed arrays, bytes), random
-// patches mostly where something is (sets, takings out, ranges, moves, ranged moves), reads, keeps
-// (alone, wrapped; withScheduler: through a scheduler's compute, effect, or failing set), marks and
-// sames, helds, unwrites. a few dozen seeds
+// Besides their scenarios, the harness suites run the harness asked against the TypeScript one
+// request by request, on random values and patches, reads, keeps, marks, sames, helds and
+// unwrites, for a few dozen seeds.
 import { assertEquals } from "@std/assert"
 import type { Patch } from "@ermine/changeable/apply"
 import { ask, command } from "../../conformance/typescript/ask.ts"
@@ -13,7 +11,6 @@ import { at, made, patch, paths } from "./random_harness.ts"
 
 export const SEEDS = 30, STEPS = 50
 const form = (ps: Patch[]) => ps.map((x) => "value" in x ? { ...x, value: toJson(x.value) } : x)
-// an answer by content: a map's key order is not part of its value (op's apply.ts)
 const sorted = (v: unknown) =>
 	v !== null && typeof v === "object" && !Array.isArray(v)
 		? Object.fromEntries(Object.keys(v).sort().map((k) => [k, (v as Record<string, unknown>)[k]]))
@@ -28,7 +25,6 @@ export async function fuzz(
 	for (let seed = 1; seed <= SEEDS; seed++) {
 		const p = rand(seed)
 		const reference = createHarness()
-		// answers as they come over the line (JSON: a list's undefined is null)
 		const send = (step: number, r: Record<string, unknown>) => {
 			const a = JSON.parse(line(reference(r)))
 			requests.push(r)
@@ -37,11 +33,8 @@ export async function fuzz(
 			return a
 		}
 		const now = () => revive(reference({ op: "value" }).value)
-		// what each hold held, as it was then: a held answer must say it still
 		let marks: string[] = [], holds = new Map<string, unknown>()
-		// the latest write's undo (unwrite writes it)
 		let undo: Record<string, unknown>[] | undefined
-		// every hold asked: what a write changed in place under one stays changed
 		const all = (step: number) => {
 			for (const [held, was] of holds) {
 				const a = send(step, { op: "held", name: held })
@@ -56,7 +49,6 @@ export async function fuzz(
 		const name = (step: number) => p(3) ? undefined : `h${step}`
 		const values = (ps: Record<string, unknown>[]) =>
 			ps.filter((x) => "value" in x).map((x) => x.value)
-		// a write's answer: its undo the latest, when it landed
 		const wrote = (a: Record<string, unknown>) => {
 			if (Array.isArray(a.undo)) undo = a.undo
 		}
@@ -99,7 +91,6 @@ export async function fuzz(
 			} else if (k < 88 && holds.size) {
 				const names = [...holds.keys()], held = names[p(names.length)]
 				const a = send(step, { op: "held", name: held })
-				// the reference too says what was held, as it was
 				assertEquals(a.value, holds.get(held), `seed ${seed}, step ${step}: ${held} as held`)
 			} else if (k < 94) send(step, { op: "value" })
 			else if (k < 98) {

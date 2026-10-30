@@ -1,10 +1,9 @@
 // deno run --allow-run crow/typescript/crow_places_bench.ts [names…]
-// places' folders, written one patch at a time, three ways: node's update copying ("copy"), in
-// place (op's apply with cow: false: a reader's map changes under it), crow.
-// writes: a place over a name there, an unplace then a place back, a rename there and back. reads
-// (crow's read): none (a burst), before every write, every 10 writes. µs per write after the
-// first (fastest of 15 rounds); the first write (the caller's map: copied, fastest round); the
-// slowest write after the first in any round (a copy after a read, and the collector's pauses)
+// Places' folders written one patch at a time, three ways: node's update copying ("copy"), in
+// place (op's apply with cow: false), and crow. Writes are a place over a name there, an unplace
+// then a place back, and a rename there and back, with reads (crow's read) never, before every
+// write, or every 10 writes. Reports µs per write after the first (fastest of 15 rounds), the
+// first write, and the slowest write after the first in any round.
 import update from "@ermine/changeable/update"
 import type { Patch } from "@ermine/changeable/apply"
 import { createCrow } from "./crow.ts"

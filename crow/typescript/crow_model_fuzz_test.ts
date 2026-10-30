@@ -1,13 +1,11 @@
-// crow against its model (model_harness.ts), on many shapes, a few dozen seeds each: random
+// Runs crow against its model (model_harness.ts) on many shapes, a few dozen seeds each: random
 // values, flat maps of 10, 1k and 10k names, deep nesting, lists of maps with spans moved, typed
-// arrays, strings (spans edited and moved where lone halves meet), the root itself, values handed out and put back in (the same object twice, a read's,
-// an undo's), and refusals of every kind after writes that landed. each step: writes, reads,
-// keeps (alone, wrapped, in a map that holds itself; handed or not), unwrites, a put again where
-// the last write put. nothing handed out changes; the value is copy-on-write apply's; copies
-// stay few. a failure prints its shortest steps. what scenario 34 pins is let by (known)
-//   deno run --allow-env --allow-read crow/typescript/crow_model_fuzz_test.ts [shape…]
-//     [--all]   as a program: what fails, by property, shortest first; --all: nothing let by.
-//     shapes: the ones here and "spans" (29's shape, often: fails until 29 passes). SEEDS=n
+// arrays, strings, the root itself, values handed out and put back in, and refusals after writes
+// that landed. Nothing handed out may change, the value is copy-on-write apply's, and copies
+// stay few. A failure prints its shortest steps. The failure scenario 34 pins is let by.
+//   deno run --allow-env --allow-read crow/typescript/crow_model_fuzz_test.ts [shape…] [--all]
+// As a program it prints what fails, by property, shortest first; --all lets nothing by. The
+// shapes are those here and "spans". SEEDS=n sets the seed count.
 import type { Key } from "@ermine/changeable/apply"
 import { assert } from "@std/assert"
 import { rand } from "../../conformance/typescript/rand.ts"
@@ -28,7 +26,6 @@ import { made, patch as randomPatch, text } from "./random_harness.ts"
 type P = (n: number) => number
 const SEEDS = Number(Deno.env.get("SEEDS") ?? 30)
 
-// every path in v (maps and lists), the first max of them
 function paths(v: unknown, max = 4000): Key[][] {
 	const out: Key[][] = []
 	const walk = (x: unknown, p: Key[]) => {
@@ -42,7 +39,6 @@ function paths(v: unknown, max = 4000): Key[][] {
 }
 const one = <T>(p: P, xs: readonly T[]): T => xs[p(xs.length)]
 
-// a patch that is refused, of each kind, on v
 function refusal(p: P, v: unknown): Spec {
 	const ps = paths(v)
 	const maps = ps.filter((x) => isMap(at(v, x)))
@@ -73,14 +69,12 @@ function refusal(p: P, v: unknown): Spec {
 			return { path: [...b, "in"], move: { path: b } }
 		}
 		case 7:
-			// the take lands, the landing is refused
 			return boxes.length ? { path: [0], move: { path: one(p, boxes) } } : { raw: null }
 		default:
 			return { path: maps.length ? one(p, maps) : [], range: [0, 0], value: { data: [] } }
 	}
 }
 
-// a value put: content, or something handed earlier, or the value an earlier patch put
 function given(p: P, s: State, j: number, content: () => unknown): Spec["value"] {
 	const k = p(10)
 	if (k < 2 && s.handed.length) {
@@ -92,7 +86,6 @@ function given(p: P, s: State, j: number, content: () => unknown): Spec["value"]
 	return { data: content() }
 }
 
-// one generic patch from random_harness, as a spec, values sometimes aliased
 function generic(p: P, s: State, j: number): Spec {
 	const x = randomPatch(p, s.e.value) as Spec & { value?: unknown }
 	if ("value" in x) return { ...x, value: given(p, s, j, () => x.value) }
@@ -105,7 +98,6 @@ type Shape = {
 	patch: (p: P, s: State, j: number) => Spec
 	steps: number
 	o?: Options
-	// at most this many seeds (big values)
 	seeds?: number
 }
 
@@ -130,7 +122,6 @@ function flat(n: number): Shape {
 				case 4:
 					return { path: [any()], move: { path: [any()] } }
 				case 5:
-					// a folder in a folder, written into after
 					return { path: [any()], value: given(p, s, j, () => ({ a: `id${p(9)}`, b: {} })) }
 				default: {
 					const deep = paths(s.e.value).filter((x) => x.length > 1 || isMap(at(s.e.value, x)))
@@ -164,7 +155,6 @@ const deep: Shape = {
 			const x = ps.filter((y) => y.length)
 			return x.length ? { path: one(p, x) } : { path: [] }
 		}
-		// a subtree moved up, down or across
 		const from = one(p, ps.filter((y) => y.length) as Key[][])
 		return from ? { path: [...t, `k${p(6)}`], move: { path: from } } : generic(p, s, j)
 	},
@@ -189,7 +179,7 @@ const lists: Shape = {
 		}
 		if (k === 1) return { path: l, range: [a, b] }
 		if (k === 2 || k === 3) {
-			// a span into a list (ranged), or as a new list (29's shape), from another or the same
+			// A span into a list (ranged), or as a new list (scenario 29), from another or the same.
 			const src = one(p, ls), sl = at(v, src) as unknown[]
 			const c = p(sl.length + 1), d = c + p(sl.length - c + 1)
 			const i = p(list.length + 1)
@@ -197,7 +187,6 @@ const lists: Shape = {
 			return { path: [`s${p(3)}`], move: { path: src, range: [c, d] } }
 		}
 		if (k === 4 && list.length) {
-			// an element out to a map key, or into another list
 			return p(2)
 				? { path: [`e${p(3)}`], move: { path: [...l, p(list.length)] } }
 				: { path: one(p, ls), range: [0, 0], move: { path: [...l, p(list.length)] } }
@@ -229,7 +218,6 @@ const typedShape: Shape = {
 			const t = one(p, ts), arr = at(v, t) as Int16Array
 			const a = p(arr.length + 1), b = a + p(arr.length - a + 1)
 			const C = arr.constructor as Int16ArrayConstructor
-			// same length (in place), or not (a new one)
 			const n = k === 0 ? b - a : p(3)
 			return {
 				path: t,
@@ -249,8 +237,8 @@ const typedShape: Shape = {
 	},
 }
 
-// strings: spans written over, taken out, moved within one and across, where pairs, modifiers and
-// lone halves sit (a lone high and a lone low that meet are one code point)
+// Strings: spans written over, taken out, moved within one and across, where pairs, modifiers and
+// lone halves sit (a lone high and a lone low that meet are one code point).
 const strings: Shape = {
 	name: "strings",
 	steps: 80,
@@ -289,8 +277,8 @@ const root: Shape = {
 	},
 }
 
-// 29's shape, often: spans moved out of lists landing as new lists (unranged), kept handed, written
-// under, their parents taken out and put back
+// Spans moved out of lists landing as new lists (unranged), kept handed, written under, with
+// their parents taken out and put back. Often fails until scenario 29 passes.
 export const spans: Shape = {
 	name: "spans",
 	steps: 60,
@@ -328,7 +316,6 @@ const random: Shape = {
 	patch: generic,
 }
 
-// handed values put back, written into, put twice
 const alias: Shape = {
 	name: "aliasing",
 	steps: 80,
@@ -357,7 +344,6 @@ export const SHAPES: Shape[] = [
 	alias,
 ]
 
-// the next step: mostly writes; reads, keeps, unwrites, refusals and puts again between
 function next(sh: Shape, p: P) {
 	return (s: State, i: number): Step => {
 		const k = p(100)
@@ -370,7 +356,6 @@ function next(sh: Shape, p: P) {
 			const ps = paths(v, 2000)
 			const path = one(p, ps)
 			const handed = p(2) ? [] : Array.from({ length: 1 + p(3) }, () => {
-				// what is at path, above it, or under it
 				const q = one(p, ps)
 				return p(2) ? path.slice(0, p(path.length + 1)) : q
 			})
@@ -381,7 +366,6 @@ function next(sh: Shape, p: P) {
 		const n = 1 + p(3)
 		const ps: Spec[] = []
 		for (let j = 0; j < n; j++) ps.push(sh.patch(p, s, j))
-		// a refusal after what landed
 		if (k < 45) ps.splice(p(ps.length + 1), 0, refusal(p, v))
 		void i
 		return { k: "write", ps }
@@ -416,8 +400,8 @@ export function report(found: Found[], value: (f: Found) => unknown): string {
 	).join("\n\n")
 }
 
-// what the failing scenarios pin, told apart so the rest is seen: a refused write that leaves a
-// typed array at the root changed (34). --all: none
+// What the failing scenarios pin, told apart so the rest is seen: a refused write that leaves a
+// typed array at the root changed. --all counts none of these as known.
 export const known: Options["known"] = (f, s) =>
 	f.property === "refused-changes" && ArrayBuffer.isView(s.e.value)
 
