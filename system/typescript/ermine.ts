@@ -55,7 +55,7 @@ import { place } from "./system/names.ts"
 import { getStatus } from "./system/status.ts"
 import { enterScheduler, leaveScheduler, registerScheduler, registerScope } from "./registry.ts"
 import { isHandle, mint } from "./handles.ts"
-import { createChangeHeader, outsideAt } from "@ermine/places/header"
+import { callFrame, createChangeHeader, locationsHere, outsideAt } from "@ermine/places/header"
 import type { Location } from "@ermine/changeable/stacktrace"
 import { createStatus, STATUS, TABLE as STATUS_TABLE } from "@ermine/processes/status"
 import type { Policy } from "@ermine/protect"
@@ -371,8 +371,9 @@ export function createErmine(options: Options = {}): Ermine {
 	// a write's header: its frame the one open (the rule is index.ts'); from outside the graph, with
 	// the locations of the call, or its build location (the public function called innermost)
 	const header = (): ChangeHeader => createChangeHeader(s, undefined, builtNow())
-	// f(inner, ...a) with build here: a write made from outside the graph in it takes it (a build's)
-	// for its locations
+	// f(inner, ...a) with build here. from outside the graph, the call's locations are captured once
+	// (build's alone, if given) and f runs in a frame of its own holding them: its writes and makes
+	// are under it, and capture nothing again
 	function enter<A extends unknown[], T>(
 		f: (inner: Inner, ...a: A) => T,
 		inner: Inner,
@@ -384,7 +385,10 @@ export function createErmine(options: Options = {}): Ermine {
 		built = build
 		builtAt = s.getCurrentFrame()
 		try {
-			return f(inner, ...a)
+			const scope = s.getCurrentScope()
+			const locations = scope === undefined ? undefined : outsideAt(s, build)
+			if (locations === undefined) return f(inner, ...a)
+			return s.runWith(scope!, callFrame(s, locations), () => f(inner, ...a))
 		} finally {
 			built = had
 			builtAt = hadAt
@@ -640,7 +644,7 @@ export function createErmine(options: Options = {}): Ermine {
 	const whys = new Map<Id, Why>()
 	const base: Base = {
 		parts,
-		locations: () => outsideAt(s, builtNow()),
+		locations: () => locationsHere(s, builtNow()),
 		statuses,
 		runs,
 		calls,

@@ -1,4 +1,5 @@
 import type { Id, Path } from "@ermine/places"
+import { isCallFrame } from "@ermine/places/header"
 import type { Frame, Scope } from "@ermine/reactivity"
 import { enterScheduler, leaveScheduler } from "../registry.ts"
 import { ErmineError } from "../features.ts"
@@ -105,7 +106,9 @@ export function notHere(base: Base, own: Scope, message: string) {
 // call's, a writer's run's) between them, its info without the user-activated flag (only a run
 // that happens during an event has it)
 export function markOf(inner: Inner, own: Scope): Scope["info"] | undefined {
-	const at = here(inner).s.getCurrentFrame()
+	// a call's own frame from outside (enter's) is not a mark: what it holds is where, not as what
+	const open = here(inner).s.getCurrentFrame()
+	const at = isCallFrame(open) ? open!.parent : open
 	const o = at === undefined || at === own.frame ? undefined : at
 	if (o === undefined) return undefined
 	const { [USER_ACTIVATED]: _, ...rest } = o.info

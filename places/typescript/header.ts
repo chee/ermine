@@ -52,6 +52,34 @@ export function outsideAt(
 	return isOutside(scheduler) ? capture(build) : undefined
 }
 
+// frames made for a call from outside the graph (callFrame): its locations, captured once
+const calls = /* @__PURE__ */ new WeakSet<Frame>()
+
+// a frame of its own for a call from outside the graph, under the one open, holding its locations:
+// what the call writes and makes is under it, and captures nothing again
+export function callFrame(
+	scheduler: Pick<Scheduler, "getCurrentFrame">,
+	locations: Location[],
+): Frame {
+	const f: Frame = { info: { locations }, parent: scheduler.getCurrentFrame() }
+	calls.add(f)
+	return f
+}
+
+// whether f is a call's frame (callFrame's)
+export const isCallFrame = (f: Frame | undefined): boolean => f !== undefined && calls.has(f)
+
+// the locations a make takes (a process, a memo, an effect, a call): from outside the graph,
+// captured now; in a call from outside, its frame open, that call's, not captured again; inside:
+// undefined
+export function locationsHere(
+	scheduler: Pick<Scheduler, "getCurrentFrame" | "getRun">,
+	build?: Location,
+): Location[] | undefined {
+	const open = scheduler.getCurrentFrame()
+	return outsideAt(scheduler, build) ?? (isCallFrame(open) ? open!.info.locations : undefined)
+}
+
 // the change base the frame open makes, extra its innermost level. none open: undefined
 export function createChangeBase(
 	scheduler: Pick<Scheduler, "getCurrentFrame">,
