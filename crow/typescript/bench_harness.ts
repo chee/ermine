@@ -1,13 +1,13 @@
-// what crow's benches share: the names asked for, a header, writing in place, and timing. µs per
-// call, fastest of 31 rounds (the machine may be busy)
+// What crow's benches share: the names asked for, a header, writing in place, and timing (µs per
+// call, fastest of 31 rounds).
 import apply, { type Patch } from "@ermine/changeable/apply"
 import type { Changeable, ChangeHeader } from "@ermine/changeable"
 
 export const only = Deno.args
 export const h: ChangeHeader = { time: 1, actor: "bench", frame: { info: {}, parent: undefined } }
 
-// in place, as op's apply does with cow: false: the value changed where it is, the change made
-// as update makes it
+// Writes in place, as op's apply does with cow: false: the value changes where it is and the
+// change is made as update makes it.
 export function inPlace(e: Changeable<unknown>, ps: Patch[], change: ChangeHeader) {
 	const undo: Patch[] = []
 	const after = apply(e.value, ps, { undo, cow: false })
@@ -34,6 +34,6 @@ export function row(name: string, ways: Record<string, () => () => void>, calls:
 	console.log(`${name}\t${cols.join("\t")} µs`)
 }
 
-// a changeable of this value and change, as a table's entry is
+// A changeable of this value and change, as a table's entry is.
 export const changeable = (value: unknown, change: ChangeHeader): Changeable<unknown> =>
 	value === undefined ? { change } : { value, change }

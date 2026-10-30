@@ -1,12 +1,9 @@
-// random values and patches for crow's fuzzers: maps, lists, strings (code points past one
-// unit, a pair and a modifier, lone halves that pair when they meet, U+0000), typed arrays, bytes;
-// patches mostly where something is: sets, takings out, ranges, moves, ranged moves (lists and
-// strings), a move into the item after it, and once in a while somewhere made up. pick: rand's
-// (conformance)
+// Random values and patches for crow's fuzzers. Values are maps, lists, strings (including code
+// points past one unit and lone halves that pair when they meet), typed arrays and bytes. Patches
+// are mostly where something is, and sometimes somewhere made up. pick is rand's (conformance).
 import type { Key, Patch } from "@ermine/changeable/apply"
 
 const KEYS = ["a", "b", "c", "d"]
-// string parts: ASCII, BMP, pairs, a pair and a modifier, lone halves, U+0000
 export const PARTS = ["x", "ab", "é", "中", "🦊", "👍🏽", "\uD83D", "\uDE00", "\u0000"]
 export type Pick = (n: number) => number
 export const text = (p: Pick, most = 4) =>
@@ -36,7 +33,6 @@ export function made(p: Pick, depth: number): unknown {
 			return Array.from({ length: p(4) }, () => made(p, depth - 1))
 	}
 }
-// every path in v, through maps and lists
 export function paths(v: unknown, at: Key[] = [], out: Key[][] = []): Key[][] {
 	out.push(at)
 	if (Array.isArray(v)) v.forEach((x, i) => paths(x, [...at, i], out))
@@ -52,7 +48,6 @@ export function at(v: unknown, path: readonly Key[]): unknown {
 }
 export const size = (v: unknown) =>
 	typeof v === "string" ? [...v].length : (v as ArrayLike<unknown>).length
-// what a range splices: a list, a string, a typed array (bytes are leaves)
 export const sequence = (v: unknown) =>
 	Array.isArray(v) || typeof v === "string" || ArrayBuffer.isView(v) && !(v instanceof Uint8Array)
 export const above = (a: readonly Key[], b: readonly Key[]) =>
@@ -60,7 +55,7 @@ export const above = (a: readonly Key[], b: readonly Key[]) =>
 
 export function patch(p: Pick, v: unknown): Patch {
 	const ps = paths(v)
-	// a move out of a list into the item after it: the take shifts where it puts
+	// A move out of a list into the item after it: the take shifts where it puts.
 	if (!p(10)) {
 		const spots = ps.flatMap((l) => {
 			const list = at(v, l)
@@ -72,7 +67,6 @@ export function patch(p: Pick, v: unknown): Patch {
 			return { path: [...l, i], range: [0, 0], move: { path: [...l, i] } }
 		}
 	}
-	// mostly somewhere that is; once in a while somewhere made up
 	const path = p(20) ? ps[p(ps.length)] : [KEYS[p(4)], p(3)]
 	const there = at(v, path)
 	const k = p(12)
@@ -89,7 +83,6 @@ export function patch(p: Pick, v: unknown): Patch {
 			: new Uint8Array([p(255)])
 		return p(4) ? { path, range: [a, b], value } : { path, range: [a, b] }
 	}
-	// mostly from somewhere not above where it goes (into-itself, once in a while)
 	const away = ps.filter((x) => x.length && !above(x, path))
 	const from = away.length && p(8) ? away[p(away.length)] : ps[p(ps.length)]
 	const source = at(v, from)
@@ -97,7 +90,6 @@ export function patch(p: Pick, v: unknown): Patch {
 		const n = source.length, a = p(n + 1), b = a + p(n - a + 1), i = p(there.length + 1)
 		return { path, range: [i, i], move: { path: from, range: [a, b] } }
 	}
-	// a span of a string into a string: another, or the same one (where the halves meet)
 	if (k < 11 && typeof there === "string") {
 		const strings = ps.filter((x) => typeof at(v, x) === "string")
 		const f = p(3) ? strings[p(strings.length)] : path

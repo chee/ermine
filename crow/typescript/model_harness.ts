@@ -1,21 +1,20 @@
-// crow against a model, for its fuzzers: a run is a list of steps (writes, reads, keeps,
+// Crow against a model, for its fuzzers. A run is a list of steps (writes, reads, keeps,
 // unwrites, a write again where the last one was), each done to one root under crow and to a
-// plain copy-on-write apply (the oracle) side by side. after each step:
+// plain copy-on-write apply (the oracle). After each step:
 // - nothing handed out has changed: what a read gave, what was kept, a write's patches (as given,
-//   refused or not) and its undo, each as it was when handed (key order too)
-// - the root's value is the oracle's, the undo the oracle's undo, a refusal the oracle's, and a
-//   refused write leaves the root and its content as they were (values by content: a map's key
-//   order is not part of its value, op's apply.ts)
-// - copies stay bounded: a write makes at most a few containers per patch (the paths it walks), and
-//   a write again where the last one wrote, with nothing read or kept since, makes none
-// a failing run shrinks to its fewest steps (and fewest patches in each). steps are data: a value
-// put is content (cloned as it is put) or a reference to something handed earlier (aliasing)
+//   refused or not) and its undo, each as it was when handed (key order too);
+// - the root's value, the undo and any refusal are the oracle's, and a refused write leaves the
+//   root as it was (values by content: key order is not part of a value);
+// - copies stay bounded: a write makes at most a few containers per patch, and a write again
+//   where the last one wrote, with nothing read or kept since, makes none.
+// A failing run shrinks to its fewest steps (and fewest patches in each). Steps are data: a
+// value put is content (cloned as it is put) or a reference to something handed earlier.
 import apply, { ApplyError, type Key, type Patch } from "@ermine/changeable/apply"
 import { createCrow, type Crow } from "./crow.ts"
 import { createRoot, type Root, write as writeRoot } from "./root_harness.ts"
 
-// a value put: content, something handed earlier (at a path in it), or the value the j-th patch
-// of the same write puts (the same object twice)
+// A value put: content, something handed earlier (at a path in it), or the value the j-th patch
+// of the same write puts (the same object twice).
 export type Given = { data: unknown } | { ref: number; at: Key[] } | { same: number }
 export type Spec = { path?: unknown; range?: unknown; move?: unknown; value?: Given; raw?: unknown }
 export type Step =
@@ -37,7 +36,6 @@ const typed = (v: unknown): v is Int16Array =>
 	ArrayBuffer.isView(v) && !(v instanceof DataView) && !(v instanceof Uint8Array)
 export const container = (v: unknown): v is object => isList(v) || isMap(v) || typed(v)
 
-// content as a string: key order, -0, typed arrays' kinds, undefined and loops all shown
 export function show(v: unknown, seen: object[] = []): string {
 	if (v === undefined) return "~"
 	if (typeof v === "number") return Object.is(v, -0) ? "-0" : String(v)
@@ -60,7 +58,6 @@ export function show(v: unknown, seen: object[] = []): string {
 	seen.pop()
 	return out
 }
-// the same, maps' keys sorted: what differs only in key order shows the same
 export function sorted(v: unknown, seen: object[] = []): string {
 	if (!isMap(v)) {
 		if (isList(v)) {
@@ -81,7 +78,6 @@ export function sorted(v: unknown, seen: object[] = []): string {
 	return s
 }
 
-// every container in v
 export function containers(v: unknown, out = new Set<object>()): Set<object> {
 	if (!container(v) || out.has(v)) return out
 	out.add(v)
@@ -99,7 +95,6 @@ export function at(v: unknown, path: readonly unknown[]): unknown {
 	return v
 }
 
-// a deep copy keeping key order, typed arrays' kinds, -0; loops as they are
 export function clone(v: unknown, seen = new Map<object, unknown>()): unknown {
 	if (v === null || typeof v !== "object") return v
 	if (seen.has(v)) return seen.get(v)
@@ -124,13 +119,11 @@ export function clone(v: unknown, seen = new Map<object, unknown>()): unknown {
 }
 
 export type Options = {
-	// check what was handed every n steps (big values), and at the end
 	every?: number
-	// leave out: the property names below, checked but not counted as failing (known ones)
+	// Failures this accepts are checked but not counted.
 	known?: (f: Failure, s: State) => boolean
-	// no copy bound checks
 	nocopies?: boolean
-	// known failures met, by property
+	// Known failures met, by property.
 	seen?: Map<string, number>
 }
 
@@ -139,14 +132,12 @@ export type State = {
 	e: Root
 	oracle: unknown
 	handed: { thing: unknown; was: string; what: string; loop?: boolean }[]
-	// the last write landed, one plain put, with nothing read, kept or refused since
 	last?: Patch
 	steps: Step[]
 }
 
 const TRACE = Deno.env.get("TRACE")
 
-// a value given in a spec, made now
 function give(s: State, g: Given, made: unknown[]): unknown {
 	if ("data" in g) return clone(g.data)
 	if ("same" in g) return made[g.same] ?? null
@@ -170,7 +161,6 @@ export function patches(s: State, specs: Spec[]): Patch[] {
 	})
 }
 
-// what makes the crow under test (a mutant, to see the checks catch it)
 let make: () => Crow = createCrow
 export const use = (f: () => Crow) => void (make = f)
 
@@ -189,7 +179,6 @@ function hand(s: State, thing: unknown, what: string, loop = false) {
 	s.handed.push({ thing, was: show(thing), what, loop })
 }
 
-// one step done to s, checked; a failure or undefined
 export function step(s: State, st: Step, i: number, o: Options = {}): Failure | undefined {
 	const no = (property: string, why: string): Failure => ({ at: i, property, why })
 	s.steps.push(st)
@@ -202,7 +191,6 @@ export function step(s: State, st: Step, i: number, o: Options = {}): Failure | 
 		let k: unknown = v
 		if (st.wrap === 1) k = [v]
 		else if (st.wrap === 2) {
-			// a run made a map holding it twice, and itself
 			const m: Record<string, unknown> = { x: v, y: [v, at(s.e.value, st.handed[0] ?? [])] }
 			m.self = m
 			k = m
@@ -222,7 +210,6 @@ export function step(s: State, st: Step, i: number, o: Options = {}): Failure | 
 			ps = undo as Patch[]
 			s.last = undefined
 		} else {
-			// a plain put again where the last write put, nothing read since: no copy
 			if (s.last === undefined) return
 			ps = [{ path: s.last.path, value: st.value }]
 		}
@@ -318,7 +305,6 @@ function write(
 		}
 	}
 	const p = ps.length === 1 ? ps[0] : undefined
-	// again only where the walk is through maps and lists
 	const through = p && p.path.length > 0 && !p.move && !p.range &&
 		p.path.slice(0, -1).every((_, j) => {
 			const c = at(s.e.value, p.path.slice(0, j + 1))
@@ -328,12 +314,10 @@ function write(
 	s.last = through ? p : undefined
 }
 
-// a whole run of steps from a start; the first failure (known ones passed by), or undefined
 export function run(value: unknown, steps: Step[], o: Options = {}): Failure | undefined {
 	const s = start(value)
 	for (const [i, st] of steps.entries()) {
 		const f = step(s, st, i, o)
-		// a known one: what was handed checked, then the oracle takes the value from there
 		if (f && o.known?.(f, s)) {
 			const c = check(s, i)
 			if (c) return c
@@ -345,7 +329,6 @@ export function run(value: unknown, steps: Step[], o: Options = {}): Failure | u
 	return check(s, steps.length)
 }
 
-// fewest steps that still fail with the same property, then fewest patches in each write
 export function shrink(value: unknown, steps: Step[], f: Failure, o: Options = {}): Step[] {
 	const fails = (ss: Step[]) => run(value, ss, o)?.property === f.property
 	let cur = steps.slice(0, f.at + 1)
@@ -362,7 +345,6 @@ export function shrink(value: unknown, steps: Step[], f: Failure, o: Options = {
 			const st = cur[j] as Extract<Step, { k: "write" }>
 			if (q >= st.ps.length || st.ps.length < 2) break
 			const ps = st.ps.filter((_, x) => x !== q)
-			// a later value naming an earlier patch's: renumbered, or content
 			const t = [
 				...cur.slice(0, j),
 				{ k: "write" as const, ps: renumber(ps, q) },
@@ -383,7 +365,6 @@ function renumber(ps: Spec[], gone: number): Spec[] {
 	})
 }
 
-// a run made step by step: next gives the next step from the state; fails, shrunk
 export function fuzz(
 	value: unknown,
 	n: number,
@@ -413,7 +394,6 @@ export function fuzz(
 	}
 }
 
-// a step as JSON, for a report
 export function says(st: Step): string {
 	return JSON.stringify(
 		st,

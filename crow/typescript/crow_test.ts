@@ -1,5 +1,5 @@
-// crow: in place while crow, copied after a read; what a reader holds, a patch's value, and
-// what an undo holds never change
+// Crow writes in place while it owns the value and copies after a read. What a reader holds, a
+// patch's value, and what an undo holds never change.
 import { assert, assertEquals, assertThrows } from "@std/assert"
 import type { ApplyError } from "@ermine/changeable/apply"
 import { createCrow } from "./crow.ts"
@@ -37,7 +37,7 @@ Deno.test("crow: a read lets go; what the reader holds never changes", () => {
 	assert(e.value !== held && doc(e).a !== a)
 	assertEquals(held, { a: { x: 1 }, b: [1, 2] })
 	assertEquals(e.value, { a: { x: 2 }, b: [2] })
-	// owned again from here
+	// Owned again from here.
 	const root = e.value
 	write(u, e, [{ path: ["a", "x"], value: 3 }])
 	assert(e.value === root)
@@ -60,7 +60,7 @@ Deno.test("crow: a patch's value is never changed", () => {
 Deno.test("crow: what a write takes out is held by its undo, and never changed after", () => {
 	const u = createCrow()
 	const e = createRoot({ a: { x: 0 }, list: [{ n: 0 }, { n: 1 }] })
-	// a and the list's elements owned
+	// a and the list's elements are owned.
 	write(u, e, [{ path: ["a", "x"], value: 1 }, { path: ["list", 0, "n"], value: 5 }])
 	write(u, e, [{ path: ["a"], value: { x: 9 } }, {
 		path: ["list"],
@@ -69,7 +69,7 @@ Deno.test("crow: what a write takes out is held by its undo, and never changed a
 	}])
 	const undo = e.undo!
 	const snapshot = structuredClone(undo)
-	// the undo put back (its values go in as given), then written under
+	// The undo is put back (its values go in as given), then written under.
 	write(u, e, undo)
 	assertEquals(e.value, { a: { x: 1 }, list: [{ n: 5 }, { n: 1 }] })
 	write(u, e, [{ path: ["a", "x"], value: 2 }, { path: ["list", 0, "n"], value: 6 }])
@@ -99,7 +99,7 @@ Deno.test("crow: kept stops at what was handed: what is owned under it let go, t
 		[{ path: ["big", "a", "x"], value: 1 }, { path: ["other", "z"], value: 1 }],
 	)
 	const root = e.value, big = doc(e).big as Doc, other = doc(e).other
-	// a list the run made, holding what it was handed
+	// A list the run made, holding what it was handed.
 	u.letGoIn([big], new Set([big]))
 	write(
 		u,

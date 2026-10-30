@@ -1,8 +1,7 @@
-// crow at random, a few dozen seeds each, on random values (maps, lists, strings, typed arrays,
-// bytes) and patches (random_harness.ts):
-// - one root against its twin under update: the same values, undos and throws; nothing
-//   read, kept, put or held by an undo ever changes; and two writes with no read between change
-//   the root in place (the first owns it)
+// Runs crow at random, a few dozen seeds, on random values and patches (random_harness.ts). One
+// root is compared with its twin under update: the same values, undos and throws. Nothing read,
+// kept, put or held by an undo ever changes, and two writes with no read between change the root
+// in place.
 import { assert, assertEquals, assertStrictEquals } from "@std/assert"
 import type { ChangeHeader } from "@ermine/changeable"
 import update from "@ermine/changeable/update"
@@ -13,7 +12,6 @@ import { createCrow } from "./crow.ts"
 import { createRoot, write as writeRoot } from "./root_harness.ts"
 
 const h = (): ChangeHeader => ({ time: 1, actor: "test", frame: { info: {}, parent: undefined } })
-// a root with names, so most paths are into something
 const start = (p: (n: number) => number) => {
 	const v = made(p, 3)
 	return isMap(v) ? v : { a: v, b: made(p, 2), c: made(p, 2) }
@@ -26,10 +24,8 @@ Deno.test("crow: as node's update, nothing held ever changes, and in place when 
 		const v = start(p)
 		const e = createRoot(structuredClone(v))
 		const twin = { value: structuredClone(v) as unknown, change: h() }
-		// what is held (read, kept, put, held by an undo) and what it was then
 		const held: [unknown, unknown, string][] = []
 		const hold = (x: unknown, what: string) => held.push([x, structuredClone(x), what])
-		// the root after the last write that owned it, while nothing has held it since
 		let owned: unknown
 		const write = (ps: Patch[], where: string) => {
 			for (const x of ps) if ("value" in x) hold(x.value, `${where}, a value put`)
@@ -58,13 +54,12 @@ Deno.test("crow: as node's update, nothing held ever changes, and in place when 
 			assertEquals(e.value, twin.value, where)
 			assertEquals(e.undo, twin.change.op?.undo, `${where}, undo`)
 			for (const x of e.undo!) if ("value" in x) hold(x.value, `${where}, an undo's`)
-			// below the root everywhere: the root a write before owned is changed in place
 			const below = ps.every((x) => x.path.length > 0 && (!x.move || x.move.path.length > 0))
 			if (below && owned !== undefined) {
 				assertStrictEquals(e.value, owned, `${where}: crow, so in place`)
 			}
-			// a write owns the root when it copied it, or it was owned: one that changed nothing (a
-			// move onto itself) leaves a read root unowned
+			// A write owns the root when it copied it or it was already owned. One that changed
+			// nothing (a move onto itself) leaves a read root unowned.
 			owned = below && (e.value !== root || owned === root) ? e.value : undefined
 		}
 		for (let step = 0; step < 80; step++) {
@@ -85,9 +80,9 @@ Deno.test("crow: as node's update, nothing held ever changes, and in place when 
 				const undo = e.undo
 				if (undo) write([...undo], `${where} (unwrite)`)
 			} else if (k < 34) {
-				// a put of a container the entry itself made and owns, alone or in a list: the
-				// caller's from now (held, and the patch lets go of what is owned in it), so the
-				// writes after never change it, though they reach the same spot through the tree
+				// Put a container the entry itself made and owns, alone or in a list. It is the
+				// caller's from now on, so later writes never change it, though they reach the same
+				// spot through the tree.
 				const ps = paths(e.value)
 				const from = ps[1 + p(ps.length - 1)] ?? []
 				const x = at(e.value, from)
@@ -95,7 +90,6 @@ Deno.test("crow: as node's update, nothing held ever changes, and in place when 
 				if (from.length && typeof x === "object" && x !== null && into.length) {
 					const value = p(2) ? x : [x]
 					write([{ path: into[p(into.length)], value }], `${where} (put an owned)`)
-					// and a write right under what was put, in place if it were still owned
 					const under = paths(x)
 					write([{ path: [...from, ...under[p(under.length)]], value: made(p, 1) }], where)
 				}

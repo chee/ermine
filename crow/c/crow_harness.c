@@ -1,6 +1,6 @@
-// the C crow (crow.h) on the line protocol of typescript/crow_harness.ts, which documents
-// it (conformance/c/harness.h has the loop). one root and its crow last for the process, and
-// what was held and marked: each kept alive (op_ref) and compared by pointer
+// The C crow (crow.h) on the line protocol of typescript/crow_harness.ts, which documents it.
+// One root and its crow last for the process, and what was held and marked is kept alive
+// (op_ref) and compared by pointer.
 #define _POSIX_C_SOURCE 200809L // strdup
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,13 +10,12 @@
 #include "crow.h"
 
 static cr_crow *crow;
-// the root crow writes through (any pointer: its address), what it holds, and the undo of the last
-// write that landed
+// The root crow writes through (any pointer: its address), what it holds, and the undo of the
+// last write that landed.
 static char root;
 static op_value *root_value;
 static op_undo last_undo;
 static int has_undo;
-// a name and what it stands for (NULL: nothing)
 typedef struct {
 	char *name;
 	op_value *value;
@@ -69,7 +68,6 @@ void hh_finish(void) {
 	crow = NULL;
 }
 
-// what is at a path of keys, NULL when nothing
 static const op_value *at(const op_value *v, const op_value *path) {
 	for (size_t i = 0; path != NULL && i < path->count; i++) {
 		const op_value *k = path->items[i];
@@ -85,7 +83,6 @@ static const op_value *at(const op_value *v, const op_value *path) {
 	return v;
 }
 
-// as === has it: a number, string, boolean or null by content, any other value by identity
 static int same(const op_value *a, const op_value *b) {
 	if (a == b) return 1;
 	if (a == NULL || b == NULL || a->type != b->type) return 0;
@@ -108,8 +105,8 @@ static void put_value(FILE *out, const op_value *v) {
 	putc('}', out);
 }
 
-// crow's update of the patches: the undo, or the error and the patch. a landed write's undo is
-// the root's from then (the last one's let go of)
+// Crow's update of the patches: the undo, or the error and the patch. A landed write's undo
+// becomes the root's, and the last one's is let go of.
 static void write(FILE *out, const op_patch *patches, size_t n, const char *hold) {
 	if (hold != NULL) {
 		op_value *list = op_list();
@@ -156,7 +153,6 @@ void hh_answer(const op_value *r, FILE *out) {
 		size_t n = list->count;
 		op_patch *patches = hh_take((n + 1) * sizeof *patches);
 		for (size_t i = 0; i < n; i++) hh_patch(list->items[i], &patches[i]);
-		// marked: patch i given what was marked under marked[i] (nothing: a removal)
 		const op_value *names = op_get(r, "marked");
 		for (size_t i = 0; names != NULL && names->type == OP_LIST && i < n && i < names->count; i++) {
 			if (names->items[i]->type != OP_STR) continue;
@@ -170,7 +166,6 @@ void hh_answer(const op_value *r, FILE *out) {
 			fputs("{\"error\":\"nothing-written\"}", out);
 			return;
 		}
-		// the undo is written while this holds it; a write that lands makes its own
 		op_undo undo = last_undo;
 		last_undo = (op_undo){0}, has_undo = 0;
 		write(out, undo.patches, undo.n, hold);
@@ -187,7 +182,6 @@ void hh_answer(const op_value *r, FILE *out) {
 		int handed = hd != NULL && hd->type == OP_BOOL && hd->bool_;
 		const op_value *wrap = op_get(r, "wrap");
 		if (wrap != NULL && wrap->type == OP_BOOL && wrap->bool_) {
-			// nothing there, in a list: null, as the line has it
 			op_value *list = op_list();
 			op_push(list, k != NULL ? k : op_null());
 			k = list;
