@@ -1,12 +1,10 @@
-// the transform: rewrites by binding, refusals, nested arguments, aliasing, default and namespace
-// imports, where the import goes, and that evaluation runs in the order it did
+// Tests for the transform: rewriting, refusals, and where the import goes.
 import { assert, assertEquals, assertThrows } from "@std/assert"
 import { parse } from "@babel/parser"
 import { Refused, transform } from "./transform.ts"
 
 const T = (code: string, id = "/src/p.ts", options = {}) =>
 	transform(code, id, { module: "ermine:site/0", ...options })
-// the body only, the import written ahead of it cut
 const body = (code: string) => T(code)!.code.replace(/^import \{[^}]*\} from "ermine:site\/0";/, "")
 
 Deno.test("transform: a named import's calls, aliased too, each its own site; nested arguments too", () => {
@@ -35,7 +33,6 @@ sys.patch(1); sys["ensureNode"](2); def.read(3); sys[k](4)
 		`__ermine$at(__ermine$s0, sys.patch)(1); __ermine$at(__ermine$s1, sys["ensureNode"])(2); ` +
 			`__ermine$at(__ermine$s2, def.read)(3); sys[k](4)`,
 	)
-	// as V8 places them: at the member; a computed one just after it
 	assertEquals(out.sites, [{ line: 3, column: 5 }, { line: 3, column: 32 }, {
 		line: 3,
 		column: 41,
@@ -95,7 +92,6 @@ export const V = () => <div>{read("/x")}</div>
 })
 
 Deno.test("transform: the import goes after a #! line and directives, on their line; lines stay", () => {
-	// it parses as a module, its directive still one, the import first in the body, lines where they were
 	const parses = (code: string, directives: number) => {
 		const ast = parse(code, { sourceType: "module" }).program
 		assertEquals(ast.directives.length, directives)
@@ -116,11 +112,9 @@ patch(1)
 	assertEquals(out.sites, [{ line: 4, column: 1 }])
 	assert(out.map.mappings.length > 0)
 	parses(out.code, 1)
-	// a directive with its semicolon: none added
 	const semi = T(`"use strict";\nimport { patch } from "@ermine/system"\npatch(1)\n`, "/src/q.js")!
 	assert(semi.code.startsWith(`"use strict";import {`))
 	parses(semi.code, 1)
-	// a #! line alone: the import on the next line, never inside the #! line
 	const bang = T(
 		`#!/usr/bin/env node\nimport { patch } from "@ermine/system"\npatch(1)\n`,
 		"/src/r.js",
@@ -146,7 +140,6 @@ Deno.test("transform: a source naming the site module, its entry, a file of it o
 		`f(__ermine$at)`,
 	]
 	for (const src of refused) assertThrows(() => T(src), Refused, "only @ermine/bundling writes it")
-	// by path, a file of it
 	assertThrows(
 		() =>
 			T(`import { site } from "../system/site.ts"`, "/repo/src/p.ts", {
@@ -156,13 +149,11 @@ Deno.test("transform: a source naming the site module, its entry, a file of it o
 		Refused,
 		"/repo/src/p.ts:1:22",
 	)
-	// sites: false checks still, rewrites nothing
 	assertThrows(() => T(`import "ermine:site"`, "/p.ts", { sites: false }), Refused)
 	assertEquals(
 		T(`import { patch } from "@ermine/system"\npatch(1)`, "/p.ts", { sites: false }),
 		undefined,
 	)
-	// a mention in a string or comment is not a name
 	assertEquals(T(`// ermine:site\nconst s = "__ermine$at"`), undefined)
 })
 
@@ -211,7 +202,6 @@ Deno.test("transform: a specifier to a guarded file is refused with or without i
 })
 
 Deno.test("transform: lines count \\r\\n, \\r and U+2028 as the engine does", () => {
-	// V8 counts \n, \r, \r\n, U+2028 and U+2029 as line ends
 	for (const eol of ["\n", "\r\n", "\r", " ", " "]) {
 		const out = T(`import { patch } from "@ermine/system"${eol}${eol}patch(1)`)!
 		assertEquals(out.sites, [{ line: 3, column: 1 }], JSON.stringify(eol))
