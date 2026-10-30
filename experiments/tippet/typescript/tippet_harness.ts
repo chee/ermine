@@ -11,7 +11,8 @@
 //   unpack  { pack, before? } -> { steps } | { refused: true }
 //   message { message } -> { bytes }     a run is ["run", device, sig, steps]
 //   read    { bytes } -> { message } | { refused: true }
-//   device  { name, seed } -> { key }    a log that writes, with its graph and sync
+//   device  { name, seed, rebase? } -> { key }    a log that writes, with its graph and sync;
+//                                        rebase: history's (how many steps an entry can undo)
 //   relay   { name } -> {}               no key, no graph
 //   write   { device, node, part?, patches, when?, who? } -> { n, lamport }
 //   disk    { name, seed, log? } -> { key }    a log on the file store, no graph; log: initial hex
@@ -116,7 +117,7 @@ function made(log: Log, relay: boolean, signer?: Signer): Device {
 	return d
 }
 
-async function createDevice(seed: Uint8Array): Promise<Device> {
+async function createDevice(seed: Uint8Array, rebase?: number): Promise<Device> {
 	const s = createScheduler()
 	const table = createTable((part, id) => places.onTableChange(part as Key, id))
 	const places = createPlaces({
@@ -130,7 +131,7 @@ async function createDevice(seed: Uint8Array): Promise<Device> {
 	const scope = s.createRootScope({ actor: "harness" })
 	const run = <T>(f: () => T) => s.runWithScope(scope, f)
 	const log = createLog({ writes: true, seed })
-	const history = createHistory({ log, table, places, run })
+	const history = createHistory({ log, table, places, run, rebase })
 	await history.load()
 	const d = made(log, false, await createSigner(seed))
 	d.graph = {
@@ -371,7 +372,7 @@ async function one(r: Request): Promise<Answer> {
 
 		case "device": {
 			if (devices.has(r.name)) throw new Error(`${r.name} is made`)
-			const d = await createDevice(unhex(r.seed))
+			const d = await createDevice(unhex(r.seed), r.rebase)
 			devices.set(r.name, d)
 			return { key: d.log.device! }
 		}
