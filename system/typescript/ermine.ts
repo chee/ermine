@@ -50,7 +50,8 @@
 // (features also get processes, FeatureAPI). features: each one's name, needs and hooks, in chain order. records: run(id) a
 // computer's latest run, call(id) a handler's latest send, waits() every send waiting; tracked.
 import type { ChangeHeader } from "@ermine/graph/entry"
-import { children, createPlaces, type Id, type Path, type Places } from "@ermine/places"
+import { children, createPlaces, crow, type Id, type Path, type Places } from "@ermine/places"
+import { crowify } from "@ermine/places/crowify"
 import { place } from "./system/names.ts"
 import { getStatus } from "./system/status.ts"
 import { enterScheduler, leaveScheduler, registerScheduler, registerScope } from "./registry.ts"
@@ -342,6 +343,9 @@ export function createErmine(options: Options = {}): Ermine {
 		contributors: [rows(root), children],
 	})
 	const offRelease = s.onTrackingEnd((key) => places!.release(key))
+	// each run a loan of what it reads: crow lets go of what outlives it (its result, what it holds
+	// across a wait), so a later write copies that, never changes it in place (as C's host does)
+	const offCrow = crowify(s, crow)
 	const p = places
 
 	// 5. the root node and the host's node, written as the host
@@ -910,6 +914,7 @@ export function createErmine(options: Options = {}): Ermine {
 			step(() => calls.stop())
 			step(offSettle)
 			step(offRelease)
+			step(offCrow)
 			for (const off of [...listening]) step(off)
 			step(unregister)
 			closed = true
