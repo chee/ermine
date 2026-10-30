@@ -80,6 +80,10 @@ export function createHistory(o: {
 	const run = o.run ?? (<T>(f: () => T) => f())
 	const entries = new Map<string, Ref[]>()
 	const heads = new Map<string, Ref[]>()
+	// per entry, made when first asked (named): for each step named in an on, the newest step naming
+	// it; and the newest old step, which names every step before it. so a late step is looked up,
+	// never every later step read again
+	const namers = new Map<string, { by: Map<string, Ref>; old?: Ref }>()
 	const failed: Failed[] = []
 	const unkept: Omit<Failed, "device" | "n">[] = []
 	let landing = false
@@ -105,7 +109,15 @@ export function createHistory(o: {
 		let i = refs.length
 		while (i > 0 && before(ref, refs[i - 1])) i--
 		refs.splice(i, 0, ref)
+		const n = namers.get(k)
+		if (n) noted(n, s, ref)
 		return i === refs.length - 1
+	}
+
+	const newer = (a: Ref | undefined, b: Ref) => !a || before(a, b) ? b : a
+	function noted(n: { by: Map<string, Ref>; old?: Ref }, s: Step, r: Ref) {
+		if (!s.on) return void (n.old = newer(n.old, r))
+		for (const o of s.on) n.by.set(`${o.device} ${o.n}`, newer(n.by.get(`${o.device} ${o.n}`), r))
 	}
 
 	function head(s: Step, last: boolean) {
@@ -115,15 +127,21 @@ export function createHistory(o: {
 		if (last || !named(k, ref)) hs.push(ref)
 		heads.set(k, hs.sort((a, b) => before(a, b) ? 1 : -1))
 	}
+	// a step of the entry's after ref names it (one not held passed over)
 	function named(k: string, ref: Ref) {
-		for (const r of entries.get(k) ?? []) {
-			if (!before(ref, r)) continue
-			try {
-				if (covers(decodeStep(log.step(r[1], r[2])), ref)) return true
-			} catch {
+		let n = namers.get(k)
+		if (!n) {
+			namers.set(k, n = { by: new Map() })
+			for (const r of entries.get(k) ?? []) {
+				try {
+					noted(n, decodeStep(log.step(r[1], r[2])), r)
+				} catch {
+					// not held
+				}
 			}
 		}
-		return false
+		const by = n.by.get(`${ref[1]} ${ref[2]}`)
+		return (by !== undefined && before(ref, by)) || (n.old !== undefined && before(ref, n.old))
 	}
 
 	function versions(node: string, part: string): Version[] {
@@ -229,21 +247,27 @@ export function createHistory(o: {
 		}
 	}
 
+	// entries a step landed early in, to be worked out again once the log is quiet: once for a
+	// whole catch-up, however many runs it comes in. a step going last in one waits with it
+	const pending = new Map<string, Step>()
 	function land(steps: Step[]) {
-		const redos = new Map<string, Step>()
 		for (const s of steps) {
 			const k = name(s.part, s.node)
 			try {
 				const last = place(s)
 				if (o.forgets && !last) continue
 				head(s, last)
-				if (!last || redos.has(k)) redos.set(k, s)
+				if (!last || pending.has(k)) pending.set(k, s)
 				else write(s, s.patches)
 			} catch (e) {
 				fail(s, e)
 			}
 		}
-		for (const s of redos.values()) {
+	}
+	function flush() {
+		const all = [...pending.values()]
+		pending.clear()
+		for (const s of all) {
 			try {
 				redo(s)
 			} catch (e) {
@@ -295,6 +319,7 @@ export function createHistory(o: {
 	const unlisten = log.on((device, steps) => {
 		if (device !== log.device) land(steps)
 	})
+	const unquiet = log.onQuiet(flush)
 
 	return {
 		failed: failed as readonly Failed[],
@@ -330,7 +355,7 @@ export function createHistory(o: {
 				count = snap.count
 				quietly(() => {
 					for (const [part, node, v, refs, hs] of snap.entries) {
-						entries.set(name(part, node), refs)
+						entries.set(name(part, node), refs), namers.delete(name(part, node))
 						const hd = hs ? hs.map((i) => refs[i]) : refs.slice(-1)
 						heads.set(name(part, node), hd.filter((r) => r !== undefined))
 						if (v === null) continue
@@ -353,11 +378,13 @@ export function createHistory(o: {
 				}
 			}
 			land(steps)
+			flush()
 		},
 
 		stop() {
 			unwatch()
 			unlisten()
+			unquiet()
 		},
 	}
 }

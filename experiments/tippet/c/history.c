@@ -17,14 +17,21 @@ typedef struct {
 
 // A kept entry, keyed by part and node. broken: a write here was not kept. unsure: the list of
 // failed
-// steps may be incomplete, so the next walk goes back to the first step.
+// steps may be incomplete, so the next walk goes back to the first step. waits: a step landed early
+// in it, and it is worked out again once the run landing is all in (settle).
 typedef struct {
 	char *key;
 	size_t size;
 	ref one, *more;
 	uint32_t count;
-	uint8_t broken, unsure;
+	uint8_t broken, unsure, waits;
 } entry;
+
+// a step that landed early in entry k
+typedef struct {
+	long k;
+	ref at;
+} early;
 
 static ref *at(entry *e, size_t i) { return i ? &e->more[i - 1] : &e->one; }
 
@@ -59,6 +66,7 @@ struct tp_history {
 	failures failed, unkept;
 	int landing;
 	tp_buf bytes;
+	tp_buf early; // early steps of the run landing, in order
 };
 
 
@@ -388,7 +396,7 @@ static long entry_of(tp_history *h, const char *part, const char *node) {
 	entry *es = grown(h, h->entries, &h->roomentries, h->nentries, sizeof *es);
 	if (!es) return tp_free(&h->mem, key, size), -1;
 	h->entries = es;
-	es[h->nentries] = (entry){key, size, {0}, NULL, 0, 0, 0};
+	es[h->nentries] = (entry){key, size, {0}, NULL, 0, 0, 0, 0};
 	h->slots[s] = ++h->nentries;
 	if (2 * h->nentries > h->nslots) {
 		size_t n = 2 * h->nslots, *slots = tp_alloc(&h->mem, n * sizeof *slots);
@@ -606,25 +614,38 @@ static int write(tp_history *h, block *b) {
 	return w.code;
 }
 
-static int redo(tp_history *h, long k, block *last, const ref *late) {
+// The entry worked out again, for its early steps (lates, n of them; last: the earliest's block):
+// walked back to before the earliest, each early step a head no more if a step after it names it
+// (each step after the earliest read once, for all of them), then applied in order.
+static int redo(tp_history *h, long k, block *last, const ref *lates, size_t nlates) {
+	const ref *late = lates;
+	for (size_t j = 1; j < nlates; j++) {
+		if (after(h, late, &lates[j])) late = &lates[j];
+	}
 	tp_buf list = {NULL, 0, 0, (size_t)-1, &h->mem, 0};
 	size_t count;
-	if (walked(h, k, late, &list, &count)) {
-		tp_buf_free(&list), block_free(last);
+	uint8_t *done = tp_alloc(&h->mem, nlates);
+	if (!done || walked(h, k, late, &list, &count)) {
+		tp_free(&h->mem, done, nlates), tp_buf_free(&list), block_free(last);
 		h->entries[k].unsure = 1;
 		return TP_NOMEM;
 	}
+	memset(done, 0, nlates);
 	op_value *value = NULL;
 	int twice = 0;
-	for (size_t i = 0; i < count && !h->forgets; i++) {
+	size_t left = nlates;
+	for (size_t i = 0; i < count && left && !h->forgets; i++) {
 		const ref *r = &((const ref *)list.p)[i];
 		tp_step s;
 		long length = after(h, r, late) ? fetch(h, h->devices[r->device], r->n) : -1;
-		if (length >= 0 && !tp_step_decode(h->bytes.p, (size_t)length, &s) && covers(h, &s, r, late)) {
-			named(&h->entries[k], late);
-			break;
+		if (length < 0 || tp_step_decode(h->bytes.p, (size_t)length, &s)) continue;
+		for (size_t j = 0; j < nlates; j++) {
+			if (!done[j] && after(h, r, &lates[j]) && covers(h, &s, r, &lates[j])) {
+				named(&h->entries[k], &lates[j]), done[j] = 1, left--;
+			}
 		}
 	}
+	tp_free(&h->mem, done, nlates);
 	for (size_t i = 0; i < count; i++) {
 		ref r = ((const ref *)list.p)[i];
 		const uint8_t *device = h->devices[r.device];
@@ -653,6 +674,46 @@ static int redo(tp_history *h, long k, block *last, const ref *late) {
 	return code;
 }
 
+// a step landed early in entry k: its entry waits to be worked out again once (settle). no room to
+// note it: worked out now
+static int later(tp_history *h, long k, block *b, const ref *late) {
+	early e = {k, *late};
+	tp_put(&h->early, &e, sizeof e);
+	if (h->early.bad) return h->early.bad = 0, redo(h, k, b, late, 1);
+	block_free(b);
+	h->entries[k].waits = 1;
+	return 0;
+}
+
+// each entry steps landed early in, worked out again once, for all of them
+static void settle(tp_history *h) {
+	size_t n = h->early.len / sizeof(early);
+	ref *lates = n ? tp_alloc(&h->mem, n * sizeof *lates) : NULL;
+	for (size_t i = 0; i < n; i++) {
+		const early *es = (const early *)h->early.p;
+		long k = es[i].k;
+		if (!h->entries[k].waits) continue;
+		h->entries[k].waits = 0;
+		// its early steps (no room for the list: the earliest alone), and the earliest
+		size_t m = 0;
+		ref first = es[i].at;
+		for (size_t j = i; j < n; j++) {
+			if (es[j].k != k) continue;
+			if (lates) lates[m++] = es[j].at;
+			if (after(h, &first, &es[j].at)) first = es[j].at;
+		}
+		const uint8_t *device = h->devices[first.device];
+		block *b = read_back(h, device, first.n);
+		int code = !b ? TP_STORE : redo(h, k, b, lates ? lates : &first, lates ? m : 1);
+		if (code) {
+			const char *part = h->entries[k].key, *node = part + strlen(part) + 1;
+			note(h, &h->failed, device, first.n, node, part, code < 0 ? tp_why(code) : op_code_name(code));
+		}
+	}
+	tp_free(&h->mem, lates, n * sizeof *lates);
+	h->early.len = 0;
+}
+
 static void land(tp_history *h, const uint8_t device[32], uint64_t n) {
 	long length = fetch(h, device, n);
 	block *b = length < 0 ? NULL : block_of(h->bytes.p, (size_t)length);
@@ -668,10 +729,11 @@ static void land(tp_history *h, const uint8_t device[32], uint64_t n) {
 	if (last >= 0) late.device = (uint32_t)device_of(h, device);
 	if (last >= 0 && !h->forgets) unhead(h, &h->entries[k], &st, &late);
 	op_value *s = op_ref(b->step);
-	int code = last < 0 ? (block_free(b), TP_NOMEM)
-		: last         ? write(h, b)
-		: h->forgets   ? (block_free(b), 0)
-			       : redo(h, k, b, &late);
+	int code = last < 0                ? (block_free(b), TP_NOMEM)
+		: !last && !h->forgets       ? later(h, k, b, &late)
+		: h->entries[k].waits        ? (block_free(b), 0)
+		: last                       ? write(h, b)
+					     : (block_free(b), 0);
 	if (code) {
 		note(h, &h->failed, device, n, s->items[3]->str, s->items[4]->str,
 			code < 0 ? tp_why(code) : op_code_name(code));
@@ -684,6 +746,7 @@ void tp_history_told(void *ctx, const uint8_t device[32], uint64_t from, size_t 
 	const uint8_t *me = tp_log_device(h->log);
 	if (me && !memcmp(me, device, 32)) return;
 	for (size_t i = 0; i < count; i++) land(h, device, from + i);
+	settle(h);
 }
 
 
@@ -864,6 +927,7 @@ int tp_history_load(tp_history *h) {
 		uint64_t from = count.p ? count_of(count, device) : 0, held = tp_log_count(h->log, device);
 		for (uint64_t n = from + 1; n <= held; n++) land(h, device, n);
 	}
+	settle(h);
 	tp_buf_free(&u.names);
 	tp_free(&h->mem, bytes, length > 0 ? (size_t)length : 0);
 	return u.why;
@@ -935,7 +999,7 @@ static void recorded(const pl_fact *f, void *ctx) {
 		x->head = x->device == late.device && x->n == n;
 	}
 	block *b = last ? NULL : read_back(h, me, n);
-	int code = last < 0 ? TP_NOMEM : b ? redo(h, k, b, &late) : last ? 0 : TP_STORE;
+	int code = last < 0 ? TP_NOMEM : b ? redo(h, k, b, &late, 1) : last ? 0 : TP_STORE;
 	if (code) note(h, &h->failed, me, n, node, part, code < 0 ? tp_why(code) : op_code_name(code));
 }
 
@@ -947,6 +1011,7 @@ tp_history *tp_history_new(const tp_history_options *o) {
 	h->mem = o->mem, h->log = o->log, h->table = o->table, h->places = o->places;
 	h->kept = o->kept, h->run = o->run, h->ctx = o->ctx, h->forgets = o->forgets;
 	h->bytes = (tp_buf){NULL, 0, 0, 1 << 20, &h->mem, 0};
+	h->early = (tp_buf){NULL, 0, 0, (size_t)-1, &h->mem, 0};
 	h->nslots = 16;
 	if (!(h->slots = tp_alloc(&h->mem, h->nslots * sizeof *h->slots))) {
 		return tp_free(&o->mem, h, sizeof *h), NULL;
@@ -973,6 +1038,7 @@ void tp_history_free(tp_history *h) {
 	tp_free(&h->mem, h->devices, h->roomdevices * 32);
 	release(h, &h->failed), release(h, &h->unkept);
 	tp_buf_free(&h->bytes);
+	tp_buf_free(&h->early);
 	tp_mem mem = h->mem;
 	tp_free(&mem, h, sizeof *h);
 }
