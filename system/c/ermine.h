@@ -1283,8 +1283,7 @@ int es_cleanup(es_context *c, es_teardown fn, void *ctx);
 // ES_GONE. what it runs is the owner's: it asks as it, makes what it makes the owner's, and its writes
 // carry the mark es_create_writer was called under (an action's call: call, handler, caller). while the host says a person just interacted
 // (options.user_activated) they say so
-int es_create_writer_at(es_context *c, op_value **writer, const ch_location *site);
-#define es_create_writer(...) es_create_writer_at(__VA_ARGS__, CH_HERE)
+int es_create_writer(es_context *c, op_value **writer);
 // f as the writer's owner, with nothing open, each write at the writer's site. ES_ALREADY_INSIDE with a scope or
 // run open; ES_GONE after the owner ended; f's code
 int es_with_writer(es_ermine *e, const op_value *writer, es_thunk f, void *ctx);
