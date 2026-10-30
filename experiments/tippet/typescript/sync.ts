@@ -83,9 +83,16 @@ export function wire(m: Message): Uint8Array {
 	return encode(a as Value)
 }
 
-export type Sync = ReturnType<typeof createSync>
+export type Sync = {
+	link(link: Link): () => void
+	readonly links: number
+	onLinks(f: () => void): () => void
+	live(data: Uint8Array): void
+	onLive(f: (data: Uint8Array) => void): () => void
+	passed(): Record<string, number>
+}
 
-export function createSync(o: { log: Log; relay?: boolean }) {
+export function createSync(o: { log: Log; relay?: boolean }): Sync {
 	const { log } = o
 	const links = new Set<Linked>()
 	const lives: ((data: Uint8Array) => void)[] = []

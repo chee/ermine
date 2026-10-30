@@ -221,11 +221,32 @@ export type Taken = { added: number } | { refused: string }
 // from: the link they came on; none: written here
 type Told = (device: string, steps: Step[], from?: unknown) => void
 
-export type Log = ReturnType<typeof createLog>
+export type Log = {
+	readonly device: string | undefined
+	readonly lamport: number
+	have(): Record<string, number>
+	count: (device: string) => number
+	step: (device: string, n: number) => Uint8Array
+	prior: (device: string, n: number) => Prior | undefined
+	steps: (device: string) => Uint8Array[]
+	on(t: Told): () => void
+	write(s: Omit<Step, "device" | "n" | "before" | "lamport" | "relative">): Step
+	run(device: string, from: number): Promise<Run | undefined>
+	take(b: Run, from?: unknown): Promise<Taken>
+	takePack(
+		m: { device: string; sig: Uint8Array; pack: Packed; message?: Uint8Array },
+		from?: unknown,
+	): Promise<Taken>
+	load(): Promise<Uint8Array | undefined>
+	snapshot: (bytes: Uint8Array) => Promise<unknown>
+	drop(through: Record<string, number>): void
+	saved: () => Promise<unknown>
+	close(): Promise<void>
+}
 
 // writes: this log writes steps of its own, under its store's key; seed: the key a fresh store
 // starts with (a store with another throws at load). neither: it only carries others' (a relay)
-export function createLog(o: { store?: Store; writes?: boolean; seed?: Uint8Array } = {}) {
+export function createLog(o: { store?: Store; writes?: boolean; seed?: Uint8Array } = {}): Log {
 	const store = o.store ?? createMemoryStore()
 	let me: Signer | undefined
 	const feeds = new Map<string, Feed>()

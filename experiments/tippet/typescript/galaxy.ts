@@ -32,7 +32,11 @@ type Room = {
 }
 
 // idle: how long a room with no links stays open (ms); most: how many rooms are open at once
-export function createGalaxy(o: { dir: string; at?: string; idle?: number; most?: number }) {
+export function createGalaxy(o: { dir: string; at?: string; idle?: number; most?: number }): {
+	handler: (req: Request) => Promise<Response>
+	close(): Promise<void>
+	readonly open: number
+} {
 	const at = (o.at ?? "/tippet") + "/"
 	const idle = o.idle ?? 5 * 60_000, most = o.most ?? 1000
 	// rooms open or opening; loaded: those open; closing: those being let go, until their log is

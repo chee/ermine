@@ -173,7 +173,9 @@ async function body(req: Request): Promise<Uint8Array | undefined> {
 }
 
 // the server: one link per link id, made on first contact. undefined: not a send or recv
-export function httpLinks(onLink: (link: Link) => void) {
+export function httpLinks(
+	onLink: (link: Link) => void,
+): ((req: Request) => Promise<Response> | undefined) & { close: () => void } {
 	const held = new Map<string, Held>()
 	// link ids closed here lately, oldest first
 	const gone = new Set<string>()
