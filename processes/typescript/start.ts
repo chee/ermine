@@ -71,6 +71,8 @@ export type Options = {
 	// the location of the call into start, known without a stack (a build's): stands in for the
 	// capture when started from outside the graph
 	build?: Location
+	// the function called from outside, so a capture starts at its caller (capture's cut)
+	cut?: unknown
 }
 
 // body's: what to do at the stop
@@ -96,6 +98,8 @@ export type Setup = {
 	// "proc:<boot>-<n>", boot 16 hex random once per createProcesses, n from 1 (most of it the same
 	// each time, so it packs small)
 	id?: () => Id
+	// the clock a start's or stop's writes take their time from, ms since 1970; none: Date.now
+	now?: () => number
 }
 
 export type Processes = {
@@ -150,7 +154,13 @@ export function createProcesses(setup: Setup): Processes {
 	const { scheduler: s, table, places, scopes } = setup
 	const owner = setup.owner ?? s.createScope({ processes: "start" })
 	const makeId = setup.id ?? processIds()
-	const statuses = createStatus({ places, table, scheduler: s, write: setup.write })
+	const statuses = createStatus({
+		places,
+		table,
+		scheduler: s,
+		write: setup.write,
+		now: setup.now,
+	})
 	const { describe, watchAll } = places
 	const runs = describe && watchAll
 		? createRuns({ places: { describe, watchAll }, table, scheduler: s })
@@ -162,7 +172,7 @@ export function createProcesses(setup: Setup): Processes {
 	const states = new WeakMap<Process, State>()
 
 	// the header of a write made now (places' createChangeHeader)
-	const headerOf = (): ChangeHeader => createChangeHeader(s)
+	const headerOf = (): ChangeHeader => createChangeHeader(s, { now: setup.now })
 
 	// f with the process's scope open; torn down already (its own teardown): open, as it is
 	const within = <T>(p: State, f: () => T): T =>
@@ -179,7 +189,7 @@ export function createProcesses(setup: Setup): Processes {
 		// its writes' headers: made with its scope open, so its frame (and the locations in it, if it
 		// began outside the graph) is theirs
 		const header = headerOf
-		const locations = locationsHere(s, options.build)
+		const locations = locationsHere(s, options.build, options.cut)
 		const scope = s.createScope(
 			{ process: at, node: id, ...locations !== undefined && { locations } },
 			options.under ?? owner,

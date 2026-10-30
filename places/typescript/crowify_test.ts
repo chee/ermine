@@ -24,7 +24,7 @@ Deno.test("crowify: what a run read before an await is let go of as it waits: a 
 	const s = createScheduler()
 	const u = createCrow()
 	const e = createEntry<{ list: Record<string, number> }>({ list: { a: 1 } }, h())
-	// unread owns the root and the list from here
+	// the crow owns the root and the list from here
 	updateEntry(u, e, [{ path: ["list", "b"], value: 2 }], h())
 	const key = {}
 	crowify(s, u, (k) => k === key ? e.value : undefined)

@@ -16,7 +16,7 @@
 // children are written through one crow (pl_crow): a burst of writes to a folder costs one copy.
 // a spot: (source, id); each table part gets one pair, made once, the same address always. spots
 // unread are let go by pl_forget; one read outside a run is never let go.
-// contributors (contributors.org): children (pl_children) plus any given, asked in order per step:
+// contributors: children (pl_children) plus any given, asked in order per step:
 // first answer is pl_get, all are pl_gets, names merged once each (pl_list, pl_members). a
 // contributor reads only through pl_read, pl_read_here, pl_keys, pl_track. caches: pl_record, pl_keep;
 // commit right after update.
@@ -119,6 +119,10 @@ typedef struct {
 	// outside any run, which no run has tracked since, is let go of as a write reaches it (paths.ts:
 	// lazily, a spot a mark gives back with no readers). 0: such a spot is kept, as before
 	int tracking;
+	// the clock a change's time is read from: ms since 1970, as the host gives them (NULL: the time
+	// now, time(NULL)); the time is kept in whole seconds. now_ctx is its first argument
+	int64_t (*now)(void *ctx);
+	void *now_ctx;
 } pl_setup;
 // once: before anything is read or written
 void pl_connect(pl *p, const pl_setup *setup);
@@ -280,8 +284,8 @@ void pl_peep(pl *p, void (*f)(void *ctx), void *ctx);
 // put into the set
 void pl_track(pl *p, const void *key);
 // a keep on one of this places' spots taken (n 1) or given back (n -1): the keeps left. a kept spot
-// is not let go by pl_forget; the keeper calls it once its last keep is given back and no run tracks
-// the spot. Anything else: 0, nothing kept
+// is not let go by pl_forget; whoever took the keeps calls it once the last is given back and no
+// run tracks the spot. Anything else: 0, nothing kept
 size_t pl_keep(pl *p, const void *key, int n);
 
 // the filesystem, every read told ---------------------------------------------------------------

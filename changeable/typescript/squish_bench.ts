@@ -1,5 +1,5 @@
-// deno bench newcore/opstreams/ts/squish_bench.ts
-// the same workloads as squish/c/bench.c: N patches each, made once
+// deno bench changeable/typescript/squish_bench.ts
+// the same workloads as c/squish_bench.c: N patches each, made once
 import { decode, encode, squish } from "./squish.ts"
 import type { Patch } from "@ermine/changeable/apply"
 

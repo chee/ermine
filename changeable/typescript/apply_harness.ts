@@ -81,8 +81,8 @@
 //    a span of the root as the landing of the root's own take: nothing there, no-key
 // A map's key order is not part of its value (apply.ts): answers are compared by content
 //
-// Values (the request's, a patch's, the answer's) in ENCODING.tex's JSON form
-// (conformance/typescript/form.ts). Unlike ENCODING.tex, a string may hold lone surrogates
+// Values (the request's, a patch's, the answer's) in their JSON form
+// (conformance/typescript/form.ts). Unlike an encoded value (cbor.ts), a string may hold lone surrogates
 // (\udxxx): apply counts each as a position. -0 is written -0 and kept as a value. A form that
 // stands for no value (bytes not in base64, an element out of its kind's range, an unknown tag):
 // not understood
@@ -100,7 +100,7 @@ import { line, revive, toJson } from "../../conformance/typescript/form.ts"
 import { type Request, serve } from "../../conformance/typescript/harness.ts"
 
 // the apply to test: @ermine/changeable/apply, or a module given as the first argument (a path from the
-// working directory), such as changeable/typescript/optim/final.ts
+// working directory)
 const { default: apply, ApplyError } =
 	(Deno.args[0] === undefined ? await import("@ermine/changeable/apply") : await import(
 		new URL(Deno.args[0], `file://${Deno.cwd()}/`).href

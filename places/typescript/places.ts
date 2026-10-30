@@ -47,6 +47,8 @@ export type Setup = {
 		& Partial<Pick<Scheduler, "getCurrentFrame">>
 	// what answers each step, in order; none: children alone
 	contributors?: readonly Contributor[]
+	// the clock a removal's change takes its time from, ms since 1970; none: Date.now
+	now?: () => number
 }
 
 // what here gives for a map: that a map is there, not what is in it
@@ -358,7 +360,7 @@ export function createPlaces(setup: Setup): Places {
 			getCurrentFrame: () => scheduler.getCurrentFrame!(),
 			getRun: () => scheduler.getRun(),
 		}
-		return createChangeHeader(s)
+		return createChangeHeader(s, { now: setup.now })
 	}
 
 	// what watchAll was given, in the order given

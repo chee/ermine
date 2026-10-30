@@ -12,7 +12,7 @@ const T = "typescript"
 const sched = `reactivity/${T}/scheduler.ts`
 const fuzzSched = { fuzz: `reactivity/${T}/scheduler_fuzz_test.ts` }
 const fuzzPaths = { fuzz: `reactivity/${T}/paths_fuzz_test.ts` }
-const fuzzUpdate = { fuzz: `graph/${T}/update_fuzz_test.ts` }
+const fuzzUpdate = { fuzz: `changeable/${T}/update_fuzz_test.ts` }
 const fuzzApply = { fuzz: `changeable/${T}/apply_fuzz_test.ts` }
 const fuzzCrow = { fuzz: `crow/${T}/crow_fuzz_test.ts` }
 const fuzzEnd = { fuzz: `places/fuzz/end_to_end_fuzz_test.ts` }
@@ -113,21 +113,21 @@ export const plants: Plant[] = [
 	// node / update
 	{
 		name: "update: the stored undo is empty (dropped undo)",
-		file: `graph/${T}/update.ts`,
+		file: `changeable/${T}/update.ts`,
 		find: "op: { patches: ps, undo }",
 		replace: "op: { patches: ps, undo: [] }",
 		catcher: fuzzUpdate,
 	},
 	{
 		name: "update: copy on write turned off (values held change in place)",
-		file: `graph/${T}/update.ts`,
+		file: `changeable/${T}/update.ts`,
 		find: "{ undo }",
 		replace: "{ undo, cow: false }",
 		catcher: fuzzUpdate,
 	},
 	{
 		name: "update: the change stores all but the first patch",
-		file: `graph/${T}/update.ts`,
+		file: `changeable/${T}/update.ts`,
 		find: "op: { patches: ps, undo }",
 		replace: "op: { patches: ps.slice(1), undo }",
 		catcher: { differ: "update", impls: T },
@@ -143,8 +143,8 @@ export const plants: Plant[] = [
 	{
 		name: "apply: a refused patch in place leaves the value changed",
 		file: `changeable/${T}/apply.ts`,
-		find: "\t\tif (!cow) {\n\t\t\tconst back: Patch[] = []",
-		replace: "\t\tif (false) {\n\t\t\tconst back: Patch[] = []",
+		find: "\t} catch (e) {\n\t\tif (!cow) {",
+		replace: "\t} catch (e) {\n\t\tif (false) {",
 		catcher: fuzzApply,
 	},
 	{
@@ -157,15 +157,15 @@ export const plants: Plant[] = [
 	{
 		name: "squish: a later edit inside the earlier insert may end one short",
 		file: `changeable/${T}/squish.ts`,
-		find: "if (a <= c && d <= a + n) {",
-		replace: "if (a <= c && d < a + n) {",
+		find: "if (a <= c && d <= add(a, n)) {",
+		replace: "if (a <= c && d < add(a, n)) {",
 		catcher: { differ: "squish" },
 	},
 	{
 		name: "squish: a removal reaching the earlier one's start no longer joins",
 		file: `changeable/${T}/squish.ts`,
-		find: "if (c <= a && a <= d) return { path, range: [c, b + (d - a)] }",
-		replace: "if (c <= a && a < d) return { path, range: [c, b + (d - a)] }",
+		find: "if (c <= a && a <= d) return { path, range: [c, add(b, sub(d, a))]",
+		replace: "if (c <= a && a < d) return { path, range: [c, add(b, sub(d, a))]",
 		catcher: { differ: "squish" },
 	},
 	{

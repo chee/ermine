@@ -16,14 +16,18 @@ import type { CallView, ChangeView, Explained, RunView, System, Touched } from "
 
 // public (mod.ts exports them): each runs its implementation below, named with As, as the
 // context it finds (acting.ts' go)
-export const explain: System["explain"] = /* @__PURE__ */ marked((x, key) =>
-	go("explain", false, explainAs, x, key)
+export const explain: System["explain"] = /* @__PURE__ */ marked(function explain(x, key) {
+	return go(explain, "explain", false, explainAs, x, key)
+})
+export const explainAttributes: System["explainAttributes"] = /* @__PURE__ */ marked(
+	function explainAttributes(x) {
+		return go(explainAttributes, "explainAttributes", false, explainAttributesAs, x)
+	},
 )
-export const explainAttributes: System["explainAttributes"] = /* @__PURE__ */ marked((x) =>
-	go("explainAttributes", false, explainAttributesAs, x)
-)
-export const explainChildren: System["explainChildren"] = /* @__PURE__ */ marked((x) =>
-	go("explainChildren", false, explainChildrenAs, x)
+export const explainChildren: System["explainChildren"] = /* @__PURE__ */ marked(
+	function explainChildren(x) {
+		return go(explainChildren, "explainChildren", false, explainChildrenAs, x)
+	},
 )
 
 const explainPart = (inner: Inner, x: Target, part: "value" | "attributes" | "children") =>

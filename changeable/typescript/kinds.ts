@@ -10,7 +10,7 @@ export function isPojo(v: unknown): v is Record<string, unknown> {
 }
 
 // a typed array: a sequence of its elements. bytes, a Uint8Array, are one whole value: never
-// spliced (MUTATE.tex)
+// spliced
 export type Typed = Int8Array | Uint16Array | Int16Array | Uint32Array | Int32Array
 export const isTyped = (v: unknown): v is Typed =>
 	ArrayBuffer.isView(v) && !(v instanceof DataView) && !(v instanceof Uint8Array)

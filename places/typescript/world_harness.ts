@@ -76,7 +76,7 @@ export const paths = createPaths<unknown>()
 export const places = createPlaces({ root: "R", table, paths, scheduler: s })
 export const host = s.createRootScope({ actor: "test" })
 // a write's header, made now
-export const header = (extra?: Info) => createChangeHeader(s, extra)
+export const header = (extra?: Info) => createChangeHeader(s, { extra })
 
 // the moments, computations by name
 function moment(m: Told): Json {

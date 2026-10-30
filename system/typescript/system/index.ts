@@ -41,8 +41,8 @@
 // is a walk up the frame's parents: a frame holds locations (every line of a stack, ermine's own
 // too) when what it is began outside the graph: a process or computer made from outside, a call
 // into a handler from outside, and a write made from outside with no frame up the chain holding
-// any (a fresh frame on top). inside, nothing is captured. a build location
-// (@ermine/bundling: site.ts) stands in for the stack. a call's record keeps its frame.
+// any (a fresh frame on top). inside, nothing is captured. a build location (@ermine/bundling's,
+// through @ermine/system/site) stands in for the stack. a call's record keeps its frame.
 //
 //   read(x, key?)        the value at key, tracked; a node there with none: undefined; a node not
 //                        there, or a pending memo with no value: throws PENDING

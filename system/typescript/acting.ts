@@ -8,8 +8,10 @@ import { here } from "./system/setting.ts"
 
 // name's implementation run as the context found (a writer: entered, so a write from outside the
 // graph takes the call's build location, if it has one; and a pulse asked for as it returns: every
-// write asks, one that throws asks none)
+// write asks, one that throws asks none). cut: the public function itself, so a capture starts at
+// its caller (the name is said too: a minifier may rename the function)
 export function go<A extends unknown[], T>(
+	cut: unknown,
 	name: string,
 	writer: boolean,
 	f: (inner: Inner, ...a: A) => T,
@@ -22,7 +24,7 @@ export function go<A extends unknown[], T>(
 		const i = inner = found(name)
 		if (!writer) return f(i, ...a)
 		const h = here(i)
-		const out = h.base.enter(f, i, a, site)
+		const out = h.base.enter(cut, site, () => f(i, ...a))
 		h.queuePulse()
 		return out
 	} catch (e) {

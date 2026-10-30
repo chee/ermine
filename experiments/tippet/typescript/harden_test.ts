@@ -133,7 +133,8 @@ Deno.test("1. a pack that says more than it holds is refused before anything is 
 		lamport: 1,
 		when: 0,
 	})
-	const k = 300_000, none = pack([first])[7]
+	// many: nothing as long as k is made (an on column of nulls once was, 5 s at this k)
+	const k = 50_000_000, none = pack([first])[7]
 	const bomb = [first, [0, k], [0, k], ["x", k], ["value", k], [null, k], [0, k], none]
 	const t = performance.now()
 	assertThrows(() => unpack(bomb), TypeError, "not a pack")

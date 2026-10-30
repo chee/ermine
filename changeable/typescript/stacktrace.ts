@@ -30,18 +30,39 @@ export function frames(stack: string): Location[] {
 	return out
 }
 
-type V8Error = { stackTraceLimit?: number }
+type V8Error = {
+	stackTraceLimit?: number
+	captureStackTrace?: (holder: object, cut?: unknown) => void
+	// how many lines ermine keeps: the host's Error.stackTraceLimit as createErmine booted (keepStackTraceLimit);
+	// none: whatever the limit is now
+	_ermineStackTraceLimit?: number
+}
 
-// every line of the stack now, parsed (top first, this function's own too): nothing is skipped, so
-// no one needs to know which lines are whose. the limit raised for the capture and put back. build,
-// a location known without a stack (@ermine/bundling's), stands in for it
-export function capture(build?: Location): Location[] {
+// ermine's limit: Error.stackTraceLimit as it is now, kept on Error as _ermineStackTraceLimit for
+// every capture after, so a limit something else sets later changes nothing of ermine's [chee 10-30:
+// "set at createErmine boot to Error.stackTraceLimit and then we read the limit from there"]. on
+// Error, so every ermine in the realm shares it: the last booted's
+export function keepStackTraceLimit() {
+	const E = Error as unknown as V8Error
+	E._ermineStackTraceLimit = E.stackTraceLimit
+}
+
+// the lines of the stack now, parsed, top first, up to ermine's limit. cut: the function called from
+// outside (one of ermine's public ones); where the engine has captureStackTrace (every one ermine
+// runs on), the lines from it inwards are left out, so the first line is its caller's and none are
+// ermine's [chee 10-30]. else every line, this function's own too. build, a location known without a
+// stack (@ermine/bundling's), stands in for it
+export function capture(build?: Location, cut?: unknown): Location[] {
 	if (build !== undefined) return [build]
 	const E = Error as unknown as V8Error
 	const limit = E.stackTraceLimit
-	E.stackTraceLimit = Infinity
+	if (E._ermineStackTraceLimit !== undefined) E.stackTraceLimit = E._ermineStackTraceLimit
 	try {
-		return frames(new Error().stack ?? "")
+		const holder: { stack?: string } = {}
+		if (typeof E.captureStackTrace === "function" && typeof cut === "function") {
+			E.captureStackTrace(holder, cut)
+		} else holder.stack = new Error().stack
+		return frames(holder.stack ?? "")
 	} finally {
 		E.stackTraceLimit = limit
 	}

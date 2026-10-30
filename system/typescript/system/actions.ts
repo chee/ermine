@@ -17,15 +17,19 @@ import { build } from "./tree.ts"
 
 // public (mod.ts exports them): each runs its implementation below, named with As, as the
 // context it finds (acting.ts' go)
-export const createAction: System["createAction"] = /* @__PURE__ */ marked((path, fn) =>
-	go("createAction", true, createActionAs, path, fn)
+export const createAction: System["createAction"] = /* @__PURE__ */ marked(
+	function createAction(path, fn) {
+		return go(createAction, "createAction", true, createActionAs, path, fn)
+	},
 )
-export const executeAction: System["executeAction"] = /* @__PURE__ */ marked((path, ...args) =>
-	go("executeAction", true, executeActionAs, path, ...args)
+export const executeAction: System["executeAction"] = /* @__PURE__ */ marked(
+	function executeAction(path, ...args) {
+		return go(executeAction, "executeAction", true, executeActionAs, path, ...args)
+	},
 )
-export const getCaller: System["getCaller"] = /* @__PURE__ */ marked(() =>
-	go("getCaller", false, getCallerAs)
-)
+export const getCaller: System["getCaller"] = /* @__PURE__ */ marked(function getCaller() {
+	return go(getCaller, "getCaller", false, getCallerAs)
+})
 
 export function createActionAs(
 	inner: Inner,

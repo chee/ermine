@@ -4,10 +4,11 @@
 // replaced or taken out at a key (the same entry again is nothing, and no event)
 import type { Entry } from "@ermine/graph/entry"
 
-// the tables, each a name and the shape of the value under it. open: a package adds its own by
-// declaration merging, as jsx's IntrinsicElements are added to:
-//   declare module "@ermine/graph/table" { interface Tables { run: Run } }
-// the table checks no name and no shape
+// the tables graph holds, each a name and the shape of the value under it. a package with tables
+// of its own exports them as a type, and whoever makes the table names what it holds:
+//   createTable<Tables & StatusTables>()
+// an app may also add to this interface by declaration merging. the table checks no name and no
+// shape; a name not in the type is allowed, and its entries are Entry<unknown>
 export interface Tables {
 	value: unknown
 	attributes: Record<string, unknown>
@@ -16,7 +17,10 @@ export interface Tables {
 }
 
 // a table's name
-export type Key = keyof Tables
+export type Key = string
+
+// the value shape under a name: the type's, else unknown
+export type Shape<T, K extends Key> = K extends keyof T ? T[K] : unknown
 
 // an id
 export type Id = string | symbol
@@ -33,11 +37,13 @@ export class TableError extends Error {
 // a table event at a key: told after it landed
 export type Event = (part: Key, id: Id) => void
 
-export type Table = {
-	add: <K extends Key>(part: K, id: Id, node: Entry<Tables[K]>) => void
-	sub: <K extends Key>(part: K, id: Id, node: Entry<Tables[K]>) => void
+// a table holding T's tables. add and sub are methods, so a table of more tables is a table of
+// fewer (Table<Tables & StatusTables> is a Table)
+export type Table<T extends Tables = Tables> = {
+	add<K extends Key>(part: K, id: Id, node: Entry<Shape<T, K>>): void
+	sub<K extends Key>(part: K, id: Id, node: Entry<Shape<T, K>>): void
 	get: {
-		<K extends Key>(part: K, id: Id): Entry<Tables[K]> | undefined
+		<K extends Key>(part: K, id: Id): Entry<Shape<T, K>> | undefined
 		(part: Key, node: Entry<unknown>): Id[]
 		(id: Id): [Key, Entry<unknown>][]
 	}
@@ -49,7 +55,7 @@ export type Table = {
 	}
 }
 
-export function createTable(event?: Event): Table {
+export function createTable<T extends Tables = Tables>(event?: Event): Table<T> {
 	type N = Entry<unknown>
 	// id → table name → entry, and entry → table name → ids
 	const at = new Map<Id, Map<Key, N>>()
@@ -138,5 +144,5 @@ export function createTable(event?: Event): Table {
 		}
 	}
 
-	return { add, sub, get, who, del } as Table
+	return { add, sub, get, who, del } as Table<T>
 }

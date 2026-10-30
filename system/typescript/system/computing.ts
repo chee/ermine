@@ -12,17 +12,32 @@ import type { System } from "./shapes.ts"
 
 // public (mod.ts exports them): each runs its implementation below, named with As, as the
 // context it finds (acting.ts' go)
-export const createMemo: System["createMemo"] = /* @__PURE__ */ marked((name, f, options) =>
-	go("createMemo", true, createMemoAs, name, f as never, options as never)
+export const createMemo: System["createMemo"] = /* @__PURE__ */ marked(
+	function createMemo(name, f, options) {
+		return go(createMemo, "createMemo", true, createMemoAs, name, f as never, options as never)
+	},
 )
-export const createEffect: System["createEffect"] = /* @__PURE__ */ marked((
+export const createEffect: System["createEffect"] = /* @__PURE__ */ marked(function createEffect(
 	name,
 	f,
 	act,
 	options,
-) => go("createEffect", true, createEffectAs, name, f as never, act as never, options as never))
+) {
+	return go(
+		createEffect,
+		"createEffect",
+		true,
+		createEffectAs,
+		name,
+		f as never,
+		act as never,
+		options as never,
+	)
+})
 // the pending pulse, now (in a pulse: nothing)
-export const pulse: System["pulse"] = /* @__PURE__ */ marked(() => go("pulse", false, pulseAs))
+export const pulse: System["pulse"] = /* @__PURE__ */ marked(function pulse() {
+	return go(pulse, "pulse", false, pulseAs)
+})
 
 type Compute<T> = (previous: T | undefined) => T | PromiseLike<T> | typeof PENDING
 type Act<T> = (value: T, before: T | undefined) => void | (() => unknown)

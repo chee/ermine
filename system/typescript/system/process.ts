@@ -13,21 +13,21 @@ import { getStatusAs } from "./status.ts"
 
 // public (mod.ts exports them): each runs its implementation below, named with As, as the
 // context it finds (acting.ts' go)
-export const addTeardown: System["addTeardown"] = /* @__PURE__ */ marked((fn) =>
-	go("addTeardown", false, addTeardownAs, fn)
-)
-export const getArgs: System["getArgs"] = /* @__PURE__ */ marked(() =>
-	go("getArgs", false, getArgsAs)
-)
+export const addTeardown: System["addTeardown"] = /* @__PURE__ */ marked(function addTeardown(fn) {
+	return go(addTeardown, "addTeardown", false, addTeardownAs, fn)
+})
+export const getArgs: System["getArgs"] = /* @__PURE__ */ marked(function getArgs() {
+	return go(getArgs, "getArgs", false, getArgsAs)
+})
 // a writer for a function to run later as this one, with nothing open: createWriter in setup or an
 // action. it writes nothing itself, but is entered: its frame is under its owner's
-export const createWriter: System["createWriter"] = /* @__PURE__ */ marked(() =>
-	go("createWriter", true, createWriterAs)
-)
+export const createWriter: System["createWriter"] = /* @__PURE__ */ marked(function createWriter() {
+	return go(createWriter, "createWriter", true, createWriterAs)
+})
 // a process running fn at at, belonging to the scope that started it: setup, an action, a writer
-export const start: System["start"] = /* @__PURE__ */ marked((fn, at, options) =>
-	go("start", true, startAs, fn, at, options)
-)
+export const start: System["start"] = /* @__PURE__ */ marked(function start(fn, at, options) {
+	return go(start, "start", true, startAs, fn, at, options)
+})
 
 // why a teardown's scope goes: a stop's reason; else, the process still there, its owner ran
 // again (replaced), or ended

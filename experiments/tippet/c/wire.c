@@ -2,6 +2,7 @@
 #include "wire.h"
 
 #include <stdbool.h>
+#include <stdlib.h>
 #include <string.h>
 
 // encoding/c/cbor.h's, declared here: that header is C11 (its json.h)
@@ -115,6 +116,48 @@ int tp_null(tp_in *in) {
 int tp_is(tp_span t, const char *s) { return strlen(s) == t.n && !memcmp(t.p, s, t.n); }
 
 int tp_canonical(const uint8_t *p, size_t n) { return cborCheck(p, n, NULL, NULL); }
+
+int tp_deeper(const uint8_t *p, size_t n, size_t most) {
+	// per container open, how many of its items are still to come
+	uint64_t small[64], *left = small;
+	size_t depth = 0, room = 64;
+	int deeper = 0;
+	tp_in in = {p, p + n};
+	for (;;) {
+		int major;
+		uint64_t arg;
+		if (tp_head(&in, &major, &arg)) break;
+		// a tag over bytes (a bignum, a typed array): its item next, no deeper
+		if (major == 6 && arg != 0x12345678u) continue;
+		if (depth) left[depth - 1]--;
+		if (major == 2 || major == 3) {
+			if (arg > (uint64_t)(in.end - in.p)) break;
+			in.p += arg;
+		} else if (major == 4 || major == 5 || major == 6) {
+			if (depth >= most) {
+				deeper = 1;
+				break;
+			}
+			// a stand-in holds one item, a map two each
+			arg = major == 6 ? 1 : major == 5 ? 2 * arg : arg;
+			if (arg && depth == room) {
+				uint64_t *more = left == small ? malloc(2 * room * sizeof *more)
+							       : realloc(left, 2 * room * sizeof *more);
+				if (!more) {
+					deeper = -1;
+					break;
+				}
+				if (left == small) memcpy(more, small, sizeof small);
+				left = more, room *= 2;
+			}
+			if (arg) left[depth++] = arg;
+		}
+		while (depth && !left[depth - 1]) depth--;
+		if (!depth) break;
+	}
+	if (left != small) free(left);
+	return deeper;
+}
 
 uint8_t *tp_reserve(tp_buf *b, size_t n) {
 	if (b->bad) return NULL;

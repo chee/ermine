@@ -1,5 +1,5 @@
 // op's value in JSON (json.c): the text a harness line is, and the text it answers with, in the JSON
-// form of ENCODING.tex. plain JSON for what JSON holds; the rest under "/":
+// form (conformance/typescript/form.ts). plain JSON for what JSON holds; the rest under "/":
 //   {"/": {"bytes": b64}}                    bytes, base64 of the standard alphabet, no padding
 //   {"/": {"int8": [...]}}                   a typed array, by its kind (int8 int16 uint16 int32
 //                                            uint32 int64 uint64 float32 float64); 64-bit elements

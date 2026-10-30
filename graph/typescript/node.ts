@@ -7,13 +7,15 @@ export type Node<T extends Record<string, unknown> = Record<string, unknown>> = 
 }
 
 // a node made from plain values: each table's value made an entry with createEntry, the one change
-// given shared by them all (with no time, the time now, the same for every table). a table given undefined is left out. nothing checked, the values not copied. a node made
+// given shared by them all (with no time, the time now by now, as createEntry's, the same for every
+// table). a table given undefined is left out. nothing checked, the values not copied. a node made
 // another way is just as good: const node: Node = { value: createEntry(…) }
 export default function createNode<T extends Record<string, unknown>>(
 	values: T,
 	change: ChangeHeader = {} as ChangeHeader,
+	{ now = Date.now }: { now?: () => number } = {},
 ): Node<T> {
-	if (change.time === undefined) change = { ...change, time: Math.floor(Date.now() / 1000) }
+	if (change.time === undefined) change = { ...change, time: Math.floor(now() / 1000) }
 	const node: Record<string, Entry<unknown>> = {}
 	for (const table of Object.keys(values)) {
 		const value = values[table]

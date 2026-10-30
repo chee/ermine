@@ -13,7 +13,7 @@ Deno.test("header: from outside, a frame of locations on top of the frame open, 
 	const host = s.createRootScope({ actor: "host" })
 	const [own, told] = s.runWithScope(host, () => [
 		createChangeHeader(s), // the call's line
-		createChangeHeader(s, undefined, given),
+		createChangeHeader(s, { build: given }),
 	])
 	const text = Deno.readTextFileSync(new URL(import.meta.url)).split("\n")
 	const line = text.findIndex((l) => l.endsWith("// the call's line")) + 1
@@ -35,7 +35,7 @@ Deno.test("header: inside, the frame open itself: in a run, or under a frame hol
 	s.runWithScope(host, () =>
 		s.createComputer(() => {
 			inRun = !isOutside(s)
-			made.push(createChangeHeader(s), createChangeHeader(s, undefined, given))
+			made.push(createChangeHeader(s), createChangeHeader(s, { build: given }))
 			return 1
 		}, () => {}))
 	s.pulse()

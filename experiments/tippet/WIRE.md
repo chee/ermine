@@ -16,10 +16,10 @@ One kept write. Bytes: a cbor array.
 - device: bstr, 32 bytes. the writer's ed25519 public key
 - n: whole, from 1, per device, one more each step
 - before: bstr, 32 bytes, the hash of this device's step n - 1; null at n = 1
-- node: tstr, the node's id; or [rest]: relative to the writer, the id `ermine:ed01` + device's hex
-  (ids: key) then rest, rest a tstr, empty or from `/`. a writer writes a node that is its
-  own id or under it so; read back to the same id. an old step's tstr stays as it was
-- part: tstr. `value`, `attributes`, `children`, …
+- node: tstr without NUL, the node's id; or [rest]: relative to the writer, the id `ermine:ed01` +
+  device's hex (ids: key) then rest, rest a tstr, empty or from `/`. a writer writes a node that is
+  its own id or under it so; read back to the same id. an old step's tstr stays as it was
+- part: tstr without NUL. `value`, `attributes`, `children`, …
 - patches: array of patch maps
 - lamport: whole. one past the highest the writer had seen
 - when: whole. seconds since 1970, the writer's clock
@@ -34,7 +34,9 @@ One kept write. Bytes: a cbor array.
 
 Anything else is not a step: another length, another kind in a place, a key or hash not 32 bytes, n
 of 0, a number not whole, a patch with another field, a node array not one rest, an on item not as
-above (k of 0 or of n or more, a pair naming the step's own device, of another length or kind).
+above (k of 0 or of n or more, a pair naming the step's own device, of another length or kind), a
+NUL in node (its rest too) or part, or containers nested 1024 deep (cbor's most; the step's own
+array counts): a run message holds a step's patches one deeper.
 
 A peer from before on refuses a step that carries it (not a step): a run with one doesn't pass it.
 

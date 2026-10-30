@@ -1,6 +1,6 @@
-// what the encoding's fuzz tests share (cbor_fuzz_test.ts; @ermine/formats' commit and hash
-// fuzz tests): seeded numbers, values of every kind, value equality, non-canonical rewrites of an
-// encoding and bytes near one. seeded and deterministic: a seed is a run
+// what the encoding's fuzz tests share (cbor_fuzz_test.ts): seeded numbers, values of every kind,
+// value equality, non-canonical rewrites of an encoding and bytes near one. seeded and
+// deterministic: a seed is a run
 // the rules (cbor.ts): whole numbers are integers (bignums past 64 bits), -0 is 0, other numbers
 // the shortest float; read back a number while safe, a bigint past that. same() compares numbers
 // so; rewrites write an integer as a float, as a bignum, a bignum with a leading zero

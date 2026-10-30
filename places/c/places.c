@@ -70,6 +70,9 @@ typedef struct {
 	// let go of as a write reaches them
 	int loosening;
 	pm loose;
+	// the clock for a change's time (setup.now), ms since 1970; NULL: time(NULL)
+	int64_t (*now)(void *ctx);
+	void *now_ctx;
 	// a typed array's element read by pl_read: the one number, remade by each
 	op_value scratch;
 	// the first answer that was not SC_OK to the reads told
@@ -184,6 +187,8 @@ void pl_connect(pl *l, const pl_setup *setup) {
 	l->s->paths = setup->paths;
 	l->s->scheduler = setup->scheduler;
 	l->s->loosening = setup->tracking;
+	l->s->now = setup->now;
+	l->s->now_ctx = setup->now_ctx;
 	ask(l, setup->contributors, setup->ncontributors);
 }
 
@@ -1565,7 +1570,7 @@ char *pl_header(pl *l, const sc_pair *extra, size_t n, const ch_location *site, 
 	}
 	const op_value *actor, *reader;
 	who_of(m->frame, &actor, &reader);
-	ch_header h = {.has_time = 1, .time = (int64_t)time(NULL)};
+	ch_header h = {.has_time = 1, .time = l->s->now != NULL ? l->s->now(l->s->now_ctx) / 1000 : (int64_t)time(NULL)};
 	h.actor = actor;
 	if (reader != NULL) h.reader = reader->str;
 	h.frame = m->frame;

@@ -157,8 +157,9 @@ export function pack(bytes: readonly Uint8Array[], prior?: Prior): Packed {
 export function unpack(p: unknown, prior?: Prior): Uint8Array[] {
 	if (!Array.isArray(p) || (p.length !== 8 && p.length !== 9)) throw new TypeError("not a pack")
 	const [first, lamports, whens, nodes, parts, whos, counts, cols] = p as Packed
-	const ons = p.length === 9 ? (p as Packed)[8]! : runs(Array(length(lamports)).fill(null))
 	const steps = length(lamports), patches = patchCount(cols)
+	// none said: every step's null, as runs
+	const ons = p.length === 9 ? (p as Packed)[8]! : steps > 0 ? [null, steps] : []
 	const against = typeof first === "number"
 	const ok = steps >= 0 && steps < STEPS && patches >= 0 &&
 		(first instanceof Uint8Array ||

@@ -1,4 +1,4 @@
-# newcore's C: every library's harness, and their conformance runs against the reference suites.
+# ermine's C: every library's harness, and their conformance runs against the reference suites.
 #   make              every harness
 #   make check        every harness-check: address and undefined-behaviour sanitizers
 #   make test         the TypeScript tests (the references)
@@ -110,7 +110,6 @@ runs_src = $(places_src) processes/c/guard.c processes/c/status.c processes/c/st
 runs = processes/c/runs-harness
 runs_flags = -DPH_LIB -DSH_LIB
 runs_suite = runs
-runs_tests = $(wildcard processes/typescript/runs_harness_test.ts)
 LIBS += runs
 # status (processes): a computer's status on its own node; the places harness's world and programs (PH_LIB), and status's requests
 status_src = $(places_src) processes/c/status.c processes/c/status_harness.c
@@ -118,19 +117,6 @@ status = processes/c/status-harness
 status_flags = -DPH_LIB
 status_suite = status
 LIBS += status
-# software (experiments/software): run a program through a loader, on the ermine (system). its harness runs the suite;
-# ermine-run is the terminal program: make experiments/software/c/ermine-run, and hello.so beside it
-software_lib = experiments/software/c/software.c
-software_src = $(filter-out system/c/ermine_harness.c,$(system_src)) $(software_lib) experiments/software/c/software_harness.c
-software = experiments/software/c/software-harness
-software_suite = software
-LIBS += software
-ermine-run_src = $(filter-out system/c/ermine_harness.c conformance/c/harness.c conformance/c/protocol_harness.c,$(system_src)) $(software_lib) experiments/software/c/ermine-run.c
-ermine-run = experiments/software/c/ermine-run
-ermine-run_flags = -rdynamic
-$(ermine-run) $(ermine-run)-check: $(wildcard */*/c/*.h)
-experiments/software/c/hello.so: experiments/software/c/hello.c experiments/software/c/software.h
-	$(CC) $(CFLAGS) -shared -fPIC $(if $(filter Darwin,$(shell uname -s)),-undefined dynamic_lookup,) -o $@ experiments/software/c/hello.c
 # JSON text (encoding/c/json_text.c): only what reads or writes it, the harnesses
 json_text_src = encoding/c/json_text.c
 $(foreach l,cbor,$(eval $(l)_src += $(json_text_src)))
@@ -142,18 +128,16 @@ check: $(CHECKS)
 
 define harness
 $($(1)): $($(1)_src)
-	$$(CC) $$(CFLAGS) $$(BLAKE3FLAGS) $$($(1)_flags) -Isync/c -o $$@ $$(filter %.c,$$^) $$($(1)_libs) -lm
+	$$(CC) $$(CFLAGS) $$(BLAKE3FLAGS) $$($(1)_flags) -o $$@ $$(filter %.c,$$^) $$($(1)_libs) -lm
 $($(1))-check: $($(1)_src)
-	$$(CC) $$(CHECKFLAGS) $$(BLAKE3FLAGS) $$($(1)_flags) -Isync/c -o $$@ $$(filter %.c,$$^) $$($(1)_libs) -lm
+	$$(CC) $$(CHECKFLAGS) $$(BLAKE3FLAGS) $$($(1)_flags) -o $$@ $$(filter %.c,$$^) $$($(1)_libs) -lm
 endef
 $(foreach l,$(LIBS),$(eval $(call harness,$(l))))
-# software's terminal program (its section above)
-$(eval $(call harness,ermine-run))
 # start's stop (processes/c/start_test.c): what its scope's teardown threw is given back. make test-start-processes, test-check-start-processes (the sanitizers)
 processes-start_src = $(filter-out places/c/places_harness.c conformance/c/harness.c conformance/c/protocol_harness.c places/c/world_harness.c,$(places_src)) processes/c/processes.c processes/c/scopes.c processes/c/start.c processes/c/runs.c processes/c/start_test.c processes/c/status.c
 processes-start = processes/c/start-test
 $(eval $(call harness,processes-start))
-$(processes-start): $(wildcard */*/c/*.h)
+$(processes-start): $(wildcard */c/*.h)
 test-start-processes: $(processes-start)
 	@echo "== processes (start)"
 	@$(processes-start)
@@ -165,7 +149,7 @@ test-check-start-processes: $(processes-start)-check
 system-promise_src = $(filter-out conformance/c/harness.c conformance/c/protocol_harness.c system/c/ermine_harness.c,$(system_src)) system/c/promise_test.c
 system-promise = system/c/promise-test
 $(eval $(call harness,system-promise))
-$(system-promise): $(wildcard */*/c/*.h)
+$(system-promise): $(wildcard */c/*.h)
 test-promise-system: $(system-promise)
 	@echo "== system (promise)"
 	@$(system-promise)
@@ -177,7 +161,7 @@ test-check-promise-system: $(system-promise)-check
 system-refuse_src = $(filter-out conformance/c/harness.c conformance/c/protocol_harness.c system/c/ermine_harness.c,$(system_src)) system/c/refuse_test.c
 system-refuse = system/c/refuse-test
 $(eval $(call harness,system-refuse))
-$(system-refuse): $(wildcard */*/c/*.h)
+$(system-refuse): $(wildcard */c/*.h)
 test-refuse-system: $(system-refuse)
 	@echo "== system (refuse)"
 	@$(system-refuse)
@@ -190,7 +174,7 @@ test-check-refuse-system: $(system-refuse)-check
 system-review_src = $(filter-out conformance/c/harness.c conformance/c/protocol_harness.c system/c/ermine_harness.c,$(system_src)) system/c/review_test.c
 system-review = system/c/review-test
 $(eval $(call harness,system-review))
-$(system-review): $(wildcard */*/c/*.h)
+$(system-review): $(wildcard */c/*.h)
 test-review-system: $(system-review)
 	@echo "== system (review)"
 	@$(system-review)
@@ -198,12 +182,25 @@ test-check-review-system: $(system-review)-check
 	@echo "== system (review, sanitizers)"
 	@$(system-review)-check
 
+# the clock es_create is given (system/c/clock_test.c): every change's time is read from it.
+# make test-clock-system, test-check-clock-system (the sanitizers)
+system-clock_src = $(filter-out conformance/c/harness.c conformance/c/protocol_harness.c system/c/ermine_harness.c,$(system_src)) system/c/clock_test.c
+system-clock = system/c/clock-test
+$(eval $(call harness,system-clock))
+$(system-clock): $(wildcard */c/*.h)
+test-clock-system: $(system-clock)
+	@echo "== system (clock)"
+	@$(system-clock)
+test-check-clock-system: $(system-clock)-check
+	@echo "== system (clock, sanitizers)"
+	@$(system-clock)-check
+
 # what a review of marks proved (system/c/marks_test.c): writers and started children used after
 # they were freed, and who may stop or ask a child. make test-marks-system, test-check-marks-system (the sanitizers)
 system-marks_src = $(filter-out conformance/c/harness.c conformance/c/protocol_harness.c system/c/ermine_harness.c,$(system_src)) system/c/marks_test.c
 system-marks = system/c/marks-test
 $(eval $(call harness,system-marks))
-$(system-marks): $(wildcard */*/c/*.h)
+$(system-marks): $(wildcard */c/*.h)
 test-marks-system: $(system-marks)
 	@echo "== system (marks)"
 	@$(system-marks)
@@ -217,13 +214,13 @@ test-check-marks-system: $(system-marks)-check
 system-steady_src = $(filter-out conformance/c/harness.c conformance/c/protocol_harness.c system/c/ermine_harness.c,$(system_src)) system/c/steady_test.c
 system-steady = system/c/steady-test
 $(eval $(call harness,system-steady))
-$(system-steady): $(wildcard */*/c/*.h)
+$(system-steady): $(wildcard */c/*.h)
 test-steady-system: $(system-steady)
 	@echo "== system (steady)"
 	@$(system-steady)
 
 # headers: any change rebuilds what includes them
-$(HARNESSES) $(CHECKS): $(wildcard */*/c/*.h */*/stacks/*/c/*.h conformance/c/*.h)
+$(HARNESSES) $(CHECKS): $(wildcard */c/*.h)
 
 # a suite on the one runner (conformance/run.ts): its scenarios (<package>/conformance/<suite>/), and
 # the package's tests of its harness (<package>/typescript/<suite>_harness_test.ts), both asked of
@@ -252,9 +249,7 @@ scheduler_tests = $(wildcard reactivity/typescript/scheduler_harness_test.ts)
 places_suite = places
 places_tests = $(wildcard places/typescript/places_harness_test.ts)
 processes_suite = processes
-processes_tests = $(wildcard processes/typescript/processes_harness_test.ts)
 protect_suite = protect
-protect_tests = $(wildcard protect/typescript/protect_harness_test.ts)
 guard_suite = guard
 guard_tests = $(wildcard processes/typescript/guard_harness_test.ts)
 # the rest: env var, then the folders of their scenarios (conformance/<lib>/)
@@ -309,8 +304,8 @@ places/c/crowify-bench: changeable/c/frame.c graph/c/node.c graph/c/update.c cha
 
 clean:
 	rm -rf $(HARNESSES) $(CHECKS) $(BENCHES) $(addsuffix .dSYM,$(HARNESSES) $(CHECKS))
-	rm -rf $(ermine-run) $(ermine-run)-check $(ermine-run).dSYM $(ermine-run)-check.dSYM experiments/software/c/hello.so
 	rm -rf $(system-steady) $(system-steady)-check $(system-steady).dSYM
+	rm -rf $(system-clock) $(system-clock)-check $(system-clock).dSYM
 	rm -rf $(system-review) $(system-review)-check $(system-review).dSYM
 	rm -rf $(system-promise) $(system-promise)-check $(system-promise).dSYM
 	rm -rf $(processes-start) $(processes-start)-check $(processes-start).dSYM $(system-refuse) $(system-refuse)-check $(system-refuse).dSYM

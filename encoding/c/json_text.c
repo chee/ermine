@@ -190,7 +190,7 @@ bool jsonDecode(Json **value) {
 	while (ok && count) {
 		Json **at = stack[--count], *here = *at;
 		if (jsonIsString(here)) {
-			ok = !utf8Surrogate(here->string, here->stringLength); // no string (ENCODING.tex)
+			ok = !utf8Surrogate(here->string, here->stringLength); // a lone surrogate: no string
 		} else if (jsonIsArray(here)) {
 			for (int i = 0; i < here->array.count; i++) {
 				stack = growArray(stack, count, &capacity, sizeof *stack);

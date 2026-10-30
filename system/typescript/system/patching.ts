@@ -13,14 +13,18 @@ import type { System } from "./shapes.ts"
 
 // public (mod.ts exports them): each runs its implementation below, named with As, as the
 // context it finds (acting.ts' go)
-export const patch: System["patch"] = /* @__PURE__ */ marked((x, patches) =>
-	go("patch", true, patchAs, x, patches)
+export const patch: System["patch"] = /* @__PURE__ */ marked(function patch(x, patches) {
+	return go(patch, "patch", true, patchAs, x, patches)
+})
+export const patchAttributes: System["patchAttributes"] = /* @__PURE__ */ marked(
+	function patchAttributes(x, patches) {
+		return go(patchAttributes, "patchAttributes", true, patchAttributesAs, x, patches)
+	},
 )
-export const patchAttributes: System["patchAttributes"] = /* @__PURE__ */ marked((x, patches) =>
-	go("patchAttributes", true, patchAttributesAs, x, patches)
-)
-export const patchChildren: System["patchChildren"] = /* @__PURE__ */ marked((x, patches) =>
-	go("patchChildren", true, patchChildrenAs, x, patches)
+export const patchChildren: System["patchChildren"] = /* @__PURE__ */ marked(
+	function patchChildren(x, patches) {
+		return go(patchChildren, "patchChildren", true, patchChildrenAs, x, patches)
+	},
 )
 
 // x's part patched: patches only, never a recipe (the base is mechanical [chee 10-25: "the core

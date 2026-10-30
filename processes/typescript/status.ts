@@ -9,7 +9,7 @@
 // the run open when the pulse began: from a pulse with none, from outside. a computer reading its
 // own status runs once more for each status written, then stops: the same status is not written
 // again
-import type { Id, Table, Tables } from "@ermine/graph/table"
+import type { Id, Table } from "@ermine/graph/table"
 import createEntry, { type Entry } from "@ermine/graph/entry"
 import update from "@ermine/changeable/update"
 import type { Patch } from "@ermine/changeable/apply"
@@ -17,11 +17,8 @@ import { type Computer, type Ended, PENDING, type Scheduler } from "@ermine/reac
 import { createChangeHeader } from "@ermine/places/header"
 import type { Places, Writer } from "@ermine/places"
 
-declare module "@ermine/graph/table" {
-	interface Tables {
-		status: Record<string, unknown>
-	}
-}
+// the table status adds, for whoever makes the table to name: createTable<Tables & StatusTables>()
+export type StatusTables = { status: Record<string, unknown> }
 
 // the table, and the key in its entry
 export const TABLE = "status"
@@ -39,6 +36,8 @@ export type Setup = {
 		Scheduler,
 		"runWithScope" | "getCurrentScope" | "getCurrentFrame" | "getRun" | "onRunEnd" | "onEffect"
 	>
+	// the clock a status write's change takes its time from, ms since 1970; none: Date.now
+	now?: () => number
 }
 
 // listens to the scheduler's onRunEnd from here on
@@ -79,7 +78,7 @@ export function createStatus(setup: Setup): {
 				Object.hasOwn(v, STATUS)
 			if (status === undefined ? !had : had && v![STATUS] === status) return
 			// made only for a write: from outside the graph, its locations are a stack read
-			const header = createChangeHeader(scheduler)
+			const header = createChangeHeader(scheduler, { now: setup.now })
 			if (setup.write !== undefined) {
 				const patches: Patch[] = there === undefined ||
 						v === undefined || v === null || typeof v !== "object"
@@ -90,7 +89,7 @@ export function createStatus(setup: Setup): {
 			}
 			if (there === undefined) {
 				const made = createEntry<Record<string, unknown>>({ [STATUS]: status }, header)
-				table.add(TABLE, id, made as Entry<Tables[typeof TABLE]>)
+				table.add(TABLE, id, made)
 				return
 			}
 			const patches: Patch[] = []

@@ -40,8 +40,8 @@ import { updateEntry } from "@ermine/places/crowify"
 import type { Key, Table } from "@ermine/graph/table"
 import { isPojo } from "@ermine/changeable/kinds"
 
-// the process part. not declared on the table's Tables
-export const PROCESS = "process" as string as Key
+// the process part. not in Tables
+export const PROCESS = "process"
 
 // the key a level holds the id of a process at the level's own path under
 const SELF = ""

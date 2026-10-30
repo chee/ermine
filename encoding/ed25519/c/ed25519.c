@@ -4,7 +4,7 @@
 // its sliding windows for [S]B - [k]A, with SHA-512 (sha2.c) where
 // Monocypher's own EdDSA hashes with BLAKE2b. The checks are this file's:
 // Monocypher's crypto_eddsa_check_equation takes A and R in any encoding and
-// of small order, and multiplies by the cofactor; SYNC.tex's strict rules take
+// of small order, and multiplies by the cofactor; the strict checks (ed25519.h) take
 // none of those, so verification here is Monocypher's loop with the equation
 // left without the cofactor and R compared as bytes.
 

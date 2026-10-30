@@ -1,5 +1,5 @@
 {
-	"title": "bytes are one whole value: never joined or cut (MUTATE.tex)",
+	"title": "bytes are one whole value: never joined or cut",
 	"steps": [
 		{
 			"op": "squish",

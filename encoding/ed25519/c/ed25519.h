@@ -1,6 +1,5 @@
 // ed25519.h: Ed25519 signatures (RFC 8032, pure Ed25519: no prehash, no
-// context), checked as strictly as SYNC.tex's "Signatures are checked
-// strictly" says.
+// context), checked strictly (ermEd25519Verify).
 
 #ifndef SUBDUCTION_ED25519_H
 #define SUBDUCTION_ED25519_H
@@ -33,7 +32,7 @@ void ermEd25519SignPair(const ermEd25519Pair *pair, const unsigned char *message
 
 /**
  * Whether signature is pub's over message[0 .. length) by RFC 8032's
- * verification (5.1.7) with every strict check of SYNC.tex: S less than the
+ * verification (5.1.7) with every strict check: S less than the
  * group order L; pub (A) and R each in their one canonical encoding, the one
  * RFC 8032 5.1.2 writes (y less than p, and no sign bit on x = 0); neither A
  * nor R of small order (an order dividing 8); and the equation without the
