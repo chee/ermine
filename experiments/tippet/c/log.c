@@ -14,6 +14,7 @@ typedef struct {
 	uint64_t count;
 	uint8_t last[32];
 	uint64_t lamport, when;
+	uint64_t end; // the last lamport its newest step takes
 } feed;
 
 struct tp_log {
@@ -112,8 +113,9 @@ static int follows(const tp_step *s, uint64_t n, const uint8_t *before) {
 		(!before || !memcmp(s->before, before, 32));
 }
 
+// jump: refuse a step a jump past what was seen (taking, not loading)
 static long chain(const tp_log *log, const uint8_t device[32], const tp_span *steps, size_t k,
-	uint8_t last[32], uint64_t *high) {
+	uint8_t last[32], uint64_t *high, int jump) {
 	const feed *f = find(log, device);
 	uint64_t held = f ? f->count : 0;
 	tp_step s;
@@ -122,15 +124,22 @@ static long chain(const tp_log *log, const uint8_t device[32], const tp_span *st
 	size_t skip = (size_t)(held + 1 - s.n), fresh = k > skip ? k - skip : 0;
 	if (held) memcpy(last, f->last, 32);
 	*high = 0;
+	// none a jump past what was seen and the lamports the steps before it take; and one that says on
+	// past the lamports its device's step before took (its counters never used twice)
+	uint64_t most = log->lamport + JUMP, before = held ? f->end : 0;
+	int jumps = 0, had = held > 0;
 	for (size_t i = 0; i < fresh; i++) {
 		const tp_span *b = &steps[skip + i];
 		if (tp_step_decode(b->p, b->n, &s) || memcmp(s.device, device, 32) ||
 			!follows(&s, held + 1 + i, held + i ? last : NULL))
 			return TP_CHAIN;
-		if (s.lamport > *high) *high = s.lamport;
+		uint64_t end = tp_step_last(&s);
+		jumps |= s.lamport > most || (s.on.p && had && s.lamport <= before);
+		most += end - s.lamport + 1, before = end > before ? end : before, had = 1;
+		if (end > *high) *high = end;
 		tp_step_hash(b->p, b->n, last);
 	}
-	return (long)fresh;
+	return jump && jumps ? TP_LAMPORT : (long)fresh;
 }
 
 static feed *fit(tp_log *log, const uint8_t device[32], size_t fresh, int *why) {
@@ -143,7 +152,7 @@ static void keep(tp_log *log, feed *f, size_t fresh, const uint8_t last[32], uin
 	tp_step s;
 	f->count += fresh;
 	memcpy(f->last, last, 32);
-	if (!tp_step_decode(end.p, end.n, &s)) f->lamport = s.lamport, f->when = s.when;
+	if (!tp_step_decode(end.p, end.n, &s)) f->lamport = s.lamport, f->when = s.when, f->end = tp_step_last(&s);
 	if (high > log->lamport) log->lamport = high;
 }
 
@@ -263,8 +272,8 @@ int tp_log_write(tp_log *log, const tp_write *w, uint64_t *n, uint64_t *lamport)
 	if (why) return why;
 	f->count++;
 	tp_step_hash(bytes, length, f->last);
-	f->lamport = s.lamport, f->when = s.when;
-	log->lamport = s.lamport;
+	f->lamport = s.lamport, f->when = s.when, f->end = tp_step_last(&s);
+	log->lamport = f->end;
 	log->loose += length;
 	if (s.n - log->asked >= EVERY || log->loose >= BYTES) close_to(log, s.n);
 	*n = s.n, *lamport = s.lamport;
@@ -304,9 +313,8 @@ long tp_log_take(tp_log *log, const uint8_t device[32], const tp_span *steps, si
 	if (!n) return 0;
 	uint64_t held = tp_log_count(log, device), high;
 	uint8_t last[32];
-	long fresh = chain(log, device, steps, n, last, &high);
+	long fresh = chain(log, device, steps, n, last, &high, 1);
 	if (fresh <= 0) return fresh;
-	if (high > log->lamport + JUMP) return TP_LAMPORT;
 	if (!tp_verify(device, last, 32, sig)) return TP_SIGNATURE;
 	int why;
 	feed *f = fit(log, device, (size_t)fresh, &why);
@@ -380,7 +388,7 @@ static int loaded(void *ctx, const uint8_t *r, size_t length, tp_at *at) {
 	uint8_t last[32];
 	int ok = !tp_step_decode(spans[0].p, spans[0].n, &s) && (run || own(log, s.device));
 	const uint8_t *device = run ? r + 7 : s.device;
-	long fresh = ok ? chain(log, device, spans, k, last, &high) : -1;
+	long fresh = ok ? chain(log, device, spans, k, last, &high, 0) : -1;
 	int why = 0;
 	feed *f = fresh > 0 ? fit(log, device, (size_t)fresh, &why) : NULL;
 	if (f) keep(log, f, (size_t)fresh, last, high, spans[k - 1]);

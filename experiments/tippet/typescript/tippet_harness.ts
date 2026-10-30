@@ -4,7 +4,8 @@
 // seeds,
 // a write's when is the request's or 1760000000, and the k-th random call gives k big-endian.
 //   encode  { step: { device, n, before, node, relative?, part, patches, lamport, when, on?, ids?, who? } } -> { bytes }
-//           ids: per patch null or { after: id | null, gone: [[id, count], …] }, an id [device, n, k]
+//           ids: per patch null or { after: id | null, gone: [[id, count], …] }, an id [device, c]
+//           (made) or [device, lamport, k] (there since that step made its sequence new)
 //   decode  { bytes } -> { step } | { refused: true }
 //   hash    { bytes } -> { hash }        blake3
 //   sign    { seed, bytes } -> { sig }   ed25519
@@ -223,10 +224,11 @@ function stepIn(s: Request, device?: string, before?: Uint8Array | null): Step {
 		out.on = (s.on as [string, number][]).map(([d, n]) => ({ device: keyOf(d), n }))
 	}
 	if (s.ids !== undefined) {
-		const id = ([d, n, k]: [string, number, number]) => ({ device: keyOf(d), n, k })
+		const id = ([d, c, k]: [string, number, number?]): Id =>
+			k === undefined ? { device: keyOf(d), c } : { device: keyOf(d), c, k }
 		out.ids = (s.ids as ({
-			after: [string, number, number] | null
-			gone: [[string, number, number], number][]
+			after: [string, number, number?] | null
+			gone: [[string, number, number?], number][]
 		} | null)[])
 			.map((x) =>
 				x &&
@@ -239,7 +241,7 @@ function stepIn(s: Request, device?: string, before?: Uint8Array | null): Step {
 	if (s.who !== undefined) out.who = s.who
 	return out
 }
-const idOut = (i: Id) => [i.device, i.n, i.k]
+const idOut = (i: Id) => i.k === undefined ? [i.device, i.c] : [i.device, i.c, i.k]
 function stepOut(s: Step) {
 	return {
 		device: s.device,
