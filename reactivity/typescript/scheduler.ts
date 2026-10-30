@@ -101,11 +101,6 @@ import { createTracker, type Node } from "./tracker.ts"
 // promise resolved to it, or rejected with it, lands pending
 export const PENDING: unique symbol = /* @__PURE__ */ Symbol.for("ermine.pending")
 
-// this module's own file, by its URL: for whoever finds a write's site by skipping library frames
-// (ermine's sites). known here, so no one has to resolve a name to find it (a bundled page has no
-// import map to resolve one with) [chee 10-26: "yes"]
-export const FILES: readonly string[] = [import.meta.url]
-
 export class SchedulerError extends Error {
 	constructor(readonly code: "disposed" | "unscoped" | "empty", message: string) {
 		super(message)
