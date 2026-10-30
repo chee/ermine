@@ -1,6 +1,5 @@
-// a tiny program built with esbuild and the plugin, then run against a real createErmine: a write
-// it makes from outside the graph takes the program's own file:line, written in at build, for its
-// locations; a program naming the site module, its entry or a file of it is refused
+// Builds a tiny program with esbuild and the plugin, runs it against a real createErmine, and
+// checks its writes carry the build-time file:line. Programs naming the site module are refused.
 import { assert, assertEquals, assertRejects } from "@std/assert"
 import type { ChangeHeader } from "@ermine/changeable"
 import * as esbuild from "esbuild"
@@ -14,7 +13,6 @@ import { NAMES } from "../../system/typescript/system/index.ts"
 const toFileUrl = (p: string) => pathToFileURL(p)
 const here = fromFileUrl(new URL(".", import.meta.url))
 
-// the program: writes outside a run, on lines 5, 6 and 7
 const PROGRAM = `import { ensureNode, patch } from "@ermine/system"
 import * as system from "@ermine/system"
 
@@ -59,7 +57,6 @@ const changeAt = (e: E, name: string): ChangeHeader => {
 async function run(out: string, features: Feature[] = []) {
 	const program = (await import(toFileUrl(out).href)).default as () => unknown
 	const e = createErmine({ features: [manual, ...features] })
-	// run as the host (from outside the graph), so each write takes its build location
 	e.within(program)
 	return e
 }
@@ -73,7 +70,6 @@ Deno.test("build: each write's location is written in at build: the program's fi
 		const file = toFileUrl(join(dir, "program.ts")).href
 		const e = await run(out)
 		const x = changeAt(e, "x")
-		// its build location stands in for the stack: the one line, the frame on top of the host's
 		assertEquals(x.frame.info.locations, [{ file, line: 6, column: 9, external: true }])
 		assertEquals(changeAt(e, "y").frame.info.locations, [{
 			file,
@@ -100,8 +96,6 @@ Deno.test("build: a program naming the site module, its entry, a file of it or a
 			await assertRejects(() => built(dir, source), Error, "only @ermine/bundling writes it")
 		})
 	}
-	// by path: ermine's own file, relative
-	// the extension left off, as the bundler resolves it
 	for (const rel of ["../../../system/site.ts", "../../../system/site"]) {
 		await inDir(async (dir) => {
 			const source = `import { site } from ${JSON.stringify(rel)}\nexport default site`
@@ -128,6 +122,5 @@ Deno.test("build: external false: @ermine/system's own files are neither transfo
 			assertEquals(plugin.resolveId(spec, id), null, `${f} imports ${spec}`)
 		}
 	}
-	// a program's file, as ever
 	assertEquals(plugin.transformInclude(join(here, "program.ts")), true)
 })

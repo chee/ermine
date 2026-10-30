@@ -1,28 +1,21 @@
-// the transform: one module's source → each call to an @ermine/system function (by its import's
-// binding: a named import, or a member of a namespace or default import) given its site, and every
-// name of the site module, its runtime entry, or the plugin's own locals refused. unplugin.ts runs
-// it over each module; it is a function of the source alone
+// Rewrites each call to an @ermine/system function so it carries its site, and refuses source
+// that names the site module, its runtime entry or the plugin's own locals. It depends only on
+// the source.
 //
 //   import { patch } from "@ermine/system"          import { at as __ermine$at, s0 as __ermine$s0 }
 //   patch("/x", [p])                           →      from "ermine:site/0";import { patch } ...
 //                                                     __ermine$at(__ermine$s0, patch)("/x", [p])
 //
-// the import is written ahead of line 1 (after a #! line and directives), so the source's lines
-// stay where they are. a site: line from 1, column from 1 (an engine's trace's), where V8 places
-// the call: at the callee's name (a member call: the member's; a computed one: just after it)
+// The import goes ahead of line 1, so source lines stay put. A site is a line and column, both
+// from 1, as V8 places the call.
 import { parse } from "@babel/parser"
 import MagicString from "magic-string"
 
-// the module only the plugin writes (one per module it rewrote: ermine:site/<n>)
 export const SITE_MODULE = "ermine:site"
-// the runtime entry that module mints through
 export const SITE_ENTRY = "@ermine/system/site"
-// the module whose functions are rewritten
 export const SYSTEM = "@ermine/system"
-// the plugin's locals in a rewritten module: a source naming one is refused
 export const RESERVED = "__ermine$"
 
-// a module refused: where (its line and column, when the source was read), and what it named
 export class Refused extends Error {
 	constructor(
 		readonly id: string,
@@ -39,20 +32,15 @@ export class Refused extends Error {
 }
 
 export type TransformOptions = {
-	// the specifier the rewritten module imports its sites from (ermine:site/<n>); none: SITE_MODULE
 	module?: string
-	// false: refused names checked, nothing rewritten
 	sites?: boolean
-	// files a specifier is refused for resolving to (the runtime's site files, as paths)
 	guarded?: readonly string[]
-	// a specifier to the file it names, from this module (relative or absolute); none: unchecked
 	resolve?: (specifier: string) => string | undefined
 }
 
 export type Rewritten = {
 	code: string
 	map: ReturnType<MagicString["generateMap"]>
-	// each site, in the order its local is numbered (s0, s1, …)
 	sites: { line: number; column: number }[]
 }
 
@@ -64,7 +52,6 @@ type Node = {
 	[key: string]: unknown
 }
 
-// specifier names the site module or its entry (or a file of it)
 export function refusedSpecifier(
 	spec: string,
 	guarded: readonly string[] = [],
@@ -74,16 +61,15 @@ export function refusedSpecifier(
 	if (/^@ermine\/system\/(typescript\/)?site(\.ts)?([?#].*)?$/.test(spec)) return true
 	if (guarded.length === 0 || resolve === undefined) return false
 	const file = resolve(spec)
-	// as the bundler resolves it: an extensionless import, or a folder's index, is the file
 	return file !== undefined && guarded.some((g) => bare(g) === bare(file))
 }
 const bare = (path: string) => path.replace(/\/index(?=\.|$)/, "").replace(/\.[cm]?[jt]sx?$/, "")
 
-// a module that may need either: it names @ermine/system, a guarded name, or a file named site
 export const mayNeed = (code: string): boolean =>
 	code.includes("ermine") || code.includes(RESERVED) || code.includes("site")
 
-// code's rewrite; nothing to rewrite: undefined. a refused name: throws Refused
+// The rewrite of the code, undefined if there is nothing to rewrite. Throws Refused for a name
+// that is not allowed.
 export function transform(
 	code: string,
 	id: string,
@@ -105,7 +91,6 @@ export function transform(
 		}
 	}
 
-	// the bindings @ermine/system's imports made: named (local → imported), namespaces and defaults
 	const named = new Set<string>()
 	const spaces = new Set<string>()
 	for (const s of program.body as Node[]) {
@@ -121,8 +106,6 @@ export function transform(
 
 	const out = new MagicString(code)
 	const sites: { line: number; column: number }[] = []
-	// the scopes open, innermost last: names declared in each (the module's own not among them: its
-	// imports are what's resolved to)
 	const scopes: Set<string>[] = []
 	const shadowed = (name: string) => scopes.some((s) => s.has(name))
 
@@ -140,16 +123,14 @@ export function transform(
 		if (c.computed && p.type === "StringLiteral") return c
 		return undefined
 	}
-	// where the engine places a call to c: at its name; a member's, at the member; a computed
-	// member's, just after it; a parenthesized callee's, at its parenthesis
+	// V8 places a call at the callee's name, at the member of a member call, just after a computed
+	// member, and at the parenthesis of a parenthesized callee.
 	const placeOf = (c: Node, at: Node): { line: number; column: number } => {
 		const paren = (c.extra as { parenStart?: number } | undefined)?.parenStart
 		const offset = paren ?? (at === c && c.type === "MemberExpression" ? c.end : at.start)
 		return position(offset)
 	}
-	// offset's line and column, from 1
 	const starts = [0]
-	// as the engine ends a line: \n, \r\n, \r, U+2028, U+2029
 	for (const m of code.matchAll(/\r\n|[\n\r\u2028\u2029]/g)) starts.push(m.index + m[0].length)
 	const position = (offset: number) => {
 		let lo = 0
@@ -215,7 +196,6 @@ export function transform(
 	const head = `import { ${names.join(", ")} } from ${
 		JSON.stringify(options.module ?? SITE_MODULE)
 	};`
-	// before any call's opening at the same place
 	const at = headAt(code, program)
 	out.prependLeft(at.at, at.before + head)
 	return {
@@ -225,7 +205,6 @@ export function transform(
 	}
 }
 
-// keys that hold no code a call or a name in scope could be in
 const SKIP = new Set([
 	"loc",
 	"start",
@@ -265,9 +244,8 @@ function pluginsFor(id: string): ("typescript" | "jsx" | "decorators")[] {
 	return ["jsx", "decorators"]
 }
 
-// where the import goes, and what must come before it there: after the directives, on the last's
-// line (a semicolon first when it has none: "use strict"import is no directive); else at the start
-// of the line after a #! line (never inside it); else at the very start. lines never move
+// Where the import goes: after the directives, or after a #! line, or at the very start. Source
+// lines never move.
 function headAt(code: string, program: Node): { at: number; before: string } {
 	const directives = program.directives as Node[] | undefined
 	if (directives !== undefined && directives.length > 0) {
@@ -281,9 +259,6 @@ function headAt(code: string, program: Node): { at: number; before: string } {
 	return { at: 0, before: "" }
 }
 
-// the names a scope n opens declares (n opens none: undefined). function scopes: the params, its
-// own name (an expression's), its body's vars and lexical names; blocks: their lexical names;
-// a catch: its param; a loop's head: its let and const; a class expression: its name
 function opens(n: Node): Set<string> | undefined {
 	switch (n.type) {
 		case "FunctionDeclaration":
@@ -339,7 +314,6 @@ function opens(n: Node): Set<string> | undefined {
 	return undefined
 }
 
-// the names a pattern binds
 function bound(p: Node, into: Set<string>) {
 	switch (p.type) {
 		case "Identifier":
@@ -365,7 +339,6 @@ function bound(p: Node, into: Set<string>) {
 	}
 }
 
-// the let, const, class, function, enum and namespace names statements declare
 function lexical(statements: Node[], into: Set<string>) {
 	for (let s of statements) {
 		if (s.type === "ExportNamedDeclaration" || s.type === "ExportDefaultDeclaration") {
@@ -384,7 +357,6 @@ function lexical(statements: Node[], into: Set<string>) {
 	}
 }
 
-// the var names a function body declares, its nested functions' left out
 function vars(n: Node, into: Set<string>) {
 	for (const k in n) {
 		if (SKIP.has(k)) continue
