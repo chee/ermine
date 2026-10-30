@@ -9,7 +9,6 @@ const PACKAGES: Record<string, readonly string[]> = {
 	reactivity: ["changeable"],
 	places: ["changeable", "crow", "graph", "reactivity"],
 	encoding: ["changeable"],
-	ids: ["encoding"],
 	processes: ["changeable", "graph", "protect", "reactivity", "places"],
 	system: ["changeable", "graph", "protect", "reactivity", "places", "processes"],
 	bundling: ["system"],

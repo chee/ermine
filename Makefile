@@ -88,11 +88,6 @@ system_src = $(filter-out places/c/places_harness.c places/c/world_harness.c,$(p
 system = system/c/ermine-harness
 system_suite = ermine
 LIBS += system
-# ids (ids): ermine ids, their text and tree ids, on encoding's BLAKE3
-ids_src = $(harness_src) ids/c/ids.c ids/c/ids_harness.c $(blake3_src)
-ids = ids/c/ids-harness
-ids_suite = ids
-LIBS += ids
 # the scheduler's frees (reactivity/c/free_test.c): what holds a scope, and when it goes; no suite
 scheduler-free-test_src = changeable/c/value.c changeable/c/frame.c reactivity/c/scheduler.c reactivity/c/order.c reactivity/c/rank.c reactivity/c/causes.c changeable/c/ptrmap.c reactivity/c/tracker.c reactivity/c/free_test.c
 scheduler-free-test = reactivity/c/free-test
