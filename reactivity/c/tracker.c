@@ -11,10 +11,8 @@ tg_node *tg_node_new(void *owner) {
 
 void tg_node_free(tg_node *n) { free(n); }
 
-// every begin takes the next tick
 static uint64_t tick;
 
-// out of to's readers, and freed
 static void drop(tg_link *l) {
 	if (l->before != NULL) l->before->after = l->after;
 	else l->to->first = l->after;
@@ -35,7 +33,6 @@ static tg_link *link(tg_node *from, tg_node *to, tg_link *prev, tg_link *next) {
 	return l;
 }
 
-// not in a run already: end it first
 int tg_begin(tg_node *f) {
 	if (f->open) return -2;
 	f->open = true;
@@ -44,9 +41,9 @@ int tg_begin(tg_node *f) {
 	return 0;
 }
 
-// link's track (alien-signals, solid 2.0): the same spot as the last read, the next link in
-// order, or t's newest reader being this run, are free; else a new link at the cursor.
-// duplicates are allowed where these miss: reads b, a, b over old [a, b] ends with two b
+// Like alien-signals and Solid 2.0, a read of the same spot as last time, of the next link in
+// order, or by t's newest reader in this run, reuses a link; otherwise a new one is added at the
+// cursor. Duplicates can occur where these miss: reading b, a, b over old [a, b] ends with two b.
 int tg_track(tg_node *f, tg_node *t) {
 	tg_link *cursor = f->cursor;
 	if (cursor != NULL && cursor->to == t) return 0;
@@ -64,13 +61,13 @@ int tg_track(tg_node *f, tg_node *t) {
 	return 0;
 }
 
-// whatever this run did not read again is dropped; without a run, nothing: leave, then trim
+// Drops whatever the run did not read again (tg_leave, then tg_trim).
 void tg_end(tg_node *f) {
 	f->open = false;
 	tg_trim(f);
 }
 
-// the run ends, no link dropped: the ones it did not reach stay after the cursor, old
+// Ends the run without dropping links; the ones it did not reach stay after the cursor as old.
 void tg_leave(tg_node *f) { f->open = false; }
 
 int tg_resume(tg_node *f) {
@@ -81,7 +78,6 @@ int tg_resume(tg_node *f) {
 
 bool tg_old(const tg_link *l) { return !l->from->open && l->gen != l->from->gen; }
 
-// outside a run: the links after the cursor (all, with no cursor) are dropped
 void tg_trim(tg_node *f) {
 	tg_link *stale;
 	if (f->cursor != NULL) {
@@ -98,7 +94,7 @@ void tg_trim(tg_node *f) {
 	}
 }
 
-// a set of nodes by identity, open addressing; cap a power of two, more than twice what goes in
+// A set of nodes by identity, using open addressing; the capacity is a power of two.
 typedef struct {
 	tg_node **slots;
 	size_t mask;
@@ -121,7 +117,7 @@ static bool seen_add(seen_set *m, tg_node *n) {
 	return false;
 }
 
-// out of f's reads (prev: the link before it, NULL at the front) and to's readers, and freed
+// Removes l from f's reads (prev is the link before it, NULL at the front) and from to's readers.
 static void cut(tg_node *f, tg_link *prev, tg_link *l) {
 	if (prev != NULL) prev->next = l->next;
 	else f->reads = l->next;
@@ -129,9 +125,8 @@ static void cut(tg_node *f, tg_link *prev, tg_link *l) {
 	drop(l);
 }
 
-// outside a run: the links after the cursor stay, but one to a spot linked before it, or after it
-// already, is dropped: a run left (tg_leave) with its reads in a new order piles up no repeats.
-// out of memory: a slower walk, the same links
+// Outside a run: drops links after the cursor to a spot already linked before or after it, so a
+// run left with its reads in a new order leaves no repeats. Out of memory it just walks slower.
 void tg_dedupe(tg_node *f) {
 	tg_link *cursor = f->cursor;
 	tg_link *l = cursor != NULL ? cursor->next : f->reads;
@@ -163,8 +158,7 @@ void tg_dedupe(tg_node *f) {
 	}
 }
 
-// outside a run: at the cursor (the end, after tg_end), the cursor on it; or left where it is. in
-// a run it would mean track
+// Outside a run: adds a link at the cursor (the end, after tg_end) and moves the cursor onto it.
 int tg_add(tg_node *f, tg_node *t) {
 	if (f->open) return -2;
 	for (tg_link *l = f->reads; l != NULL; l = l->next)

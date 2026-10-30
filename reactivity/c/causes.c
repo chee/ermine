@@ -3,18 +3,16 @@
 #include <stdlib.h>
 #include <string.h>
 
-// causes let go wait for the next cs_run, up to this many
+// Released causes wait here for reuse, up to this many.
 #define SPARE_MAX 1024
 
 struct causes {
-	// the computations that ran in this pulse
 	pm ran;
-	// the computations holding causes, forgotten at the pulse's end
 	pm holding;
 	// causes let go, linked through small[0]
 	cs_cause *spare;
 	size_t nspare;
-	// causes not let go yet; freed: cs_free came first, so this goes with the last of them
+	// Causes not yet released. After cs_free this goes down to zero and then frees the struct.
 	size_t live;
 	int freed;
 };
@@ -43,8 +41,7 @@ cs_cause *cs_ref(cs_cause *c) {
 	return c;
 }
 
-// lets go; a cause with no count left lets go of its parents, with a stack of its own (on the C
-// stack while it is short)
+// Drops one count. A cause with none left releases its parents, using its own stack.
 void cs_release(cs_cause *c) {
 	cs_cause *first[32];
 	cs_cause **stack = first;
@@ -130,7 +127,6 @@ static int by_n(const void *a, const void *b) {
 	return x->n < y->n ? -1 : x->n > y->n;
 }
 
-// a cause, and how many of its parents are walked
 typedef struct frame {
 	cs_cause *x;
 	size_t i;
@@ -138,8 +134,7 @@ typedef struct frame {
 
 cs_item **cs_loop(causes *c, cs_cause *cause, cs_item *t, size_t *count) {
 	if (cause == NULL || !pm_has(&c->ran, t)) return NULL;
-	// each cause after its parents (causes only point back, so no cycle): on a path back to a run
-	// of t when it is of t, or a parent is
+	// Causes only point back, so there is no cycle to guard against.
 	pm seen = {0}, on = {0};
 	frame *stack = NULL;
 	size_t top = 0, cap = 0;
@@ -172,7 +167,6 @@ cs_item **cs_loop(causes *c, cs_cause *cause, cs_item *t, size_t *count) {
 		pm_clear(&on);
 		return NULL;
 	}
-	// their computations, once each
 	pm items = {0};
 	for (size_t i = 0; i < on.cap; i++)
 		if (on.keys[i] != NULL) pm_set(&items, ((const cs_cause *)on.keys[i])->of, NULL);

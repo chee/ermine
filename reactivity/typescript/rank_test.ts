@@ -1,4 +1,4 @@
-// rank on its own: components and their ranks, and a chain deeper than the call stack
+// Tests rank on its own: components, their ranks, and a chain deeper than the call stack.
 import { assertEquals } from "@std/assert"
 import rank from "./rank.ts"
 

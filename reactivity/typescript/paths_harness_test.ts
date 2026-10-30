@@ -1,11 +1,5 @@
-// paths on whichever harness HARNESS names (default: paths_harness.ts), by the fuzzers; the
-// scenarios are run by conformance/run.ts. Spots compare as sets with the rule; with HARNESS set,
-// the reference is asked too and every answer is the same, spots in the same order.
-//
-// The oracle fuzz needs no second implementation: on copy-on-write values (op's apply), a read
-// whose value is a new reference after the patches must be marked; and a single patch at a list
-// of objects never reused marks an index read (inside the list, before or after) exactly when
-// what is there changed.
+// Tests paths on the harness named by HARNESS (default paths_harness.ts) by fuzzing against the
+// rule. On copy-on-write values, a read whose value is a new reference must be marked.
 import { assert, assertEquals } from "@std/assert"
 import apply from "@ermine/changeable/apply"
 import type { Key, Patch } from "@ermine/changeable/apply"
@@ -27,10 +21,8 @@ async function ask(requests: Request[]): Promise<Record<string, unknown>[]> {
 	return answers
 }
 
-// a set of spots, in one order
 const sorted = (spots: unknown) => (spots as Shown[]).map((s) => JSON.stringify(s)).sort()
 
-// fuzzing: a few dozen seeds (memory: fuzz runs small)
 const SEEDS = 40
 
 function rand(seed: number) {
@@ -46,12 +38,9 @@ const MISSING = Symbol("missing")
 const isMap = (v: unknown): v is Record<string, unknown> =>
 	v !== null && typeof v === "object" && Object.getPrototypeOf(v) === Object.prototype
 const typed = (v: unknown): v is Int16Array => v instanceof Int16Array
-// positions: code points, as apply counts them
 const size = (v: unknown) =>
 	typeof v === "string" ? [...v].length : (v as ArrayLike<unknown>).length
 
-// what a read of path got: only lists and maps are walked into (strings and typed arrays are
-// leaves), as apply walks
 function get(v: unknown, path: readonly Key[]): unknown {
 	if (v === undefined) return MISSING
 	for (const k of path) {
@@ -62,7 +51,6 @@ function get(v: unknown, path: readonly Key[]): unknown {
 	return v
 }
 
-// a value: maps, lists, strings, typed arrays, numbers; every list item a new one
 function make(r: Rand, depth: number): unknown {
 	const k = r.pick(depth > 0 ? 9 : 4)
 	if (k === 0) return r.pick(5)
@@ -74,7 +62,6 @@ function make(r: Rand, depth: number): unknown {
 	for (const n of NAMES) if (r.pick(2)) m[n] = make(r, depth - 1)
 	return m
 }
-// a run of new positions for a sequence like v
 function run(r: Rand, v: unknown): unknown {
 	const n = r.pick(3)
 	if (typeof v === "string") return Array.from({ length: n }, () => r.one(CHARS)).join("")
@@ -82,7 +69,6 @@ function run(r: Rand, v: unknown): unknown {
 	return Array.from({ length: n }, () => make(r, 1))
 }
 
-// every path in v, [] included
 function every(v: unknown, at: Key[] = [], out: Key[][] = []): Key[][] {
 	if (v === undefined) return out
 	out.push(at)
@@ -96,7 +82,6 @@ function span(r: Rand, v: unknown): [number, number] {
 	return [a, a + r.pick(n - a + 1)]
 }
 
-// one patch apply takes on v, or none found
 function patch(r: Rand, v: unknown): Patch | undefined {
 	const all = every(v)
 	for (let tries = 0; tries < 30; tries++) {
@@ -111,7 +96,6 @@ function patch(r: Rand, v: unknown): Patch | undefined {
 			p = { path: at, range: span(r, there) }
 			if (r.pick(3)) p.value = run(r, there)
 		} else {
-			// a move: an unranged or ranged take, landing unranged or in a span
 			const to = r.one(all.length ? all : [[]]), dest = get(v, to)
 			const take = sequence(there) && r.pick(2)
 				? { path: at, range: span(r, there) }
@@ -129,7 +113,6 @@ function patch(r: Rand, v: unknown): Patch | undefined {
 	}
 }
 
-// read paths: every path in v, and some made up (missing, wrong kind, into leaves)
 function reads(r: Rand, v: unknown): Key[][] {
 	const out = every(v)
 	for (let i = 0; i < 12; i++) {
@@ -140,7 +123,6 @@ function reads(r: Rand, v: unknown): Key[][] {
 	return out.filter((p) => !seen.has(JSON.stringify(p)) && seen.add(JSON.stringify(p)))
 }
 
-// typed arrays are leaves to the rule: sent as a map
 const sent = (p: Patch): Patch =>
 	JSON.parse(JSON.stringify(p, (_, x) => typed(x) ? { typed: [...x] } : x))
 
@@ -189,7 +171,6 @@ Deno.test(`fuzz: ${SEEDS} seeds, what changed is marked, and the index agrees wi
 	}
 })
 
-// the keys at a value: a map's names, a list's length; a leaf or nothing has none
 const shape = (v: unknown) =>
 	isMap(v) ? JSON.stringify(Object.keys(v).sort()) : Array.isArray(v) ? `list ${v.length}` : "none"
 
@@ -286,7 +267,6 @@ Deno.test(`fuzz: ${SEEDS} seeds, a list of new objects: an index read is marked 
 	}
 })
 
-// pruning against a model: the spots held, and what an event at a key gives
 Deno.test(`fuzz: ${SEEDS} seeds, spot and release against a model`, async () => {
 	const SOURCES: unknown[] = ["v", { symbol: "v" }]
 	const IDS = ["n", "m"]

@@ -1,6 +1,5 @@
-// the scheduler, where the suite (reactivity/conformance/scheduler) does not reach: keys of any kind, its
-// own equal, sets and cleanups that throw, scopes under a computation, the plain read, wake, the
-// sweep, and scopes: what is open, and nothing after an await
+// Tests the scheduler beyond the conformance suite: keys of any kind, throwing sets and cleanups,
+// scopes under a computation, the sweep, and what is open.
 import { assert, assertEquals, assertStrictEquals, assertThrows } from "@std/assert"
 import {
 	type Computer,
@@ -13,25 +12,19 @@ import {
 } from "./scheduler.ts"
 import { type Told, trace } from "./scheduler_harness.ts"
 
-// what is under o, oldest first
 const under = (o: Scope) => {
 	const out: Scope[] = []
 	for (let x = o.newest; x; x = x.older) out.unshift(x)
 	return out
 }
 
-// what is open, as the three getters give it (the info as it is now: getInfo's is live);
-// nothing: undefined
 type Now = { scope: Scope; info: Info; run: Run | undefined } | undefined
 const now = (s: ReturnType<typeof createScheduler>): Now => {
 	const scope = s.getCurrentScope()
 	return scope && { scope, info: { ...s.getInfo()! }, run: s.getRun() }
 }
-// a run as [its computer, its number]
 const named = (run: Run | undefined) => run && [run.computer, run.n]
 
-// a scheduler over a little store: write(key, value, by?) keeps it and says it changed. at(f): f
-// under the one root a test makes its computations in
 function setup() {
 	const moments: Told[] = []
 	const s = createScheduler()
@@ -60,8 +53,8 @@ const unscoped = (f: () => unknown) => {
 Deno.test("a computation's f is given its last result: a compute's last set, an effect's last acted on", () => {
 	const { s, at, write, get } = setup()
 	write("k", 1)
-	// results in the same ten are equal: an equal result is not set, so what is given stays the
-	// last one set, not the last result
+	// Results in the same ten are equal, so an equal result is not set; what is given stays the last
+	// set, not the last result.
 	const tens = (a: number, b: number) => Math.floor(a / 10) === Math.floor(b / 10)
 	const given: unknown[] = []
 	at(() =>
@@ -166,11 +159,9 @@ Deno.test("a run's end says what it keeps past it: a result given to set (even o
 	assertEquals(kept.length, 2)
 	assertStrictEquals(kept.find(([k]) => k === c)![1], v)
 	assertEquals(kept.find(([k]) => k === e)![1], 2)
-	// equal: nothing kept
 	write("a", 2)
 	s.pulse()
 	assertEquals(kept.length, 2)
-	// a set that throws had the result: kept all the same
 	const w = { x: 2 }
 	at(() =>
 		s.createComputer(() => (get("c"), w), () => {
@@ -199,19 +190,16 @@ Deno.test("dispose: every cleanup runs, the first error after; one added later r
 			throw new Error("second")
 		})
 	)
-	// a cleanup added in a scope gone while it was open runs at once
 	const late = s.createScope({ why: "test" }, p)
 	s.runWithScope(late, () => {
 		const e = assertThrows(() => s.teardown(o))
 		assertEquals((e as Error).message, "first")
 		assertEquals(ran, ["p2", "p1", "o"])
 		s.registerTeardown(s.getCurrentScope()!, () => ran.push("late"))
-		// nothing made in it now
 		assertThrows(() => s.createScope({ why: "test" }), SchedulerError, "disposed")
 		assertThrows(() => s.createComputer(() => 1, () => {}), SchedulerError, "disposed")
 	})
 	assertEquals(ran.at(-1), "late")
-	// a gone scope is opened by no one, and has nothing made under it
 	assertThrows(() => s.runWithScope(o, () => {}), SchedulerError, "disposed")
 	assertThrows(() => s.createScope({ why: "test" }, o), SchedulerError, "disposed")
 })
@@ -224,7 +212,6 @@ Deno.test("what is made under a compute goes before its next run", () => {
 		s.createComputer(() => {
 			const n = get("a")
 			made++
-			// in a run, the scope open is the computation
 			s.createEffect(() => get("b"), (v) => void inner.push([n, v]))
 			return n
 		}, () => {})
@@ -236,7 +223,6 @@ Deno.test("what is made under a compute goes before its next run", () => {
 	s.pulse()
 	write("b", "y")
 	s.pulse()
-	// one inner effect at a time: the first went with its compute's second run
 	assertEquals(made, 2)
 	assertEquals(inner, [[1, "x"], [2, "x"], [2, "y"]])
 	assertEquals(under(c).length, 1)
@@ -283,7 +269,6 @@ Deno.test("after an await a read counts for nothing; the writer kept from the ru
 	s.pulse()
 	assertEquals(ends(c).map((m) => m.ended), ["pending", "done"])
 	assert(moments.some((m) => "due" in m && m.due === b && m.by === c))
-	// a was read after the await: nothing reruns c
 	const before = ends(c).length
 	write("a", 2)
 	s.pulse()
@@ -295,7 +280,6 @@ Deno.test("wake: told when a promise settles; its result lands at the next pulse
 	const s = createScheduler()
 	s.onSettle(() => woken++)
 	const set: number[] = []
-	// set's value is the promise's: number
 	s.runWithScope(
 		s.createRootScope({ actor: "test" }),
 		() => s.createComputer(() => Promise.resolve(7), (v: number) => void set.push(v)),
@@ -329,7 +313,6 @@ Deno.test("a thenable settles once: what it says after its first resolve or reje
 	let woken = 0
 	s.onSettle(() => woken++)
 	const set: number[] = []
-	// a thenable that keeps talking: resolve twice, then reject
 	const loud = {
 		then(resolve: (v: number) => void, reject: (e: unknown) => void) {
 			resolve(1)
@@ -427,7 +410,6 @@ Deno.test("keys nobody reads any more are forgotten, and tracking stays right", 
 	const { s, at, write, get } = setup()
 	let i = 0
 	const set: unknown[] = []
-	// each run reads the next key: the old ones are left with no readers
 	at(() => s.createComputer(() => get(`k${i}`) ?? i, (v) => void set.push(v)))
 	s.pulse()
 	for (i = 1; i < 300; i++) {
@@ -445,8 +427,7 @@ Deno.test("keys nobody reads any more are forgotten, and tracking stays right", 
 })
 
 Deno.test("a compute's key, given: its reader waits for it from the first pulse", () => {
-	// a reader made before its writer: without the key, the reader's first result is from before
-	// the writer ran, and it is given again; with it, the reader is given once, the writer's
+	// A reader made before its writer is given its first result again, unless the key is declared.
 	for (const declared of [false, true]) {
 		const { s, at, write, get } = setup()
 		write("a", 1)
@@ -465,7 +446,6 @@ Deno.test("a compute's key, given: its reader waits for it from the first pulse"
 	}
 })
 
-// a pulse past this many runs is endless: the hook throws, and the pulse is left
 function bounded(limit = 2000) {
 	let runs = 0
 	const s = createScheduler()
@@ -501,10 +481,9 @@ Deno.test("made in an act, under the effect, its set changing what the effect re
 })
 
 Deno.test("a cleanup writing what its computation read, on a plain scope made in the run: the loop ends, as one on the computation does", () => {
-	// written by the writer open (current().writer), as a program that knows no more would. the
-	// plain scope stays through the next run and goes once that run is done; the computation's own
-	// cleanup runs once the round's runs are (like Solid): either way the run-1 cleanup writes 1
-	// after run 2, a loop, and run 3's cleanup write (101) is cut
+	// Written by the writer open. The plain scope stays through the next run; the computation's own
+	// cleanup runs once the round's runs are done. The run-1 cleanup writes 1 after run 2, a loop,
+	// and run 3's cleanup write (101) is cut.
 	const go = (nested: boolean) => {
 		const { s, at, write, get, store, runs } = bounded(50)
 		store.set("k", 0)
@@ -588,7 +567,6 @@ Deno.test("changed with a writer: the run, from current().writer, names that run
 	for (const named of [true, false]) {
 		const { s, at, write, get, moments } = setup()
 		write("x", 1)
-		// a writes w in its run; b reads w
 		const a = at(() =>
 			s.createComputer(() => {
 				write("w", get("x"), named ? s.getRun() : undefined)
@@ -601,7 +579,6 @@ Deno.test("changed with a writer: the run, from current().writer, names that run
 		s.pulse()
 		const by = moments.flatMap((m) => "due" in m && m.due === b ? [m.by === a] : [])
 		const ranks = moments.flatMap((m) => "starts" in m && m.starts === b ? [m.rank] : [])
-		// named: a is w's writer, so b ranks after it
 		assertEquals([by, ranks], named ? [[false, true], [0, 1]] : [[false, false], [0, 0]])
 	}
 })
@@ -609,7 +586,6 @@ Deno.test("changed with a writer: the run, from current().writer, names that run
 Deno.test("made in a run known to loop, its set changing what that run read: the loop ends", () => {
 	const { s, at, store, runs } = bounded()
 	store.set("k", 0)
-	// each run makes a compute whose set says k changed, its value the same
 	at(() =>
 		s.createComputer(() => {
 			s.track("k")
@@ -649,8 +625,6 @@ Deno.test("a compute that throws PENDING is pending: nothing set, its last resul
 })
 
 Deno.test("pending through reads: a read of something pending throws it, and every compute above is pending; the value comes, they all land", () => {
-	// a host keeping pending places as ermine will: a compute's run ending pending makes its key
-	// pending, and any other end makes it not; each said changed. a read of a pending key throws
 	const store = new Map<unknown, unknown>()
 	const pending = new Set<unknown>()
 	const keyOf = new Map<Computer, string>()
@@ -669,7 +643,6 @@ Deno.test("pending through reads: a read of something pending throws it, and eve
 		return store.get(key) as number
 	}
 	const runs = new Map<string, number>()
-	// c1 reads x; c2 reads c1; c3 reads c2: each adds one, and only reads
 	const chain = (name: string, from: string) => {
 		const c: Computer = s.createComputer(() => {
 			runs.set(name, (runs.get(name) ?? 0) + 1)
@@ -688,12 +661,10 @@ Deno.test("pending through reads: a read of something pending throws it, and eve
 	store.set("x", 1)
 	s.pulse()
 	assertEquals([store.get("c3"), [...pending]], [4, []])
-	// x is pending: only c1's read throws
 	pending.add("x")
 	s.mark(["x"])
 	s.pulse()
 	assertEquals([store.get("c3"), [...pending].sort()], [4, ["c1", "c2", "c3", "x"]])
-	// the value comes
 	pending.delete("x")
 	store.set("x", 10)
 	s.mark(["x"])
@@ -702,15 +673,12 @@ Deno.test("pending through reads: a read of something pending throws it, and eve
 	assertEquals([...runs.values()], [3, 3, 3])
 })
 
-// scopes: what is open
-
 Deno.test("scope: nothing open: no scope; making a scope or a computer is unscoped", () => {
 	const s = createScheduler()
 	assertEquals(s.getCurrentScope(), undefined)
 	unscoped(() => s.createScope({ why: "test" }))
 	unscoped(() => s.createComputer(() => 1, () => {}))
 	unscoped(() => s.createEffect(() => 1, () => {}))
-	// a root is made with nothing open
 	assertEquals(s.createRootScope({ actor: "test" }).parent, undefined)
 })
 
@@ -720,7 +688,6 @@ Deno.test("scope: a scope with no keys is empty: a root, a scope", () => {
 	const o = s.createRootScope({ actor: "test" })
 	assertThrows(() => s.createScope({}, o), SchedulerError, "no keys")
 	s.runWithScope(o, () => assertThrows(() => s.createScope({}), SchedulerError, "no keys"))
-	// nothing made under o
 	assertEquals(under(o), [])
 })
 
@@ -736,12 +703,9 @@ Deno.test("scope: one tree: a write's info is the scope open's, nothing added; t
 		seen.push(s.getInfo()!)
 	})
 	assertEquals(seen, [{ why: "save" }, { app: "notes", actor: "notes" }])
-	// the info is the scope's own, not a copy: the object given
 	assertStrictEquals(seen[1], app.info)
-	// the tree: up through parent to the root
 	assertStrictEquals(app.parent, chee)
 	assertEquals(chee.parent, undefined)
-	// the owner too: disposing the root takes all of it
 	s.teardown(chee)
 	assertEquals(app.state, "gone")
 	assertThrows(() => s.runWithScope(app, () => {}), SchedulerError, "disposed")
@@ -775,15 +739,12 @@ Deno.test("scope: a run opens its computation, its info the run's, written by th
 		e = s.createEffect(() => (eown = s.getRun(), get("a")), () => void (seen.act = now(s)))
 	})
 	const t = write("a", 1)
-	// till its first run, a computer's info is the tick of its making alone
 	assertEquals(c.info, { mark: t - 2 })
 	s.pulse()
 	const shown = (x: Now) => [x!.scope, x!.info, x!.run]
 	const pairs = (n: number, mark: number): Info => ({ run: n, mark })
 	assertStrictEquals(c.parent, notes)
-	// each made due by its making: the mark is the tick it was made at, before the write's
 	assertEquals(shown(seen.run), [c, pairs(1, t - 2), own])
-	// a set and an act are by the computer: its latest run
 	assertEquals(shown(seen.set), [c, pairs(1, t - 2), own])
 	assertEquals(shown(seen.act), [e, pairs(1, t - 1), eown])
 	const t2 = write("a", 2)
@@ -835,7 +796,6 @@ Deno.test("scope: the caller of an async function doesn't see the callee's scope
 		})
 	await s.runWithScope(caller, () => {
 		const p = call()
-		// back in the caller at once, the callee's scope closed
 		seen.push(s.getInfo()!)
 		return p
 	})
@@ -861,7 +821,6 @@ Deno.test("scope: a teardown opens its scope: a computer's by it (its latest run
 	write("a", 2)
 	s.pulse()
 	s.teardown(p)
-	// c's teardown from run 1 runs as run 2 starts: by run 2, its latest
 	assertEquals(seen.map((x) => [x!.scope, named(x!.run)]), [[c, [c, 2]], [p, undefined]])
 	assertEquals(seen[1]!.info, { why: "plain" })
 })
@@ -877,11 +836,9 @@ Deno.test("scope: a scope made in an act is under the effect, made in the run ac
 	)
 	write("a", 1)
 	s.pulse()
-	// run 2 gives true again: no act, so what act 1 made stays
 	write("a", 2)
 	s.pulse()
 	assertEquals([k.state, e.runs], ["alive", 2])
-	// its own info; made in act 1, made due by its making, at tick 1
 	assertEquals(k.info, { why: "listen" })
 	assertStrictEquals(k.parent, e)
 	assertEquals(made, { run: 1, mark: 1 })
@@ -896,7 +853,6 @@ Deno.test("scope: a click dispatched in a run, its scope made there, is under th
 		s.createComputer(() => {
 			own = s.getRun()
 			get("a")
-			// dispatchEvent: sync, a scope of the event's, under the one open
 			s.runWithScope(s.createScope({ event: "click" }), () => void (seen = now(s)))
 			return 0
 		}, () => {}))
@@ -907,17 +863,13 @@ Deno.test("scope: a click dispatched in a run, its scope made there, is under th
 	assertEquals(c.info, { mark: 1 })
 	assertStrictEquals(c.parent, notes)
 	assertStrictEquals(seen!.run, own)
-	// the click's frame is under its run's own, not the computer's
 	assertStrictEquals(seen!.scope.frame.parent, (own as Run).frame)
 })
 
 Deno.test("scope: a handler's call, as a scope: under the definer's (it dies with it), the caller and trusted-event as its info", () => {
 	const { s, at, write, get } = setup()
-	// notes defines a handler: a scope of its own, under notes
 	const notes = at(() => s.createScope({ actor: "notes" }))
 	const handler = s.createScope({ handler: "click" }, notes)
-	// a call: a scope under the definer's, the caller and whether the event was trusted as data;
-	// only the host, making the call, says trusted
 	const made: Computer[] = []
 	const seen: unknown[] = []
 	const ups: (Scope | undefined)[] = []
@@ -927,20 +879,17 @@ Deno.test("scope: a handler's call, as a scope: under the definer's (it dies wit
 			ups.push(s.getCurrentScope()!.parent)
 			made.push(s.createComputer(() => 0, () => {}))
 		})
-	// games' run calls it, a script's click; the host calls it, the user's
 	const games = at(() => s.createScope({ actor: "games" }))
 	s.runWithScope(games, () => s.createComputer(() => (get("a"), call("games", false)), () => {}))
 	write("a", 1)
 	s.pulse()
 	s.runWithScope(s.createRootScope({ actor: "host" }), () => call("chee", true))
-	// the definer's, never the caller's: games and the host are in the info only as the call said
 	assertEquals(seen, [{ caller: "games", "trusted-event": false }, {
 		caller: "chee",
 		"trusted-event": true,
 	}])
 	assertEquals(ups, [handler, handler])
 	assertStrictEquals(handler.parent, notes)
-	// what a call made is the definer's: it goes with notes, not with games
 	s.teardown(games)
 	assertEquals(made.map((c) => c.state), ["alive", "alive"])
 	s.teardown(notes)
@@ -961,7 +910,6 @@ Deno.test("onTrackingStart: told when a key gains its first tracker, again after
 	write("x", 1)
 	s.pulse()
 	s.teardown(s.getCurrentScope() ?? a)
-	// the second reader still reads x: no gone yet
 	assertEquals(told.filter(([w]) => w === "gone"), [])
 })
 
@@ -973,10 +921,8 @@ Deno.test("onAfterPulse: told once a pulse is over, after its acts; not for a pu
 	at(() => s.createEffect(() => (s.pulse(), get("x")), (v) => void told.push(`act ${v}`)))
 	s.pulse()
 	assertEquals(told, ["act 1", "after"])
-	// a pulse with nothing to do is a pulse
 	s.pulse()
 	assertEquals(told, ["act 1", "after", "after"])
-	// a listener that writes and pulses: a new pulse, told again
 	told.length = 0
 	let once = true
 	const off = s.onAfterPulse(() => {
@@ -1012,7 +958,6 @@ Deno.test("a computer's info: one object, the keys given copied once, as it is m
 	write("x", 1)
 	s.pulse()
 	assertEquals(seen, [{ run: 1, mark: 1 }, { run: 2, mark: 2 }])
-	// the computer's info never replaced nor changed; each run's info a new one, its frame's
 	assertStrictEquals(c.info, made)
 	assertEquals(c.info, { node: "N", mark: 1 })
 	assert(live[0] !== live[1] && live[0] !== made)
@@ -1023,7 +968,6 @@ Deno.test("a computer's info: one object, the keys given copied once, as it is m
 	)
 	assertEquals(early, { run: 1, mark: 3 })
 	assertEquals(e.info, { node: "E", mark: 3 })
-	// none given: as ever
 	const d = at(() => s.createComputer(() => 1, () => {}))
 	assertEquals(d.info, { mark: 4 })
 })

@@ -1,12 +1,10 @@
-// libFuzzer target: the input bytes are a value, then rounds of reads (spots made at two keys, or
-// let go of) and patches on the value (../../changeable/c/fuzz_values.h), the patches that op_apply lands
-// given to pt_mark. Checked each round:
-// - a spot asked for again is the same spot, with its key and path; a new one is new;
-// - every read whose value a patch changed is marked by it (op_apply on copies, one patch at a
-//   time, says what changed: a read of a path is what is there, deep; a number key also reads a
-//   string's code point or a typed array's element);
-// - pt_mark gives each spot once: the key's change spot, and exactly the spots of the key that
-//   some patch marks by pt_marks; pt_event gives every spot of the key;
+// libFuzzer target. The input bytes are a value, then rounds of reads (spots made at two keys or
+// let go of) and patches on that value (see fuzz_values.h). Each round checks that:
+// - a spot asked for again is the same spot, and a new one is new;
+// - every read whose value a patch changed is marked by it (found by applying the patch to
+//   copies; a number key also reads a string's code point or a typed array's element);
+// - pt_mark gives each spot once: the key's change spot and exactly the spots that some patch
+//   marks by pt_marks; pt_event gives every spot of the key;
 // - pt_held_of counts the keys, spots and steps the model has.
 #include "paths.h"
 #include "../../changeable/c/fuzz_values.h"
@@ -32,7 +30,6 @@ typedef struct {
 static mspot spots[SPOTS];
 static int nspots;
 
-// what a read of path sees in v, as a value of its own; NULL: nothing there
 static op_value *seen(const op_value *v, const op_key *path, size_t n) {
 	for (size_t i = 0; i < n && v != NULL; i++) {
 		op_key k = path[i];
@@ -41,7 +38,6 @@ static op_value *seen(const op_value *v, const op_key *path, size_t n) {
 		else if (i + 1 < n || k.type != OP_NUM_KEY) return NULL;
 		else if (v->type == OP_TYPED) return (size_t)k.n < op_length(v) ? op_typed(v->kind, v->data + k.n * op_size(v->kind), 1) : NULL;
 		else if (v->type == OP_STR) {
-			// the code point's bytes: from its lead byte to the next
 			size_t at = 0, count = 0;
 			while (at < v->bytes && count < (size_t)k.n)
 				if (((unsigned char)v->str[++at] & 0xc0) != 0x80) count++;
@@ -54,8 +50,8 @@ static op_value *seen(const op_value *v, const op_key *path, size_t n) {
 	return fz_copy(v);
 }
 
-// KNOWN (repro-paths-joined-surrogates): a span put in or taken out of a string just after a lone
-// high, so that a lone low meets it: that code point, before the span, becomes a pair; unmarked
+// Known gap (repro-paths-joined-surrogates): a span put into or taken out of a string just after
+// a lone high surrogate, next to a lone low one, joins them into a pair and goes unmarked.
 static int joined(const op_value *x, const op_value *y) {
 	return x != NULL && y != NULL && x->type == OP_STR && x->bytes == 3 && (unsigned char)x->str[0] == 0xed &&
 		((unsigned char)x->str[1] & 0xf0) == 0xa0 && y->type == OP_STR && y->bytes == 4;
@@ -69,7 +65,6 @@ static int same_path(const op_key *a, size_t na, const op_key *b, size_t nb) {
 	return 1;
 }
 
-// the steps a key keeps: its [], and every other prefix of its spots' paths, once
 static size_t steps_of(int key) {
 	size_t n = 1;
 	for (int i = 0; i < nspots; i++) {
@@ -99,7 +94,6 @@ static void check_held(pt_paths *p, int round) {
 	if (got.keys != want.keys || got.spots != want.spots || got.steps != want.steps) die("held is not the model's", round);
 }
 
-// the marked list: each once; key 0's change spot, and exactly the spots `marked` says
 static void check_marked(pt_spot *const *got, size_t n, const int *marked, int round, const char *what) {
 	for (size_t i = 0; i < n; i++)
 		for (size_t j = i + 1; j < n; j++)
@@ -122,7 +116,6 @@ int LLVMFuzzerTestOneInput(const unsigned char *data, size_t size) {
 	op_value *value = fz_value(&b, 0);
 	nspots = 0;
 	for (int round = 0; round < 6 && b.at < b.size; round++) {
-		// reads: made at either key, or let go of
 		for (unsigned n = fz_byte(&b) % 5; n > 0; n--) {
 			unsigned c = fz_byte(&b);
 			if (c % 4 == 3) {
@@ -151,7 +144,6 @@ int LLVMFuzzerTestOneInput(const unsigned char *data, size_t size) {
 		}
 		check_held(p, round);
 
-		// patches at key 0, one at a time on copies: what each changed must be marked by it
 		fz_patches ps;
 		fz_patch_list(&b, value, &ps);
 		op_value *now = fz_copy(value);

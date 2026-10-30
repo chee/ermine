@@ -1,5 +1,5 @@
-// the tracker against the model (tracker_model.ts), on whichever harness HARNESS names (default:
-// tracker_harness.ts). The scenarios are run by conformance/run.ts. Lists compare exactly.
+// Tests the tracker against the model (tracker_model.ts) on the harness named by HARNESS
+// (default tracker_harness.ts).
 import { assertEquals } from "@std/assert"
 import { ask, command } from "../../conformance/typescript/ask.ts"
 import { rand } from "../../conformance/typescript/rand.ts"
@@ -7,10 +7,8 @@ import { createModel } from "./tracker_model.ts"
 
 type Request = { op: string; from?: string; to?: string; of?: string }
 
-// a few dozen seeds (memory: fuzz runs small)
 const SEEDS = 40
 const STEPS = 300
-// names: ASCII, BMP, a pair, a pair and a modifier, lone halves, NUL; some both readers and targets
 const READERS = ["p", "中", "\uD83D", "a\u0000"]
 const TARGETS = ["a", "é", "😀", "👍🏽", "\uDE00", "p", "\uD83D", "a\u0000"]
 
@@ -26,7 +24,6 @@ function sequence(seed: number): Request[] {
 			open.push(r)
 			out.push({ op: "begin", from: r })
 		} else if (k < 11 && open.length > 0) {
-			// most tracks go to the innermost run, as nested code would
 			const r = pick(4) === 0 ? one(open) : open[open.length - 1]
 			out.push({ op: "track", from: r, to: one(TARGETS) })
 		} else if (k < 14 && open.length > 0) {
@@ -39,7 +36,6 @@ function sequence(seed: number): Request[] {
 		} else if (k < 18) {
 			out.push({ op: "untrack", from: one(READERS) })
 		} else {
-			// end outside a run: nothing
 			const idle = READERS.filter((x) => !open.includes(x))
 			if (idle.length > 0) out.push({ op: "end", from: one(idle) })
 		}

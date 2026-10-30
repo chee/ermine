@@ -1,27 +1,12 @@
-// the scheduler with its tracker, where scheduler_test.ts and the scheduler suite's fuzz do not
-// reach: random graphs of computes over host keys and each other's (sums, conditionals, a mod
-// that cuts off, failures), effects over them, random writes, disposals and new computations, a
-// pulse after each. checked after every pulse, and at every act:
-//   - every live compute's value is the model's: everything evaluated again from scratch
-//   - effects act once at most per pulse, exactly when the model's value differs from the one
-//     acted on last, with that value and the last as previous; at an act, every compute already
-//     has the model's value (no half-updated state, diamonds included)
-//   - set is never given a value equal to the last (the cut off stops there)
-//   - a run starts only for a reason: new, its last run stopped, or a key it still tracked was
-//     said changed since that run began
-//   - a run starts at a rank above every compute whose key its last run (not stopped) read
-//   - the tracker: every live computation's reads are its last run's keys, in first-read order,
-//     when that run was done; else those, then the old ones (a run not done holds what it did
-//     not reach), no repeats among the old; both lists of every link agree; a
-//     disposed computation holds no links
-// a few dozen seeds (fuzz runs small)
+// Fuzzes the scheduler with its tracker over random graphs of computes and effects, writes and
+// disposals. After every pulse and act it checks values against a model, that effects act once
+// per pulse, the rank order of runs, and the tracker's reads and links.
 import { assert, assertEquals } from "@std/assert"
 import { type Computer, createScheduler, type Run, type Scope } from "./scheduler.ts"
 import { type Told, trace } from "./scheduler_harness.ts"
 import type { Link, Node } from "./tracker.ts"
 import { rand } from "../../conformance/typescript/gen.ts"
 
-// how many are under o
 const under = (o: Scope) => {
 	let n = 0
 	for (let x = o.newest; x; x = x.older) n++
@@ -30,11 +15,8 @@ const under = (o: Scope) => {
 
 const SEEDS = 40
 const STEPS = 15
-// keys: lone halves, apart and (the next) as the pair they make, NUL, a pair and a modifier
 const HOST = ["h0", "\uD83D", "\uDE00", "😀", "h\u0000", "👍🏽"]
-// what text gives: ASCII, BMP, pairs, lone halves, NUL; two halves joined are the pair before
 const TEXTS = ["", "a", "é", "中", "😀", "👍🏽", "\uD83D", "\uDE00", "\u0000", "\uD83D\uDE00"]
-// a name's end, as keys
 const ENDS = ["", "é", "\uD83D", "\uDE00", "\u0000"]
 
 type R = ReturnType<typeof rand>
@@ -51,9 +33,7 @@ type Expr =
 class Fail extends Error {}
 
 type Value = number | string
-// a string as a number: its length in code points
 const num = (v: unknown) => typeof v === "number" ? v : typeof v === "string" ? [...v].length : 0
-// over keys whose values come from look; nothing there is 0
 function evaluate(e: Expr, look: (key: string) => unknown): Value {
 	const n = (x: Expr) => num(evaluate(x, look))
 	if ("read" in e) {
@@ -88,27 +68,19 @@ function expr(r: R, keys: string[], depth: number): Expr {
 	return { fail: [expr(r, keys, depth - 1), r.pick(8)] }
 }
 
-// a computation as made here
 type Made = {
 	name: string
 	kind: "compute" | "effect"
 	e: Expr
 	c: Computer
-	// its runs: the one going on or last, and the one before. sources: the computes whose key it
-	// read once they had written it
 	run?: { tick: number; reads: Set<string>; sources: Set<Made>; ended?: string }
-	// the keys it tracks since its last run ended: a done run's reads; else those and the old
 	held: Set<string>
-	// the sources of its last run not stopped (the order's edges), and its rank at its last start
 	edges: Set<Made>
 	rank: number
-	// a compute's: its set has written its key
 	wrote: boolean
-	// an effect's: the value acted on last
 	acted?: { value: Value }
 }
 
-// the readers' list of a key node, both ways; each link's from holds it once in its reads
 function readersOf(node: Node<unknown>, at: string): Link<unknown>[] {
 	const out: Link<unknown>[] = []
 	let before: Link<unknown> | null = null
@@ -133,29 +105,23 @@ function readsOf(node: Node<unknown>, at: string, done: boolean): Link<unknown>[
 		out.push(l)
 		prev = l
 	}
-	// outside a run, after a run done: the cursor is the last link
 	if (done) assert(node.cursor === prev, `${at}: the cursor`)
 	assertEquals(node.open, false, `${at}: open outside a run`)
 	return out
 }
 
-// what the seeds reached, counted
 type Reach = { acts: number; cut: number; runs: number; failed: number }
 
-// one seed's run
 function seeded(seed: number, reach: Reach) {
 	const r = rand(seed)
 	const label = (s: string) => `seed ${seed}, ${s}`
-	// each moment kept, and told to what the pulse checks
 	const moments: Told[] = []
 	let told = (_: Told) => {}
 	const s = createScheduler()
 	trace(s, (m) => (moments.push(m), told(m)))
-	// the tick of the latest mark
 	let tick = 0
 	s.onMark((_keys, _run, _due, t) => void (tick = t))
 	const store = new Map<string, Value>()
-	// the tick each key was last said changed at
 	const changedAt = new Map<string, number>()
 	const changed = (keys: string[], by?: Computer) => {
 		const t = s.mark(keys, by)
@@ -169,8 +135,6 @@ function seeded(seed: number, reach: Reach) {
 	const byComputation = new Map<Computer, Made>()
 	const alive = (m: Made) => m.c.state === "alive"
 
-	// what every compute and effect should come to: from scratch over the host's values; a
-	// disposed compute's value stays; one that fails keeps the value it had
 	let expected = new Map<string, Value | undefined>()
 	function model() {
 		const out = new Map<string, Value | undefined>()
@@ -203,7 +167,6 @@ function seeded(seed: number, reach: Reach) {
 		}
 		return out
 	}
-	// at an act: every live compute already has the model's value
 	function settled(at: string) {
 		for (const m of made) {
 			if (m.kind !== "compute" || !alive(m)) continue
@@ -217,7 +180,6 @@ function seeded(seed: number, reach: Reach) {
 	let pulses = 0
 	function make(kind: "compute" | "effect") {
 		const name = `${kind[0]}${made.length}${r.one(ENDS)}`
-		// over the host's keys and the computes made before it
 		const keys = [...HOST, ...made.filter((m) => m.kind === "compute").map((m) => m.name)]
 		const e = expr(r, keys, 2 + r.pick(2))
 		const o = r.one(scopes.filter((o) => o.state === "alive"))
@@ -263,14 +225,12 @@ function seeded(seed: number, reach: Reach) {
 	for (let i = 2 + r.pick(4); i > 0; i--) make("compute")
 	for (let i = 1 + r.pick(2); i > 0; i--) make("effect")
 
-	// every node seen for each key: one forgotten (no readers left) is made again when read again
 	const keyNodes = new Map<string, Set<Node<unknown>>>()
 	function pulse(what: string) {
 		const at = label(`pulse ${++pulses} (${what})`)
 		expected = model()
 		const actedBefore = new Map(made.map((m) => [m, m.acted]))
 		moments.length = 0
-		// each start against the run before it
 		told = (m: Told) => {
 			if ("starts" in m) {
 				const x = byComputation.get(m.starts)!
@@ -279,7 +239,6 @@ function seeded(seed: number, reach: Reach) {
 					const why = [...x.held].some((k) => (changedAt.get(k) ?? 0) > last.tick)
 					if (!why) problems.push(`${at}: ${x.name} ran for no reason`)
 				}
-				// above what it is after (the graph here has no cycles)
 				for (const y of x.edges) {
 					if (alive(y) && m.rank <= y.rank) {
 						problems.push(
@@ -303,12 +262,10 @@ function seeded(seed: number, reach: Reach) {
 		told = () => {}
 		assertEquals(problems, [], at)
 
-		// the model's values
 		for (const m of made) {
 			if (m.kind !== "compute" || !alive(m)) continue
 			assertEquals(store.get(m.name), expected.get(m.name), `${at}: ${m.name}`)
 		}
-		// acts: once at most, exactly when the value differs from the one acted on last
 		const acting = new Map<Computer, number>()
 		for (const m of moments) {
 			if ("acts" in m) acting.set(m.acts, (acting.get(m.acts) ?? 0) + 1)
@@ -326,7 +283,6 @@ function seeded(seed: number, reach: Reach) {
 			const due = want !== undefined && (before === undefined || before.value !== want)
 			assertEquals(n, due ? 1 : 0, `${at}: ${m.name} on ${want}, last ${before?.value}`)
 		}
-		// the tracker: reads are the last run's, in order; both lists agree
 		for (const m of made) {
 			const node = m.c.node
 			const links = readsOf(node, `${at}: ${m.name}`, m.run?.ended === "done")
@@ -335,8 +291,6 @@ function seeded(seed: number, reach: Reach) {
 				continue
 			}
 			assert(m.run?.ended !== undefined && m.run.ended !== "stopped", `${at}: ${m.name}`)
-			// a key met again in order after a new link to it was made keeps both (as the
-			// tracker's model does): once each, the keys are the run's, in first-read order
 			const reads = [...m.run!.reads]
 			assertEquals(
 				[...new Set(links.map((l) => l.to.owner))].slice(0, reads.length),
@@ -348,7 +302,6 @@ function seeded(seed: number, reach: Reach) {
 				m.held,
 				`${at}: ${m.name}'s keys held`,
 			)
-			// after the cursor: old, each once, none read again
 			const old: unknown[] = []
 			for (let l = node.cursor ? node.cursor.next : node.reads; l !== null; l = l.next) {
 				old.push(l.to.owner)
@@ -384,7 +337,6 @@ function seeded(seed: number, reach: Reach) {
 	for (let step = 0; step < STEPS; step++) {
 		const k = r.pick(12)
 		if (k < 7) {
-			// the host writes a few keys, said changed in one call or one each
 			const keys = [...new Set(Array.from({ length: 1 + r.pick(3) }, () => r.one(HOST)))]
 			for (const key of keys) store.set(key, r.pick(4) ? r.pick(6) : r.one(TEXTS) + r.one(TEXTS))
 			if (r.pick(2)) changed(keys)
@@ -420,13 +372,8 @@ Deno.test(`scheduler fuzz: ${SEEDS} seeds × ${STEPS} steps, against a model, th
 	)
 })
 
-// the loops fuzz: where no from-scratch value exists. cyclic systems (any computation reads and
-// writes any key), writes in runs, cleanups that write, computations made in runs and acts,
-// async computes whose promises settle while they are due again and write after their await
-// (with by, or as from outside), computations disposed by their own cleanups. checked after every
-// pulse: it ended (past BOUND runs the hook throws), it left nothing due (another pulse runs
-// nothing), no f, set or act was called for a computation gone, no effect acted while due again
-// (its value old), and an effect's runs pile nothing up under it. a few dozen seeds (fuzz runs small)
+// The loops fuzz, for cyclic systems with no from-scratch value. After every pulse it checks that
+// the pulse ended, nothing is left due, and nothing was called for a gone computation.
 const LOOP_SEEDS = 40
 const LOOP_STEPS = 15
 const BOUND = 5000
@@ -439,10 +386,9 @@ async function loops(seed: number, reach: Loops) {
 	const at = (s: string) => `loops seed ${seed}, ${s}`
 	let runs = 0
 	const s = createScheduler()
-	// the computations made due since they last started
 	const due = new Set<Computer>()
-	// a mark made with c or a scope under it open (its last act's cleanups, going just before its
-	// act) is left out: 34 and 48 pin that it acts then
+	// A mark made while c or a scope under it is open (its last act's cleanups) is left out; tests
+	// 34 and 48 pin that it acts then.
 	const inside = (c: Computer) => {
 		for (let o = s.getCurrentScope(); o !== undefined; o = o.parent) if (o === c) return true
 		return false
@@ -465,17 +411,14 @@ async function loops(seed: number, reach: Loops) {
 		s.mark([key], by)
 	}
 	const problems: string[] = []
-	// told it is called: f, set or act of c
 	const called = (c: Computer, what: string) => {
 		if (c.state !== "alive") problems.push(`${what} of ${c.n}, gone`)
 	}
 	const effects: Computer[] = []
 	const scopes: Scope[] = [s.createRootScope({ actor: "test" })]
 	const living: Computer[] = []
-	// the settling of each pending promise
 	const pending: (() => void)[] = []
 
-	// a sum of a few keys' values, read through read, kept small so loops come round
 	const sum = (read: (key: unknown) => void, keys: string[]) => {
 		let n = 0
 		for (const k of keys) {
@@ -486,17 +429,13 @@ async function loops(seed: number, reach: Loops) {
 	}
 	const keys = () => Array.from({ length: 1 + r.pick(3) }, () => r.one(KEYS))
 
-	// what a computation is, drawn once: one made in a run or act is the same each time. near: the
-	// keys its maker reads; one made by a computation is a compute, mostly writing those
 	type Plan = {
 		kind: number
 		ins: string[]
 		out: string
 		other: string
-		// a cleanup's that disposes it; an async one's write after its await names it
 		dies: boolean
 		named: boolean
-		// what it makes, in each run or act; or under a scope
 		makes?: Plan
 	}
 	function plan(depth = 0, near = KEYS): Plan {
@@ -519,18 +458,15 @@ async function loops(seed: number, reach: Loops) {
 		if (o.state !== "alive") return
 		return s.runWithScope(o, () => build(p))
 	}
-	// p, made under the scope open
 	function build(p: Plan): Computer | undefined {
 		const { ins, out, other } = p
 		let c!: Computer
 		if (p.kind === 0) {
-			// a compute whose set writes its key
 			c = s.createComputer(() => (called(c, "f"), sum(s.track, ins)), (v) => {
 				called(c, "set")
 				write(out, v, c)
 			})
 		} else if (p.kind === 1) {
-			// a compute writing in its run
 			c = s.createComputer(() => {
 				const writer = s.getRun()
 				called(c, "f")
@@ -539,7 +475,6 @@ async function loops(seed: number, reach: Loops) {
 				return v % 2
 			}, () => called(c, "set"))
 		} else if (p.kind === 2) {
-			// a compute whose cleanup writes, and now and then disposes it
 			c = s.createComputer(() => {
 				const writer = s.getRun()
 				called(c, "f")
@@ -554,7 +489,6 @@ async function loops(seed: number, reach: Loops) {
 				write(out, v, c)
 			})
 		} else if (p.kind === 3) {
-			// an effect: each run makes a scope under it; its act writes, and may make a compute
 			c = s.createEffect(() => {
 				const writer = s.getRun()
 				called(c, "f")
@@ -568,7 +502,6 @@ async function loops(seed: number, reach: Loops) {
 			})
 			effects.push(c)
 		} else if (p.kind === 4) {
-			// an async compute: after its await it writes, with by or from outside
 			c = s.createComputer(() => {
 				const writer = s.getRun()
 				called(c, "f")
@@ -583,7 +516,6 @@ async function loops(seed: number, reach: Loops) {
 				write(out, v, c)
 			})
 		} else if (p.kind === 5) {
-			// a compute making a compute under itself in each run
 			c = s.createComputer(() => {
 				const writer = s.getRun()
 				called(c, "f")
@@ -594,7 +526,6 @@ async function loops(seed: number, reach: Loops) {
 				write(out, v, c)
 			})
 		} else {
-			// a scope, with one under it
 			const under = s.createScope({ why: "test" })
 			scopes.push(under)
 			return make(under, p.makes!)
@@ -628,7 +559,6 @@ async function loops(seed: number, reach: Loops) {
 			s.mark(ks)
 			pulse(`wrote ${ks}`)
 		} else if (k < 6) {
-			// some promises settle; their writes after the await reach the scheduler
 			const now = pending.splice(0, 1 + r.pick(pending.length + 1))
 			for (const settle of now) settle()
 			await new Promise((done) => setTimeout(done, 0))

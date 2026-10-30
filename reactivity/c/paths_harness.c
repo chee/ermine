@@ -1,5 +1,5 @@
-// the C paths (paths.h) on the line protocol of reactivity/typescript/paths_harness.ts. A
-// symbol is a token per name, the harness's.
+// The C paths (paths.h) on the line protocol of reactivity/typescript/paths_harness.ts. A symbol
+// is a token per name.
 #define _POSIX_C_SOURCE 200809L
 #include <math.h>
 #include <stdio.h>
@@ -12,11 +12,11 @@
 
 static pt_paths *paths;
 
-// symbols: one token per name, held to the end
+// Symbols: one token per name, held to the end.
 static char **names;
 static size_t count, capacity;
 
-// a source or an id: a string, or {"symbol": name}; 0 when neither
+// A source or an id: a string or {"symbol": name}; 0 when neither.
 static int key_of(const op_value *x, pt_key *out) {
 	if (x == NULL) return 0;
 	if (x->type == OP_STR) return *out = pt_string(x->str), 1;
@@ -35,7 +35,7 @@ static int key_of(const op_value *x, pt_key *out) {
 	return 1;
 }
 
-// keys: numbers and strings; NULL when x is not a list of them. *n how many
+// Keys: numbers and strings; NULL when x is not a list of them. *n is how many.
 static op_key *path_of(const op_value *x, size_t *n) {
 	if (x == NULL || x->type != OP_LIST) return NULL;
 	op_key *keys = hh_take((x->count + 1) * sizeof *keys);
@@ -50,7 +50,7 @@ static op_key *path_of(const op_value *x, size_t *n) {
 	return keys;
 }
 
-// a place of a patch: a map with a path, and a range of two whole numbers when it has one
+// A place of a patch: a map with a path, and a range of two whole numbers when it has one.
 static int place_ok(const op_value *x) {
 	if (x == NULL || x->type != OP_MAP) return 0;
 	size_t n;
@@ -165,7 +165,7 @@ void hh_answer(const op_value *r, FILE *out) {
 		if (path == NULL) { hh_error(out, "no path"); return; }
 		pt_spot_of(paths, source, id, path, n, keys);
 	} else if (strcmp(op, "release") == 0) {
-		// made, then let go: a spot not there stays not there
+		// Made, then let go: a spot that was never there stays that way.
 		pt_release(paths, path ? pt_spot_of(paths, source, id, path, n, keys) : pt_change_of(paths, source, id));
 	} else {
 		hh_unknown(out, r);

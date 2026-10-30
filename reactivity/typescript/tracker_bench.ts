@@ -1,5 +1,5 @@
 // deno bench reactivity/typescript/tracker_bench.ts
-// what a scheduler does with the tracker: runs that read spots, readers of a hot spot
+// What a scheduler does with the tracker: runs that read spots, readers of a hot spot, and more.
 import { createTracker, type Node } from "./tracker.ts"
 
 const N = 1000
@@ -16,7 +16,6 @@ function make() {
 	return { t, nodes, run }
 }
 
-// a run reading N spots the first time; the reads dropped between runs, not timed
 {
 	const { t, nodes, run } = make()
 	const spots = nodes(N)
@@ -29,7 +28,6 @@ function make() {
 	})
 }
 
-// a re-run reading the same spots in the same order: the cursor path, the common case
 for (const n of [10, N]) {
 	const { nodes, run, t } = make()
 	const spots = nodes(n)
@@ -38,7 +36,6 @@ for (const n of [10, N]) {
 	Deno.bench(`re-run, same ${n} spots`, { group: "run" }, () => run(r, spots))
 }
 
-// a re-run reading a different subset each time: every other run reads a shifted half
 {
 	const { nodes, run, t } = make()
 	const spots = nodes(N)
@@ -53,7 +50,6 @@ for (const n of [10, N]) {
 	})
 }
 
-// a re-run reading the same spots reversed: nothing matches the cursor, links are made and dropped
 {
 	const { nodes, run, t } = make()
 	const spots = nodes(100)
@@ -67,7 +63,6 @@ for (const n of [10, N]) {
 	})
 }
 
-// the same spot read many times in a run: the tail check
 {
 	const { nodes, run, t } = make()
 	const [s] = nodes(1)
@@ -76,7 +71,6 @@ for (const n of [10, N]) {
 	Deno.bench(`one spot read ${N} times in a run`, { group: "run" }, () => run(r, many))
 }
 
-// one spot with thousands of readers; one comes and goes each round, round the ring
 {
 	const { nodes, run, t } = make()
 	const hot = t.node(-1)
@@ -89,7 +83,6 @@ for (const n of [10, N]) {
 		run(r, [hot])
 	})
 }
-// the same, but the leaving is by untrack
 {
 	const { nodes, run, t } = make()
 	const hot = t.node(-1)
@@ -102,7 +95,6 @@ for (const n of [10, N]) {
 		t.add(r, hot)
 	})
 }
-// readers of a hot spot: no holes (live array), and with one hole (compacts)
 {
 	const { nodes, run, t } = make()
 	const hot = t.node(-1)
@@ -112,7 +104,6 @@ for (const n of [10, N]) {
 		t.readers(hot)
 	})
 	let i = 0
-	// untrack one in the middle, read, add it back: the compaction is most of it
 	Deno.bench(`readers of a hot spot, ${HOT}, after one leaves`, { group: "readers" }, () => {
 		const r = readers[1 + (i++ % (HOT - 2))]
 		t.untrack(r, hot)
@@ -121,7 +112,6 @@ for (const n of [10, N]) {
 	})
 }
 
-// untrack of a reader with many reads
 {
 	const { nodes, run, t } = make()
 	const spots = nodes(N)
@@ -141,7 +131,6 @@ for (const n of [10, N]) {
 	})
 }
 
-// the whole life of a reader, run and untrack both in the time (as tracker_bench.c)
 {
 	const { nodes, run, t } = make()
 	const spots = nodes(N)
@@ -157,7 +146,6 @@ for (const n of [10, N]) {
 	})
 }
 
-// a deep chain: each node's run reads the next; the whole chain re-runs
 {
 	const { nodes, run } = make()
 	const chain = nodes(N)
@@ -166,7 +154,6 @@ for (const n of [10, N]) {
 		for (let i = 0; i < N - 1; i++) run(chain[i], [chain[i + 1]])
 	})
 }
-// a wide fan: N readers of one spot all re-run
 {
 	const { nodes, run, t } = make()
 	const hot = t.node(-1)
@@ -176,7 +163,6 @@ for (const n of [10, N]) {
 		for (const r of readers) run(r, [hot])
 	})
 }
-// a wide fan out: one reader of N spots, each read by one other reader as well
 {
 	const { nodes, run, t } = make()
 	const spots = nodes(N)

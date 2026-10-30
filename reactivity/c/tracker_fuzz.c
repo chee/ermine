@@ -1,7 +1,6 @@
-// libFuzzer target: the input bytes are a sequence of operations over a few nodes, applied to
-// the tracker and to a small model (tracker_model.ts, in C). After every step:
-// reads and readers agree with the model exactly (links may repeat, as in alien-signals), and
-// the laws hold (both lists doubly linked and agreeing; add in a run fails).
+// libFuzzer target. The input bytes are a sequence of operations over a few nodes, applied to the
+// tracker and to a small model. After every step, reads and readers must agree with the model
+// (links may repeat) and both lists must be doubly linked and agree.
 #include "tracker.h"
 
 #include <stdio.h>
@@ -64,7 +63,8 @@ static void model_set_gen(int r, int a, unsigned id, unsigned gen) {
 	(void)r;
 }
 
-// the same checks as tg_track: same spot as the last read, next in order, newest reader is this run
+// The same checks as tg_track: same spot as the last read, next in order, newest reader is this
+// run.
 static void model_track(int r, int a) {
 	mreader *m = &model[r];
 	if (m->at > 0 && m->reads[m->at - 1].to == a) return;
@@ -112,7 +112,6 @@ static int index_of(tg_node *n) {
 static void check(int step) {
 	for (int n = 0; n < NODES; n++) {
 		tg_node *t = nodes[n];
-		// the readers list: before and last agree, each link is to t
 		tg_link *before = NULL;
 		for (tg_link *l = t->first; l != NULL; l = l->after) {
 			if (l->to != t) die("a reader's to is not its node", step);
@@ -120,7 +119,6 @@ static void check(int step) {
 			before = l;
 		}
 		if (t->last != before) die("last is not the end of the readers", step);
-		// symmetry: links from n to each node, counted both ways
 		for (int a = 0; a < NODES; a++) {
 			int forward = 0, back = 0;
 			for (tg_link *l = t->reads; l != NULL; l = l->next) {
@@ -131,13 +129,11 @@ static void check(int step) {
 				if (l->from == t) back++;
 			if (forward != back) die("symmetry broken", step);
 		}
-		// reads against the model's
 		int k = 0;
 		for (tg_link *l = t->reads; l != NULL; l = l->next, k++)
 			if (k >= model[n].length || model[n].reads[k].to != index_of(l->to))
 				die("reads differ from the model", step);
 		if (k != model[n].length) die("reads differ from the model (length)", step);
-		// readers against the model
 		k = 0;
 		for (tg_link *l = t->first; l != NULL; l = l->after, k++)
 			if (k >= readers_length[n] || readers[n][k].from != index_of(l->from))
@@ -158,7 +154,7 @@ int LLVMFuzzerTestOneInput(const unsigned char *data, size_t size) {
 	for (size_t i = 0; i + 1 < size && i / 2 < 400; i += 2) {
 		int op = data[i] % 6, r = data[i + 1] % READERS, a = (data[i + 1] >> 2) % NODES;
 		mreader *m = &model[r];
-		// track in a run, add and begin outside one (add in a run fails)
+		// Track in a run; add and begin outside one (add in a run fails).
 		if (op == 0 && !m->open) {
 			tg_begin(nodes[r]);
 			m->open = 1, m->at = 0, m->gen = ++ticks;

@@ -4,7 +4,6 @@
 
 void rk_rank(size_t n, const size_t *off, const size_t *adj, const int *floor, int *out) {
 	if (n == 0) return;
-	// -1: not visited
 	long *index = malloc(n * sizeof *index);
 	long *low = malloc(n * sizeof *low);
 	size_t *comp = malloc(n * sizeof *comp);
@@ -41,7 +40,6 @@ void rk_rank(size_t n, const size_t *off, const size_t *adj, const int *floor, i
 			cp--;
 			if (cp > 0 && low[p] < low[call[cp - 1]]) low[call[cp - 1]] = low[p];
 			if (low[p] != index[p]) continue;
-			// p heads a component: its members are on the stack down to p
 			size_t from = sp;
 			while (stack[from - 1] != p) from--;
 			from--;

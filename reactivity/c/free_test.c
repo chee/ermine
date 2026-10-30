@@ -1,7 +1,5 @@
-// the scheduler's frees (scheduler.h, memory): a scope lives while something holds it, and goes
-// once torn down and held by nothing, told to sc_on_free first: a plain scope at once, a computer
-// as the pulse ends. exits 1 at the first thing that is not so. run under the sanitizers and leaks
-// for the frees
+// Checks when the scheduler frees scopes (see the memory section of scheduler.h). Exits 1 at the
+// first failure. Run it under the sanitizers.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,16 +14,14 @@
 		} \
 	} while (0)
 
-// a value held once more than it has holders is never freed
 static op_value text = {.type = OP_STR, .str = "free", .bytes = 4, .ascii = 1};
 static const sc_pair info[] = {{"test", &text}};
 
-// what was freed, in order
+// What was freed, in order.
 static sc_scope *freed[16];
 static size_t nfreed;
 static void told(sc_scope *o, void *data) {
 	(void)data;
-	// its info still there to read
 	CHECK(sc_scope_frame(o) != NULL);
 	freed[nfreed++] = o;
 }
@@ -55,15 +51,14 @@ int main(void) {
 	sc_on_free(s, told, NULL);
 	sc_scope *root = sc_create_root_scope(s, info, 1);
 
-	// a plain scope: alive, its maker's hold let go, it stays (the tree holds it); torn down, freed
-	// at once
+	// A plain scope stays while the tree holds it; once torn down and unheld it is freed at once.
 	sc_scope *a = sc_create_scope(s, info, 1, root);
 	sc_release(a);
 	CHECK(nfreed == 0);
 	free(sc_teardown(a));
 	CHECK(nfreed == 1 && freed[0] == a);
 
-	// torn down and held: kept till the last hold goes (a's memory may be b's: counted afresh)
+	// Torn down but held: freed only when the last hold goes.
 	nfreed = 0;
 	sc_scope *b = sc_create_scope(s, info, 1, root);
 	free(sc_teardown(b));
@@ -74,7 +69,6 @@ int main(void) {
 	sc_release(b);
 	CHECK(was_freed(b));
 
-	// what is under a scope holds it: the parent goes after its child
 	nfreed = 0;
 	sc_scope *p = sc_create_scope(s, info, 1, root);
 	sc_scope *c = sc_create_scope(s, info, 1, p);
@@ -85,7 +79,7 @@ int main(void) {
 	sc_release(c);
 	CHECK(nfreed == 2 && freed[0] == c && freed[1] == p);
 
-	// a computer: freed as the pulse ends, not at once
+	// A computer is freed as the pulse ends, not at once.
 	nfreed = 0;
 	sc_scope *own = sc_create_scope(s, info, 1, root);
 	CHECK(sc_run_with_scope(own, make_computer, NULL) == NULL);
@@ -98,7 +92,6 @@ int main(void) {
 	sc_pulse(s);
 	CHECK(nfreed == 2 && freed[0] == m && freed[1] == own);
 
-	// a run held holds its computer
 	nfreed = 0;
 	own = sc_create_scope(s, info, 1, root);
 	CHECK(sc_run_with_scope(own, make_computer, NULL) == NULL);
@@ -115,14 +108,13 @@ int main(void) {
 	sc_pulse(s);
 	CHECK(nfreed == 2 && freed[0] == m && freed[1] == own);
 
-	// a maker that never lets go: kept till sc_free
+	// A maker that never lets go keeps it until sc_free.
 	nfreed = 0;
 	sc_scope *kept = sc_create_scope(s, info, 1, root);
 	free(sc_teardown(kept));
 	sc_pulse(s);
 	CHECK(nfreed == 0 && !sc_scope_alive(kept));
 
-	// a run held past sc_free is still good to let go
 	own = sc_create_scope(s, info, 1, root);
 	CHECK(sc_run_with_scope(own, make_computer, NULL) == NULL);
 	sc_pulse(s);

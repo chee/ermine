@@ -1,22 +1,7 @@
-// order: what runs next. the due, each at the tick it became due; and the ranks: made whole once
-// (rank.ts), then mended where an edge changed, only ever rising.
-//
-// a computation is after: the writers of the keys its last run read (values), and the one it
-// waits after (after). the scheduler says when those change (sees, waits), and when one is made
-// and goes; order changes nothing else of a computation, but its own fields on it (Ordered).
-//
-// mending: a computation whose edges changed rises to one past the most of what it is after, if
-// that is more than its rank now, and what is after it does the same, as far as a rank rises.
-// a rank never falls (an edge gone, a computation gone: nothing lowered), so it is at least
-// rank.ts's, never less: still after everything it is after. a cycle (a component of more than
-// one) is rank.ts's alone, ranked over the part of the graph from the change on (local): when a
-// mend reaches one of its members, a member goes, or a mend comes back round to where it began
-// (a cycle made now)
+// Decides what runs next: the due computations, and the ranks that order them.
+// Ranks are made whole once, then mended where an edge changed. A mended rank only ever rises.
 import rank from "./rank.ts"
 
-// what order keeps on a computation. values: the writers its last run read, no repeats.
-// due: the tick it became due at; 0, not due. rank: its rank, good while ranked is the making
-// now. afters: what is after it, each with how many edges. stamp: for telling two lists apart
 export type Ordered<P> = {
 	n: number
 	values: P[]
@@ -32,20 +17,15 @@ export type Ordered<P> = {
 export function createOrder<P extends Ordered<P>>(
 	all: () => Iterable<P>,
 ): Order<P> {
-	// how many are due
 	let dues = 0
-	// the making of the ranks now (0: none, made at the next pick); how many it ranks; whether
-	// some component of it has more than one member
 	let making = 0
 	let made = 0
 	let ranked = 0
-	// the members of a component of more than one, at the making now
 	const members = new Set<P>()
 	let stamps = 0
 	const edge = (p: P, q: P | undefined) => q !== undefined && q !== p && q.state === "alive"
 	const rankOf = (p: P) => p.ranked === making ? p.rank : 0
 
-	// p is after q by one more edge, or one less
 	function link(p: P, q: P) {
 		const m = q.afters ??= new Map()
 		m.set(p, (m.get(p) ?? 0) + 1)
@@ -79,7 +59,6 @@ export function createOrder<P extends Ordered<P>>(
 		}
 		remake()
 	}
-	// the heap made again from the due
 	function remake() {
 		heapLength =
 			heapP.length =
@@ -89,9 +68,6 @@ export function createOrder<P extends Ordered<P>>(
 		for (const p of all()) if (p.due !== 0) push(p, rankOf(p), p.due)
 	}
 
-	// ranked again from start and everything after it (the region): rank.ts over the region's own
-	// edges, each at least one past what it is after outside it. nothing outside is after the
-	// region, so nothing outside changes. its members found again
 	function local(start: Iterable<P>) {
 		const region = new Set<P>()
 		const stack = [...start]
@@ -118,11 +94,8 @@ export function createOrder<P extends Ordered<P>>(
 		for (const [p, k] of r) for (const q of inner(p)) if (r.get(q) === k) members.add(p).add(q)
 	}
 
-	// the edges of these changed: each rises to one past its edges' most, and what is after it
-	// too, as far as a rank rises. a due one mended goes in the heap again at its new rank. a
-	// cycle's member reached, or one of these reached again (after what is after it: a cycle made
-	// now): ranked again from these on (local). mending longer than a whole making would take:
-	// made whole at the next
+	// Raise each of these to one past its highest edge, then do the same for whatever is after it.
+	// Past a limit, or on a cycle, re-rank locally or make the ranks whole at the next pick.
 	function mend(work: P[]) {
 		if (making === 0) return
 		const begun = new Set(work)
@@ -148,13 +121,10 @@ export function createOrder<P extends Ordered<P>>(
 		}
 	}
 
-	// the due as a heap, by rank, then mark, then the order made: three lists side by side. an
-	// entry whose computation is no longer due at its mark, or not at its rank, is stale
 	const heapP: P[] = []
 	const heapRank: number[] = []
 	const heapMark: number[] = []
 	let heapLength = 0
-	// (r, m, n) before (r2, m2, n2): by rank, then mark, then the order made
 	const lt = (r: number, m: number, n: number, r2: number, m2: number, n2: number) =>
 		r !== r2 ? r < r2 : m !== m2 ? m < m2 : n < n2
 	function put(i: number, p: P, rank: number, mark: number) {
@@ -175,7 +145,6 @@ export function createOrder<P extends Ordered<P>>(
 		}
 		put(i, p, rank, mark)
 	}
-	// the top out
 	function pop() {
 		const last = --heapLength
 		const p = heapP[last], rank = heapRank[last], mark = heapMark[last]
@@ -203,12 +172,10 @@ export function createOrder<P extends Ordered<P>>(
 		put(i, p, rank, mark)
 	}
 
-	// the entries next sets aside, waiting after a due one: computations, and rank, mark pairs
 	const waiting: P[] = []
 	const waitingAt: number[] = []
 
 	return {
-		// the due: the tick each became due at
 		at: (p: P) => p.due !== 0 ? p.due : undefined,
 		has: (p: P) => p.due !== 0,
 		set: (p: P, mark: number) => {
@@ -225,11 +192,8 @@ export function createOrder<P extends Ordered<P>>(
 
 		rank: (p: P) => (ranks(), rankOf(p)),
 
-		// the due computation to run: not waiting after a due one; lowest rank, then earliest made
-		// due, then the order made
 		next(): { p: P; rank: number } {
 			ranks()
-			// stale entries past four times the due: the heap is made again
 			if (heapLength > 4 * dues + 64) remake()
 			let best: P | undefined
 			let bestRank = 0
@@ -261,11 +225,9 @@ export function createOrder<P extends Ordered<P>>(
 			ranked++
 		},
 
-		// the writers p's run read: p.values becomes next
 		sees(p: P, next: P[]) {
 			const old = p.values
 			p.values = next
-			// the same, in the same order: nothing changed
 			if (old.length === next.length) {
 				let i = 0
 				while (i < old.length && old[i] === next[i]) i++
@@ -289,7 +251,6 @@ export function createOrder<P extends Ordered<P>>(
 			if (changed) mend([p])
 		},
 
-		// p waits after q: p.after becomes q
 		waits(p: P, q: P | undefined) {
 			if (p.after === q) return
 			let changed = false
@@ -305,8 +266,6 @@ export function createOrder<P extends Ordered<P>>(
 			if (changed) mend([p])
 		},
 
-		// p goes: not due, out of the ranks, after nothing; what was after it keeps its rank. a
-		// cycle's member: what was after it ranked again (local)
 		gone(p: P) {
 			if (p.due !== 0) dues--
 			p.due = 0

@@ -1,6 +1,5 @@
-// rank: strongly connected components (Tarjan), each ranked after the ones its members are after.
-// members of one component share a rank; a component with nothing after it is 0, or the most
-// floor gives its members (what they are after outside these, for a part of a graph)
+// Strongly connected components (Tarjan), each ranked after the ones its members are after.
+// Members of a component share a rank.
 export function rank<T>(
 	all: Iterable<T>,
 	edges: (t: T) => T[],
@@ -12,7 +11,7 @@ export function rank<T>(
 	const on = new Set<T>()
 	const stack: T[] = []
 	let next = 0
-	// the walk's own stack, not the call stack: a chain of any depth (rank.c does the same)
+	// The walk uses its own stack, not the call stack, so a chain of any depth works (rank.c too).
 	const call: T[] = []
 	const kids: T[][] = []
 	const at: number[] = []
