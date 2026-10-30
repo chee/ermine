@@ -1,6 +1,5 @@
-// the C JSON writer (json.h) on a value nested far deeper than the reader takes: written whole,
-// not by recursion (the C stack held ~11.7k levels). exits 1 at the first thing that is not so.
-// make test-c-json-test (test-check-, test-leaks-)
+// Tests that the C JSON writer handles a value nested far deeper than the reader takes, without
+// recursion. Exits 1 at the first failure. Run with make test-c-json-test.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,7 +17,6 @@
 
 int main(void) {
 	enum { DEPTH = 40000 };
-	// lists in lists, maps in the list at the bottom
 	op_value *root = op_list(), *at = root;
 	for (int i = 1; i < DEPTH; i++) {
 		op_value *inner = op_list();

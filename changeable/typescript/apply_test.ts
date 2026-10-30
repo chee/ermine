@@ -2,7 +2,6 @@ import { assert, assertEquals, assertStrictEquals, assertThrows } from "@std/ass
 import apply, { ApplyError, type Patch } from "./apply.ts"
 import { squish } from "./squish.ts"
 
-// a fuzz's numbers: xorshift (an LCG's low bits repeat, so % k of one is patterned)
 const xs = (x: number) => {
 	x = x || 1
 	x ^= x << 13
@@ -41,13 +40,11 @@ Deno.test("apply: bytes are one whole value, never spliced", () => {
 	assertEquals(into({ path: ["b"], range: [3, 3], value: new Uint8Array([4]) }), "wrong-kind")
 	assertEquals(into({ path: ["b"], range: [0, 1] }), "wrong-kind")
 	assertEquals(into({ path: ["b", 0], value: 9 }), "wrong-kind")
-	// a typed array takes no bytes into it
 	const t = new Int8Array([1])
 	assertEquals(
 		code(() => apply(t, [{ path: [], range: [1, 1], value: new Uint8Array([2]) }])),
 		"wrong-kind",
 	)
-	// a put replaces them whole, a view as given
 	const view = new Uint8Array([0, 7, 8, 0]).subarray(1, 3)
 	assertStrictEquals((apply({ b }, [{ path: ["b"], value: view }]) as { b: Uint8Array }).b, view)
 	assertEquals(b, new Uint8Array([1, 2, 3]))
@@ -62,7 +59,6 @@ Deno.test("apply: what is not touched is shared, the value given unchanged", () 
 	assertEquals(old, { a: { x: 1 }, b: { y: 2 } })
 	assertEquals(now.a, { x: 3, z: 4 } as unknown)
 	assertStrictEquals(now.b, old.b)
-	// no patch: the value itself
 	assertStrictEquals(apply(old, []), old)
 })
 
@@ -97,7 +93,6 @@ Deno.test("apply: moves leave first, then land in what is left", () => {
 		code(() => apply({ m: { k: 1 } }, [{ path: ["m", "k", "x"], move: { path: ["m"] } }])),
 		"into-itself",
 	)
-	// a span, into a span of what is left
 	assertEquals(
 		apply("abcdef", [{ path: [], range: [0, 0], move: { path: [], range: [4, 6] } }]),
 		"efabcd",
@@ -152,8 +147,6 @@ Deno.test("apply: undo, asked for, is pushed once all have landed; a throw leave
 	assertEquals(undo.length, 3)
 })
 
-// many string patches in one call walk from what the last left (walk-string's near): the same end
-// as one call each, which never does
 Deno.test("apply: fuzz, string edits in one call as one call each", () => {
 	const parts = ["a", "é", "😀", "\uD83D", "\uDE00", "中", "xy"]
 	for (let seed = 1; seed <= 40; seed++) {
@@ -164,7 +157,6 @@ Deno.test("apply: fuzz, string edits in one call as one call each", () => {
 		const ps: Patch[] = []
 		for (let step = 0; step < 60; step++) {
 			const s = (one as { s: string }).s, n = Array.from(s).length
-			// typing runs, backspaces, deletes, replaces, at random places and at the last caret
 			const near = ps.length && rand(2) ? (ps[ps.length - 1].range![0] + 1) : rand(n + 2)
 			const a = Math.min(near, n + 1), b = a + rand(3)
 			const p: Patch = rand(3)
@@ -202,12 +194,10 @@ Deno.test("apply cow: false: the containers given change, the root returned is t
 		m: { a: { b: 1, c: 2 } },
 		n: new Int16Array([9, 8, 3]),
 	})
-	// a typed array whose length stays is changed where it is, a string is put new
 	assertStrictEquals(v.n, n)
 	apply(v, [{ path: ["n"], range: [1, 2] }], { cow: false })
 	assert(v.n !== n)
 	assertEquals(v.n, new Int16Array([9, 3]))
-	// the whole replaced: the root returned is the new one
 	assertEquals(apply(v, [{ path: [], value: 5 }], { cow: false }), 5)
 })
 
@@ -225,7 +215,6 @@ Deno.test("apply cow: false: the same value and undo as copy-on-write", () => {
 	const a = apply(make(), ps, { undo: was }), b = apply(make(), ps, { undo: now, cow: false })
 	assertEquals(b, a)
 	assertEquals(now, was)
-	// and no undo asked for
 	assertEquals(apply(make(), ps, { cow: false }), a)
 })
 
@@ -238,7 +227,6 @@ Deno.test("apply cow: false: a refused patch undoes what was done, in place; the
 			path: ["q", "r"],
 			value: 1,
 		}],
-		// a take, then a landing that is refused
 		[{ path: ["m", "c"] }, { path: ["t"], range: [9, 9], move: { path: ["l", 0] } }],
 		[{ path: ["m", "x", "y"], move: { path: ["m", "c"] } }],
 		[{ path: ["t"], range: [0, 1], value: "z" }, { path: [], value: 7 }, {

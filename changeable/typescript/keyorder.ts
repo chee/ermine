@@ -1,7 +1,6 @@
-// how a map's keys are ordered: by length in UTF-8 bytes, shorter first, then bytewise. the order
-// of their CBOR encodings, which is canonical CBOR's (encoding's cbor.ts), without the encoding.
-// a lone surrogate is its own three bytes (WTF-8, as the C has it), never U+FFFD: distinct keys
-// never compare equal
+// Orders a map's keys by length in UTF-8 bytes, shorter first, then bytewise. This is canonical
+// CBOR's key order. A lone surrogate becomes its own three bytes (WTF-8, as the C does) rather
+// than U+FFFD, so distinct keys never compare equal.
 const utf8 = /* @__PURE__ */ new TextEncoder()
 const bytes = /* @__PURE__ */ new Map<string, Uint8Array>()
 function wtf8(k: string): Uint8Array {

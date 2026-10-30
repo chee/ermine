@@ -1,5 +1,5 @@
 // op's value in JSON (json.h), in C.
-#define _POSIX_C_SOURCE 200809L // open_memstream
+#define _POSIX_C_SOURCE 200809L
 #include "json.h"
 #include "whole.h"
 
@@ -19,7 +19,6 @@ static void *grab(size_t n) {
 	return p;
 }
 
-// --- reading ---
 
 typedef struct {
 	const char *p;
@@ -47,7 +46,6 @@ static int hex4(reader *r, unsigned *out) {
 	*out = x;
 	return 1;
 }
-// one code point as UTF-8; U+0000 as C0 80, a lone surrogate as its 3 bytes
 static size_t put8(char *out, unsigned c) {
 	if (c == 0) return out[0] = (char)0xC0, out[1] = (char)0x80, 2;
 	if (c < 0x80) return out[0] = (char)c, 1;
@@ -64,10 +62,8 @@ static size_t put8(char *out, unsigned c) {
 	out[3] = (char)(0x80 | (c & 63));
 	return 4;
 }
-// a string literal, after its opening quote: malloc'd, its length in *length; NULL when bad
 static char *literal(reader *r, size_t *length) {
-	// room for the literal as written, up to its closing quote (an escape never grows): not the
-	// rest of the line, which made reading a line quadratic in its length
+	// Room is sized to the literal, not the rest of the line, which made reading quadratic.
 	const char *end = r->p;
 	while (*end && *end != '"') end += *end == '\\' && end[1] ? 2 : 1;
 	char *out = grab((size_t)(end - r->p) + 1);
@@ -91,7 +87,6 @@ static char *literal(reader *r, size_t *length) {
 		case 'u': {
 			unsigned u, lo;
 			if (!hex4(r, &u)) goto bad;
-			// a high and a low are one character; on their own, each is held as WTF-8
 			if (u >= 0xD800 && u < 0xDC00 && r->p[0] == '\\' && r->p[1] == 'u') {
 				const char *at = r->p;
 				r->p += 2;
@@ -135,7 +130,6 @@ static op_value *number(reader *r) {
 		while (*q >= '0' && *q <= '9') q++;
 	}
 	r->p = q;
-	// digits alone: a whole number, exactly
 	size_t length = (size_t)(q - s);
 	int negative = *s == '-';
 	if (length - (size_t)negative > 15 && !memchr(s, '.', length) && !memchr(s, 'e', length) &&
@@ -152,7 +146,6 @@ static op_value *number(reader *r) {
 	double d = strtod(text, NULL);
 	free(text);
 	op_value *v = op_num(d);
-	// -0 read as written: a float typed array's element keeps it; a number is 0 (written 0)
 	v->num = d;
 	return v;
 bad:
@@ -160,7 +153,6 @@ bad:
 	return NULL;
 }
 
-// JSON as it is, "/" forms and all
 static op_value *plain(reader *r, int depth) {
 	blank(r);
 	char c = *r->p;
@@ -212,8 +204,6 @@ static op_value *plain(reader *r, int depth) {
 	return number(r);
 }
 
-// the "/" forms, from the top: v is let go of, what it stands for returned; NULL (all let go of)
-// when a form is malformed
 static op_value *revive(reader *r, op_value *v);
 static op_value *bigint_of(const op_value *body);
 
@@ -228,8 +218,6 @@ static int is_word(const op_value *x, double *out) {
 	else return 0;
 	return 1;
 }
-// one element of a typed array, little-endian at `at`, from the JSON it is written as: a whole
-// number in range; 64-bit, a decimal string; a float, a number or a word. 0 when it is not one
 static int element(op_elements kind, const op_value *x, unsigned char *at) {
 	static const double lo[] = {-128, -32768, 0, -2147483648.0, 0};
 	static const double hi[] = {127, 32767, 65535, 2147483647.0, 4294967295.0};
@@ -267,8 +255,6 @@ static op_value *typed_of(op_elements kind, const op_value *list) {
 	free(buf);
 	return t;
 }
-// bytes from base64, standard alphabet, no padding, in the one spelling of them: the bits past the
-// last byte zero
 static op_value *bytes_of(const op_value *x) {
 	if (x->type != OP_STR || x->bytes % 4 == 1) return NULL;
 	unsigned char *buf = grab(x->bytes);
@@ -292,7 +278,6 @@ static op_value *revive(reader *r, op_value *v) {
 	if (v->type == OP_LIST || (v->type == OP_MAP && !is_form(v))) {
 		for (size_t i = 0; i < v->count; i++) {
 			if ((v->items[i] = revive(r, v->items[i])) == NULL) {
-				// the item that failed is let go of already: v is, with a null in its place
 				v->items[i] = op_null();
 				op_free(v);
 				return NULL;
@@ -307,7 +292,6 @@ static op_value *revive(reader *r, op_value *v) {
 	op_value *body = form->items[0], *made = NULL;
 	double word;
 	if (strcmp(tag, "map") == 0) {
-		// a map whose one key is "/", as data: its value is revived in turn
 		if (is_form(body)) {
 			made = op_ref(body);
 			op_free(v);
@@ -335,8 +319,6 @@ static op_value *revive(reader *r, op_value *v) {
 	return made;
 }
 
-// a whole number past 2^53 - 1 either way, in decimal, no leading zero: the one spelling of the
-// "bigint" form (a safe one is plain digits); NULL otherwise
 static op_value *bigint_of(const op_value *body) {
 	if (body == NULL || body->type != OP_STR) return NULL;
 	const char *s = body->str;
@@ -369,7 +351,6 @@ op_value *op_json_read(const char *text, const char **why) {
 	return v;
 }
 
-// --- writing ---
 
 void op_json_string(FILE *out, const char *s) {
 	putc('"', out);
@@ -383,7 +364,6 @@ void op_json_string(FILE *out, const char *s) {
 		else if (c == '\b') fputs("\\b", out);
 		else if (c == '\f') fputs("\\f", out);
 		else if (c < 0x20) fprintf(out, "\\u%04x", c);
-		// a lone surrogate, held as WTF-8 (ED A0..BF xx), is written as its escape
 		else if (c == 0xED && ((unsigned char)s[1] & 0xE0) == 0xA0 && s[2]) {
 			fprintf(out, "\\u%04x", 0xD000 | (((unsigned char)s[1] & 63) << 6) | ((unsigned char)s[2] & 63));
 			s += 2;
@@ -391,8 +371,6 @@ void op_json_string(FILE *out, const char *s) {
 	}
 	putc('"', out);
 }
-// a number: the fewest digits that read back the same; -0 as -0. before and after go around the
-// words NaN and Infinity, which JSON has no number for
 static void put_number(FILE *out, double d, const char *before, const char *after) {
 	if (isnan(d) || isinf(d)) {
 		fprintf(out, "%s%s%s", before, isnan(d) ? "NaN" : d > 0 ? "Infinity" : "-Infinity", after);
@@ -448,13 +426,11 @@ static void put_elements(FILE *out, const op_value *v) {
 	putc(']', out);
 }
 
-// a value that holds none: written whole
 static void write_leaf(FILE *out, const op_value *v) {
 	switch (v->type) {
 	case OP_NULL: fputs("null", out); break;
 	case OP_BOOL: fputs(v->bool_ ? "true" : "false", out); break;
 	case OP_NUM:
-		// a whole number past 2^53 - 1: its digits, in the bigint form
 		if (v->big != NULL || (isfinite(v->num) && v->num == floor(v->num) && fabs(v->num) > 9007199254740991.0)) {
 			unsigned char m[128];
 			const unsigned char *at = v->big != NULL ? v->big : m;
@@ -488,14 +464,13 @@ static void write_leaf(FILE *out, const op_value *v) {
 	}
 }
 
-// a list, a map or a stand-in being written: how far along, and whether a map is escaped as data
 typedef struct {
 	const op_value *v;
 	size_t i;
 	int escaped;
 } frame;
 
-// as deep as the value goes: a stack of frames that grows, not the C stack
+// Uses a stack of frames that grows, not the C stack, so any depth works.
 void op_json_write(FILE *out, const op_value *root) {
 	frame first[64], *stack = first;
 	size_t depth = 0, cap = 64;
@@ -509,7 +484,6 @@ void op_json_write(FILE *out, const op_value *root) {
 				if (stack != first) free(stack);
 				stack = grown;
 			}
-			// a map whose one key is "/" is data, not a form: it is escaped
 			int escaped = v->type == OP_MAP && is_form(v);
 			if (v->type == OP_LIST) putc('[', out);
 			else if (v->type == OP_STAND) fputs("{\"/\":{\"live\":", out);
@@ -519,7 +493,6 @@ void op_json_write(FILE *out, const op_value *root) {
 			}
 			stack[depth++] = (frame){v, 0, escaped};
 		} else write_leaf(out, v);
-		// on to the next value to write, closing what is used up
 		for (;;) {
 			if (depth == 0) {
 				if (stack != first) free(stack);

@@ -1,6 +1,5 @@
-// op values and patches made from fuzz bytes, for the libFuzzer targets of op, node and paths
-// (apply_fuzz.c, update_fuzz.c, paths_fuzz.c): small values of every kind, patches aimed mostly
-// at what is there, a deep copy and an equality (maps by content). Bytes run out as zeros.
+// Makes op values and patches from fuzz bytes for the libFuzzer targets, plus a deep copy and an
+// equality (maps by content). Bytes run out as zeros.
 #ifndef OP_FUZZ_VALUES_H
 #define OP_FUZZ_VALUES_H
 
@@ -19,9 +18,6 @@ static inline unsigned fz_byte(fz_bytes *b) { return b->at < b->size ? b->data[b
 
 static const char *const fz_names[] = {"a", "b", "c", "d"};
 
-// string parts: one, two, three and four bytes, a pair and a modifier, NUL, lone highs, lone lows
-// (as WTF-8). a high then a low in one string is a pair (four bytes), never two lone ones: edits
-// bring them together
 static const struct {
 	const char *s;
 	size_t n;
@@ -30,7 +26,6 @@ static const struct {
 	{"\xed\xb8\x80", 3}, {"\xed\xb0\x80", 3}};
 enum { FZ_CHARS = sizeof fz_chars / sizeof fz_chars[0], FZ_HIGH = 6, FZ_LOW = 8 };
 
-// a string of up to 5 parts
 static inline op_value *fz_text(fz_bytes *b) {
 	char s[64];
 	size_t len = 0;
@@ -105,7 +100,6 @@ static inline op_value *fz_copy(const op_value *v) {
 	abort();
 }
 
-// the same content; a map's keys in any order
 static inline int fz_equal(const op_value *a, const op_value *b) {
 	if (a == NULL || b == NULL) return a == b;
 	if (a->type != b->type) return 0;
@@ -133,7 +127,6 @@ static inline int fz_equal(const op_value *a, const op_value *b) {
 	return 0;
 }
 
-// every value in the tree has no holder past its first: what a caller made and still owns alone
 static inline int fz_unshared(const op_value *v) {
 	if (v == NULL) return 1;
 	if (v->refs != 0) return 0;
@@ -142,9 +135,6 @@ static inline int fz_unshared(const op_value *v) {
 	return 1;
 }
 
-// every string in v is WTF-8 as op holds it: a lone surrogate three bytes (ED A0..BF xx), a high
-// never right before a low (that is a pair: four bytes), no overlong or cut sequence; ascii set
-// only when every byte is (unset when every byte is costs only speed)
 static inline int fz_wtf8(const op_value *v) {
 	if (v == NULL) return 1;
 	if (v->type == OP_STR) {
@@ -172,7 +162,6 @@ static inline int fz_wtf8(const op_value *v) {
 	return 1;
 }
 
-// patches: their keys and values are fz_patches' own
 enum { FZ_PATCHES = 6, FZ_DEPTH = 4 };
 typedef struct {
 	op_patch p[FZ_PATCHES];
@@ -181,8 +170,6 @@ typedef struct {
 	size_t n;
 } fz_patches;
 
-// a path: mostly a walk down what is in v (a key there, or one past a list's end), sometimes any
-// key; rarely a negative number (not a patch)
 static inline void fz_target(fz_bytes *b, const op_value *v, op_target *t, op_key *keys) {
 	unsigned c = fz_byte(b);
 	size_t n = c % FZ_DEPTH;
@@ -190,7 +177,7 @@ static inline void fz_target(fz_bytes *b, const op_value *v, op_target *t, op_ke
 		unsigned k = fz_byte(b);
 		if (k % 8 != 0 && v != NULL && v->type == OP_MAP && v->count) {
 			size_t j = (k >> 3) % v->count, x = 0;
-			// the name, not the map's copy of it: the patch may outlive the map
+			// Use the name, not the map's copy of it, since the patch may outlive the map.
 			while (x < 3 && strcmp(fz_names[x], v->keys[j]) != 0) x++;
 			keys[i] = (op_key){.type = OP_STR_KEY, .s = fz_names[x]};
 			v = v->items[j];
@@ -216,7 +203,6 @@ static inline void fz_target(fz_bytes *b, const op_value *v, op_target *t, op_ke
 	}
 }
 
-// up to FZ_PATCHES patches aimed at v: a put, a removal, or a move
 static inline void fz_patch_list(fz_bytes *b, const op_value *v, fz_patches *out) {
 	memset(out, 0, sizeof *out);
 	out->n = fz_byte(b) % (FZ_PATCHES + 1);

@@ -1,7 +1,6 @@
 import { assertEquals } from "@std/assert"
 import { count, near, slice, unit, walk } from "./walk-string.ts"
 
-// a fuzz's numbers: xorshift (an LCG's low bits repeat, so % k of one is patterned)
 const xs = (x: number) => {
 	x = x || 1
 	x ^= x << 13
@@ -42,7 +41,6 @@ Deno.test("walk: utf16 counts units, walking nothing", () => {
 	assertEquals(slice(s, 1, 2, true), "\uD83D")
 })
 
-// against the engine's own walk (for..of steps by code point, a lone surrogate one)
 Deno.test("walk: as Array.from counts, over random strings", () => {
 	const parts = ["a", "é", "😀", "\uD83D", "\uDE00", "✓"]
 	let x = 7
@@ -58,8 +56,6 @@ Deno.test("walk: as Array.from counts, over random strings", () => {
 	}
 })
 
-// the fuzz: strings made of the awkward parts, every position pair, against the engine's own
-// split by code point (Array.from: a pair is one, a lone surrogate one)
 const parts = [
 	"a",
 	"é",
@@ -78,14 +74,11 @@ function strings(seed: number, n: number): string[] {
 	let x = seed
 	const rand = (k: number) => (x = xs(x)) % k
 	return Array.from({ length: n }, () => {
-		// mostly short (every pair of positions walked), some long
 		const size = rand(10) === 0 ? 200 + rand(400) : rand(24)
-		// some strings plain, some all surrogates, some mixed
 		const pool = [parts, parts.slice(0, 4), parts.slice(4)][rand(3)]
 		return Array.from({ length: size }, () => pool[rand(pool.length)]).join("")
 	})
 }
-// what each position's unit is, by the engine
 function units(s: string): number[] {
 	const at = [0]
 	for (const cp of Array.from(s)) at.push(at[at.length - 1] + cp.length)
@@ -99,7 +92,6 @@ Deno.test("walk: fuzz, against Array.from and in UTF-16", () => {
 			const say = (what: string) => `seed ${seed} ${what} ${JSON.stringify(s)}`
 			assertEquals(count(s), n, say("count"))
 			assertEquals(count(s, true), s.length, say("count utf16"))
-			// past the end by two, so past-the-end answers are checked too
 			const top = Math.min(n + 2, 40)
 			for (let a = 0; a <= top; a++) {
 				assertEquals(unit(s, a), a <= n ? at[a] : -1, say(`unit ${a}`))
@@ -132,7 +124,6 @@ Deno.test("walk: fuzz, near answers as walk from any true hint", () => {
 		for (const s of strings(seed + 2000, 40)) {
 			const n = count(s), top = Math.min(n + 2, 30)
 			for (let t = 0; t < 4; t++) {
-				// a true hint: some position and its unit; the count known or not
 				const k = rand(n + 1)
 				const h = { n: rand(2) ? n : -1, k, i: unit(s, k) }
 				const far = [[n >> 1, n >> 1], [n, n], [0, n], [Math.max(0, n - 3), n]]

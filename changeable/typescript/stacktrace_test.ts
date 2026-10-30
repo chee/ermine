@@ -26,7 +26,6 @@ Deno.test("frames: a V8 message is not a frame", () => {
 	}])
 })
 
-// from macOS's jsc, 2026-10-11, paths shortened
 Deno.test("frames: JavaScriptCore", () => {
 	const stack = [
 		"inner@/s/j.js:1:36",
@@ -58,7 +57,6 @@ Deno.test("capture: every line of the stack now, this file's among them, the lim
 
 type Kept = { stackTraceLimit: number; _ermineStackTraceLimit?: number }
 
-// with ermine's limit set to n for f, put back after
 function limited<T>(n: number | undefined, f: () => T): T {
 	const E = Error as unknown as Kept
 	const was = E._ermineStackTraceLimit

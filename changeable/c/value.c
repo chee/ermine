@@ -6,7 +6,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-// memory
 
 static void *xrealloc(void *p, size_t n) {
 	void *q = realloc(p, n);
@@ -16,7 +15,6 @@ static void *xrealloc(void *p, size_t n) {
 	}
 	return q;
 }
-// names: a count of holders past the first, then the string
 typedef struct {
 	size_t refs;
 	char s[];
@@ -38,7 +36,6 @@ void op_name_free(char *p) {
 	if (k->refs) k->refs--;
 	else free(k);
 }
-// room for one more at index count
 #define GROW(p, count, capacity) \
 	do { \
 		if ((count) == (capacity)) { \
@@ -47,7 +44,6 @@ void op_name_free(char *p) {
 		} \
 	} while (0)
 
-// values
 
 static op_value *make(op_type type) {
 	op_value *v = xrealloc(NULL, sizeof *v);
@@ -167,8 +163,7 @@ static size_t hash(const char *s) {
 	for (; *s; s++) h = h * 33 + (unsigned char)*s;
 	return h;
 }
-// the index holds positions plus one. A removal puts the last key in the removed one's place, so a
-// removal costs the same however many keys there are (key order is not part of a map's value)
+// A removal puts the last key in the removed one's place, so it costs the same however many keys.
 static void slot(op_value *m, size_t e) {
 	size_t h = hash(m->keys[e]) & (m->slots - 1);
 	while (m->index[h]) h = (h + 1) & (m->slots - 1);
@@ -178,7 +173,6 @@ static void unindex(op_value *m) {
 	free(m->index);
 	m->index = NULL;
 }
-// a map with many keys is found by hash
 static op_value *lookup(const op_value *map, const char *key, size_t *at) {
 	if (map->count <= 16) {
 		for (size_t i = 0; i < map->count; i++) {
@@ -218,7 +212,6 @@ long op_find(const op_value *map, const char *key) {
 void op_unset(op_value *map, size_t i) {
 	size_t last = map->count - 1;
 	if (map->index != NULL) {
-		// the key's slot is emptied and the cluster after it closed up
 		size_t mask = map->slots - 1, h = hash(map->keys[i]) & mask;
 		while (!map->index[h] || map->index[h] - 1 != i) h = (h + 1) & mask;
 		for (size_t j = h;;) {
@@ -231,7 +224,6 @@ void op_unset(op_value *map, size_t i) {
 		}
 		map->index[h] = 0;
 		if (i != last) {
-			// the last key is about to be at i
 			h = hash(map->keys[last]) & mask;
 			while (map->index[h] != last + 1) h = (h + 1) & mask;
 			map->index[h] = i + 1;
@@ -247,7 +239,6 @@ void op_unset(op_value *map, size_t i) {
 	}
 	map->count--;
 }
-// the key a name already (shared: given), or a string to make one of
 static void put(op_value *map, const char *key, char *shared, op_value *v) {
 	size_t at;
 	if (lookup(map, key, &at) != NULL) {

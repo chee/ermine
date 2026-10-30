@@ -1,16 +1,5 @@
-// The C apply (apply.h) and invert (invert.h) on the line protocol of
-// changeable/typescript/apply_harness.ts: a value's "/" forms are read by op's codec, so a string
-// anywhere may hold lone surrogates, as apply counts them. The suites apply and invert both speak
-// it, and this is the binary of both.
-//
-// As the reference, every call is checked: the value given and the patches' values unchanged. And
-// the ownership rules of apply.h and invert.h: the value given and the patches' values are let go
-// of before the answer is made from what came out. With "cow": false (in place) instead: a refused
-// call leaves them as they were (by content, a key put back going last), and a good one answers
-// the value given itself when it is a list or a map and no patch has the whole for a place.
-//
-// The values given are a copy of the request's, made from the line again, held by this call alone:
-// the request's own are the line's, and are never let go of early.
+// The C apply and invert on the line protocol of changeable/typescript/apply_harness.ts. Values
+// are read by op's codec. Every call also checks that the value and patches' values are unchanged.
 #define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,7 +9,6 @@
 #include "invert.h"
 #include "../../conformance/c/protocol_harness.h"
 
-// a copy of v with every map's keys sorted: the same for the same content
 static int by_key(const void *a, const void *b) {
 	return strcmp(*(char *const *)a, *(char *const *)b);
 }
@@ -41,7 +29,6 @@ static op_value *sorted(const op_value *v) {
 	return map;
 }
 
-// the values given, as text: the same after the call. by_content: a map's keys in order
 static char *given(const op_value *value, op_value *const *values, size_t n, int by_content) {
 	char *text;
 	size_t size;
@@ -85,7 +72,6 @@ void hh_answer(const op_value *r, FILE *out) {
 		return;
 	}
 	size_t n = ps->count;
-	// the patches: places from the request, values from the copy
 	op_patch *patches = hh_take((n + 1) * sizeof *patches);
 	op_value **values = hh_take((n + 1) * sizeof *values);
 	op_value *copy = op_json_read(hh_text(), NULL);
@@ -99,7 +85,6 @@ void hh_answer(const op_value *r, FILE *out) {
 			values[i] = op_ref(op_get(cps->items[i], "value"));
 			patches[i].value = values[i];
 		}
-		// a target is a path and a range: one carrying a value or a move is no patch
 		if (patches[i].has_move && (op_get(op_get(ps->items[i], "move"), "value") ||
 					op_get(op_get(ps->items[i], "move"), "move"))) {
 			patches[i].move.has_range = 1;
@@ -128,12 +113,10 @@ void hh_answer(const op_value *r, FILE *out) {
 	}
 	char *after = given(value, values, n, in_place);
 	int changed = strcmp(before, after) != 0 && !(in_place && code == OP_OK);
-	// in place, the value given is the value answered
 	int other = !inverting && in_place && code == OP_OK && !wholes && end != NULL &&
 		value != NULL && (value->type == OP_LIST || value->type == OP_MAP) && end != value;
 	free(before);
 	free(after);
-	// what was given, let go of: what came out holds its own
 	op_free(value);
 	for (size_t i = 0; i < n; i++) op_free(values[i]);
 	if (changed || other) {

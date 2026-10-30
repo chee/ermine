@@ -1,23 +1,21 @@
-// Squishing patches, and patches as columns (typescript/squish.ts), in C. Same rules.
-// Never applies a patch and never needs the content.
+// Squishing patches and patches as columns, in C (the same rules as typescript/squish.ts). It
+// never applies a patch and never needs the content.
+//
+// Paths, keys, values and moves given in are borrowed: the caller keeps them alive while the
+// squisher is. Arrays returned are the caller's to free; what they point into stays borrowed.
 #ifndef SQUISH_H
 #define SQUISH_H
 
 #include <stddef.h>
 #include <stdint.h>
 
-// a key into the content: a string (s), or a whole number (s NULL, n)
 typedef struct {
 	const char *s;
 	long n;
 } sq_key;
 
-// what joins and cuts: a string (UTF-8, with a lone surrogate as WTF-8: n counts code points), a
-// list (n opaque elements), a typed array (n elements, each bytes long, of a kind: joins only with
-// its own kind); anything else, bytes included (one whole value, never spliced), is
-// SQ_ANY and never joins. size: data's length in bytes. lone: a lone surrogate is in it, or in
-// anything it holds (a string sets it itself; for a list or any other value, the caller does:
-// squish never reads those)
+// lone says a lone surrogate is in the value or anything it holds. A string sets it itself; for a
+// list or other value the caller does, since squish never reads those.
 typedef enum { SQ_ANY, SQ_STR, SQ_LIST, SQ_TYPED } sq_kind;
 typedef struct {
 	sq_kind kind;
@@ -25,8 +23,6 @@ typedef struct {
 	size_t size;
 	const void *data;
 	int lone;
-	// a typed array's kind (the caller's number for it), 0 for the rest; a list's or a typed array's
-	// bytes per element, 0 for the rest
 	int of;
 	size_t each;
 } sq_value;
@@ -36,7 +32,6 @@ sq_value sq_list(const void *const *elements, size_t n);
 sq_value sq_typed(int of, size_t each, const void *data, size_t n);
 sq_value sq_any(const void *v);
 
-// a patch (apply.ts' Patch). move: opaque, NULL for none; only move_path of it is read
 typedef struct {
 	const sq_key *path;
 	size_t depth;
@@ -45,8 +40,6 @@ typedef struct {
 	int has_value;
 	sq_value value;
 	const void *move;
-	// a move's from-path, and whether it takes a span, when there is a move (squish reads only these
-	// of it)
 	const sq_key *move_path;
 	size_t move_depth;
 	int move_has_range;
@@ -55,16 +48,11 @@ typedef struct {
 typedef struct sq sq;
 
 sq *sq_new(void);
-// path, keys, values and moves are borrowed: kept alive by the caller while the squisher is
 void sq_push(sq *s, const sq_patch *patch);
-// what has been pushed, squished; valid until the next push or sq_free
 const sq_patch *sq_patches(const sq *s, size_t *n);
-// empties it, keeping its memory (and forgetting the lone surrogates it saw); joined values made
-// before are freed
 void sq_clear(sq *s);
 void sq_free(sq *s);
 
-// [value, count, value, count, ...]; n: how many numbers
 typedef struct {
 	int64_t *v;
 	size_t n;
@@ -75,8 +63,6 @@ typedef struct {
 	size_t depth;
 } sq_path;
 
-// as squish.ts's Columns. shape: 1 a range, 2 a value, 4 a move. from: the step from the last
-// ranged patch's from; size: to - from. Paths, values and moves are the patches', borrowed
 typedef struct {
 	sq_path *paths;
 	size_t npaths;
@@ -89,7 +75,7 @@ typedef struct {
 
 sq_columns sq_encode(const sq_patch *patches, size_t n);
 void sq_columns_free(sq_columns *c);
-// a new array (free it), its paths, values and moves borrowed from c; NULL, *n 0 when empty
+// A new array (free it); NULL with *n 0 when empty.
 sq_patch *sq_decode(const sq_columns *c, size_t *n);
 
 #endif

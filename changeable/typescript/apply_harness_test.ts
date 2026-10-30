@@ -1,10 +1,4 @@
-// what apply's suite does besides its scenarios (conformance/run.ts), asked of the harness named by
-// HARNESS (default: the TypeScript one, apply_harness.ts, which documents the protocol).
-//
-// The fuzzer makes values and patches, follows them with apply.ts, and asks the harness the same:
-// its answers must be what calling apply.ts gives. And, for apply.ts and the harness alike: many
-// patches in one call give what one call each gives (one call walks a string from where the last
-// patch left off; one call each never does).
+// Tests apply on the harness named by HARNESS (default apply_harness.ts), with a fuzzer.
 import { assert, assertEquals } from "@std/assert"
 import apply, { ApplyError, type Patch } from "@ermine/changeable/apply"
 import { ask, command } from "../../conformance/typescript/ask.ts"
@@ -29,13 +23,11 @@ Deno.test("an unknown op, or a line that is not JSON, is an error, and the harne
 	assertEquals(d, { value: 1 })
 })
 
-// a few dozen seeds (memory: fuzz runs small)
 const SEEDS = 40
 const PATCHES = 24
 
 type Pick = ReturnType<typeof rand>
 
-// string parts: ASCII, BMP, pairs, a pair and a modifier, lone halves, U+0000
 const PARTS = ["a", "b", "xy", "é", "中", "😀", "👍🏽", "\uD83D", "\uDE00", "\u0000"]
 const KEYS = ["a", "b", "c", "k"]
 const KINDS = [
@@ -54,7 +46,6 @@ const typed = (v: unknown): v is Typed =>
 	ArrayBuffer.isView(v) && !(v instanceof DataView) && !(v instanceof Uint8Array)
 const isMap = (v: unknown): v is Record<string, unknown> =>
 	v !== null && typeof v === "object" && !Array.isArray(v) && !ArrayBuffer.isView(v)
-// an answer by content: a map's key order is not part of its value (apply.ts)
 const sorted = (v: unknown) =>
 	isMap(v) ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, v[k]])) : v
 const content = (a: unknown) => line(a, sorted)
@@ -95,7 +86,6 @@ const len = (v: unknown) =>
 	typeof v === "string" ? Array.from(v).length : (v as unknown[] | Typed).length
 const isSeq = (v: unknown) => typeof v === "string" || Array.isArray(v) || typed(v)
 
-// every place in v: its path and what is there
 function places(
 	v: unknown,
 	path: (string | number)[] = [],
@@ -108,7 +98,6 @@ function places(
 	return out
 }
 
-// a span of a sequence of n: mostly in it, now and then past its end or reversed
 function span(pick: Pick, n: number): [number, number] {
 	const a = pick(n + 1), b = a + pick(n - a + 1)
 	switch (pick(14)) {
@@ -120,7 +109,6 @@ function span(pick: Pick, n: number): [number, number] {
 			return [a, b]
 	}
 }
-// what fits a span of s, mostly
 function filling(pick: Pick, s: unknown): unknown {
 	if (pick(10) === 0) return made(pick, 1)
 	if (typeof s === "string") return text(pick, 3)
@@ -129,7 +117,6 @@ function filling(pick: Pick, s: unknown): unknown {
 	return elements(pick, kind, pick(3))
 }
 
-// a patch against v (absent: undefined); many are valid, some are not
 function patch(pick: Pick, v: unknown): Patch {
 	const all = v === undefined ? [] : places(v)
 	const any = () => all.length ? all[pick(all.length)] : [[], undefined] as const
@@ -157,7 +144,6 @@ function patch(pick: Pick, v: unknown): Patch {
 			: { path: p, range: span(pick, len(s)) }
 	}
 	if (k < 15) {
-		// unranged: to a new key, onto a place, into a span
 		const [from] = any()
 		const j = pick(3)
 		if (j === 0 && maps.length) {
@@ -173,7 +159,6 @@ function patch(pick: Pick, v: unknown): Patch {
 		return { path: p, range: [g, g + pick(2)], move: { path: from } }
 	}
 	if (k < 19) {
-		// ranged: within one sequence, or across
 		const [f, s] = seq()
 		const n = isSeq(s) ? len(s) : 0
 		const r = span(pick, n)
@@ -189,7 +174,6 @@ function patch(pick: Pick, v: unknown): Patch {
 		return { path: [...m, KEYS[pick(KEYS.length)]], move: { path: f, range: r } }
 	}
 	if (k < 21) {
-		// paths that may not be there, or are the wrong kind of key
 		const [p] = any()
 		const extra = [["x"], [0], [9], ["a", "b"], [1, "q"]][pick(5)]
 		return pick(2) ? { path: [...p, ...extra], value: 1 } : { path: [...p, ...extra] }
@@ -213,7 +197,6 @@ function patch(pick: Pick, v: unknown): Patch {
 	return { path: [...p, KEYS[pick(KEYS.length)]], move: { path: p } }
 }
 
-// apply.ts called directly, answered as the harness answers
 function direct(value: unknown, patches: Patch[]): Answer {
 	try {
 		const v = apply(value, patches)
@@ -239,7 +222,6 @@ type Run = {
 	bad: [number, Patch][]
 }
 
-// patches followed one by one: the valid kept, the invalid kept aside with where they fell
 function run(seed: number): Run {
 	const pick = rand(seed)
 	let v: unknown = pick(8)
@@ -274,7 +256,6 @@ Deno.test(`fuzz: ${SEEDS} seeds × ${PATCHES} patches, as apply.ts; one call as 
 		const seed = i + 1
 		add(seed, "all", r.start, r.good)
 		r.good.forEach((p, k) => add(seed, `patch ${k} alone`, r.befores[k], [p]))
-		// an invalid patch where it fell: that index, whatever came before
 		for (const [k, p] of r.bad) {
 			add(
 				seed,
@@ -289,7 +270,6 @@ Deno.test(`fuzz: ${SEEDS} seeds × ${PATCHES} patches, as apply.ts; one call as 
 	answers.forEach((a, i) =>
 		assertEquals(content(a), content(expected[i]), `${where[i]}: ${line(requests[i])}`)
 	)
-	// the same in place
 	const inPlace = await ask(harness, requests.map((r) => ({ ...r, cow: false })))
 	inPlace.forEach((a, i) =>
 		assertEquals(
@@ -298,7 +278,6 @@ Deno.test(`fuzz: ${SEEDS} seeds × ${PATCHES} patches, as apply.ts; one call as 
 			`${where[i]} (cow: false): ${line(requests[i])}`,
 		)
 	)
-	// one call, as one call each: the end, an invalid patch's index
 	let at = 0
 	runs.forEach((r, i) => {
 		const all = answers[at], alone = answers.slice(at + 1, at + 1 + r.good.length)

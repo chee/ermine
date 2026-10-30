@@ -1,14 +1,9 @@
-// update on one entry over many changes, where update_test.ts and the update suite do not reach:
-// random values of every kind and random batches, a new change each update,
-// the header given left as it was, refused batches changing nothing, and every change's op still
-// walking back and forth through the history after the changes that came later. a few dozen
-// seeds (fuzz runs small)
+// Fuzz test of update on one entry over many changes; runs a few dozen seeds.
 import { assert, assertEquals, assertStrictEquals, assertThrows } from "@std/assert"
 import apply, { ApplyError, type Patch } from "@ermine/changeable/apply"
 import type { Changeable, ChangeHeader } from "@ermine/changeable"
 import update from "./update.ts"
 import { differ, patch, rand, show, snap, start } from "../../conformance/typescript/gen.ts"
-// a changeable of this value and change (no change given: the time now, whole seconds since 1970)
 const createChangeable = <V>(
 	value: V,
 	change: ChangeHeader = {} as ChangeHeader,
@@ -33,12 +28,10 @@ Deno.test(`update fuzz: ${SEEDS} seeds × ${STEPS} updates, every change kept wa
 			actor: "host",
 			frame: { info: {}, parent: undefined },
 		})
-		// what each update was given and made: the value before, the change, the value after
 		const history: { before: unknown; change: ChangeHeader; after: unknown }[] = []
 		const changes = new Set<ChangeHeader>([n.change])
 		for (let step = 0; step < STEPS; step++) {
 			const at = `seed ${seed}, step ${step}`
-			// a few patches, each on what the ones before it made; now and then one refused
 			const ps: Patch[] = []
 			let v = n.value
 			for (let k = 1 + pick(4); k > 0; k--) {
@@ -72,7 +65,6 @@ Deno.test(`update fuzz: ${SEEDS} seeds × ${STEPS} updates, every change kept wa
 			assertEquals(differ(header, headerWas, true), "", `${at}: the header given changed`)
 			assertEquals("op" in header, false, at)
 			if (refused) {
-				// nothing changes: the same value, the same change
 				assertStrictEquals(n.value, before, at)
 				assertStrictEquals(n.change, change, at)
 				assertEquals("value" in n, had, at)
@@ -80,7 +72,6 @@ Deno.test(`update fuzz: ${SEEDS} seeds × ${STEPS} updates, every change kept wa
 				assertThrows(() => apply(before, ps), ApplyError)
 				continue
 			}
-			// a new change, the header's fields and the op
 			assert(!changes.has(n.change), `${at}: a change object again`)
 			changes.add(n.change)
 			assert(n.change !== header, at)
@@ -88,7 +79,6 @@ Deno.test(`update fuzz: ${SEEDS} seeds × ${STEPS} updates, every change kept wa
 			assertEquals(rest, header, at)
 			if (given === ps) assertStrictEquals(op!.patches, ps, at)
 			else assertEquals(op!.patches, ps, at)
-			// the value the patches make, the one before as it was
 			const want = apply(before, ps)
 			assertEquals(differ(n.value, want), "", `${at}: ${show(ps)}`)
 			assertEquals("value" in n, want !== undefined, at)
@@ -100,7 +90,6 @@ Deno.test(`update fuzz: ${SEEDS} seeds × ${STEPS} updates, every change kept wa
 			)
 			history.push({ before: beforeWas, change: n.change, after: snap(n.value) })
 		}
-		// every change still holds: back from the end, change by change, then forward again
 		let v = n.value
 		for (let i = history.length - 1; i >= 0; i--) {
 			const h = history[i]
@@ -142,7 +131,6 @@ Deno.test(`update fuzz: ${SEEDS} seeds, one update of many patches, as one updat
 		const at = `seed ${seed}: ${show(first)}\n${show(ps)}`
 		assertEquals(differ(all.value, each.value), "", at)
 		assertEquals("value" in all, "value" in each, at)
-		// the one change's undo and the many, last first, take it to the same place
 		let back = each.value
 		for (let i = undos.length - 1; i >= 0; i--) back = apply(back, undos[i])
 		assertEquals(differ(back, apply(all.value, all.change.op!.undo)), "", at)

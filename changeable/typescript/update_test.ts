@@ -3,7 +3,7 @@ import apply, { ApplyError, type Patch } from "@ermine/changeable/apply"
 import { type Changeable, type ChangeHeader } from "@ermine/changeable"
 import update from "./update.ts"
 
-// a changeable of this value and change (no change given: the time now, whole seconds since 1970)
+// A changeable of this value and change (no change given: the time now, in whole seconds).
 const createChangeable = <V>(
 	value: V,
 	change: ChangeHeader = {} as ChangeHeader,
@@ -25,7 +25,6 @@ Deno.test("update: the value the patches make; the change, the header with its o
 	assertEquals(n.value, { t: "hi", l: [2], x: 1 })
 	assertEquals([n.change.time, n.change.actor], [5, "me"])
 	assertStrictEquals(n.change.op!.patches, patches)
-	// the header given is unchanged
 	assertEquals(by, { time: 5, actor: "me", frame: { info: {}, parent: undefined } })
 })
 

@@ -1,13 +1,5 @@
-// what invert's suite does besides its scenarios (conformance/run.ts: they pin only that an undo
-// undoes), asked of the harness named by HARNESS (default: the TypeScript one, apply_harness.ts,
-// which speaks both suites: { op: "invert", value?, patches, cow? }).
-//
-// Every undo answered is also walked back with apply.ts: apply(apply(value, patches), undo) is
-// value; lists, strings and typed arrays element for element, maps by content (a key put back
-// goes last). That is done for the scenarios' answers too, at the start of the one test. The
-// fuzzer makes values and patches and asks the harness: its answers walk back, and with the
-// TypeScript harness (no HARNESS) are what calling invert.ts gives, exactly. Another harness's
-// undos may differ: for them the walking back, here and in the suite, is all that is asked.
+// Tests invert on the harness named by HARNESS (default apply_harness.ts): every undo is walked back
+// with apply.ts, and with the TypeScript harness it must equal invert.ts's. Has a fuzzer.
 import { assert, assertEquals } from "@std/assert"
 import apply, { ApplyError, type Key, type Patch } from "@ermine/changeable/apply"
 import invert from "@ermine/changeable/invert"
@@ -28,12 +20,10 @@ const patchesOf = (ps: unknown[]) =>
 		isMap(p) && Object.hasOwn(p, "value") ? { ...p, value: revive(p.value) } : p
 	) as Patch[]
 
-// a value's JSON form with every map's keys sorted: the same for the same content
 const sorted = (v: unknown) =>
 	isMap(v) ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, v[k]])) : v
 const content = (v: unknown) => v === undefined ? "(nothing)" : line(toJson(v), sorted)
 
-// the undo, walked back with apply.ts: the value as apply has it
 function walksBack(r: Request, undo: unknown[], why: string) {
 	const value = Object.hasOwn(r, "value") ? revive(r.value) : undefined
 	const out = apply(value, patchesOf(r.patches))
@@ -41,7 +31,6 @@ function walksBack(r: Request, undo: unknown[], why: string) {
 	assertEquals(content(back), content(apply(value, [])), `${why}: the way back`)
 }
 
-// the scenarios' undos walk back too
 async function scenarios() {
 	for (const f of [...Deno.readDirSync(suite("invert").fixtures)].map((f) => f.name).sort()) {
 		if (!/^\d.*\.json$/.test(f)) continue
@@ -58,7 +47,6 @@ async function scenarios() {
 	}
 }
 
-// a few dozen seeds (fuzz runs stay small)
 const SEEDS = 40
 const PATCHES = 24
 
@@ -123,7 +111,6 @@ function filling(pick: Pick, s: unknown): unknown {
 	if (Array.isArray(s)) return Array.from({ length: pick(3) }, () => made(pick, 1))
 	return elements(pick, s!.constructor as (typeof KINDS)[number], pick(3))
 }
-// a patch against v: many valid, some not
 function patch(pick: Pick, v: unknown): Patch {
 	const all = v === undefined ? [] : places(v)
 	const any = () => all.length ? all[pick(all.length)] : [[], undefined] as [Key[], unknown]
@@ -157,7 +144,6 @@ function patch(pick: Pick, v: unknown): Patch {
 			return { path: any()[0], move: { path: any()[0] } }
 		case 8:
 		case 9: {
-			// a value into a sequence of its kind
 			const [p, s] = seq()
 			const fits = all.filter(([q, x]) =>
 				q.length > 0 && (Array.isArray(s) ||
@@ -199,7 +185,6 @@ const request = (value: unknown, ps: Patch[]): Request => ({
 		isMap(p) && Object.hasOwn(p, "value") ? { ...p, value: toJson(p.value) } : p
 	),
 })
-// invert.ts called directly, answered as the harness answers
 function direct(value: unknown, ps: Patch[]): Answer {
 	try {
 		const undo = invert(value, ps)
@@ -249,7 +234,7 @@ Deno.test(`fuzz: ${SEEDS} seeds × ${PATCHES} patches, as invert.ts; each undo w
 	const answers = (await ask(harness, requests)) as Answer[]
 	assertEquals(answers.length, requests.length, "one answer per request")
 	answers.forEach((a, i) => {
-		// exactly invert.ts's answer only of the TypeScript harness; an error is always the same
+		// Only the TypeScript harness gives exactly invert.ts's undo; an error is always the same.
 		if (!Deno.env.get("HARNESS") || a.error || expected[i].error) {
 			assertEquals(
 				line(a, sorted),
@@ -259,7 +244,6 @@ Deno.test(`fuzz: ${SEEDS} seeds × ${PATCHES} patches, as invert.ts; each undo w
 		}
 		if (a.undo) walksBack(requests[i], a.undo, where[i])
 	})
-	// the same in place
 	const inPlace = await ask(harness, requests.map((r) => ({ ...r, cow: false })))
 	inPlace.forEach((a, i) => {
 		if (!Deno.env.get("HARNESS") || a.error || expected[i].error) {
