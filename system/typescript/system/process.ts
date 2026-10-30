@@ -11,26 +11,19 @@ import { here } from "./setting.ts"
 import type { Starting, System, Taken, WithWriter } from "./shapes.ts"
 import { getStatusAs } from "./status.ts"
 
-// public (mod.ts exports them): each runs its implementation below, named with As, as the
-// context it finds (acting.ts' go)
 export const addTeardown: System["addTeardown"] = /* @__PURE__ */ marked(function addTeardown(fn) {
 	return go(addTeardown, "addTeardown", false, addTeardownAs, fn)
 })
 export const getArgs: System["getArgs"] = /* @__PURE__ */ marked(function getArgs() {
 	return go(getArgs, "getArgs", false, getArgsAs)
 })
-// a writer for a function to run later as this one, with nothing open: createWriter in setup or an
-// action. it writes nothing itself, but is entered: its frame is under its owner's
 export const createWriter: System["createWriter"] = /* @__PURE__ */ marked(function createWriter() {
 	return go(createWriter, "createWriter", true, createWriterAs)
 })
-// a process running fn at at, belonging to the scope that started it: setup, an action, a writer
 export const start: System["start"] = /* @__PURE__ */ marked(function start(fn, at, options) {
 	return go(start, "start", true, startAs, fn, at, options)
 })
 
-// why a teardown's scope goes: a stop's reason; else, the process still there, its owner ran
-// again (replaced), or ended
 export function addTeardownAs(inner: Inner, fn: (why: Why) => unknown) {
 	const own = owner(inner)
 	notInAct(own, "addTeardown")
@@ -40,7 +33,6 @@ export function addTeardownAs(inner: Inner, fn: (why: Why) => unknown) {
 
 const notData = () => new ErmineError("not-a-value", "a writer is not data: it won't serialize")
 
-// createWriter(): in setup or an action
 export function createWriterAs(inner: Inner): WithWriter {
 	const { base, parts } = here(inner)
 	const own = owner(inner)
@@ -50,7 +42,6 @@ export function createWriterAs(inner: Inner): WithWriter {
 		"createWriter in a memo or effect: create it in setup or an action, and use the writer there",
 	)
 	const mark = markOf(inner, own)
-	// the writer's own frame, under its owner's
 	const frame = parts.scheduler.createFrame({}, own.frame)
 	const later = function (f: () => unknown) {
 		const data = base.writers.get(later)!
@@ -93,13 +84,8 @@ export function createWriterAs(inner: Inner): WithWriter {
 	return later
 }
 
-// start(fn, at, { args }): a process running fn at at [chee 10-27: "processes should be able to start
-// and stop processes"]. asked as the starter, as placing at is ("place" on the folder). it belongs to
-// the scope that started it (setup's: the starter's; an action's: the scope that placed it; a writer's:
-// its parent): it stops as that ends. it is told nothing of its parent. not in a compute or an
-// act (a compute would start it every run; an act makes nothing). stop() is asked as
-// the starter is, wherever it is called. taken: { refused: "taken", at } only: whose it is (a
-// stopped process held by a feature) is for the host's start [holding an id is the permission]
+// start(fn, at, { args }) is asked as the starter, like placing at `at`. The process belongs to the
+// scope that started it and stops when that ends. Refused only as { refused: "taken", at }.
 export function startAs(
 	inner: Inner,
 	fn: () => unknown,
@@ -113,24 +99,20 @@ export function startAs(
 		throw new ErmineError("not-a-function", "start takes the program: its function")
 	}
 	const path = resolve(at)
-	// the folder it is placed in, or the nearest one above that is there (the rest are made)
 	const asked = () => {
 		for (let n = path.length - 1; n >= 0; n--) {
 			const folder = get(places, path.slice(0, n))
 			if (folder !== undefined) return ask("place", slotAt(path.slice(0, n + 1), folder))
 		}
 	}
-	// stop() is asked as the starter is, wherever it is called from
 	const mark = markOf(inner, own)
 	const asStarter = () => runAs(inner, own, mark, asked)
 	asked()
 	const made = base.start(fn, path, { args: options.args, places }, own)
-	// a program gets where the path is held, never whose it is (an id is the permission)
 	if ("refused" in made) return { refused: "taken", at: made.at }
 	const id = made.process.id
 	return {
 		process: { at: made.process.at, folder: made.process.folder },
-		// the node unplaced, as unplace asks it
 		stop: (why) => {
 			if (!base.processes.has(id)) return
 			asStarter()

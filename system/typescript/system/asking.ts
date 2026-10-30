@@ -6,8 +6,6 @@ import type { Inner, Step, Target } from "../context.ts"
 import { aimed, idOf, nodeOf } from "./addressing.ts"
 import { here } from "./setting.ts"
 
-// the policy asked "read" of id's part (and a key in it), reached by path: a Refusal when it says
-// no, PENDING when it cannot say yet. a write is asked as context's ask has it
 export function mayRead(
 	inner: Inner,
 	id: Id,
@@ -17,7 +15,6 @@ export function mayRead(
 ) {
 	if (inner.guarded) inner.guard.read(aimed(id, path, part, key))
 }
-// whether the policy refuses the read, asked as mayRead asks (a pending answer: PENDING thrown)
 export function refused(inner: Inner, id: Id, path: Path | undefined, part: Key) {
 	try {
 		mayRead(inner, id, path, part)
@@ -28,10 +25,8 @@ export function refused(inner: Inner, id: Id, path: Path | undefined, part: Key)
 	}
 }
 
-// a node already there given a name in a folder: asked as inner "place" of the
-// slot with the node beside, then read and edit of the node (an action's: execute too), so a name
-// can't widen what anyone may do with it [chee 10-26: "we will do it the protected_hardlinks way
-// for now, it's better to over- than under-"]. x: the node as it was given (the path it came by)
+// A node given a name in a folder is asked "place" of the slot, then read and edit of the node (and
+// execute for an action), so a name cannot widen what anyone may do with it.
 export function askPlacing(inner: Inner, slot: Aimed, x: Target, id: Id) {
 	const { guard, guarded, methods } = here(inner)
 	if (!guarded) return

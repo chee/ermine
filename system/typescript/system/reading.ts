@@ -13,8 +13,6 @@ import { computerAt } from "./made.ts"
 import { here } from "./setting.ts"
 import type { Item, System } from "./shapes.ts"
 
-// public (mod.ts exports them): each runs its implementation below, named with As, as the
-// context it finds (acting.ts' go)
 export const read: System["read"] = /* @__PURE__ */ marked(function read(x, key) {
 	return go(read, "read", false, readAs, x, key)
 })
@@ -55,15 +53,13 @@ export function readAs(inner: Inner, x: Target, path: readonly Step[] = []): unk
 	const { base, calls, state, places, guarded } = here(inner)
 	const n = nodeOf(inner, x)
 	const id = idOf(inner, n)
-	// a node not there: pending, as a memo with no value is ("not there yet" one way) [chee 10-25:
-	// "i think a missing node should also throw pending"], the read tracked so its coming reruns it,
-	// and said where the reader waits [chee: "the read available in the graph so you can put
-	// something somewhere somebody wants it"]
+	// A node that is not there is pending, like a memo with no value. The read is tracked so the node's
+	// arrival reruns it, and the wait is recorded.
 	if (id === undefined) {
 		if (n.path !== undefined && state.peeping === 0) waitFor(inner, n.path)
 		throw PENDING
 	}
-	// (asked only when there is a policy: this is the hottest read)
+	// Asked only when there is a policy, because this is the hottest read.
 	if (guarded) mayRead(inner, id, n.path, n.part, path)
 	if (state.peeping === 0) calls.read(n.part, id, path)
 	if (n.part === "value" && computerAt(base.made, id)?.memo) {
@@ -76,7 +72,6 @@ export function readAs(inner: Inner, x: Target, path: readonly Step[] = []): unk
 	return places.readValue(n.part, id, path)
 }
 
-// read's, from its entry's change; then what features show
 function versions(inner: Inner, x: Target, path: readonly Step[] = []): Version[] {
 	const { base, table, context } = here(inner)
 	const n = nodeOf(inner, x)
@@ -88,7 +83,6 @@ function versions(inner: Inner, x: Target, path: readonly Step[] = []): Version[
 		const change = (table.get(n.part, id) as Entry<unknown> | undefined)?.change
 		items.push({ value: shown, from: change === undefined ? {} : { change } })
 	}
-	// each item's change as its view (a feature's too): the header's frame stays the host's
 	return base.shown({ node: n, part: n.part, id, path, context }, items).map((v) =>
 		v.from.change === undefined || base.changes.has(v.from.change as never) ? v : {
 			...v,
@@ -106,7 +100,6 @@ export function readEntriesAs(inner: Inner, x: Target): Item[] {
 			return [{ value: undefined, from: "id", refused: true }]
 		}
 		if (state.peeping === 0) calls.read(n.part, n.id, [])
-		// a node there by id, with or without a value (as by a path); nothing under that id: none
 		const value = places.readValue(n.part, n.id)
 		if (value === undefined && table.get(n.id).length === 0) return []
 		return [{ value, from: "id", node: byId(inner, n.id, n.part) }]
@@ -119,7 +112,6 @@ export function readEntriesAs(inner: Inner, x: Target): Item[] {
 		node: byId(inner, a.id, n.part),
 	})
 	if (!guarded) return found.map(item)
-	// the root: no name in a folder to ask by, so the node itself, as read asks
 	if (n.path.length === 0) {
 		return found.map((a) =>
 			refused(inner, a.id, n.path, n.part)
@@ -144,7 +136,6 @@ export function listAs(inner: Inner, x: Target): string[] {
 	return [...listAt(places, n.path)]
 }
 
-// x's children, each as a handle (reached by this process's path, so its own to hold)
 export function readChildrenAs(inner: Inner, x: Target): Record<string, Node> {
 	const { places } = here(inner)
 	const n = nodeOf(inner, x)
@@ -155,14 +146,12 @@ export function readChildrenAs(inner: Inner, x: Target): Record<string, Node> {
 		: places.readValue("children", id) as Record<string, Id> | undefined ?? {}
 	const out: Record<string, Node> = {}
 	for (const name of names) {
-		// a name's node as its path reaches it (a process's node, named by its row), else the entry's
 		const at = (n.path === undefined ? undefined : get(places, [...n.path, name])) ?? kids[name]
 		if (at !== undefined) out[name] = byId(inner, at, "value")
 	}
 	return out
 }
 
-// every version of x's part; children's ids turned handles (no ids given out)
 function allOf(
 	inner: Inner,
 	x: Target,
@@ -181,8 +170,7 @@ const handlesFor = (inner: Inner, v: unknown) =>
 		]),
 	)
 
-// path waited on by the reader now: a computer's (in its run now), else a setup's (the context's
-// node, its setup running); anyone else's is shown nowhere, so not kept (Base's missing)
+// The path the reader waits on: a computer's, else a setup's. Anyone else's is not kept.
 function waitFor(inner: Inner, path: Path) {
 	const { base, s, runs } = here(inner)
 	const run = s.getRun()
@@ -199,7 +187,6 @@ function waitFor(inner: Inner, path: Path) {
 	if (!m.keys.has(k)) m.keys.add(k), m.paths.push(path)
 }
 
-// f with nothing it reads tracked (a read of a pending memo: undefined, as peep's)
 export function peepAs<T>(inner: Inner, f: () => T): T {
 	const { places, state } = here(inner)
 	state.peeping++
@@ -217,7 +204,6 @@ export function peepAs<T>(inner: Inner, f: () => T): T {
 	}
 }
 
-// the parts alike: attributes and children by the same functions as the value
 export const readAttributesAs = (inner: Inner, x: Target, key?: readonly Step[]) =>
 	readAs(inner, attributesOf(inner, x), key)
 

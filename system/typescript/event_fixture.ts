@@ -1,6 +1,5 @@
-// a stand-in for the browser's navigator.userActivation, defined before @ermine/system loads
-// (useractivation.ts keeps the getter and the object then): tests set `userActivation.active` to say
-// whether a person just interacted with the page
+// A stand-in for navigator.userActivation, defined before @ermine/system loads. Tests set
+// `userActivation.active`.
 export const userActivation: { active: boolean } = { active: false }
 class UserActivation {
 	get isActive() {

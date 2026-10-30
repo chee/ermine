@@ -9,7 +9,6 @@ import { here } from "./setting.ts"
 import { SCOPE } from "./shapes.ts"
 import { childrenOf, folderOf, namesIn, nodeGone, placeUnder, takeOut, under } from "./tree.ts"
 
-// a memo's or effect's code, in place: a run of its owner making it again gives it new code
 export type Code = {
 	// deno-lint-ignore no-explicit-any
 	f: (previous: any) => unknown
@@ -18,22 +17,18 @@ export type Code = {
 	// deno-lint-ignore no-explicit-any
 	equal?: Equal<any>
 }
-// what an owner's run made: a memo or effect at its node (Computed), an action's handler placed at a
-// node (Placed). a computer is in Base's made, by node. the owner's next run makes it again, or it
-// is let go
+// What an owner's run made: a memo or effect (Computed) or a placed action handler (Placed).
+// The owner's next run makes it again, or it is let go.
 type Computed = {
 	readonly kind: "computer"
 	readonly id: Id
-	// the context that made it, the scope that did (its next run claims it), and where
 	readonly inner: Inner
 	readonly own: Scope
 	readonly path: Path
 	c?: Computer
 	code: Code
 	readonly memo: boolean
-	// its latest run gave a promise not settled yet
 	awaiting: boolean
-	// what its code last gave
 	gave?: unknown
 }
 type Placed = {
@@ -44,17 +39,13 @@ type Placed = {
 }
 export type Made = Computed
 
-// the memo or effect at id; none: it is none
 export const computerAt = (made: Base["made"], id: Id) => {
 	const m = made.get(id)
 	return m?.kind === "computer" ? m : undefined
 }
 
-// what an owner made and has not let go: one teardown on the owner asks after them all, again as it
-// runs (a cleanup of that run, run once the next run is done: it finds a computer claimed, alive,
-// and leaves it) and as it goes (what is under it first). one stopped is out of its bin at once.
-// an owner has a bin for its computers (at: by name, for its next run to claim), and one for each
-// action it placed (one teardown each)
+// What an owner made and has not let go. One teardown on the owner checks the bin after each run
+// ends and when the owner goes.
 type Bin = { armed: boolean; members: Set<Computed | Placed> }
 type Computers = Bin & { at: Map<string, Set<Computed>> }
 const bins = new WeakMap<Scope, Computers>()
@@ -64,7 +55,6 @@ function binOf(own: Scope): Computers {
 	if (bin === undefined) bins.set(own, bin = { armed: false, members: new Set(), at: new Map() })
 	return bin
 }
-// m kept in its owner's bin, asked after as the owner's runs end and it goes
 function hold(inner: Inner, bin: Bin, m: Computed | Placed) {
 	bin.members.add(m)
 	arm(inner, m.own, bin)
@@ -84,7 +74,6 @@ function arm(inner: Inner, own: Scope, bin: Bin) {
 				if (f === "gone") {
 					const { base, calls } = here(m.inner)
 					base.methods.delete(m.id)
-					// its record goes with it (calls.ts)
 					calls.drop(m.id)
 				}
 			} else if (f === "gone") forget(m)
@@ -92,21 +81,14 @@ function arm(inner: Inner, own: Scope, bin: Bin) {
 		if (alive && bin.members.size > 0) arm(inner, own, bin)
 	})
 }
-// what an owner's run ending (alive: it runs again) or its going makes of a member of its bin: kept
-// for the next, let be (its computer alive while its owner is gone; an action another placement took
-// over), or let go (a computer not alive; an action, its owner gone)
 function fate(m: Computed | Placed, alive: boolean): "keep" | "taken" | "gone" {
 	if (m.kind === "computer") return m.c?.state === "alive" ? alive ? "keep" : "taken" : "gone"
 	return here(m.inner).base.methods.get(m.id)?.scope !== m.own ? "taken" : alive ? "keep" : "gone"
 }
 
-// the one made at path under own: claimed, given new code (a parent's rerun does not destroy
-// its children; two of a name in one run are refused). as own's run starts, what its earlier
-// runs made is old (the scheduler's): one old is claimed; one not old was made in this run (or
-// own has had no run since): already-there. none: a new one is to be made
-// two codes with the same source: their functions' text (f, act, equal), not their closures
-// a bound or native function's text says nothing of it ("function () { [native code] }"): such a
-// function is itself, the same only as itself
+// The computer made at path under own, claimed by its next run and given new code. Two of a name in
+// one run are refused. Code is compared by function source text, so a bound or native function
+// counts only as itself.
 const text = (f: unknown) => {
 	if (typeof f !== "function") return f
 	const t = f.toString()
@@ -120,10 +102,8 @@ export function again(inner: Inner, own: Scope, path: Path, code: Code): Compute
 	const bin = bins.get(own)
 	for (const m of bin?.at.get(keyOf(path)) ?? []) {
 		if (m.c === undefined || m.c.state !== "alive") continue
-		// nominal [chee 10-28: "that's one of the benefits of giving things names we get to do
-		// nominal adapton"]: made again with the same source, it is due only when what it read
-		// changes; a closure over values it doesn't read can go stale ("we expect staleness when we
-		// use values that are not reactive")
+		// A computer made again with the same source is due only when what it read changes, so a closure
+		// over values it does not read can go stale.
 		if (!s.claim(m.c, undefined, !sameSource(m.code, code))) {
 			throw new PlacesError("already-there", path.join("/"))
 		}
@@ -133,9 +113,6 @@ export function again(inner: Inner, own: Scope, path: Path, code: Code): Compute
 	}
 }
 
-// a computer's node: a new id, placed at path, its scope written (own's node key, or the
-// nearest above with one; none: not written); in own's bin, its node and name gone with it.
-// made in a call: the call's record says so
 export function computerNode(
 	inner: Inner,
 	own: Scope,
@@ -172,7 +149,6 @@ export function computerNode(
 	return m
 }
 
-// m's node and name taken out now: its computer is not alive
 function forget(m: Computed) {
 	const { inner, id } = m
 	const { base, places } = here(inner)
@@ -185,14 +161,10 @@ function forget(m: Computed) {
 		if (there?.delete(m) && there.size === 0) bin.at.delete(at)
 	}
 	base.missing.delete(id)
-	// every name holding it, as its folder is now (not by a path: a folder removed above it no longer
-	// gives one)
 	for (const { folder, name } of [...places.namesOf(id)]) takeOut(inner, folder, name, id)
 	nodeGone(inner, id, { runs: true, held: true })
 }
 
-// the action at id placed by own, kept while own is: a later placement, its own or another's, takes
-// it over. one bin for each (owner, node), however often it is placed
 export function keepAction(inner: Inner, own: Scope, id: Id) {
 	let mine = placers.get(own)
 	if (mine === undefined) placers.set(own, mine = new Map())
@@ -202,7 +174,6 @@ export function keepAction(inner: Inner, own: Scope, id: Id) {
 	hold(inner, bin, { kind: "action", id, inner, own })
 }
 
-// the name in the folder taken out, and what was made at its node and under it stopped (stopMade)
 export function unplaced(inner: Inner, folder: Id, name: string) {
 	const was = namesIn(childrenOf(inner, folder))?.[name]
 	const below = was === undefined ? [] : under(inner, was)
@@ -210,9 +181,8 @@ export function unplaced(inner: Inner, folder: Id, name: string) {
 	stopMade(inner, below)
 }
 
-// what was made at the nodes below that no name reaches from the root now (and at always, a node
-// remove took out) stopped, as unplace and remove stop it (index.ts has the rule). a call already
-// going finishes (its record is let go, calls.drop)
+// Stops what was made below that no name reaches from the root now. A call already going
+// finishes.
 export function stopMade(inner: Inner, below: readonly Id[], always?: Id) {
 	const { base, s, places, calls } = here(inner)
 	const ids = below.filter((i) => i === always || up(base, places, places.root, i) === undefined)
@@ -220,7 +190,6 @@ export function stopMade(inner: Inner, below: readonly Id[], always?: Id) {
 		const m = base.made.get(id)
 		if (m !== undefined) {
 			if (m.c?.state === "alive") {
-				// the maker's process lives on: its teardowns are told ended, not replaced
 				const key = m.inner.node
 				const had = base.whys.get(key)
 				base.whys.set(key, "ended")
@@ -243,9 +212,8 @@ export function stopMade(inner: Inner, below: readonly Id[], always?: Id) {
 export const same = (m: Computed) => (a: unknown, b: unknown) =>
 	m.code.equal ? m.code.equal(a, b) : Object.is(a, b)
 
-// a generator compute's generator, watched: awaiting while it waits at a promise it yielded (the
-// scheduler steps it, giving back what the promise settled with). mine: whether it is still the
-// latest run's, so an earlier one let go late leaves the latest's awaiting as it is
+// A generator compute's generator, awaiting a yielded promise. `mine` tells whether it is still the
+// latest run's.
 function* watched(m: Computed, gen: Generator<unknown, unknown, unknown>, mine: () => boolean) {
 	let input: unknown
 	let threw = false
@@ -276,8 +244,6 @@ function* watched(m: Computed, gen: Generator<unknown, unknown, unknown>, mine: 
 const isGen = (v: unknown): v is Generator<unknown, unknown, unknown> =>
 	Object.prototype.toString.call(v) === "[object Generator]"
 
-// m's code run: a promise given marks its node awaiting till it settles; a generator, while it
-// waits at one it yielded
 export const ran = (m: Computed, previous: unknown) => {
 	let r = m.code.f(previous)
 	if (isGen(r)) {
@@ -287,7 +253,6 @@ export const ran = (m: Computed, previous: unknown) => {
 	m.gave = r
 	if (isPromise(r)) {
 		m.awaiting = true
-		// an earlier run's promise settling late leaves the node awaiting the latest's
 		const done = () => void (m.gave === r && (m.awaiting = false))
 		r.then(done, done)
 	} else m.awaiting = false

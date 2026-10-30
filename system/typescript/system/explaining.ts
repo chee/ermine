@@ -14,8 +14,6 @@ import { mayRead } from "./asking.ts"
 import { here } from "./setting.ts"
 import type { CallView, ChangeView, Explained, RunView, System, Touched } from "./shapes.ts"
 
-// public (mod.ts exports them): each runs its implementation below, named with As, as the
-// context it finds (acting.ts' go)
 export const explain: System["explain"] = /* @__PURE__ */ marked(function explain(x, key) {
 	return go(explain, "explain", false, explainAs, x, key)
 })
@@ -39,8 +37,7 @@ export function explainAs(
 	path: readonly Step[] = [],
 ): Explained | undefined {
 	const { base, table, places } = here(inner)
-	// a change's view (a reads item's from.change, a watch's): its change. a view is known only
-	// by base.changes, so none can be forged into a record's lookup
+	// A view is known only through base.changes, so none can be forged into a record lookup.
 	const viewed = typeof x === "object" && !isHandle(x) && !Array.isArray(x)
 		? base.changes.get(x as ChangeView)
 		: undefined
@@ -60,7 +57,6 @@ export function explainAs(
 	return h === undefined ? by : { ...by, held: h }
 }
 
-// a record's read or write, as this process sees it
 const touched = (inner: Inner, t: { part: Key; id: Id }): Touched => {
 	const p = seen(inner, t.id)
 	return p === undefined ? { part: t.part } : { part: t.part, path: p }
@@ -79,16 +75,14 @@ const runView = (inner: Inner, r: Run): RunView => ({
 	reads: r.reads.flatMap((x) => "part" in x ? [touched(inner, x)] : []),
 	writes: r.writes.map((t) => touched(inner, t)),
 })
-// a value a record holds (a call's args, what it returned) as inner is shown it: a handle in it, the
-// path it reaches as inner sees it (none: null), never the handle [the dormouse's finding 2]. lists
-// and plain maps looked through; anything else as it is
+// A value a record holds is shown with any handle replaced by the path it reaches, never the handle.
 function shown(inner: Inner, v: unknown, seenAlready = new Map<object, unknown>()): unknown {
 	if (isHandle(v)) {
 		const d = dataOf(here(inner).base.handles, v).node
 		const id = d.id ?? get(here(inner).places, d.path!)
 		return (id === undefined ? undefined : seen(inner, id)) ?? null
 	}
-	// a writer is a power, never data: shown as a marker, as a handle is shown as its path
+	// A writer is a power, never data: shown as a marker.
 	if (typeof v === "function" && here(inner).base.writers.has(v)) return "[writer]"
 	if (v === null || typeof v !== "object") return v
 	const proto = Object.getPrototypeOf(v)
@@ -121,7 +115,6 @@ const callView = (inner: Inner, c: Call): CallView => ({
 		{ made: c.made.map((m) => ({ kind: m.kind, ...pathOf(inner, m.id) })) },
 })
 
-// the change's writer, one step: its view, the writer by path as this process sees it
 function writerOf(inner: Inner, change: ChangeHeader): Explained & { change: ChangeView } {
 	const { base, calls, runs } = here(inner)
 	const at = (key: string) => nearest(change.frame, key)
@@ -141,7 +134,6 @@ function writerOf(inner: Inner, change: ChangeHeader): Explained & { change: Cha
 	if (at("call") !== undefined && at("handler") !== undefined) {
 		const handler = at("handler") as Id
 		const call = calls.latest(handler)
-		// any write carrying the call's mark: the call's view, while it is the handler's latest
 		if (call !== undefined && call.n === at("call")) {
 			return {
 				change: view,
@@ -150,8 +142,7 @@ function writerOf(inner: Inner, change: ChangeHeader): Explained & { change: Cha
 		}
 		return { change: view, writer: { kind: "method", ...pathOf(inner, handler) } }
 	}
-	// pipe-extension: core gap. a scope whose info holds node and a feature's name: that feature's
-	// thing, writing as itself, at its node
+	// pipe-extension: core gap. A feature writing as itself at its node.
 	const feature = at("feature")
 	if (typeof feature === "string" && at("node") !== undefined) {
 		return {

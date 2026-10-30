@@ -1,6 +1,6 @@
-// promises: a then on a settled promise is told with the promise held, so a callback letting go of
-// the maker's hold frees nothing it was handed (a review's finding: freed under AddressSanitizer).
-// make test-promise-system (and its -check, with the sanitizers)
+// A then on a settled promise is told with the promise held, so a callback letting go of the
+// maker's hold frees nothing it was handed (found under AddressSanitizer). make
+// test-promise-system and its -check.
 #include "ermine.h"
 
 #include <stdio.h>
@@ -22,7 +22,6 @@ typedef struct {
 	char value[32];
 } told_t;
 
-// let go of the maker's hold, then read what it was handed
 static void lets_go(void *ctx, int ok, const op_value *value, const char *error) {
 	told_t *t = ctx;
 	es_promise_release(t->p);

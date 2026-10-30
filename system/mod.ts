@@ -1,9 +1,6 @@
-// @ermine/system: ermine, one package [chee 10-26: "ermine/ermine is meant to be system"]:
-// the process api, verb-first and mechanical [chee 10-25: "let's change the process api to be verb
-// first … a very clear mechanical api"; "the let's do @ermine/system"], and createErmine, the host's
-// (typescript/ermine.ts). each process api function finds its process from the scope open
-// (typescript/registry.ts) and does its work as it (typescript/system/, where each is written);
-// nothing open (a timer, a listener, after an await): nothing-open
+// @ermine/system: the process API and createErmine for hosts. Each function finds the process
+// it runs for from the open scope; called with nothing open (a timer, a listener, after an await)
+// it throws nothing-open.
 //
 //   import { createMemo, ensureNode, read } from "@ermine/system"
 //   export default function setup() {
@@ -11,13 +8,12 @@
 //     return createMemo("count", () => (read("items") as unknown[]).length)
 //   }
 //
-// paths: where a name a process gives lands. a bare name and ./ are not the same place:
+// Paths. A bare name and ./ are not the same place:
 //   items      a bare name: inside this process's node (its own; gone when it stops)
 //   ./items    beside this process: in the folder its node is in
 //   ../items   above that: in the folder that folder is in
 //   /items     from this process's root (its box's "/"; no box: the graph's root)
-// so ensureNode("./count") puts count next to the process, not in it; ensureNode("count") puts it
-// in. for the host (no process) the root is its node: a bare name and ./ both land in the root
+// For the host (no process) both a bare name and ./ land in the root.
 export { createNode, ensureNode, getNode, hasNode, ref } from "./typescript/system/nodes.ts"
 export {
 	list,

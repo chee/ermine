@@ -1,4 +1,7 @@
-// features: changes to how the base works, given to createErmine. hooks only, no functions
+// Features change how the base works. They are given to createErmine and only add hooks.
+// Each hook is middleware: it is called with the hook's arguments and `next`, and what it guards
+// does not happen unless it calls next. Chain order follows the features list, each feature's
+// needs first and the first feature outermost. Hooks can only be added during setup.
 //
 //   export default {
 //     name: "patchy",
@@ -9,45 +12,20 @@
 //     },
 //   }
 //
-// order: the features list, each one's needs set up first; a need not given, a name given twice
-// or needs going round: createErmine throws, naming them. chain order is that order, the first
-// outermost: its hook is called first, and next calls the one after it, the base last.
-// hooks: middleware with next, every one. next is called with the hook's own arguments, as given
-// or changed; not called, what it guards doesn't happen (onWrite: no write; onTeardown: the
-// teardown doesn't run; onRecord: the record isn't held).
-//   onTable(table, next)            the table places reads, made once before places: next(table)
-//                                   is what the features after this one made; table.ahead() what
-//                                   is in front of what this hook gives (the layer made over it,
-//                                   or places): where its table events and commits go on to
-//   onRead(x, items, next)          what reads shows beyond the table: x the node read ({ node,
-//                                   part, id, path }), items reads' so far
-//   onWrite(context, write, next)    every table write (values, attributes, placements, entries
-//                                   gone, rows, statuses, the boot's), as the context it is for
-//   onTeardown(scope, why, next)    each teardown(fn) as its scope goes; next runs fn(why)
-//   onRecord(record, next)          each run's and send's record as it is written; next holds it
-//   onStatus(x, status, next)       what status(x) shows: x the node read ({ node, id }), status the
-//                                   base's so far; next gives the inner hooks' (the base's last).
-//                                   a field it adds is the feature's to name (pully's provider).
-//                                   not called for a node not there
-//   onId(kind, next)                each new id: kind "node" (a node's, the root's, the host's) or
-//                                   "process"; next gives the base's (uuidv7; proc:<boot>-<n>)
-//   onSchedule(pulse, next)         each ask for a pulse soon (one at a time): next(pulse) runs it
-//                                   in a microtask; not called: pulse is the hook's to run, or not
-//   onCreateFunction(made, next)    each memo, effect and action made (an inspector's)
-//   onError(error, fn, next)        each error ermine throws (fn: the function of @ermine/system's
-//                                   it came out of; none: ermine's own, start's or closed): what
-//                                   the hook gives is thrown (hints.ts adds its advice)
-//   reserveSlot()                   per-process state only this feature reaches, by context
-// and, in a hook (made after setup; before: not-yet), what a feature acts with: context(process?)
-// a running process's context (none: the host's); to act as one, context.within(() => …) round
-// @ermine/system's functions, which find it (a feature that sends as whoever named something, as
-// pully does)
-// shown: a hook's throw is rethrown as a FeatureError naming the feature and the hook. PENDING,
-// and what next threw, pass as they are; a Refusal the hook throws passes as a Refusal, its
-// feature and hook named on it (feature, hook). an item onRead adds names the feature
-// (from.feature); a write onWrite changed names it in its frame (one more frame on top, its info
-// features: every feature that changed it, in chain order).
-// hooks are setup-only: one added after createErmine has returned throws.
+//   onTable(table, next)           the table places reads; table.ahead is what lies in front of it
+//   onRead(x, items, next)         adds items to what reads show
+//   onWrite(context, write, next)  every table write, as the context it is for
+//   onTeardown(scope, why, next)   each teardown as its scope goes
+//   onRecord(record, next)         each run's and send's record
+//   onStatus(x, status, next)      what status(x) shows; not called for a node that is not there
+//   onId(kind, next)               each new id, kind "node" or "process"
+//   onSchedule(pulse, next)        each ask for a pulse; not calling next means the hook runs it
+//   onCreateFunction(made, next)   each memo, effect and action made
+//   onError(error, fn, next)       each error ermine throws
+//   reserveSlot()                  per-process state only this feature reaches
+//
+// A hook that throws is rethrown as a FeatureError naming the feature and hook. PENDING and
+// whatever next threw pass through, and a Refusal passes with its feature and hook named.
 import type { ChangeHeader, Entry } from "@ermine/graph/entry"
 import type { Key as Step } from "@ermine/changeable/apply"
 import type { Id, Path, Places } from "@ermine/places"
@@ -68,7 +46,6 @@ import type {
 } from "./context.ts"
 import type { ChangeView, Status } from "./system/shapes.ts"
 
-// what createErmine and its parts throw, by code
 export type Code =
 	| "missing-feature"
 	| "feature-twice"
@@ -76,23 +53,17 @@ export type Code =
 	| "setup-only"
 	| "not-yet"
 	| "nothing-open"
-	// a function found nothing open, but an ermine of a second copy of @ermine/system has
 	| "two-copies"
 	| "not-a-handle"
 	| "not-a-value"
 	| "not-patches"
 	| "not-a-function"
 	| "closed"
-	// something made, or a teardown added, in an effect's act (an act makes nothing)
 	| "in-act"
 	| "outside"
-	// an act returned something that is no function (its cleanup)
 	| "bad-cleanup"
-	// createWriter or start called where a process can't (a compute, an act)
 	| "not-here"
-	// a writer called after its parent ended
 	| "gone"
-	// a writer called while a scope or run is open
 	| "already-inside"
 
 export class ErmineError extends Error {
@@ -102,7 +73,6 @@ export class ErmineError extends Error {
 	}
 }
 
-// a hook's throw: the feature, the hook, what it threw (cause)
 export class FeatureError extends Error {
 	constructor(readonly feature: string, readonly hook: Hook, cause: unknown) {
 		super(
@@ -115,18 +85,13 @@ export class FeatureError extends Error {
 	}
 }
 
-// the table places reads through: get and who, and where table events and commits go on to
 export type Layer = Pick<Table, "get" | "who"> & {
 	onTableChange: (part: Key, id: Id) => void
 	commit: (changed: readonly Entry<unknown>[]) => void
 }
-// where a layer's table events and commits go on to
 export type Ahead = Pick<Layer, "onTableChange" | "commit">
-// what onTable is given: the table under it, and what is in front of what the hook gives
 export type Under = Pick<Table, "get" | "who"> & { ahead: () => Ahead }
 
-// the node reads is reading, and who reads it (a feature's own fields shown to it name nodes by
-// the path it sees: seen)
 export type Reading = {
 	readonly node: NodeData
 	readonly part: Key
@@ -135,14 +100,12 @@ export type Reading = {
 	readonly context: ProcessContext
 }
 
-// the node status(x) is asked of; computer: a memo's or effect's
 export type Asked = {
 	readonly node: NodeData
 	readonly id: Id
 	readonly computer: boolean
 }
 
-// a record as it is written: a computer's run, or a send's call, by its node's id
 export type Recorded =
 	| { readonly id: Id; readonly run: Run; readonly call?: undefined }
 	| { readonly id: Id; readonly call: Call; readonly run?: undefined }
@@ -167,12 +130,10 @@ export type Hooks = {
 	onCreateFunction: (made: CreatedFunction, next: (made: CreatedFunction) => void) => void
 	onError: (error: unknown, fn: string | undefined, next: Errored) => unknown
 }
-// an error on its way out: what is thrown
 export type Errored = (error: unknown, fn: string | undefined) => unknown
-// what a new id is for
 export type IdKind = "node" | "process"
 export type Hook = keyof Hooks
-// every hook, written once: a hook added to Hooks is missed here as a type error
+// Every hook is listed once, so a hook added to Hooks and missed here is a type error.
 const HOOK_KEYS: Record<Hook, true> = {
 	onTable: true,
 	onRead: true,
@@ -187,7 +148,6 @@ const HOOK_KEYS: Record<Hook, true> = {
 }
 export const HOOKS = Object.keys(HOOK_KEYS) as readonly Hook[]
 
-// per-process state, by context: only who holds the slot reaches it
 export type Slot<T> = {
 	get: (context: ProcessContext) => T | undefined
 	set: (context: ProcessContext, value: T) => void
@@ -210,48 +170,37 @@ export type FeatureAPI = {
 	onCreateFunction: (hook: Hooks["onCreateFunction"]) => void
 	onError: (hook: Hooks["onError"]) => void
 	reserveSlot: <T>() => Slot<T>
-	// in a hook (before: not-yet): the host's process context; a process's while it runs (stopped,
-	// or not this ermine's: undefined). acting as one: context.within(() => …), @ermine/system's
-	// functions finding it
+	// The host's process context, or a running process's. To act as one, wrap code in
+	// context.within(() => ...). Not available before setup finishes.
 	getProcessContext: {
 		(): ProcessContext
 		(process?: Process): ProcessContext | undefined
 	}
-	// the host's and features' side of handles (handles.ts): a handle minted for node (an id, any
-	// part: features have that power; a path from the root); and what a handle reaches (not this
-	// ermine's handle: undefined). a handle names a place, no one's power [chee 10-26]
+	// Handles for the host and features. A handle names a place and gives no one any power.
 	handleOf: (node: NodeData) => Node
 	dataOf: (x: unknown) => { node: NodeData } | undefined
-	// a node's path from the root (none: moved, or placed by no
-	// functions): what a feature shows a process in place of an id
+	// A node's path from the root, shown to a process in place of an id.
 	seen: (id: Id, context: ProcessContext) => Path | undefined
-	// in a hook or a service's handler (before: not-yet): the send being answered where the code runs
-	// now (the scope open, or one above it), its record so far, the caller's context in it; none:
-	// undefined. for a service acting for its caller (patchy's land)
+	// Inside a hook or service handler: the send being answered and its record so far.
 	calling: () => Calling | undefined
-	// pipe-extension: core gap. a change (a table fact's, an entry's) as a process is shown it:
-	// the view reads give, so explain takes it back. one view for each change
+	// pipe-extension: core gap. A change as a process is shown it, so explain can take it back.
 	viewOf: (change: ChangeHeader) => ChangeView
 }
 
-// a send being answered: its record so far
 export type Calling = Omit<Call, "end" | "reads" | "writes" | "made" | "ended">
 
 export type Feature = {
 	readonly name: string
-	// other features' names: set up first
 	readonly needs?: readonly string[]
 	setup: (feature: FeatureAPI) => void
 }
 
-// what ermine.features shows: each feature's name, its needs and its hooks, in chain order
 export type Shown = {
 	readonly name: string
 	readonly needs: readonly string[]
 	readonly hooks: readonly Hook[]
 }
 
-// the features in chain order: each one's needs first, else the order given
 export function order(features: readonly Feature[]): Feature[] {
 	const named = new Map<string, Feature>()
 	for (const f of features) {
@@ -277,19 +226,14 @@ export function order(features: readonly Feature[]): Feature[] {
 	return out
 }
 
-// a hook, and the feature it is of
 export type Hooked<H extends Hook> = { readonly feature: string; readonly fn: Hooks[H] }
 
-// the features, set up: their hooks by kind in chain order, what to show
 export type Installed = {
 	readonly hooks: { readonly [H in Hook]: readonly Hooked<H>[] }
 	readonly shown: readonly Shown[]
-	// hooks are setup-only from now on
 	done: () => void
 }
 
-// each feature's setup run with its own FeatureAPI, in chain order. parts: what the FeatureAPI
-// gives (places and processes: getters, not-yet until made)
 export function install(
 	features: readonly Feature[],
 	parts: {
@@ -297,7 +241,6 @@ export function install(
 		table: Table
 		places: () => Places | undefined
 		processes: () => Processes | undefined
-		// none till ermine is made
 		getProcessContext: () => ((process?: Process) => ProcessContext | undefined) | undefined
 		handleOf: () => ((node: NodeData) => Node) | undefined
 		dataOf: () =>
@@ -367,13 +310,10 @@ export function install(
 	return { hooks, shown, done: () => void (open = false) }
 }
 
-// how a hook's arguments, changed by it, are marked as its (onRead's new items, onWrite's write)
 type Mark<A extends unknown[]> = (feature: string, given: A, passed: A) => A
-// and how what it gives back is (onRead's items it added after next)
 type After<A extends unknown[], R> = (feature: string, given: A, inner: R | undefined, out: R) => R
 
-// what a hook's throw is thrown as: PENDING, a FeatureError and what its next threw as they are; a
-// Refusal as it is, the feature and hook named on it (the first to throw it); else a FeatureError
+// A hook's throw becomes a FeatureError, except PENDING, FeatureErrors and Refusals, which pass.
 function own(feature: string, hook: Hook, e: unknown, passed: { e: unknown } | undefined) {
 	if (e === PENDING || e instanceof FeatureError || (passed && passed.e === e)) return e
 	if (e instanceof Refusal) {
@@ -384,8 +324,7 @@ function own(feature: string, hook: Hook, e: unknown, passed: { e: unknown } | u
 	return new FeatureError(feature, hook, e)
 }
 
-// the hooks around inner, as one function: the first outermost. a hook's own throw is a
-// FeatureError; PENDING, a FeatureError, and what its next threw pass as they are
+// Wraps inner in the hooks, the first outermost.
 export function chain<A extends unknown[], R>(
 	// deno-lint-ignore no-explicit-any
 	hooks: readonly { readonly feature: string; readonly fn: (...a: any[]) => R }[],
@@ -419,24 +358,20 @@ export function chain<A extends unknown[], R>(
 	return (...a: A) => at(0, a)
 }
 
-// onTable's hooks over the table, in chain order: what places reads, and where the table's own
-// events and commits go first. each layer's ahead: the layer made over it, or places
+// The onTable hooks laid over the table in chain order.
 export function layer(
 	hooks: readonly Hooked<"onTable">[],
 	table: Pick<Table, "get" | "who">,
 	places: () => Pick<Layer, "onTableChange" | "commit">,
 ): { front: Pick<Table, "get" | "who">; first: Pick<Layer, "onTableChange" | "commit"> } {
-	// a layer → what is in front of it
 	const ahead = new Map<object, Pick<Layer, "onTableChange" | "commit">>()
 	const aheadOf = (l: object) => ahead.get(l) ?? places()
-	// a layer as somewhere to go on to: its own, else on through it
 	const asAhead = (l: Partial<Layer> & object): Pick<Layer, "onTableChange" | "commit"> => ({
 		onTableChange: (part, id) =>
 			l.onTableChange ? l.onTableChange(part, id) : aheadOf(l).onTableChange(part, id),
 		commit: (changed) => l.commit ? l.commit(changed) : aheadOf(l).commit(changed),
 	})
 	const raw = { get: table.get, who: table.who } as Pick<Table, "get" | "who">
-	// what each hook was given stands for the table under it
 	const wraps = new Map<object, object>()
 	const unwrap = (l: object) => {
 		while (wraps.has(l)) l = wraps.get(l)!
@@ -445,7 +380,6 @@ export function layer(
 	const at = (i: number, t: Pick<Table, "get" | "who">): Pick<Table, "get" | "who"> => {
 		if (i === hooks.length) return t
 		const h = hooks[i]
-		// what this hook gives, once it has
 		// deno-lint-ignore prefer-const
 		let made: object | undefined
 		const under: Under = {

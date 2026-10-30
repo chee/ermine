@@ -1,30 +1,20 @@
-// the registry @ermine/system's functions find their context by (system/mod.ts): which
-// schedulers to look in, the ermines entered now, and which scope finds which process context.
-// module state, never on a global: only createErmine registers (ermine.ts). one copy through the
-// import map is what makes the functions find their processes (module identity); a second copy
-// loaded is told apart only to say so (two-copies)
+// The registry that @ermine/system's functions find their context by. It is module state, and
+// only createErmine registers. Functions find their processes by module identity, so a second
+// copy of this file is detected only to report it (two-copies).
 import type { Scheduler, Scope } from "@ermine/reactivity"
 import type { Inner } from "./context.ts"
 import { ErmineError, type Errored } from "./features.ts"
 
-// each scheduler, and how many ermines registered it
 const schedulers = new Map<Scheduler, number>()
-// a scope a context is found by → that context
 const scopes = new WeakMap<Scope, Inner>()
 
-// a scope found to its context, from here on (kept while the scope is)
 export function registerScope(scope: Scope, inner: Inner) {
 	scopes.set(scope, inner)
 }
 
-// the onError chains of the ermines registered with any onError hook, oldest first
 const erring: Errored[] = []
-// what an error no context was found for goes through (nothing-open, a handle turned into data):
-// the first ermine open with an onError hook's chain; none: thrown as it is
 export const unfound = (e: unknown, fn?: string): unknown => erring.length ? erring[0](e, fn) : e
 
-// s looked in, from here on (an ermine made; onError: its chain, when it has hooks); gives its
-// letting go (the ermine closed)
 export function registerScheduler(s: Scheduler, onError?: Errored): () => void {
 	schedulers.set(s, (schedulers.get(s) ?? 0) + 1)
 	if (onError) erring.push(onError)
@@ -39,10 +29,8 @@ export function registerScheduler(s: Scheduler, onError?: Errored): () => void {
 	}
 }
 
-// how many ermines now hold s registered (tests ask)
 export const registrations = (s: Scheduler): number => schedulers.get(s) ?? 0
 
-// the context scope (or one above it) is found by; none: undefined
 function contextAt(scope: Scope | undefined): Inner | undefined {
 	for (let o = scope; o !== undefined; o = o.parent) {
 		const inner = scopes.get(o)
@@ -51,9 +39,7 @@ function contextAt(scope: Scope | undefined): Inner | undefined {
 	return undefined
 }
 
-// the ermines entered now, by scheduler, the innermost last: an ermine's host functions, start,
-// close, pulse and a context's within enter it as they run and leave it as they return, so code of
-// one ermine run inside another's (b.executeAction in an action of a) finds its own
+// The ermines entered now, innermost last, so code of one ermine run inside another's finds its own.
 const entered: Scheduler[] = []
 export function enterScheduler(s: Scheduler) {
 	entered.push(s)
@@ -62,9 +48,7 @@ export function leaveScheduler() {
 	entered.pop()
 }
 
-// the context the scope open now is in; none: nothing-open, naming the function. the innermost
-// ermine entered with a scope open whose walk finds one; none entered: of several schedulers, the
-// first with one
+// The context of the open scope. With none open this throws nothing-open naming the function.
 export function found(name: string): Inner {
 	for (let i = entered.length - 1; i >= 0; i--) {
 		const inner = contextAt(entered[i].getCurrentScope())
@@ -89,8 +73,7 @@ export function found(name: string): Inner {
 	)
 }
 
-// every copy of this file loaded, on one global list, only so a function finding nothing can say
-// a second copy is what it missed: its file, and whether one of its ermines has a scope open
+// Every copy of this file loaded, only so an error can say a second copy exists.
 type Copy = { readonly url: string; readonly open: () => boolean }
 const COPIES = Symbol.for("party.chee.ermine.system.copies")
 const copy: Copy = {

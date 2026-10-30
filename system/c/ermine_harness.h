@@ -1,5 +1,5 @@
-// what another harness adds to the ermine harness (ermine_harness.c): an extension's tests are
-// the same harness with its ops beside. set before the first request (a constructor does)
+// What another harness adds to the ermine harness (ermine_harness.c): an extension's tests are the
+// same harness with its ops beside. Set before the first request (a constructor does).
 #ifndef ERMINE_HARNESS_H
 #define ERMINE_HARNESS_H
 

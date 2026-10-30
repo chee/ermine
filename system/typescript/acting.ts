@@ -1,15 +1,13 @@
-// what a call of @ermine/system's functions acts as: the context of the scope open (a process's, or
-// the host's, process 0's: registry.ts), its implementation (system/) run as it
+// What a call of @ermine/system's functions acts as: the context of the open scope (a process's or
+// the host's), with the implementation run as it.
 import { PENDING } from "@ermine/reactivity"
 import type { Inner } from "./context.ts"
 import { found, unfound } from "./registry.ts"
 import { take } from "./site.ts"
 import { here } from "./system/setting.ts"
 
-// name's implementation run as the context found (a writer: entered, so a write from outside the
-// graph takes the call's build location, if it has one; and a pulse asked for as it returns: every
-// write asks, one that throws asks none). cut: the public function itself, so a capture starts at
-// its caller (the name is said too: a minifier may rename the function)
+// Runs the implementation as the context found, then asks for a pulse as it returns. `cut` is the
+// public function itself, so a capture starts at its caller.
 export function go<A extends unknown[], T>(
 	cut: unknown,
 	name: string,
@@ -17,7 +15,6 @@ export function go<A extends unknown[], T>(
 	f: (inner: Inner, ...a: A) => T,
 	...a: A
 ): T {
-	// the call's build site, if one was set for it (site.ts): taken first, so nothing it runs gets it
 	const site = take()
 	let inner: Inner | undefined
 	try {
@@ -28,8 +25,7 @@ export function go<A extends unknown[], T>(
 		h.queuePulse()
 		return out
 	} catch (e) {
-		// through the ermine's onError hooks (hints.ts adds advice); PENDING as it is. no context
-		// found (nothing-open): through the first ermine open with any
+		// Errors go through the ermine's onError hooks; PENDING passes as it is.
 		if (e === PENDING) throw e
 		throw inner === undefined ? unfound(e, name) : here(inner).base.errored(e, name)
 	}

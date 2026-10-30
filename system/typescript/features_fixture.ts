@@ -1,4 +1,4 @@
-// the ermine harness's test features (ermine_harness.ts says each), in a file of their own
+// The ermine harness's test features.
 import { Refusal } from "@ermine/processes/guard"
 import { no } from "@ermine/protect"
 import type { Feature, Hook, ProcessContext } from "./ermine.ts"
@@ -50,16 +50,12 @@ export function testFeature(
 					if (slot) slot.set(o, (slot.get(o) ?? 0) + 1)
 					const how = spec.onWrite
 					if (how === undefined) return next(o, wr)
-					// only: "host": only the host's context's writes
 					if (spec.only === "host" && o.process !== undefined) return next(o, wr)
-					// ids, parts: only writes to these nodes, these parts; takes: only writes taking
-					// something out (an entry gone, or every patch with no value and no move)
 					if (Array.isArray(spec.ids) && !spec.ids.includes(wr.id)) return next(o, wr)
 					if (Array.isArray(spec.parts) && !spec.parts.includes(wr.part)) return next(o, wr)
 					const out = wr.gone ||
 						wr.patches.every((p) => !("value" in p) && p.move === undefined)
 					if (spec.takes && !out) return next(o, wr)
-					// times: the first so many it matches only
 					if (typeof spec.times === "number" && matched++ >= spec.times) return next(o, wr)
 					if (wr.gone) say("onWrite", wr.part, wr.id, "gone")
 					else say("onWrite", wr.part, wr.id)

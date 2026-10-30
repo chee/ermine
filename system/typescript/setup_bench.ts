@@ -1,10 +1,6 @@
-// what a write and a make cost in a process's setup (the site rule: system/index.ts), each case its
-// median over trials, in µs a call:
+// What a write and a make cost in a process's setup, median over trials in microseconds per call.
 //   deno run -A system/typescript/setup_bench.ts [trials]
-//   patch        one patch at a node
-//   ensureNode   one node made
-//   createMemo   one memo made, reading a node
-// each trial: a fresh ermine, one process whose setup makes 1,000 of the thing, timed inside it
+// Cases: patch, ensureNode, createMemo. Each trial makes 1,000 of the thing in a fresh ermine.
 import { createErmine, createMemo, ensureNode, type Feature, patch, read } from "@ermine/system"
 
 const TRIALS = Number(Deno.args[0] ?? 15)
@@ -38,7 +34,6 @@ function trial(body: () => number): number {
 	return us
 }
 
-// warm: the engine's first runs
 for (const [, body] of cases) for (let i = 0; i < 3; i++) trial(body)
 for (const [name, body] of cases) {
 	const xs = Array.from({ length: TRIALS }, () => trial(body))

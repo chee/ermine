@@ -1,6 +1,5 @@
-// a helper in a file of its own, as a component library would be: it imports @ermine/system's
-// functions and is given nothing; called from a setup, they find that setup's process
-// (system_test.ts)
+// A helper in a file of its own, as a component library would be. It is given nothing and finds the
+// process of the setup that calls it.
 import { createMemo, read } from "@ermine/system"
 
 export const countOf = (x: string) =>
