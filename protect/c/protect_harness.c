@@ -1,6 +1,4 @@
-// protect on the line protocol (protect/typescript/protect_harness.ts documents it). State
-// lasts for the process: the nodes a policy reads, per (part, id) and the version they are
-// visible at.
+// Protect on the line protocol (protect/typescript/protect_harness.ts documents it).
 #define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,7 +9,6 @@
 
 static char *own(const char *s) { return strcpy(malloc(strlen(s) + 1), s); }
 
-// --- the world ---
 
 typedef struct {
 	char *part, *id;
@@ -35,7 +32,6 @@ static void drop(const char *p, const char *i, const op_value *at) {
 	*c = world[--nworld];
 }
 
-// --- reads: logged, in order ---
 
 typedef struct {
 	char *part, *id;
@@ -53,7 +49,6 @@ static const op_value *reader(void *ctx, const char *part, tb_key id, const op_v
 		if (log_ == NULL) hh_fail("out of memory");
 	}
 	log_[nlog++] = (told){own(part), own(id.string), op_ref((op_value *)path)};
-	// the one made for this version, else the one for every
 	const cell *any = NULL;
 	for (size_t k = 0; k < nworld; k++) {
 		const cell *c = &world[k];
@@ -64,7 +59,6 @@ static const op_value *reader(void *ctx, const char *part, tb_key id, const op_v
 	return any ? any->value : NULL;
 }
 
-// --- policies ---
 
 static const char **strings(const op_value *list) {
 	const char **xs = hh_take((list->count ? list->count : 1) * sizeof *xs);
@@ -79,7 +73,6 @@ static const op_value *list_of(const op_value *x) {
 	return x;
 }
 
-// denynode: no "denied node" when the ask's node is this id
 static pr_answer deny_node(void *ctx, const pr_ask *ask, const pr_read *read) {
 	(void)read;
 	const char *id = ask->node.id.string;
@@ -115,7 +108,6 @@ static pr_policy *policy_of(const op_value *p) {
 	hh_fail("unknown policy");
 }
 
-// --- requests ---
 
 static void print_key(FILE *out, const char *s) { op_json_string(out, s); }
 

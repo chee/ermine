@@ -1,5 +1,5 @@
-// unit tests; the conformance suite (protect/conformance/protect/) holds the behaviour for both languages.
-// what is here is what a line protocol cannot send: policies that are functions
+// Unit tests for what a line protocol cannot send, such as policies that are functions. The
+// conformance suite in protect/conformance/protect/ holds the behaviour for both languages.
 import { assertEquals } from "@std/assert"
 import { all, any, may, no, type Policy, same, yes } from "./protect.ts"
 

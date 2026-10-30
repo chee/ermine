@@ -1,23 +1,15 @@
-// protect (protect.ts) on the line protocol (conformance/typescript/harness.ts). State lasts for
-// the process. Another implementation joins by speaking this (HARNESS).
+// Protect (protect.ts) on the line protocol. State lasts for the process. Policies are data:
+// "yes", "pending", {no: reason}, {grants: [part, id]}, {all: [policy]}, {any: [policy]},
+// {only: [op], policy}, {denynode: id} (no "denied node" when the ask's node is that id).
+// A node with no value reads as not there. Ids are strings.
 //
-// the world: nodes a policy reads, by (part, id) and the version they are visible at.
-// a node with no value reads as not there (undefined), as a read does in link. ids are strings
-//
-// a policy is data: "yes", "pending", {no: reason}, {grants: [part, id]}, {all: [policy]},
-// {any: [policy]}, {only: [op], policy}, {denynode: id} (no "denied node" when the ask's node,
-// a placement's, is that id)
-//
-// { op: "load", part, id, value?, at? }          → {}   the node there, for version at (none: for
-//    every version; one made for the version asked wins). loaded again: replaced
-// { op: "drop", part, id, at? }                  → {}   that node not there
-// { op: "ask", policy, who?, what, target, at? } → { answer, reason?, need?, grant?, reads }
-//    grant?: { part, id, index }, the grant that decided (a grants policy's yes or denied)
-//    from?: {path?, route?, box?}, the place the asker is at (box: its box's folder's id)
-//    who: a change header (a map with actor, reader, ...)
-//    target: {part?, id?, field?, path?, route?}, as protect.ts's Target (route: ids)
-//    node?: a Target too: a placement's, the node given the name (the target its folder's slot)
-//    reads: each read the policy made, in order: [part, id, path?]
+// { op: "load", part, id, value?, at? }  → {}  the node, for version at (absent: every version;
+//                                              one made for the asked version wins)
+// { op: "drop", part, id, at? }          → {}  the node not there
+// { op: "ask", policy, who?, what, target, node?, from?, at? }
+//     → { answer, reason?, need?, grant?: { part, id, index }, reads: [[part, id, path?], ...] }
+//   who: a header map (actor, reader, ...); target and node: {part?, id?, field?, path?, route?};
+//   from: {path?, route?, box?}; reads: each read the policy made, in order
 import {
 	all,
 	type Answer,
