@@ -2,11 +2,11 @@
 // it makes from outside the graph takes the program's own file:line, written in at build, for its
 // locations; a program naming the site module, its entry or a file of it is refused
 import { assert, assertEquals, assertRejects } from "@std/assert"
+import type { ChangeHeader } from "@ermine/changeable"
 import * as esbuild from "esbuild"
 import { join } from "node:path"
 import { fileURLToPath as fromFileUrl, pathToFileURL } from "node:url"
 import { createErmine, type Feature, read } from "@ermine/system"
-import type { ChangeHeader } from "@ermine/graph/entry"
 import ermine, { type Options } from "./unplugin.ts"
 import { manual } from "../../system/typescript/manual_fixture.ts"
 import { NAMES } from "../../system/typescript/system/index.ts"

@@ -1,8 +1,10 @@
-// the packages, lowest first, and what each may import: its own files and these, nothing else.
+// the packages, lowest first, and what each builds on: it may import its own files, these, and
+// whatever these may (system builds on places, so what may import system may import places too).
+// nothing else.
 // a package's code (typescript/, c/: TS imports and C #includes, bare @ermine/... and relative)
-// is checked; its tests are not (a file named *_test, *_bench, *harness*, *fixture*, *fuzz*, or
-// under fuzz/), since a test may reach above what it tests. code never imports conformance/ or
-// experiments/
+// is checked. a test file (named *_test, *_bench, *harness*, *fixture*, *fuzz*, or under fuzz/)
+// may also import conformance/, the shared harness code every package uses. code never imports
+// conformance/ or experiments/; neither does anything import experiments/
 import { assertEquals } from "@std/assert"
 
 const PACKAGES: Record<string, readonly string[]> = {
@@ -21,6 +23,10 @@ const PACKAGES: Record<string, readonly string[]> = {
 
 const root = new URL("../", import.meta.url).pathname
 const ORDER = Object.keys(PACKAGES)
+
+// what p may import: its own list, and theirs, all the way down
+const reachable = (p: string): Set<string> =>
+	new Set((PACKAGES[p] ?? []).flatMap((d) => [d, ...reachable(d)]))
 // in the order for its C files alone: not in the workspace
 const C_ONLY: string[] = []
 
@@ -86,14 +92,16 @@ Deno.test("layout: a package may import only packages before it", () => {
 	assertEquals(wrong, [])
 })
 
-Deno.test("layout: a package's code imports only itself and what it may", () => {
-	const wrong = Object.entries(PACKAGES).flatMap(([p, deps]) =>
-		files(p).filter((f) => !testOnly(f)).flatMap((f) =>
+Deno.test("layout: a package's files import only itself and what they may", () => {
+	const wrong = Object.keys(PACKAGES).flatMap((p) => {
+		const may = reachable(p)
+		return files(p).flatMap((f) =>
 			specifiers(f).filter((spec) => {
 				const to = reaches(f, spec)
-				return to !== undefined && to !== p && !deps.includes(to)
+				if (to === "conformance" && testOnly(f)) return false
+				return to !== undefined && to !== p && !may.has(to)
 			}).map((spec) => `${f}: ${spec} (${reaches(f, spec)})`)
 		)
-	)
+	})
 	assertEquals(wrong, [])
 })

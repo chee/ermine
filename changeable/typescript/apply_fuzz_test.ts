@@ -5,7 +5,7 @@
 import { assert, assertEquals, assertStrictEquals, assertThrows } from "@std/assert"
 import apply, { ApplyError, type Patch } from "./apply.ts"
 import invert from "./invert.ts"
-import { batch, differ, rand, show, snap, start } from "../../places/fuzz/gen_harness.ts"
+import { batch, differ, rand, show, snap, start } from "../../conformance/typescript/gen.ts"
 
 const SEEDS = 40
 

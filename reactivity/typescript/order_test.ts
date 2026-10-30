@@ -4,7 +4,7 @@
 // and computations gone, both asked again at every pick. a few dozen seeds (fuzz runs small)
 import { assert, assertEquals } from "@std/assert"
 import { createOrder, type Ordered } from "./order.ts"
-import { rand } from "../../places/fuzz/gen_harness.ts"
+import { rand } from "../../conformance/typescript/gen.ts"
 
 interface P extends Ordered<P> {}
 

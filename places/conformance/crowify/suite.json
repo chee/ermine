@@ -1,0 +1,3 @@
+{
+	"reads": [{ "op": "value" }, { "op": "same", "name": "$name", "path": "$path" }]
+}

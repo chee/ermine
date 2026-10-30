@@ -1,5 +1,5 @@
 // update's streams: an entry started on a random value
-// (places/fuzz/gen_harness.ts), then updates of a few patches each (some refused: they change nothing), an
+// (conformance/typescript/gen.ts), then updates of a few patches each (some refused: they change nothing), an
 // entry asked after each; a put of a fresh list, map or string then spliced into in the same
 // update, now and then. headers given or not ({ time: 1, actor: "me" }), {} too.
 // the invariant, each implementation on its own: the entry's value is the start value with every
@@ -11,7 +11,7 @@
 // values that are no JSON form. half the seeds have the keys made tricky (kit.ts)
 // deno-lint-ignore-file no-explicit-any
 import apply, { ApplyError, type Patch } from "@ermine/changeable/apply"
-import { KEYS, patch, start } from "../../places/fuzz/gen_harness.ts"
+import { KEYS, patch, start } from "../typescript/gen.ts"
 import { wildPatches } from "./apply.ts"
 import {
 	type Answer,

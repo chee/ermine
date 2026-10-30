@@ -7,6 +7,7 @@
 		"update": "deno run --quiet --allow-read changeable/typescript/update_harness.ts",
 		"table": "deno run --quiet --allow-read graph/typescript/table_harness.ts",
 		"crow": "deno run --quiet --allow-read crow/typescript/crow_harness.ts",
+		"crowify": "deno run --quiet --allow-read places/typescript/crowify_harness.ts",
 		"tracker": "deno run --quiet --allow-read reactivity/typescript/tracker_harness.ts",
 		"paths": "deno run --quiet --allow-read reactivity/typescript/paths_harness.ts",
 		"scheduler": "deno run --quiet --allow-read reactivity/typescript/scheduler_harness.ts"
@@ -19,6 +20,7 @@
 		"update": "graph/c/update-harness",
 		"table": "graph/c/table-harness",
 		"crow": "crow/c/crow-harness",
+		"crowify": "places/c/crowify-harness",
 		"tracker": "reactivity/c/tracker-harness",
 		"paths": "reactivity/c/paths-harness",
 		"scheduler": "reactivity/c/scheduler-harness"
@@ -31,6 +33,7 @@
 		"update": "graph/c/update-harness-check",
 		"table": "graph/c/table-harness-check",
 		"crow": "crow/c/crow-harness-check",
+		"crowify": "places/c/crowify-harness-check",
 		"tracker": "reactivity/c/tracker-harness-check",
 		"paths": "reactivity/c/paths-harness-check",
 		"scheduler": "reactivity/c/scheduler-harness-check"

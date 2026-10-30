@@ -10,7 +10,7 @@ import { ask, command } from "../../conformance/typescript/ask.ts"
 import { line } from "../../conformance/typescript/form.ts"
 import type { Answer, Request } from "../../conformance/typescript/harness.ts"
 import { keyorder } from "@ermine/changeable/keyorder"
-import { rand } from "./gen_harness.ts"
+import { rand } from "../../conformance/typescript/gen.ts"
 
 const SEEDS = Number(Deno.env.get("SEEDS") ?? 40)
 const STEPS = 6
