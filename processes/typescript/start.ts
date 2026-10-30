@@ -30,7 +30,7 @@
 import createEntry, { type ChangeHeader } from "@ermine/graph/entry"
 import { type Id, type Path, type Places, PlacesError, type Writer } from "@ermine/places"
 import { parse } from "@ermine/places/path"
-import { createChangeHeader, outsideAt } from "@ermine/places/header"
+import { createChangeHeader, locationsHere } from "@ermine/places/header"
 import { createStatus, STATUS, TABLE } from "./status.ts"
 import { type Computer, PENDING, type Scheduler, type Scope } from "@ermine/reactivity"
 import type { Table } from "@ermine/graph/table"
@@ -179,7 +179,7 @@ export function createProcesses(setup: Setup): Processes {
 		// its writes' headers: made with its scope open, so its frame (and the locations in it, if it
 		// began outside the graph) is theirs
 		const header = headerOf
-		const locations = outsideAt(s, options.build)
+		const locations = locationsHere(s, options.build)
 		const scope = s.createScope(
 			{ process: at, node: id, ...locations !== undefined && { locations } },
 			options.under ?? owner,
