@@ -1,64 +1,18 @@
-// paths (paths.ts) on the line protocol (conformance/typescript/harness.ts). Another implementation
-// joins by speaking this (HARNESS).
-//
-//   source, id   a string, or {"symbol": name}: one symbol per name, never equal to a string.
-//                strings equal by content, any string ("", NUL, lone surrogates). a key: (source, id)
-//   path         a list of keys: whole numbers 0 <= n < 1e15 (list indices; -0 is 0, written back
-//                as 0) and strings (map keys, any string); 1 and "1" differ; anything else an error
-//   patch        op's, as apply takes it: {path, range?: [a, b], value?, move?: {path, range?}};
-//                one malformed (not a map, a path not a path, a range not two whole numbers) is an error
-//   keys         true: a keys read; anything else, a plain read
-//
-// the rule (marks; mark is it per spot). a patch's places: a move's take {path: move.path, range:
-// move.range, put: no, n: 0} then its landing {path, range, put: yes, n: the take's b - a, or 1};
-// else one {path, range, put: has value, n: value's length when a list, 0 when no value, else not
-// known}. a removal at an index: unranged, no put, its last key a number. a place Q reaches a
-// plain read of P when
-//   P is Q or a prefix of it (the change is inside what was read)
-//   Q is a removal at an index k, P runs beside it to Q's parent then a number > k, then anything
-//   Q is a proper prefix of P and Q unranged (what P read was replaced or removed)
-//   Q ranged [a, b), P = Q + [k, ...], k a number: k in [a, b) when n is b - a (the length held),
-//     else k >= a (past the end too)
-// a keys read of P: when Q is no longer than P, as a plain read; else only when Q is P plus one
-// key and unranged (a key set, removed, taken or landed). a batch marks what any patch marks, each
-// patch in its own coordinates
-//
-// spots: held by key, in a trie of path steps per key; a step is held while a spot is at or under
-// it. a spot in an answer: its path, {"keys": path} for a keys spot, {"here": path} for a here
-// spot, "change" for the change spot.
-// mark's order: the change spot, then each patch's places in turn; a spot already given is
-// skipped. a place walks from the key's top down its path: at each step above the place, its
-// spot, then its here spot when the place's next step is a number (into a list); at the step just above an unranged place, its keys spot too; above a removal at index k,
-// the number kids past k in index order, wholly; then on into the next step (none held: the place
-// is done). at the place's step: unranged, wholly; ranged [a, b), its spot, its keys spot, its here spot, then
-// its number kids from a in index order, below b when n is b - a, each wholly. wholly: the
-// step's spot, its keys spot, its here spot, then each kid wholly in the order the kid steps were made (a step
-// let go and made again comes last)
-//
-//   {"op":"spot","source","id","path","keys"?,"here"?}  {}  a read's spot, made or found; keys: true,
-//                                                 a read of the keys at path only, a spot of its own;
-//                                                 here: true, a read of what is at path itself (a map
-//                                                 as a map), a spot of its own
-//   {"op":"change","source","id"}            {}  the change spot, made or found
-//   {"op":"mark","source","id","patches"}    {"spots":[...]}  what the patches mark, each once; a key
-//                                                 with no spots: [] (nothing is made)
-//   {"op":"event","source","id"}             {"spots":[...]}  a whole-node event at that key: a mark
-//                                                 of [{"path":[]}]
-//   {"op":"release","source","id","path"?,"keys"?,"here"?}  {}  lets the spot go (no path: the change spot);
-//                                                 not there: nothing. steps left with nothing go, then
-//                                                 the key
-//   {"op":"marks","patch","paths","keys"?,"here"?}   {"marks":[...]}  the rule, a boolean per path in
-//                                                 order (keys: for a keys read; here: for a here read);
-//                                                 no key, nothing held
-//   {"op":"held"}                            {"keys","spots","steps"}  what is held: keys with a spot,
-//                                                 spots, and steps (per key its top, and each other
-//                                                 prefix of its spots' paths, once)
-//   anything wrong                           {"error": why}; why is not compared. no op, an unknown
-//                                                 op, a source or id neither string nor symbol, spot
-//                                                 with no path or a bad one, mark with no list of
-//                                                 patches (held key or not) or a malformed patch, marks
-//                                                 with no patch or paths or a bad path. nothing is held
-//                                                 by one
+// Paths (paths.ts) on the line protocol (conformance/typescript/harness.ts); HARNESS names
+// another implementation that speaks it.
+// source, id: a string, or {"symbol": name}. path: whole numbers 0 <= n < 1e15 and strings; 1 and "1"
+// differ. patch: {path, range?: [a, b], value?, move?: {path, range?}}. A spot in an answer is its
+// path, {"keys": path}, {"here": path}, or "change".
+// {"op":"spot","source","id","path","keys"?,"here"?}  -> {}  make or find a read's spot
+// {"op":"change","source","id"}                       -> {}  make or find the change spot
+// {"op":"mark","source","id","patches"}               -> {"spots":[...]}  spots the patches mark, each once
+// {"op":"event","source","id"}                        -> {"spots":[...]}  same as mark of [{"path":[]}]
+// {"op":"release","source","id","path"?,"keys"?,"here"?} -> {}  no path: the change spot
+// {"op":"marks","patch","paths","keys"?,"here"?}      -> {"marks":[...]}  a boolean per path
+// {"op":"held"}                                       -> {"keys","spots","steps"}  counts held
+// anything wrong                                      -> {"error": why}  why is not compared
+// Order within mark: the change spot first, then each patch's places in turn, each walking down
+// its path from the key's top (see paths.ts).
 import { createPaths, type Key, marks, type Patch, type Spot } from "./paths.ts"
 import { type Answer, type Request, serve } from "../../conformance/typescript/harness.ts"
 
@@ -72,7 +26,6 @@ const key = (k: unknown): unknown => {
 	if (s === undefined) symbols.set(name, s = Symbol(name))
 	return s
 }
-// a path: a list of whole numbers 0 <= n < 1e15 and strings; anything else is an error
 function path(x: unknown): Key[] {
 	if (!Array.isArray(x)) throw new Error("a path is a list")
 	for (const k of x) {
@@ -83,7 +36,6 @@ function path(x: unknown): Key[] {
 	}
 	return x
 }
-// a place of a patch: a map with a path, and a range of two whole numbers when it has one
 function place(x: unknown): void {
 	if (typeof x !== "object" || x === null || Array.isArray(x)) throw new Error("a patch is a map")
 	const m = x as { path?: unknown; range?: unknown }
@@ -117,7 +69,7 @@ function answer(r: Request): Answer {
 		case "event":
 			return { spots: paths.event(key(r.source), key(r.id)).map(shown) }
 		case "release": {
-			// made, then let go: a spot not there stays not there
+			// Made, then released: a spot that is not there stays not there.
 			const s = r.path === undefined
 				? paths.change(key(r.source), key(r.id))
 				: paths.spot(key(r.source), key(r.id), path(r.path), r.keys === true, r.here === true)

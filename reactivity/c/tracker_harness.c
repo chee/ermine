@@ -1,4 +1,4 @@
-// the C tracker (tracker.h) on the line protocol of reactivity/typescript/tracker_harness.ts. A
+// The C tracker (tracker.h) on the line protocol of reactivity/typescript/tracker_harness.ts. A
 // node's owner is its name.
 #define _POSIX_C_SOURCE 200809L
 #include <stdio.h>

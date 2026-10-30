@@ -15,18 +15,15 @@ struct order {
 	od_item **live;
 	size_t nlive, caplive;
 	size_t ndue;
-	// ranks made at this epoch are good while ranks_ok; an item is ranked when its rank_epoch is
-	// the epoch, and nranked count them
+	// Ranks are valid while ranks_ok; an item is ranked when its rank_epoch equals epoch.
 	uint64_t epoch;
 	bool ranks_ok;
 	size_t nranked;
-	// the last stamp given (od_item stamp)
 	uint64_t stamps;
-	// the items to mend
 	od_item **work;
 	size_t nwork, capwork;
-	// the due as a heap, by rank, then mark, then the order made; made at heap_epoch, and again
-	// when a due one's rank was mended
+	// The due items as a heap, ordered by rank, then mark, then order made. Rebuilt when the
+	// ranks are, or when a due item's rank was mended.
 	entry *heap;
 	size_t nheap, capheap;
 	uint64_t heap_epoch;
@@ -48,7 +45,6 @@ void od_free(order *o) {
 
 static bool edge(const od_item *p, const od_item *q) { return q != NULL && q != p && q->alive; }
 
-// p is after q by one more edge, or one less
 static void link(od_item *p, od_item *q) {
 	uintptr_t n = (uintptr_t)pm_get(&q->rev, p);
 	pm_set(&q->rev, p, (void *)(n + 1));
@@ -83,7 +79,7 @@ static void grow(od_item ***a, size_t n, size_t *cap) {
 	if (*a == NULL) abort();
 }
 
-// q, an edge of p's: one of the region's edges, or one past its rank into p's floor
+// An edge of p's to q: counted in the region if q is in it, else it raises p's minimum rank.
 static size_t into(const order *o, uint64_t s, const od_item *p, const od_item *q, size_t *adj, size_t count,
                    int *floor) {
 	if (!edge(p, q)) return count;
@@ -92,9 +88,9 @@ static size_t into(const order *o, uint64_t s, const od_item *p, const od_item *
 	return count;
 }
 
-// ranked again from start and everything after it (the region): rank.h over the region's own
-// edges, each at least one past what it is after outside it. nothing outside is after the
-// region, so nothing outside changes. its members found again
+// Ranks start and everything after it (the region) again, using rank.h over the region's own
+// edges. Each rank is at least one past anything the item is after outside the region. Nothing
+// outside the region is after it, so nothing outside changes.
 static void local(order *o, od_item *const *start, size_t nstart) {
 	uint64_t s = ++o->stamps;
 	od_item **stack = NULL, **at = NULL;
@@ -156,18 +152,16 @@ static void local(order *o, od_item *const *start, size_t nstart) {
 	free(adj);
 }
 
-// the edges of what is in work changed: each rises to one past its edges' most, and what is
-// after it too, as far as a rank rises; a rank never falls (order.ts). a cycle's member reached,
-// or the one it began from reached again (after what is after it: a cycle made now): ranked
-// again from there on (local). mending longer than a whole making would take: made whole at the
-// next
+// Mends ranks after the edges of the items in work changed. Each rises to one past its highest
+// edge, and so does what is after it, as far as a rank rises. A rank never falls. A cycle member
+// that is reached, or a cycle formed now, is ranked again locally. If mending takes longer than
+// ranking everything would, the ranks are rebuilt in full on next use.
 static void mend(order *o) {
 	if (!o->ranks_ok) {
 		o->nwork = 0;
 		o->ranks_ok = false;
 		return;
 	}
-	// what it began from: its callers give one
 	od_item *begun = o->nwork == 1 ? o->work[0] : NULL;
 	size_t limit = 4 * o->nranked + 64;
 	for (size_t steps = 0; o->nwork; steps++) {
@@ -210,7 +204,6 @@ whole:
 	o->ranks_ok = false;
 }
 
-// the ranks of everything alive
 static void ranks(order *o) {
 	if (o->ranks_ok) return;
 	size_t n = 0;
@@ -326,7 +319,8 @@ int od_rank(order *o, const od_item *p) {
 
 od_item *od_next(order *o, int *rank) {
 	ranks(o);
-	// the heap is remade when the ranks are; a popped entry no longer due at its mark is stale
+	// The heap is rebuilt when the ranks are. A popped entry that is no longer due at its mark is
+	// stale.
 	if (o->heap_epoch != o->epoch || o->heap_stale || o->nheap > 4 * o->ndue + 64) {
 		o->heap_epoch = o->epoch;
 		o->heap_stale = false;
@@ -375,7 +369,6 @@ void od_started(order *o, od_item *p) {
 
 void od_sees(order *o, od_item *p, pm *next) {
 	if (p->values == next) return;
-	// one gone is after nothing (no edge): not held, so it can be freed
 	if (next) {
 		od_item *gone[8];
 		size_t ngone;
@@ -448,7 +441,7 @@ void od_gone(order *o, od_item *p) {
 		p->rank_epoch = 0;
 		o->nranked--;
 	}
-	// what was after it keeps its rank; a cycle's member: what was after it ranked again (local)
+	// What was after p keeps its rank. If p was in a cycle, what was after it is ranked again.
 	if (o->ranks_ok && p->member_epoch == o->epoch) {
 		p->member_epoch = 0;
 		o->nwork = 0;
@@ -457,8 +450,8 @@ void od_gone(order *o, od_item *p) {
 		local(o, o->work, o->nwork);
 		o->nwork = 0;
 	}
-	// what was after it is after it no more (no edge to one gone): nothing names it, so it can be
-	// freed; nor does the heap, made again
+	// Nothing after p is after it any more, so nothing names it and it can be freed. The heap is
+	// rebuilt.
 	for (size_t i = 0; i < p->rev.cap; i++) {
 		od_item *x = (od_item *)p->rev.keys[i];
 		if (x == NULL) continue;
@@ -467,7 +460,6 @@ void od_gone(order *o, od_item *p) {
 	}
 	if (o->nheap > 0) o->heap_stale = true;
 	pm_clear(&p->rev);
-	// out of the live list
 	if (p->slot < o->nlive && o->live[p->slot] == p) {
 		od_item *last = o->live[--o->nlive];
 		o->live[p->slot] = last;

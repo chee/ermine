@@ -1,7 +1,7 @@
-// rank: strongly connected components (Tarjan), each ranked after the ones its members are
-// after. members of one component share a rank; a component with nothing after it is 0, or the
-// most floor gives its members (floor NULL: none; what they are after outside these, for a part of
-// a graph). items are 0..n-1; the edges of item i are adj[off[i]..off[i+1]). out gets n ranks.
+// Strongly connected components (Tarjan), each ranked after the ones its members come after.
+// Members of a component share a rank. Items are 0..n-1; item i's edges are adj[off[i]..off[i+1]).
+// The optional per-item array (NULL for none) sets a minimum rank for a component: the largest
+// value among its members. out gets n ranks.
 #ifndef RANK_H
 #define RANK_H
 

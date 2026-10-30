@@ -1,7 +1,4 @@
-// The model the tracker harness test checks against: tracker.ts read plainly, with arrays and
-// indexOf: link's track (alien-signals, solid 2.0). Free when it is the same spot as the last
-// read, the next link in order (confirmed), or the spot's newest reader link is this run's.
-// Else a new link at the cursor. Duplicates are allowed where these miss.
+// The model the tracker harness test checks against: tracker.ts written plainly with arrays.
 type Link = { from: string; to: string; gen: number }
 
 export function createModel() {

@@ -1,7 +1,5 @@
-// order on its own, against the rule said plainly: of the due, not one waiting after a due one;
-// of those, the lowest rank, then the earliest due, then the oldest. and the ranks: each one past
-// what it is after, a cycle sharing one. random graphs, picks, stops, reads that change, marks
-// and computations gone, both asked again at every pick. a few dozen seeds (fuzz runs small)
+// Fuzzes order against the plain rule: the next pick is a due computation not waiting after a due
+// one, lowest rank then earliest due.
 import { assert, assertEquals } from "@std/assert"
 import { createOrder, type Ordered } from "./order.ts"
 import { rand } from "../../conformance/typescript/gen.ts"
@@ -25,7 +23,6 @@ function make(n: number): P {
 const edges = (p: P) =>
 	[...p.values, ...(p.after ? [p.after] : [])].filter((q) => q !== p && q.state === "alive")
 
-// p reaches q going up its edges
 function reaches(p: P, q: P): boolean {
 	const seen = new Set<P>()
 	const stack = edges(p)
@@ -39,7 +36,6 @@ function reaches(p: P, q: P): boolean {
 	return false
 }
 
-// the rule, by the ranks order has
 function pick(all: P[], rank: (p: P) => number): P {
 	const ready = all.filter((p) =>
 		p.state === "alive" && p.due !== 0 && !(p.after && p.after.due !== 0)
@@ -48,7 +44,6 @@ function pick(all: P[], rank: (p: P) => number): P {
 	return ready[0]
 }
 
-// each after what it is after: ranked past it, or the same rank on a cycle with it
 function ranked(all: P[], rank: (p: P) => number) {
 	for (const p of all) {
 		if (p.state !== "alive") continue
@@ -83,7 +78,6 @@ for (let seed = 1; seed <= 40; seed++) {
 			return [...out]
 		}
 		for (const p of live()) order.sees(p, reads())
-		// a few due at once, some at one tick
 		const mark = () => {
 			const t = ++tick
 			for (const p of live()) if (p.due === 0 && r(3) === 0) order.set(p, t)
@@ -105,7 +99,6 @@ for (let seed = 1; seed <= 40; seed++) {
 			const at = p.due
 			order.delete(p)
 			order.waits(p, undefined)
-			// stopped: waits after a due one whose waits do not reach it, due again as it was
 			const stops = live().filter((q) => {
 				if (q.due === 0 || q === p) return false
 				for (let x: P | undefined = q; x; x = x.after) if (x === p) return false
@@ -117,7 +110,6 @@ for (let seed = 1; seed <= 40; seed++) {
 				continue
 			}
 			order.sees(p, reads())
-			// what it wrote: its readers due at a new tick
 			if (r(2) === 0) {
 				const t = ++tick
 				for (const q of live()) if (q.due === 0 && q.values.includes(p)) order.set(q, t)

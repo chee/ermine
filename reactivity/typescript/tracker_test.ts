@@ -1,5 +1,4 @@
-// unit tests for the tracker; the conformance suite covers the behaviour through a harness,
-// these reach the edges directly (the two lists, cursor, links' fields)
+// Unit tests for the tracker's edges: the two lists, the cursor and the links' fields.
 import { assert, assertEquals, assertThrows } from "@std/assert"
 import { createModel } from "./tracker_model.ts"
 import { createScheduler } from "./scheduler.ts"
@@ -15,7 +14,6 @@ function setup() {
 	}
 	const reads = (r: string) => t.reads(n(r)).map((x) => x.owner)
 	const readers = (a: string) => t.readers(n(a)).map((l) => l.from.owner)
-	// a whole run: begin, track each, end
 	const run = (r: string, ...to: string[]) => {
 		t.begin(n(r))
 		for (const x of to) t.track(n(r), n(x))
@@ -24,7 +22,6 @@ function setup() {
 	return { t, n, reads, readers, run }
 }
 
-// every spot's readers list is a doubly linked list of links to it, and from's list agrees
 function consistent(t: { n: (s: string) => Node<string> }, names: string[]) {
 	for (const name of names) {
 		const node = t.n(name)
@@ -40,7 +37,6 @@ function consistent(t: { n: (s: string) => Node<string> }, names: string[]) {
 		for (let l = node.reads; l !== null; l = l.next) {
 			assert(l.from === node, `${name}: from`)
 			assert(l.prev === prev, `${name}: prev`)
-			// the link is in its spot's list too
 			let there = false
 			for (let r = l.to.first; r !== null; r = r.after) there ||= r === l
 			assert(there, `${name}: in the spot's readers`)
@@ -178,11 +174,9 @@ Deno.test("a read made again after another reader read the spot: found by the cu
 	const { reads, run, t, n } = setup()
 	t.begin(n("r"))
 	t.track(n("r"), n("a"))
-	// s reads a too, so r is no longer the tail of a's readers
 	run("s", "a")
 	t.track(n("r"), n("a"))
 	t.end(n("r"))
-	// the cursor sits on r's link to a
 	assertEquals(reads("r"), ["a"])
 })
 
@@ -194,7 +188,7 @@ Deno.test("a read made again, not next to the first, with another reader's link 
 	run("s", "a") // a's last reader is now s, not r
 	t.track(n("r"), n("a"))
 	t.end(n("r"))
-	// a's newest reader is s, not r, and the cursor is on b: the check misses, a is linked twice
+	// a's newest reader is s, not r, and the cursor is on b, so the check misses and a is linked twice.
 	assertEquals(reads("r"), ["a", "b", "a"])
 	assertEquals(readers("a"), ["r", "s", "r"])
 	consistent({ n }, ["r", "s", "a", "b"])
@@ -206,8 +200,8 @@ Deno.test("a read made again whatever happened between: duplicates where the che
 	for (const x of ["a", "b", "c"]) t.track(n("r"), n(x))
 	run("s", "a", "b", "c")
 	run("u", "c", "b", "a")
-	// out of order, with s and u the last readers of each: b, a, c are linked again at the
-	// cursor; then a and b are r's own newest links, and are not linked a third time
+	// Out of order, with s and u the last readers of each: b, a, c are linked again at the cursor,
+	// then a and b are r's own newest links and are not linked a third time.
 	for (const x of ["b", "a", "c", "a", "b"]) t.track(n("r"), n(x))
 	t.end(n("r"))
 	assertEquals(reads("r"), ["a", "b", "c", "b", "a", "c"])
@@ -218,7 +212,6 @@ Deno.test("a read made out of order, then met in order again: the old link stays
 	const { n, reads, readers, run } = setup()
 	run("r", "a", "b")
 	run("r", "b", "a", "b")
-	// b: new link in front (the old b is not next); a: confirmed; b: the old b is next, confirmed
 	assertEquals(reads("r"), ["b", "a", "b"])
 	assertEquals(readers("a"), ["r"])
 	assertEquals(readers("b"), ["r", "r"])
@@ -255,7 +248,6 @@ Deno.test("end outside a run drops nothing", () => {
 	t.end(n("r"))
 	t.end(n("r"))
 	assertEquals(reads("r"), ["a", "b"])
-	// a node never run
 	t.end(n("fresh"))
 	assertEquals(reads("fresh"), [])
 })
@@ -369,7 +361,6 @@ Deno.test("nested runs: each reader has its own cursor", () => {
 	const { t, n, reads, readers, run } = setup()
 	run("p", "a", "b")
 	run("q", "b")
-	// p re-runs, and inside it q re-runs
 	t.begin(n("p"))
 	t.track(n("p"), n("a"))
 	t.begin(n("q"))
@@ -396,7 +387,6 @@ Deno.test("interleaved runs: p and q alternate their reads", () => {
 	assertEquals(reads("p"), ["a", "b", "c"])
 	assertEquals(reads("q"), ["a", "b", "c"])
 	for (const x of ["a", "b", "c"]) assertEquals(readers(x), ["p", "q"])
-	// a re-run of both, interleaved, in a different order for q
 	t.begin(n("p"))
 	t.begin(n("q"))
 	for (const x of ["a", "b", "c"]) t.track(n("p"), n(x))
@@ -435,7 +425,6 @@ Deno.test("begin takes a new tick and resets the cursor; end closes it; a stale 
 	assertEquals(n("r").gen, g)
 	t.begin(n("r"))
 	assert(n("r").gen > g)
-	// r's old link to a has an old gen: reading a now confirms it
 	t.track(n("r"), n("a"))
 	assertEquals(n("r").reads!.gen, n("r").gen)
 })
@@ -450,12 +439,10 @@ Deno.test("old: a link the latest run did not read, once that run is over", () =
 	assert(!t.old(a) && !t.old(b))
 	t.begin(n("r"))
 	t.track(n("r"), n("a"))
-	// in a run: nothing is old yet
 	assert(!t.old(a) && !t.old(b))
 	t.leave(n("r"))
 	assert(!t.old(a))
 	assert(t.old(b))
-	// read again: taken back
 	t.begin(n("r"))
 	t.track(n("r"), n("a"))
 	t.track(n("r"), n("b"))
@@ -581,7 +568,6 @@ Deno.test("many reads on one node: sizes stay consistent", () => {
 	assertEquals(s.reads("r"), names.slice(50, 150))
 })
 
-// fuzz against the model, lists compared exactly
 Deno.test("fuzz: 30 seeds against the model", () => {
 	const READERS = ["p", "q", "r", "s"]
 	const TARGETS = ["a", "b", "c", "d", "e", "p", "q"]
@@ -658,9 +644,6 @@ Deno.test("fuzz: 30 seeds against the model", () => {
 	}
 })
 
-// runs of random read orders with repeats, nested and interleaved. after every end the
-// reader's reads, deduplicated, are the spots its run read, in first-read order; and the links
-// match the model exactly, after every step
 Deno.test("fuzz: 40 seeds, after every end the reads deduplicated are the distinct reads in first-read order", () => {
 	const READERS = ["p", "q", "r", "s"]
 	const SPOTS = ["a", "b", "c", "d", "p", "q"]
@@ -690,7 +673,6 @@ Deno.test("fuzz: 40 seeds, after every end the reads deduplicated are the distin
 				s.t.begin(s.n(r))
 				m.begin(r)
 			} else if (k < 8 && open.length > 0) {
-				// mostly the innermost run; sometimes another, interleaved
 				const r = pick(4) === 0 ? one(open) : open[open.length - 1]
 				const a = one(SPOTS)
 				s.t.track(s.n(r), s.n(a))
@@ -710,8 +692,8 @@ Deno.test("fuzz: 40 seeds, after every end the reads deduplicated are the distin
 	}
 })
 
-// a duplicate link is harmless to the scheduler: its reader is due once, and a run that no
-// longer reads the spot leaves no link of it behind
+// A duplicate link is harmless to the scheduler: its reader is due once, and a run that no
+// longer reads the spot leaves no link of it behind.
 Deno.test("scheduler: a reader linked twice to a spot runs once when it changes, and both links go", () => {
 	const s = createScheduler()
 	let runs = 0
@@ -729,11 +711,9 @@ Deno.test("scheduler: a reader linked twice to a spot runs once when it changes,
 	s.mark(["a"])
 	s.pulse()
 	assertEquals(runs, 2)
-	// changed on the doubled spot: due once, one run
 	s.mark(["b"])
 	s.pulse()
 	assertEquals(runs, 3)
-	// a run reading only a: the links to b are dropped, a change of b runs nothing
 	shape = ["a"]
 	s.mark(["b"])
 	s.pulse()

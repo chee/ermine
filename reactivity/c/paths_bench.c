@@ -1,5 +1,5 @@
-// paths (paths.h) on what paths_bench.ts measures: medians of 31 rounds, µs per mark call.
-// make reactivity/c/paths-bench
+// Benchmark for paths.h matching paths_bench.ts: median of 31 rounds, in microseconds per mark.
+// Run with: make reactivity/c/paths-bench
 #define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <stdlib.h>

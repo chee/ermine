@@ -1,5 +1,5 @@
-// the tracker on what a scheduler does with it, as tracker_bench.ts does: runs that read spots,
-// readers of a hot spot. cc -O2 -o tracker-bench tracker.c tracker_bench.c
+// Benchmarks the tracker as a scheduler uses it, like tracker_bench.ts: runs that read spots, and
+// readers of a hot spot. Build: cc -O2 -o tracker-bench tracker.c tracker_bench.c
 #define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <stdlib.h>
@@ -27,7 +27,7 @@ static void run(tg_node *r, tg_node **to, size_t n) {
 	for (size_t i = 0; i < n; i++) tg_track(r, to[i]);
 	tg_end(r);
 }
-// the time for one call of f, over enough calls to take ~100 ms (after a warm-up)
+// The time for one call of f, over enough calls to take about 100 ms (after a warm-up).
 typedef void (*fn)(void *);
 static void bench(const char *name, fn f, void *arg) {
 	for (int i = 0; i < 200; i++) f(arg);

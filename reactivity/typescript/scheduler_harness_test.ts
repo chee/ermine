@@ -1,6 +1,5 @@
-// what the scheduler's scenarios (conformance/run.ts) do not: an unknown op is an error and the
-// harness goes on, and the fuzzer. they ask the harness named by HARNESS (default: the TypeScript
-// one, scheduler_harness.ts). The protocol: scheduler_harness.ts
+// Tests what the scheduler scenarios do not (unknown ops, the fuzzer) on the harness named by
+// HARNESS (default scheduler_harness.ts).
 // deno-lint-ignore-file no-explicit-any
 import { assert, assertEquals } from "@std/assert"
 import { ask, command } from "../../conformance/typescript/ask.ts"
@@ -17,19 +16,13 @@ Deno.test("an unknown op is an error, and the harness goes on", async () => {
 	assertEquals(b, { tick: 0 })
 })
 
-// the fuzzer: computes summing, choosing and failing over the host's keys and each other's, and
-// effects logging, under a few scopes; the host writes and disposes, a pulse after each. against
-// a plain model: everything evaluated again from scratch. a few dozen seeds (fuzz runs small)
 const SEEDS = 40
 const STEPS = 12
-// keys and names: lone halves, apart and (the next) as the pair they make, NUL; values of STRS:
-// strings of PARTS, through reads, eq and if, never sum or mod
 const HOST = ["h0", "\uD83D", "\uDE00", "h\u0000"]
 const STRS = ["😀", "\uDE00\uD83D", "s\u0000"]
 const PARTS = ["a", "xy", "é", "中", "😀", "👍🏽", "\uD83D", "\uDE00", "\u0000"]
 const NAMED = ["", "é", "中", "👍🏽", "\uD83D", "\uDE00", "\u0000"]
 
-// the model's evaluator: the fuzzer's forms only
 type Expr = unknown
 const num = (v: unknown) => (v === null || v === undefined ? 0 : v as number)
 function evaluate(e: Expr, store: Map<string, unknown>): unknown {
@@ -108,7 +101,6 @@ function generate(seed: number) {
 		const name = named(`c${i}`)
 		let f: Expr
 		if (k >= 10) {
-			// a string chosen: on a string read, or a number
 			const test = pick(2)
 				? { eq: [{ read: one(strs) }, { quote: one([text(), one(PARTS)]) }] }
 				: { eq: [{ mod: [{ read: one(keys) }, 2] }, 0] }
@@ -152,7 +144,6 @@ function generate(seed: number) {
 		return false
 	}
 
-	// after a pulse: computes again from scratch, in the order made (each reads earlier keys)
 	const pulse = (label: string) => {
 		send({ op: "pulse" })
 		const acts: unknown[][] = []

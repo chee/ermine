@@ -1,10 +1,5 @@
-// tracked paths against op, in process, where the paths suite's oracle fuzz (paths_harness_test.ts)
-// does not reach: values of lists nested in maps and lists, batches of up to six patches mixing
-// ranged and unranged moves (inside a list, between lists, to and from map keys) with splices,
-// removals that shift, and replaces. on copy-on-write values (op's apply), a read whose value is
-// a new reference after the batch must be marked; mark agrees with the rule (marks) patch by
-// patch; a released spot is no longer given, the rest are; an event gives every spot of the key.
-// a few dozen seeds (fuzz runs small)
+// Fuzzes tracked paths against op in process: nested lists and maps, batches of patches, splices,
+// shifting removals. On copy-on-write values, a read whose value is a new reference must be marked.
 import { assert, assertEquals } from "@std/assert"
 import apply, { ApplyError, type Key, type Patch } from "@ermine/changeable/apply"
 import { createPaths, marks, type Spot } from "./paths.ts"
@@ -17,8 +12,6 @@ const MISSING = Symbol("missing")
 
 type R = ReturnType<typeof rand>
 
-// a value: maps of lists, lists of lists and maps, every item a new object; a string and a typed
-// array as leaves now and then
 function make(r: R, depth: number): unknown {
 	const k = r.pick(depth > 0 ? 10 : 3)
 	if (k === 0) return { n: r.pick(100) }
@@ -48,7 +41,6 @@ function every(v: unknown, at: Key[] = [], out: Key[][] = []): Key[][] {
 	return out
 }
 
-// a patch on v, aimed at its lists most of the time; none found: undefined
 function patch(r: R, v: unknown): Patch | undefined {
 	const all = every(v)
 	const lists = all.filter((p) => Array.isArray(get(v, p)))
@@ -66,7 +58,6 @@ function patch(r: R, v: unknown): Patch | undefined {
 		let p: Patch | undefined
 		const k = r.pick(14)
 		if (k < 2 && lists.length) {
-			// a splice: new items in, a span out
 			const l = r.one(lists)
 			p = r.pick(3)
 				? { path: l, range: spanOf(l), value: items(r) }
@@ -74,13 +65,10 @@ function patch(r: R, v: unknown): Patch | undefined {
 		} else if (k < 3 && elems.length) p = { path: r.one(elems) } // a removal: the rest shift
 		else if (k < 4 && elems.length) p = { path: r.one(elems), value: make(r, 1) }
 		else if (k < 6 && lists.length) {
-			// a span moved inside its list
 			const l = r.one(lists), s = spanOf(l)
 			const g = gap(l, s[1] - s[0])
 			p = { path: l, range: [g, g], move: { path: l, range: s } }
 		} else if (k < 8 && lists.length) {
-			// a span to another list
-			// a span to another list (or the same), landing in a gap or over a span of what is left
 			const from = r.one(lists), to = r.one(lists), a = gap(to), b = r.pick(2) ? a : gap(to)
 			p = {
 				path: to,
@@ -88,11 +76,9 @@ function patch(r: R, v: unknown): Patch | undefined {
 				move: { path: from, range: spanOf(from) },
 			}
 		} else if (k < 10 && elems.length && lists.length) {
-			// one element into a list's gap
 			const to = r.one(lists), g = gap(to)
 			p = { path: to, range: [g, g], move: { path: r.one(elems) } }
 		} else if (k < 11 && elems.length && maps.length) {
-			// one element, or a span as a list, to a map's key
 			const l = r.one(lists.length ? lists : [[]])
 			const take = r.pick(2) || !lists.length
 				? { path: r.one(elems) }
@@ -102,7 +88,6 @@ function patch(r: R, v: unknown): Patch | undefined {
 			const to = r.one(lists), g = gap(to)
 			p = { path: to, range: [g, g], move: { path: r.one(keys) } }
 		} else if (k < 13 && elems.length) {
-			// an element onto another: a replace
 			p = { path: r.one(elems), move: { path: r.one(elems) } }
 		} else if (maps.length) {
 			p = r.pick(2)
@@ -121,7 +106,6 @@ function patch(r: R, v: unknown): Patch | undefined {
 	}
 }
 
-// reads: every path before and after, and some made up (past the end, missing, into leaves)
 function reads(r: R, before: unknown, after: unknown): Key[][] {
 	const out = [...every(before), ...every(after)]
 	for (let i = 0; i < 10; i++) {
@@ -153,7 +137,6 @@ Deno.test(`paths fuzz: ${SEEDS} seeds × ${CASES} batches of nested lists: what 
 			const id = `case ${c}`
 			const spots = new Map<Spot<never>, Key[]>()
 			for (const p of ps) spots.set(paths.spot("v", id, p.slice()), p)
-			// here reads: what is at p itself (a map as a map)
 			const heres = new Map<Spot<never>, Key[]>()
 			for (const p of ps) heres.set(paths.spot("v", id, p.slice(), false, true), p)
 			const change = paths.change("v", id)
@@ -176,7 +159,6 @@ Deno.test(`paths fuzz: ${SEEDS} seeds × ${CASES} batches of nested lists: what 
 					assert(once.has(s), `${at}: here ${show(p)} changed, not marked`)
 				}
 			}
-			// mark is the rule, patch by patch
 			for (const [s, p] of spots) {
 				assertEquals(once.has(s), batch.some((x) => marks(x, p)), `${at}: ${show(p)}`)
 				if (get(before, p) !== get(after, p)) {
@@ -185,7 +167,6 @@ Deno.test(`paths fuzz: ${SEEDS} seeds × ${CASES} batches of nested lists: what 
 				}
 				if (once.has(s)) marked++
 			}
-			// released spots are no longer given; the rest are, as before
 			for (const s of heres.keys()) paths.release(s)
 			const gone = new Set([...spots.keys()].filter(() => r.pick(2) === 0))
 			for (const s of gone) paths.release(s)
@@ -195,7 +176,6 @@ Deno.test(`paths fuzz: ${SEEDS} seeds × ${CASES} batches of nested lists: what 
 				new Set(got.filter((s) => !gone.has(s) && !heres.has(s))),
 				`${at}: after release`,
 			)
-			// an event: every spot still held
 			const still = [...spots.keys()].filter((s) => !gone.has(s))
 			assertEquals(new Set(paths.event("v", id)), new Set([change, ...still]), `${at}: event`)
 			for (const s of still) paths.release(s)

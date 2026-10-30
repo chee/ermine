@@ -1,100 +1,39 @@
-// the scheduler (typescript/scheduler.ts), in C; prefix sc_. it runs code, and knows nothing
-// else. a compute is tracked: it runs again when a key it tracked was marked. an effect is a
-// compute whose value is acted on after the round's last run. a setup runs once, untracked. the
-// scopes tree holds them: tearing a scope down takes everything under it.
+// The scheduler (typescript/scheduler.ts) in C, prefix sc_. It runs code and knows nothing else.
+// A compute is tracked and runs again when a key it tracked is marked. An effect is a compute
+// whose value is acted on after the round's last run. A setup runs once, untracked. The scopes
+// tree holds them all, and tearing a scope down takes everything under it. Keys are opaque
+// const void * compared by identity, never NULL. Values are opaque void * compared by the
+// computer's equal, else by pointer. Single threaded. The rules are scheduler.ts's and
+// reactivity/conformance/scheduler's.
 //
-// a scope owns (what is made in it is put under it; the tree is sc_scope_parent). a frame
-// (changeable/c/frame.h) is what a change made now is made as: info, as key/value pairs (op_values;
-// keys unique; their order no meaning), and the frame it is under (a logical call stack, apart from
-// what owns what). a frame owns nothing but its parent, held; it is shared by reference, never
-// copied. each scope has a frame of its own: its info under the frame its parent scope had open
-// when it was made (a run's, a step's), else under its parent's own. a computer's is never written
-// after it is made: its pairs and "mark", the tick of the mark that made it due. each run has a
-// frame of its own, { run: n, mark: t }, under the computer's (sc_run_frame); a step's (SC_PAUSE) is
-// { step: n } under its run's. a computer's set, act and teardowns open its latest run's frame.
-// one can also be made alone (sc_create_frame: a call, a writer's run); the maker lets go of it
-// (ch_frame_free). what is open is a pair, the scope and the frame (sc_run_with). sc_create_scope
-// makes one under a parent, else under the one open; sc_create_root_scope one with no parent. no
-// pairs given: it fails (empty). a scope is open only while sc_run_with_scope or the scheduler
-// runs code in it: a computer's runs, sets and acts open it, written by itself. a scope is made
-// once; under a
-// computer, it belongs to that run (a plain scope is never claimed: it goes once a later run is
-// done; what an act made, before the next act). a teardown opens its scope, and what is under a scope goes with it open: a teardown on a
-// plain scope under a computer, run by the computer's teardown, its run's end or its act, is
-// written by it. nothing open: making a scope or a computer fails (unscoped).
+// Each scope has a frame (changeable/c/frame.h) holding its info. Making a scope or computer with
+// nothing open fails (unscoped).
 //
-// early effects: the reference's rules (typescript/scheduler.ts), the same here: sc_def's early
-// ("acts at once and is in an earlier queue so it goes compute, early, effect"): made, it is due,
-// runs and acts in sc_create_effect; after, a round is three queues: the runs by rank, the early
-// acts, the other acts, each owners first (an act waits while one above it is due in the same
-// queue).
+// Runs: the caller of sc_mark says who made a change; it is never guessed from what is running.
+// Pass the run open (sc_get_run), the one f was given at its start (held past its end with
+// sc_run_ref), or a computer's latest (sc_latest). A compute's run makes it the keys' writer. NULL
+// means from outside (the host, sync): no writer and no cause.
 //
-// keys are opaque: const void *, compared by identity, never NULL. values are opaque: void *,
-// compared by the computer's equal, else by pointer.
+// There are no exceptions in C, so:
+//   - A failure is a malloc'd error string, which whoever is handed it frees; NULL means none.
+//     The scheduler's own are SC_DISPOSED, SC_UNSCOPED and SC_EMPTY. A create returns NULL for
+//     any of them.
+//   - A track returns SC_OK or SC_STOP. After SC_STOP (its writer is due) the run must end now.
+//     A track outside a run, or after it returned, counts for nothing.
+//   - A run may return a promise (sc_promise_new) that the host settles later with sc_resolve or
+//     sc_reject. The run ends pending and the result lands at the next pulse.
+//   - Where the reference's f returns or throws PENDING, f returns SC_PENDING. A promise settles
+//     pending with sc_resolve_pending.
 //
-// the run: who made a change, told by the caller of sc_mark, never guessed from what is running.
-// a caller who knows it passes the run: the one open (sc_get_run), the one f was taken at f's
-// start (held past its end with sc_run_ref, after an await), or a computer's latest (sc_latest).
-// a compute's run named so makes it the keys' writer (its readers wait for it while it is due),
-// and the change carries the run's cause (loops). NULL: from outside (the host, sync): no writer
-// learned, no cause. in a set, act or teardown, sc_get_run is the computer's latest run.
+// Errors thrown by a listener (sc_throw) or by a cleanup are held until what was going on has
+// finished, then come out: the first, with the rest let go. sc_teardown returns it; sc_pulse,
+// sc_mark, sc_track and the like leave it for sc_escaped. An unfinished pulse leaves what is
+// still due or to act for the next one.
 //
-// no exceptions in C, so:
-//   - a failure is an error string (malloc'd; whoever is handed one frees it), NULL for none.
-//     the scheduler's own are "disposed", "unscoped" and "empty" (SC_DISPOSED, SC_UNSCOPED,
-//     SC_EMPTY). a create answers NULL for any: with nothing open and no parent, unscoped; a
-//     parent gone (or the one open), disposed; else no pairs, empty
-//   - a track answers SC_OK or SC_STOP (its writer is due: the run must end now, returning
-//     anything). a track outside a run, or after it returned, counts for nothing
-//   - async: a run may return a promise (sc_promise_new) to be settled later by the host
-//     (sc_resolve, sc_reject); the run ends pending, and the result lands at the next pulse
-//   - pending: where the reference's f returns or throws PENDING, f returns SC_PENDING (a track
-//     of something pending returns it up through each f above, as a throw would unwind); a
-//     promise settles pending with sc_resolve_pending, where the reference's is resolved to or
-//     rejected with PENDING
-//
-// listeners (sc_on_...): each kind a small list, told in the order added; adding gives back a
-// handle, sc_remove_listener takes it away (not from inside a call of its own kind).
-//
-// thrown out ("finish, then rethrow"): what a listener throws (sc_throw, as no C function can),
-// or a computer's cleanup run once its next run is done (below), is held while what was going on
-// finishes (every listener told; the run, act, mark or teardown all done), then it comes out:
-// the first, the rest let go. sc_teardown returns it; sc_pulse, sc_mark, sc_track,
-// sc_create_computer, sc_create_effect, sc_resolve and the like leave it for sc_escaped. a pulse
-// is left there: what is still due, or to act, waits for the next. a teardown's: what a listener
-// threw (under it too), else a cleanup's. before an act, what its last act made goes: a cleanup's
-// error is the act's (told with it), a listener's comes out once the act is done. (the reference
-// cannot throw from a making or a settling: it holds those for a pulse; a harness carries
-// sc_escaped there to agree)
-//
-// a rerun keeps what it makes again: the reference's rules (typescript/scheduler.ts), the same
-// here. as a run starts, what the computer's earlier runs made is old (a compute's all; an
-// effect's, not what its act made), still alive while the run goes, and its own cleanups are set
-// aside; sc_claim, in the run, takes an old child back and makes it due. the run done: what is
-// still old goes at its end, before its end
-// is told; the cleanups set aside run once the round's runs are done (before its acts), newest
-// first, and the first that fails ends the rest of that computer's, its error thrown out. a run
-// ending any other way keeps both. a computer torn down takes what is old and set aside with
-// it. before each act, what its last act made goes, and the cleanups made in it run.
-//
-// what a run read stays tracked till a run is done: the reference's rules
-// (typescript/scheduler.ts), the same here. links a run does not read again are old. a run done
-// (its latest; an awaited one as it lands done) lets the old ones go; one ending any other way
-// holds them too (a mark of one is a retry, no loop), no repeats.
-//
-// memory: values a run gives (its result, a promise's value) are the scheduler's until it lets
-// go of them with options.drop (replaced as last, equal, failed, torn down, or at sc_free).
-// set and act are lent them for the call. a scope or computer lives while something holds it, as
-// a WeakMap's key does in the reference [chee 10-26: "the C should "garbage collect" via
-// something like a weakmap"]: its maker (the one hold sc_create_* gives, let go with sc_release),
-// each sc_retain, sc_run_with_scope while it is open, each scope under it, each of its runs
-// (sc_run_ref, a promise's, a queued act's), a loop that names it, and, alive, the tree. torn
-// down and held by nothing, it is freed: a plain scope at once, a computer as the pulse ends (the
-// pulse it went in, else the next: a pulse's causes and order name it till then), the free
-// listeners told first (sc_on_free). a maker that never lets go keeps it till sc_free, as
-// before. a scope's frame is held by it (and by whatever else ch_frame_ref'd it), the pairs given
-// copied into it: each value held (op_ref'd), each key copied. free promises and held runs first.
-// single threaded.
+// Memory: values a run gives are the scheduler's until it lets go with options.drop. A scope or
+// computer is freed once it is torn down and nothing holds it (its maker, sc_retain, an open
+// sc_run_with_scope, scopes under it, its runs, promises, queued acts). A plain scope is freed
+// at once, a computer as the pulse ends, after the free listeners (sc_on_free) are told.
 #ifndef SCHEDULER_H
 #define SCHEDULER_H
 
@@ -110,40 +49,32 @@
 
 typedef struct sc_scheduler sc_scheduler;
 typedef struct sc_scope sc_scope;
-// a computer is a scope too
 typedef struct sc_scope sc_computer;
-// one time a computer ran (its computer, sc_run_computer, and its number, sc_run_n): the run open
-// while it runs (sc_get_run), held with sc_run_ref past its end
+// One run of a computer (its computer is sc_run_computer, its number sc_run_n). The run open while
+// it runs is sc_get_run; hold it past its end with sc_run_ref.
 typedef struct sc_run sc_run;
 typedef struct sc_promise sc_promise;
-// a registered listener, to give to sc_remove_listener
 typedef struct sc_listener sc_listener;
 
 typedef enum { SC_OK = 0, SC_STOP = 1 } sc_track_status;
 
-// one of a frame's info: a key and its value, an op_value (changeable/c/frame.h)
 typedef ch_pair sc_pair;
 
 typedef enum {
-	// a value (maybe NULL): the result
 	SC_VALUE,
-	// the run ends pending: nothing given
 	SC_PENDING,
-	// error: the run failed
 	SC_FAILED,
-	// promise: the run ends pending; its settling is the result
+	// promise: the run ends pending; its settling is the result.
 	SC_AWAIT,
-	// promise and step: the run ends pending; as the promise settles the same run goes on, in step
+	// promise and step: the run ends pending; when the promise settles the same run goes on, in step.
 	SC_PAUSE,
 } sc_out_kind;
 
-// what goes on a run when its promise has settled (SC_PAUSE). next: given what the promise
-// settled with (ok: its value, owned by next, maybe NULL; else its error, malloc'd, next's to
-// free), it gives what the run comes to next, any kind (SC_PAUSE again too). the run's tracking is
-// open again as it was (its tick and cursor), the run open, and a frame of its own, info
-// { step: n } (n an op_value number), under the run's frame. quit: the step let go instead, once,
-// with nothing open: the computer run again or due again, torn down, the promise never settled
-// before the scheduler goes, or settled to pending. exactly one of next and quit is called, once
+// What carries on a run once its promise has settled (SC_PAUSE). next is given what the promise
+// settled with (ok: its value, owned by next, maybe NULL; else its malloc'd error, for next to
+// free) and returns what the run comes to next. quit is called instead, with nothing open, if the
+// step is let go (the computer ran or became due again, was torn down, or its promise never settled
+// or settled to pending). Exactly one of next and quit is called, once.
 typedef struct sc_step {
 	struct sc_out (*next)(void *data, bool ok, void *value, char *error);
 	void (*quit)(void *data);
@@ -155,38 +86,36 @@ typedef struct sc_out {
 	void *value;
 	char *error;
 	sc_promise *promise;
-	// SC_PAUSE's
 	sc_step step;
 } sc_out;
 
-// what a computer is made of
 typedef struct sc_def {
-	// each run. keys are tracked through sc_track (after SC_STOP, return at once: what is returned
-	// is dropped); a track after an await counts for nothing. the run: sc_get_run at f's start,
-	// kept by f if it writes after an await.
-	// previous: the computer's last result (a compute's: the last given to set; an effect's: the
-	// last acted on), NULL for none. a result equal to the last is not kept, so it stays the last set
+	// Each run. Keys are tracked through sc_track; after SC_STOP, return at once (what is returned
+	// is dropped). A track after an await counts for nothing. Call sc_get_run at f's start and
+	// hold the run if f writes after an await. previous is the computer's last result (a compute's:
+	// the last given to set; an effect's: the last acted on), NULL for none. A result equal to the
+	// last is not held, so it stays the last set.
 	sc_out (*f)(void *previous, void *data);
-	// a compute's: a result not equal to the last. effects leave it NULL
+	// A compute's: takes a result not equal to the last. Effects leave it NULL.
 	char *(*set)(void *value, void *data);
-	// an effect's: a result not equal to the one last acted on, after the round's last run.
-	// previous: the one acted on before, NULL for none
+	// An effect's: acts on a result not equal to the one last acted on, after the round's last run.
+	// previous is the one acted on before, NULL for none.
 	char *(*effect)(void *value, void *previous, void *data);
-	// NULL: pointers compared
 	bool (*equal)(const void *a, const void *b, void *data);
-	// a compute's: where set's results land, when known (NULL: learned from the writer of marks)
+	// A compute's: where set's results land, when known. NULL means learn it from the writer of marks.
 	const void *key;
 	void *data;
-	// an effect's: acted on in the round's early queue; its first run and act in sc_create_effect
+	// An effect's: acted on in the round's early queue; its first run and act are in sc_create_effect.
 	bool early;
 } sc_def;
 
 typedef enum { SC_DONE, SC_PENDED, SC_FAIL, SC_STOPPED_RUN, SC_LOOPING } sc_ended;
 
-// what more a run's end says. equal: -1 none, else 0 or 1. error: NULL for none. waits (stopped):
-// the computer it waits after. through (looping): the computers on the loop, in the order made.
-// kept (has_kept): its result, when held past the run (a compute's given to set, even one that
-// failed; an effect's to be acted on): only when not equal to the last. borrowed for the call
+// What more a run's end says. equal: -1 for none, else 0 or 1. error: NULL for none. waits (when
+// stopped): the computer it waits after. through (when looping): the computers on the loop, in
+// the order made. kept (has_kept): the result held past the run (a compute's given to set, even
+// a failed one, or an effect's to be acted on), only when not equal to the last. Borrowed for
+// the call.
 typedef struct sc_more {
 	int equal;
 	const char *error;
@@ -198,11 +127,10 @@ typedef struct sc_more {
 } sc_more;
 
 typedef struct sc_options {
-	// lets go of a value the scheduler was given
 	void (*drop)(void *value, void *data);
-	// one hold more on a value the scheduler was given: a promise's, for each run it lands at.
-	// NULL: the first run it lands at takes the promise's hold, any other the same value unheld
-	// (a host that drops values and awaits a promise twice gives keep)
+	// Adds a hold on a value the scheduler was given, for each run a promise's value lands at. If
+	// NULL, the first run it lands at takes the promise's hold and any other gets the value
+	// unheld. A host that drops values and awaits a promise twice must give keep.
 	void (*keep)(void *value, void *data);
 	void *data;
 } sc_options;
@@ -210,155 +138,139 @@ typedef struct sc_options {
 sc_scheduler *sc_new(sc_options options);
 void sc_free(sc_scheduler *s);
 
-// listeners, each told as it happens. data is given back to each call; reads, keys and due are good
-// for the call only
-// a key tracked in a run
 typedef void (*sc_track_fn)(const void *key, sc_run *run, void *data);
 sc_listener *sc_on_track(sc_scheduler *s, sc_track_fn f, void *data);
-// a key that gets its first tracker (none had it, or never before): told in the reading run, after the
-// track. Mirrors TS' onTrackingStart
+// A key got its first tracker (none had it, or never before). Told in the reading run, after the
+// track. Mirrors TS onTrackingStart.
 sc_listener *sc_on_tracking_start(sc_scheduler *s, sc_track_fn f, void *data);
-// a mark, and a new computer (due at once: no keys): what it made due, and its tick. run: who made
-// it, NULL for none
+// A mark, or a new computer (due at once, with no keys): what it made due, and the tick. run is
+// who made it, NULL for none.
 typedef void (*sc_mark_fn)(const void *const *keys, size_t nkeys, sc_run *run, sc_computer *const *due,
 	size_t ndue, uint64_t tick, void *data);
 sc_listener *sc_on_mark(sc_scheduler *s, sc_mark_fn f, void *data);
 typedef void (*sc_run_start_fn)(sc_computer *c, unsigned n, int rank, ch_frame *frame, void *data);
-// frame: the run's own, good for the call (ch_frame_ref it to keep it)
 sc_listener *sc_on_run_start(sc_scheduler *s, sc_run_start_fn f, void *data);
-// a run's body returned a value (an awaited one: its promise landed with it), told before anything
-// is done with it (compared, given to set, queued to act; value: still the scheduler's): once per
-// run at most, for computes and effects. not told for a failure, SC_PENDING, a stopped run, or one
-// torn down in its body. a write made in the run before this is the run's own; one after, its
-// set's (un_keeping tells them apart this way). Mirrors TS' onRunReturn
+// A run's body returned a value (for an awaited run, its promise landed with it). Told before
+// the value is compared, given to set or queued to act, and still the scheduler's. At most once
+// per run, for computes and effects; not for a failure, SC_PENDING, a stopped run, or one torn
+// down in its body. A write made in the run before this is the run's own; one after is its
+// set's. Mirrors TS onRunReturn.
 typedef void (*sc_run_return_fn)(sc_computer *c, unsigned n, const void *value, void *data);
 sc_listener *sc_on_run_return(sc_scheduler *s, sc_run_return_fn f, void *data);
-// reads: every key the run tracked, in order, a key tracked again tracked again (the tracker keeps
-// it once). kept only while someone listens here
+// reads: every key the run tracked, in order; a key tracked twice appears twice. Only collected
+// while someone listens here.
 typedef void (*sc_run_end_fn)(sc_computer *c, unsigned n, sc_ended ended, const void *const *reads,
 	size_t nreads, const sc_more *more, void *data);
 sc_listener *sc_on_run_end(sc_scheduler *s, sc_run_end_fn f, void *data);
-// an effect acted; error: NULL for none
 typedef void (*sc_effect_fn)(sc_computer *c, unsigned n, const char *error, void *data);
 sc_listener *sc_on_effect(sc_scheduler *s, sc_effect_fn f, void *data);
-// a promise settled: its result waits for the next pulse
 typedef void (*sc_settle_fn)(void *data);
 sc_listener *sc_on_settle(sc_scheduler *s, sc_settle_fn f, void *data);
-// a pulse ended: nothing due, every act done (not told when one threw out of it). a pulse called
-// here is a new one. Mirrors TS' onAfterPulse
+// A pulse ended: nothing due and every act done (not told if one threw out of it). A pulse
+// started here is a new one. Mirrors TS onAfterPulse.
 typedef void (*sc_after_pulse_fn)(void *data);
 sc_listener *sc_on_after_pulse(sc_scheduler *s, sc_after_pulse_fn f, void *data);
-// a key nobody tracks any more: at once when its last tracker's run that ended done did not track
-// it again, or it was torn down (a sweep now and then catches any other)
+// A key nobody tracks any more: its last tracker's run ended done without tracking it again, or
+// was torn down. A periodic sweep catches any other case.
 typedef void (*sc_tracking_end_fn)(const void *key, void *data);
 sc_listener *sc_on_tracking_end(sc_scheduler *s, sc_tracking_end_fn f, void *data);
-// a scope or computer freed: torn down, held by nothing. told as it goes, its frame, parent and user
-// still there to read; never held again. what is kept by it (a WeakMap's entry) goes here
+// A scope or computer was freed: torn down and held by nothing. Told as it goes, while its frame,
+// parent and user pointer can still be read. Anything the host keyed on it should go here.
 typedef void (*sc_free_fn)(sc_scope *o, void *data);
 sc_listener *sc_on_free(sc_scheduler *s, sc_free_fn f, void *data);
 void sc_remove_listener(sc_listener *l);
 
-// scopes: n pairs of info, copied (not their keys or values). a new one with no parent. NULL: n 0
+// Creates a scope with no parent, copying n pairs of info (not their keys or values). NULL when n
+// is 0.
 sc_scope *sc_create_root_scope(sc_scheduler *s, const sc_pair *info, size_t n);
-// a new one under parent, else under the one open. NULL: none open, the parent is gone, or n 0
+// Creates a scope under parent, else under the one open. NULL when none is open, the parent is
+// gone, or n is 0.
 sc_scope *sc_create_scope(sc_scheduler *s, const sc_pair *info, size_t n, sc_scope *parent);
-// one hold more on o, and one let go (memory, above). the maker's hold is let go with sc_release
-// too; a scope gone and held by nothing is freed
+// Adds a hold on o, or lets one go (see memory in the header). The maker's hold is let go with
+// sc_release too. A gone scope held by nothing is freed.
 sc_scope *sc_retain(sc_scope *o);
 void sc_release(sc_scope *o);
-// the host's own pointer on a scope or computer
 void sc_scope_set(sc_scope *o, void *user);
 void *sc_scope_user(const sc_scope *o);
 bool sc_scope_alive(const sc_scope *o);
-// made by an earlier run of its computer, not made again (claimed) by the run going on yet, nor gone
 bool sc_scope_old(const sc_scope *o);
-// an early effect
 bool sc_scope_early(const sc_scope *o);
 sc_scope *sc_scope_parent(const sc_scope *o);
-// the scope open (NULL: none)
 sc_scope *sc_get_current_scope(const sc_scheduler *s);
-// the frame open (NULL: none): the scope open's own, or a run's, a step's, one run with it
 ch_frame *sc_get_current_frame(const sc_scheduler *s);
-// a scope's own frame (held by it): its info, under the frame its parent had open when it was made,
-// else its parent's own. a computer's never changes after it is made: its pairs, and mark, the
-// tick that made it due
+// A scope's own frame, held by it: its info under the frame its parent had open when it was
+// made, else its parent's own. A computer's frame never changes: its pairs plus "mark", the tick
+// that made it due.
 ch_frame *sc_scope_frame(sc_scope *o);
-// a run's own frame (held by it): { run: n, mark: t }, under its computer's
 ch_frame *sc_run_frame(const sc_run *run);
-// a frame alone: n pairs, under up, else under the frame open. n may be 0: a frame that says
-// nothing. refs 1: the caller's, to ch_frame_free
+// A frame of its own: n pairs under up, else under the frame open. n may be 0, for a frame that
+// says nothing. The caller holds the one reference and frees it with ch_frame_free.
 ch_frame *sc_create_frame(sc_scheduler *s, const sc_pair *info, size_t n, ch_frame *up);
-// the run open (NULL: from outside)
 sc_run *sc_get_run(const sc_scheduler *s);
-// on scope o; it gone already, f runs now (its error, if it ran)
+// Registers a teardown on o. If o is already gone, f runs now and its error is returned.
 char *sc_register_teardown(sc_scheduler *s, sc_scope *o, char *(*f)(void *data), void *data);
-// children first, newest first, then o's teardowns, newest first. every teardown runs; the first
-// error is returned (a listener's thrown while it went first: sc_throw)
+// Tears down children first, newest first, then o's teardowns, newest first. Every teardown
+// runs; the first error is returned (a listener's thrown error, from sc_throw, comes first).
 char *sc_teardown(sc_scope *o);
-// a computer its owner's earlier run made (old), made again by the run going on: kept, back under
-// the owner, the newest, and due (a tick, told to the mark listeners as a new computer is, by the
-// run open). false: not old (made or
-// claimed in this run already, or no run of its owner since), gone, or a plain scope
+// Takes back a computer an earlier run of its owner made (it is old) in the run going on: it goes
+// back under the owner as the newest and becomes due (a tick, announced to mark listeners as a
+// new computer is, by the run open). False when it is not old (already made or claimed in this
+// run, or its owner has not run since), is gone, or is a plain scope.
 bool sc_claim(sc_computer *c);
-// sc_claim, but not made due: made again the same (a name's nominal match, as Adapton's), it runs
-// when what it read changes, not because its owner ran
+// Like sc_claim but not made due: it is made again the same (as a name's nominal match in
+// Adapton), so it runs when what it read changes, not because its owner ran.
 bool sc_claim_same(sc_computer *c);
-// sc_claim, and c takes def whole (its key not read) and that kind (effect: an effect, else a
-// compute; a compute made again as an effect, or the reverse). a new kind: its last result is let
-// go (its next is set or acted on, equal or not); become an effect, it is the writer of nothing;
-// become a compute, what its last act made is old at its next run, and the cleanups made in that
-// act are set aside with its own then. an act queued is dropped. false as sc_claim, and nothing
-// taken
+// Like sc_claim, and c takes def whole (its key is not read) and the new kind: an effect or a
+// compute, so one can be made again as the other. A new kind lets go of its last result, and its
+// next one is set or acted on whether equal or not. Becoming an effect makes it the writer of
+// nothing. Becoming a compute makes what its last act made old at its next run, and the cleanups
+// made in that act are set aside with its own. A queued act is dropped. False as sc_claim, and
+// nothing is taken.
 bool sc_claim_as(sc_computer *c, bool effect, sc_def def);
 
-// f once, untracked, with o open, the run open the same: a setup, a host's write, a call.
-// SC_DISPOSED (and f not called) when o is gone, else 0
+// Runs f once, untracked, with o and its frame open: a setup, a host's write, a call. Returns
+// SC_DISPOSED (and does not call f) when o is gone, else 0.
 const char *sc_run_with_scope(sc_scope *o, void (*f)(void *data), void *data);
-// sc_run_with_scope with frame open, not o's own: what is made is o's, a change made is frame's. NULL
-// frame: o's own
+// Like sc_run_with_scope but with frame open instead of o's own: what is made is o's, a change
+// made is frame's. A NULL frame means o's own.
 const char *sc_run_with(sc_scope *o, ch_frame *frame, void (*f)(void *data), void *data);
 
-// tracked, under the scope open; first runs at the next pulse (early: now). info: its own n pairs
-// (keys unique, none "run" or "mark"), before its run's, copied (not their keys or values: kept alive as long as it); NULL: n 0. NULL:
-// none open, or it is gone
+// Tracked, and made under the scope open; first runs at the next pulse (early effects run now).
+// info gives its own n pairs, before its run's. Keys must be unique and not "run" or "mark".
+// Pairs are copied but not their keys or values, which must live as long as it does. NULL when
+// none is open or it is gone.
 sc_computer *sc_create_computer(sc_scheduler *s, sc_def def, const sc_pair *info, size_t n);
 sc_computer *sc_create_effect(sc_scheduler *s, sc_def def, const sc_pair *info, size_t n);
 
-// the running computer tracked this key; outside a run, or in sc_run_with_scope, nothing
 sc_track_status sc_track(sc_scheduler *s, const void *key);
-// holds on a run past its end (a promise's settling may use it for a mark)
 sc_run *sc_run_ref(sc_run *run);
 void sc_run_unref(sc_run *run);
-// the computer a run is of, and its number
 sc_computer *sc_run_computer(const sc_run *run);
 unsigned sc_run_n(const sc_run *run);
-// a computer's latest run (good until it runs again; sc_run_ref to keep it); NULL when it has not
-// run, is gone, or o is a plain scope
+// A computer's latest run, good until it runs again (sc_run_ref to hold it). NULL when it has not
+// run, is gone, or o is a plain scope.
 sc_run *sc_latest(sc_scope *o);
 
-// these keys were marked: what tracked them is due, at the next tick. run: who made the change
-// (above); a compute's run becomes their writer. an effect is no one's writer: it writes in its
-// acts, after the round's runs. the tick it took
+// Marks these keys, so whatever tracked them is due at the next tick. run says who made the
+// change (see the header); a compute's run becomes the writer of the keys. An effect writes in
+// its acts, not its runs, so it is no one's writer. Returns the tick taken.
 uint64_t sc_mark(sc_scheduler *s, const void *const *keys, size_t count, sc_run *run);
 
-// rounds until nothing is due: the settled promises land, the due run by rank, the effects act.
-// a pulse in a pulse does nothing. what is thrown out leaves it (sc_escaped)
+// Runs rounds until nothing is due: settled promises land, due computers run by rank, effects act.
+// Does nothing when called inside a pulse. Anything thrown out is left for sc_escaped.
 void sc_pulse(sc_scheduler *s);
 
-// a listener's throw: held while what was going on finishes, then out (above). error is the
-// scheduler's
+// Holds an error thrown by a listener until what was going on finishes, then lets it out (see the
+// header). The error is the scheduler's.
 void sc_throw(sc_scheduler *s, char *error);
-// what was thrown out of the calls that leave it here since it was last taken: the first (the
-// rest let go), taken (the caller frees it); NULL: none
+// Takes what was thrown out of the calls that leave it: the first one, the rest let go. The
+// caller frees it. NULL when there is none.
 char *sc_escaped(sc_scheduler *s);
 
-// promises. one is the host's until sc_promise_free
 sc_promise *sc_promise_new(sc_scheduler *s);
-// settles it, once; the value is the scheduler's. at each run awaiting it, unless run again or
-// gone, the result lands at the next pulse (and the settle listeners are told); a run awaiting it
-// once settled, the same
+// Settles it, once; the scheduler takes the value. The result lands at the next pulse in each run
+// awaiting it (unless that run ran again or is gone), and the settle listeners are told.
 void sc_resolve(sc_promise *p, void *value);
-// settles it to pending
 void sc_resolve_pending(sc_promise *p);
 void sc_reject(sc_promise *p, char *error);
 void sc_promise_free(sc_promise *p);

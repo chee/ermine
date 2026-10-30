@@ -1,5 +1,5 @@
-// what comes out of calls that leave it for sc_escaped, two before it is read: the first, the rest
-// let go (as the reference's escaped ??=). exits 1 at the first thing that is not so
+// Checks what sc_escaped returns for calls that leave it: the first is read, the rest are let go.
+// Exits 1 at the first failure.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,14 +14,13 @@
 		} \
 	} while (0)
 
-// a value held once more than it has holders is never freed
 static op_value text = {.type = OP_STR, .str = "escaped", .bytes = 7, .ascii = 1};
 static const sc_pair info[] = {{"test", &text}};
 static sc_scheduler *s;
 
 static char *copy(const char *x) { return strcpy(malloc(strlen(x) + 1), x); }
 
-// each settling told throws: "first", then "second"
+// Each settling throws "first", then "second".
 static int told;
 static void settled(void *data) {
 	(void)data;

@@ -24,9 +24,8 @@ static char *copy(const char *s) {
 	return memcpy(grab(n), s, n);
 }
 
-// hashing
 
-// MurmurHash3's finalizer: its 64-bit one where a size_t is 64 bits, its 32-bit one where it is 32
+// MurmurHash3's finalizer, in its 64-bit form where size_t is 64 bits and 32-bit form otherwise.
 static size_t mix(size_t x) {
 #if SIZE_MAX > 0xffffffffu
 	x ^= x >> 33;
@@ -41,7 +40,6 @@ static size_t mix(size_t x) {
 #endif
 	return x;
 }
-// 64-bit FNV-1a, cut to a size_t at the end
 static size_t text(const char *s) {
 	uint64_t h = 1469598103934665603ULL;
 	for (; *s; s++) h = (h ^ (unsigned char)*s) * 1099511628211ULL;
@@ -53,7 +51,6 @@ static int same_key(pt_key a, pt_key b) {
 	return strcmp(a.string, b.string) == 0;
 }
 
-// a chained map; every record starts with its link
 typedef struct link {
 	struct link *chain;
 	size_t hash;
@@ -93,20 +90,16 @@ static void del(map *m, link *x) {
 	m->count--;
 }
 
-// one path step in a key's trie; at the top: up NULL, no key
+// One path step in a key's trie. The top step has no up and no key.
 struct pt_step {
 	link link;
 	pt_step *up;
 	op_key key;
-	// the kids, in the order made, and this one's siblings in up's
 	pt_step *first, *last, *next, *prev;
-	// the kids with number keys, by key
 	pt_step **nums;
 	size_t count, capacity;
 	pt_spot *spot;
-	// the keys spot at this path
 	pt_spot *keys;
-	// the here spot at this path
 	pt_spot *here;
 };
 struct pt_root {
@@ -118,9 +111,7 @@ struct pt_root {
 struct pt_paths {
 	map roots, steps;
 	pt_held held;
-	// every mark call takes the next tick
 	uint64_t tick;
-	// what the last call marked
 	pt_spot **out;
 	size_t count, capacity;
 };
@@ -164,7 +155,6 @@ static pt_step *kid(const pt_paths *p, const pt_step *up, const op_key *k) {
 	}
 	return NULL;
 }
-// the first of up's number kids with key >= a
 static size_t from(const pt_step *up, int64_t a) {
 	size_t lo = 0, hi = up->count;
 	while (lo < hi) {
@@ -185,7 +175,6 @@ static pt_step *make_kid(pt_paths *p, pt_step *up, const op_key *k) {
 	else up->first = s;
 	up->last = s;
 	if (k->type == OP_NUM_KEY) {
-		// in index order: at the end
 		size_t i = up->count && up->nums[up->count - 1]->key.n > k->n ? from(up, k->n) : up->count;
 		if (up->count == up->capacity) {
 			up->capacity = up->capacity ? up->capacity * 2 : 4;
@@ -203,7 +192,6 @@ static pt_spot *made(pt_paths *p, pt_root *r, pt_step *at, size_t length, int ke
 	pt_spot *s = grab(sizeof *s);
 	*s = (pt_spot){.source = r->source, .id = r->id, .length = length, .keys = keys, .here = here,
 		.step = at, .root = r};
-	// the keys, the steps' own: they outlive the spot
 	op_key *path = grab(length * sizeof *path);
 	for (pt_step *x = at; x != NULL && x->up != NULL; x = x->up) path[--length] = x->key;
 	s->path = path;
@@ -233,9 +221,9 @@ pt_spot *pt_change_of(pt_paths *p, pt_key source, pt_key id) {
 	return r->change;
 }
 
-// a place a patch changes: a take, a landing, or the patch itself. put: something lands there (an
-// unranged put is a replace, never a shift). n: positions in a ranged place, -1 when not known (a
-// value that is not a list: a string or typed array, a leaf)
+// A place a patch changes: a take, a landing, or the patch itself. put: something lands there
+// (an unranged put replaces, never shifts). n: positions in a ranged place, -1 when unknown (the
+// value is not a list).
 typedef struct {
 	const op_key *path;
 	size_t length;
@@ -245,7 +233,6 @@ typedef struct {
 	int64_t n;
 } place;
 
-// a move is its take and its landing; a landing holds the take's count, or 1
 static size_t places(const op_patch *p, place out[2]) {
 	const op_target *t = &p->place;
 	if (p->has_move) {
@@ -260,7 +247,6 @@ static size_t places(const op_patch *p, place out[2]) {
 	return 1;
 }
 
-// a list's removal at S+[k] shifts the kids of S from k on
 static int shifts(const place *q) {
 	return !q->ranged && !q->put && q->length > 0 && q->path[q->length - 1].type == OP_NUM_KEY;
 }
@@ -268,13 +254,13 @@ static int shifts(const place *q) {
 static int hit(const place *q, const op_key *path, size_t length) {
 	size_t n = q->length, i = 0;
 	while (i < n && i < length && same(&path[i], &q->path[i])) i++;
-	// the read is at Q or above it: the change is inside what it read
+	// The read is at Q or above it, so the change is inside what it read.
 	if (i == length) return 1;
-	// beside Q: only a list removal's shift reaches it, past Q's last step
+	// Beside Q: only a list removal's shift reaches it, past Q's last step.
 	if (i < n) {
 		return i == n - 1 && shifts(q) && path[i].type == OP_NUM_KEY && path[i].n > q->path[i].n;
 	}
-	// under Q: an unranged place replaced it; a ranged one reaches it by its index
+	// Under Q: an unranged place replaced it; a ranged one reaches it by index.
 	if (!q->ranged) return 1;
 	if (path[n].type != OP_NUM_KEY) return 0;
 	long k = path[n].n;
@@ -289,7 +275,7 @@ static int keyed(const place *q, const op_key *path, size_t length) {
 	return 1;
 }
 
-// whether a place reaches a here read of path: at it or above it, or under it into a list
+// Whether a place reaches a here read of path: at or above it, or under it into a list.
 static int placed(const place *q, const op_key *path, size_t length) {
 	if (q->length <= length) return hit(q, path, length);
 	if (q->path[length].type != OP_NUM_KEY) return 0;
@@ -318,14 +304,12 @@ static void give(pt_paths *p, pt_spot *s) {
 	}
 	p->out[p->count++] = s;
 }
-// every spot at or under at
 static void all(pt_paths *p, const pt_step *at) {
 	give(p, at->spot);
 	give(p, at->keys);
 	give(p, at->here);
 	for (pt_step *k = at->first; k != NULL; k = k->next) all(p, k);
 }
-// at's number kids from a on, up to b
 static void span(pt_paths *p, const pt_step *at, int64_t a, int64_t b, int open) {
 	for (size_t i = from(at, a); i < at->count; i++) {
 		if (!open && at->nums[i]->key.n >= b) return;
@@ -336,9 +320,7 @@ static void mark_place(pt_paths *p, pt_root *r, const place *q) {
 	const pt_step *at = &r->top;
 	for (size_t i = 0; i < q->length; i++) {
 		give(p, at->spot);
-		// a here read of a list the place goes into
 		if (q->path[i].type == OP_NUM_KEY) give(p, at->here);
-		// a keys read one step above an unranged place
 		if (i == q->length - 1 && !q->ranged) give(p, at->keys);
 		if (i == q->length - 1 && shifts(q)) span(p, at, q->path[i].n + 1, 0, 1);
 		const pt_step *next = kid(p, at, &q->path[i]);

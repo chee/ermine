@@ -1,23 +1,19 @@
-// The C scheduler (scheduler.h) on the line protocol of reactivity/typescript/scheduler_harness.ts
-// (conformance/c/harness.h has the loop). The programs are data, evaluated here as the reference
-// does (see its header). Values are op_values, held; keys are interned strings.
+// The C scheduler (scheduler.h) on the line protocol of reactivity/typescript/scheduler_harness.ts.
+// The programs are data, evaluated here as the reference does. Values are op_values, held; keys are
+// interned strings.
 //
-// async: {"wait":[p]} makes a promise with sc_promise_new and names it p; the run returns it
-// (SC_AWAIT); {"await":p} returns that one again, settled or not (kept to the end). {"wait":[p,e]} also keeps e and the run, and resolve evaluates e through the run
-// first (the read is the global one: after the await it counts for nothing), then settles the promise with its value or
-// error, as a then does. the rest (the result lands at the next pulse) is the scheduler's.
+// {"wait":[p]} makes a promise p that the run returns (SC_AWAIT); {"await":p} returns it again.
+// {"wait":[p,e]} also holds e and the run; resolve evaluates e through the run, then settles the
+// promise with its value or error, as a then does.
 //
-// the run, as the reference's: a computer's program takes sc_get_run at its start and keeps
-// it in its context, so a write in a run (after an await too) names the run; in a set, act,
-// teardown or run(), the computer's latest run (sc_latest); else none; "open": the run open
-// (sc_get_run); a computation's name: its latest run (sc_latest). a scope's info is the
-// request's own object, as pairs; every line is retained to the end, so what points into one stays good. a
-// pulse past ENDLESS moments is left as the reference's is: every moment after throws (sc_throw),
-// and what is thrown out leaves the pulse (sc_escaped): it answers {"error":"endless"}. what the
-// scheduler throws out of a call (sc_escaped) is that request's error, or, in a program, thrown
-// there, as the reference's throw is; but a making's (sc_create_computer, sc_create_effect) and a
-// settling's (sc_resolve, sc_reject) are carried: the answer of the pulse going on, else the next,
-// before its own, as the reference's scheduler holds them (it cannot throw them)
+// A computer's program takes sc_get_run at its start and holds it, so a write in a run (even after
+// an await) names the run. In a set, act, teardown or run() the computer's latest run is used;
+// "open" is the run open.
+//
+// A pulse past ENDLESS moments is left as the reference's is: every moment after throws (sc_throw)
+// and the pulse answers {"error":"endless"}. What the scheduler throws out of a call (sc_escaped)
+// is that request's error, or is thrown in the program. A making's or settling's is carried to the
+// answer of the pulse going on, else the next.
 #define _POSIX_C_SOURCE 200809L
 #include <math.h>
 #include <stdarg.h>
@@ -29,36 +25,24 @@
 #include "scheduler.h"
 #include "../../conformance/c/harness.h"
 
-// the recorder: the scheduler's on... listeners as one list, in order, what happened (as
-// typescript/scheduler_harness.ts's trace). due: a computer made due, by the run of the mark (by: its
-// computer). a run's reads are kept while this listens; the sc_trace is the caller's
+// The recorder: the scheduler's listeners as one ordered list of what happened (like the trace in
+// scheduler_harness.ts). due: a computer made due by the run of the mark (by is its computer).
 typedef enum { SC_T_DUE, SC_T_STARTS, SC_T_ENDS, SC_T_ACTS } sc_told_kind;
 
-// one thing that happened, good for the call
 typedef struct sc_told {
 	sc_told_kind kind;
 	sc_computer *c;
-	// SC_T_DUE; by: the computer of the run that made the change, NULL when not told
 	uint64_t tick;
 	sc_computer *by;
-	// SC_T_STARTS, SC_T_ENDS, SC_T_ACTS
 	unsigned run;
-	// SC_T_STARTS
 	int rank;
-	// SC_T_ENDS
 	sc_ended ended;
-	// -1: none, else 0 or 1
 	int equal;
-	// SC_T_ENDS, SC_T_ACTS: NULL for none
 	const char *error;
-	// SC_T_ACTS: an early effect's act
 	bool early;
-	// SC_T_ENDS stopped: the computer it waits after
 	sc_computer *waits;
-	// SC_T_ENDS looping: the computers on the loop, in the order made
 	sc_computer *const *through;
 	size_t nthrough;
-	// SC_T_ENDS: every key the run tracked, in order
 	const void *const *reads;
 	size_t nreads;
 } sc_told;
@@ -104,7 +88,6 @@ static inline void sc_trace_effect(sc_computer *c, unsigned n, const char *error
 		t->data);
 }
 
-// f told each, in order
 static inline void sc_trace_start(sc_scheduler *s, sc_trace *t, void (*f)(const sc_told *, void *),
 	void *data) {
 	t->f = f;
@@ -137,16 +120,13 @@ static char *formatString(const char *format, ...) {
 	va_end(args);
 	return out;
 }
-// the string a value is; NULL when it is none
 static const char *text(const op_value *v) { return v && v->type == OP_STR ? v->str : NULL; }
 static bool is(const op_value *v, op_type t) { return v && v->type == t; }
 static op_value *integer(double n) { return op_num(n); }
 
 static sc_scheduler *sch;
 
-// the store, names ------------------------------------------------------------------------------
 
-// the value kept at a key; the key's pointer is the scheduler's key
 typedef struct entry {
 	char *key;
 	op_value *value;
@@ -164,8 +144,8 @@ static size_t nstore, capstore;
 		(v)[(n)++] = (x); \
 	} while (0)
 
-// strings to what they name: open addressing, never more than half full. a key is kept as given:
-// whoever gave it keeps it alive
+// Strings to what they name: open addressing, never more than half full. Keys are held as given;
+// whoever gave one keeps it alive.
 typedef struct smap {
 	const char **keys;
 	void **vals;
@@ -176,7 +156,6 @@ static size_t shash(const char *k) {
 	for (; *k; k++) h = (h ^ (unsigned char)*k) * 1099511628211u;
 	return h;
 }
-// k's slot: where it is, or where it would go
 static size_t sslot(const smap *m, const char *k) {
 	size_t i = shash(k) & (m->cap - 1);
 	while (m->keys[i] != NULL && strcmp(m->keys[i], k) != 0) i = (i + 1) & (m->cap - 1);
@@ -212,7 +191,6 @@ static void sfree(smap *m) {
 	*m = (smap){0};
 }
 
-// the store's entries by key
 static smap entries;
 
 static entry *entry_of(const char *key) {
@@ -235,16 +213,13 @@ static void keep(const char *key, op_value *v) {
 static sc_scope **named;
 static size_t nnamed, capnamed;
 
-// each name's latest scope
 static smap names;
 
-// the latest named so
 static sc_scope *scope_named(const char *name) { return sget(&names, name); }
 
-// an error when the name is taken (by one not torn down and not old: else taken over): asked
-// before anything is made, so a refused one makes nothing
-// the names of the computers being made: taken till named (what an early one's run makes under
-// the same name is refused, so a name is never held twice: the reference's)
+// An error when the name is taken (by a scope not torn down and not old, else it is taken over).
+// Asked before anything is made, so a refused name makes nothing. The names of computers being made
+// are taken until named, so a name is never held twice, as in the reference.
 static const char **naming;
 static size_t nnaming, capnaming;
 
@@ -255,7 +230,6 @@ static char *taken(const char *name) {
 	sc_scope *was = scope_named(n);
 	return was && sc_scope_alive(was) && !sc_scope_old(was) ? formatString("name taken: %s", n) : NULL;
 }
-// names the scope
 static char *name_it(sc_scope *o, const char *name) {
 	char *n = copyString(name ? name : "");
 	sc_scope_set(o, n);
@@ -263,9 +237,9 @@ static char *name_it(sc_scope *o, const char *name) {
 	sput(&names, n, o);
 	return NULL;
 }
-// a scope freed (a plain one let go by every holder: the release op): its name forgotten, the
-// string kept to the end (the names map may still point at it). computers are held by the harness
-// too (their moments name them), so never freed before the end
+// A scope freed (a plain one let go by every holder: the release op): its name is forgotten, but
+// the string stays until the end since the names map may still point at it. The harness holds
+// computers too, so they are never freed before the end.
 static char **unnamed;
 static size_t nunnamed, capunnamed;
 static void freed(sc_scope *o, void *data) {
@@ -284,9 +258,9 @@ static void freed(sc_scope *o, void *data) {
 static op_value **logged;
 static size_t nlogged, caplogged;
 
-// moments, as told (named when asked: a new computer is due before it has a name). returns: a
-// run's body returned (sc_on_run_return; m.c and m.run only), not trace's, shown when asked.
-// pulsed: a pulse ended (sc_on_after_pulse; nothing else set), shown when asked
+// Moments, as told. named is filled when asked, since a new computer is due before it has a name.
+// returns: a run's body returned (sc_on_run_return; m.c and m.run only). pulsed: a pulse ended
+// (sc_on_after_pulse).
 typedef struct moment {
 	sc_told m;
 	bool returns, pulsed;
@@ -297,17 +271,17 @@ typedef struct moment {
 static moment *moments;
 static size_t nmoments, capmoments;
 
-// a pulse past this many moments is endless
 #define ENDLESS 10000
 static size_t told;
 static bool pulsing;
 
-// a listener armed to throw, once: which, at what (a computation's name, or a key), its message
+// A listener armed to throw, once: which one, at what (a computation's name or a key), and its
+// message.
 static char *armed_on, *armed_at, *armed_error;
 static const char *const listeners[] = {"mark", "starts", "returns", "ends", "acts", "forgotten", "started", "settles", "pulsed"};
 
-// what a listener threw in a making or a settling (sc_escaped after it): kept, the first, to be
-// the answer of the pulse going on, else the next, as the reference's scheduler holds it
+// What a listener threw in a making or a settling (sc_escaped after it): the first, held to be the
+// answer of the pulse going on, else the next.
 static char *carried;
 static void carry(char *e) {
 	if (e == NULL) return;
@@ -321,7 +295,6 @@ static void disarm(void) {
 	free(armed_error);
 	armed_on = armed_at = armed_error = NULL;
 }
-// the armed listener on, told of at (NULL: of nothing it could name)
 static void fire(const char *on, const char *at) {
 	if (armed_on == NULL || strcmp(armed_on, on) != 0) return;
 	if (armed_at != NULL && (at == NULL || strcmp(armed_at, at) != 0)) return;
@@ -353,7 +326,6 @@ static void told_moment(const sc_told *m, void *data) {
 	PUSH(moments, nmoments, capmoments, x);
 }
 
-// a run's body returned: a returns moment, not counted toward ENDLESS
 static void run_returned(sc_computer *c, unsigned n, const void *value, void *data) {
 	(void)value, (void)data;
 	fire("returns", sc_scope_user(c));
@@ -361,7 +333,6 @@ static void run_returned(sc_computer *c, unsigned n, const void *value, void *da
 	PUSH(moments, nmoments, capmoments, x);
 }
 
-// the keys untracked since last asked
 static op_value **forgotten;
 static size_t nforgotten, capforgotten;
 
@@ -371,7 +342,6 @@ static void untrack(const void *key, void *data) {
 	fire("forgotten", key);
 }
 
-// the keys that gained their first tracker since last asked
 static op_value **started;
 static size_t nstarted, capstarted;
 
@@ -387,7 +357,6 @@ static void settled(void *data) {
 	fire("settles", NULL);
 }
 
-// a pulse ended: a pulsed moment, not counted toward ENDLESS
 static void pulsed(void *data) {
 	(void)data;
 	moment x = {.pulsed = true};
@@ -395,7 +364,6 @@ static void pulsed(void *data) {
 	fire("pulsed", NULL);
 }
 
-// the tick of the latest mark (each mark and each new computer takes the next)
 static uint64_t latest_tick;
 static sc_trace trace;
 
@@ -419,9 +387,7 @@ static void keep_value(void *v, void *data) {
 	op_ref(v);
 }
 
-// equality --------------------------------------------------------------------------------------
 
-// Object.is: scalars by value, the rest by identity
 static bool object_is(const void *a, const void *b, void *data) {
 	(void)data;
 	if (a == b) return true;
@@ -448,9 +414,9 @@ static bool json_equal(const void *a, const void *b, void *data) {
 	return same_json(a, b);
 }
 
-// programs --------------------------------------------------------------------------------------
 
-// what an expression is evaluated in: the run (sc_get_run at its start), the computer, an act's values
+// What an expression is evaluated in: the run (sc_get_run at its start), the computer, an act's
+// values.
 typedef struct ctx {
 	sc_run *run; // the run kept
 	sc_scope *self;
@@ -458,14 +424,11 @@ typedef struct ctx {
 	const op_value *previous;
 } ctx;
 
-// V_THROW, V_STOP and V_PENDS (PENDING thrown) end the evaluation, as a throw does
 typedef enum { V_OK, V_PENDING, V_PROMISE, V_THROW, V_STOP, V_PENDS } vkind;
 #define ENDS(v) ((v).k == V_THROW || (v).k == V_STOP || (v).k == V_PENDS)
 typedef struct val {
 	vkind k;
-	// V_OK: held
 	op_value *j;
-	// V_THROW: owned
 	char *err;
 	sc_promise *p;
 } val;
@@ -477,7 +440,6 @@ static void release(val v) {
 	free(v.err);
 }
 
-// a promise named by a program
 typedef struct waiting {
 	char *name;
 	sc_promise *p;
@@ -486,10 +448,8 @@ typedef struct waiting {
 } waiting;
 static waiting **waits;
 static size_t nwaits, capwaits;
-// promises replaced under their name: never settled, freed at the end
 static waiting **old;
 static size_t nold, capold;
-// promises settled: kept for await, freed at the end
 static waiting **done;
 static size_t ndone, capdone;
 
@@ -505,7 +465,6 @@ static waiting *wait_for(const char *name) {
 		if (strcmp(waits[i]->name, name) == 0) return waits[i];
 	return NULL;
 }
-// the latest promise named so, settled or not
 static waiting *made_as(const char *name) {
 	waiting *w = wait_for(name);
 	for (size_t i = ndone; w == NULL && i > 0; i--)
@@ -513,7 +472,6 @@ static waiting *made_as(const char *name) {
 	return w;
 }
 
-// closures for cleanups: kept to the end
 typedef struct closure {
 	const op_value *e;
 	ctx c;
@@ -521,7 +479,7 @@ typedef struct closure {
 static closure **closures;
 static size_t nclosures, capclosures;
 
-// a promise named name (owned), then evaluated after it: replacing one of that name
+// Makes a promise named name (owned), then evaluates after it, replacing one of that name.
 static waiting *make_wait(char *name, const op_value *then, const ctx *c) {
 	waiting *w = allocate(sizeof *w);
 	w->name = name;
@@ -543,15 +501,12 @@ static waiting *make_wait(char *name, const op_value *then, const ctx *c) {
 }
 
 static val evaluate(const op_value *e, const ctx *c);
-// the effect form
 static val made_in(const char *form, const op_value *a0, const op_value *a1, const op_value *a2,
 	const op_value *arg);
 
-// the pair lists made from requests: kept to the end
 static sc_pair **infos;
 static size_t ninfos, capinfos;
 
-// a request's info object as pairs, its own keys and values (unique: a map's); NULL, *n 0: none
 static const sc_pair *info_of(const op_value *map, size_t *n) {
 	*n = 0;
 	if (!is(map, OP_MAP) || map->count == 0) return NULL;
@@ -561,7 +516,6 @@ static const sc_pair *info_of(const op_value *map, size_t *n) {
 	return out;
 }
 
-// an info as an object: its values the request's, or numbers the scheduler made
 static op_value *object_of(const ch_frame *frame) {
 	op_value *out = op_map();
 	for (size_t j = 0; j < frame->n; j++) {
@@ -571,7 +525,7 @@ static op_value *object_of(const ch_frame *frame) {
 	return out;
 }
 
-// what is open: {scope, info, writer?}, by the computer of the run; nothing: null
+// What is open: {scope, info, writer?}, by the computer of the run; null for nothing.
 static op_value *current(void) {
 	sc_scope *open = sc_get_current_scope(sch);
 	if (open == NULL) return op_null();
@@ -585,14 +539,12 @@ static op_value *current(void) {
 	return out;
 }
 
-// why nothing could be made under parent (NULL: the scope open): none open, it is gone, or no pairs
 static char *unmade(const sc_scope *parent) {
 	if (parent == NULL) parent = sc_get_current_scope(sch);
 	if (parent == NULL) return copyString(SC_UNSCOPED);
 	return copyString(sc_scope_alive(parent) ? SC_EMPTY : SC_DISPOSED);
 }
 
-// who a change in this code is by: the run, else the computer's latest
 static sc_run *writer_of(const ctx *c) {
 	if (c->run) return c->run;
 	return c->self ? sc_latest(c->self) : NULL;
@@ -607,7 +559,6 @@ static double num(const op_value *j) {
 	val var = evaluate((expr), c); \
 	if (ENDS(var)) return var
 
-// e evaluated to a string, copied; NULL when it is not one
 static val string_of(const op_value *e, const ctx *c, char **out) {
 	*out = NULL;
 	EVAL(v, e);
@@ -621,7 +572,6 @@ struct inrun {
 	const ctx *c;
 	val v;
 };
-// a teardown registered on a scope, with it open
 struct incleanup {
 	sc_scope *o;
 	char *(*f)(void *);
@@ -639,7 +589,6 @@ static void in_run(void *data) {
 	r->v = evaluate(r->e, &inner);
 }
 
-// a value's error, if it threw ("pending" for PENDING); the rest let go
 static char *error_of(val v) {
 	char *e = v.k == V_THROW ? v.err : v.k == V_PENDS ? copyString("pending") : NULL;
 	if (v.k == V_THROW) v.err = NULL;
@@ -659,7 +608,6 @@ static closure *closure_of(const op_value *e, const ctx *c) {
 	k->e = e;
 	k->c = *c;
 	k->c.run = NULL;
-	// held: a value given to the run or act may be let go before the cleanup runs
 	if (k->c.value) op_ref((op_value *)k->c.value);
 	if (k->c.previous) op_ref((op_value *)k->c.previous);
 	PUSH(closures, nclosures, capclosures, k);
@@ -708,7 +656,6 @@ static val evaluate(const op_value *e, const ctx *c) {
 			EVAL(v, arg->items[i]);
 			double x = num(v.j);
 			release(v);
-			// numbers only: null is 0, anything else an error; mod by 0 an error
 			if (isnan(x)) return thrown(copyString("not a number"));
 			if (sum) n += x;
 			else if (i == 0) first = x;
@@ -760,13 +707,11 @@ static val evaluate(const op_value *e, const ctx *c) {
 			release(v);
 			return thrown(copyString("write to a non-string"));
 		}
-		// the writer first: one not there writes nothing
 		const char *said = text(a2);
 		sc_run *writer = NULL;
 		if (a2 == NULL) writer = writer_of(c);
 		else if (said && strcmp(said, "open") == 0) writer = sc_get_run(sch);
 		else if (said) {
-			// a computation by name: its latest run (none yet: from outside)
 			sc_scope *o = scope_named(said);
 			if (o == NULL) {
 				release(v);
@@ -853,7 +798,6 @@ static val evaluate(const op_value *e, const ctx *c) {
 	}
 	if (strcmp(form, "current") == 0) return ok(current());
 	if (strcmp(form, "cleanup") == 0) {
-		// on the scope open when it is the one named (or none is), else with that one open
 		const char *name = text(a0);
 		sc_scope *o = name ? scope_named(name) : NULL;
 		if (o == NULL && !is(a0, OP_NULL)) return thrown(formatString("no scope %s", name ? name : "null"));
@@ -881,22 +825,18 @@ static val evaluate(const op_value *e, const ctx *c) {
 	return thrown(formatString("unknown form %s", form));
 }
 
-// a computer's program
 
 typedef struct prog {
 	const op_value *f;
 	const op_value *act;
-	// a compute's set: e evaluated after its result is kept, given it as value
 	const op_value *set;
 	const char *to;
 	sc_computer *self;
-	// made as an effect, or claimed as one
 	bool effect;
 } prog;
 static prog **progs;
 static size_t nprogs, capprogs;
 
-// itself: an early effect runs and acts before it is given back, the scope open then
 static sc_scope *self_of(prog *p) { return p->self ? p->self : sc_get_current_scope(sch); }
 
 static sc_out out_of(val v) {
@@ -908,15 +848,14 @@ static sc_out out_of(val v) {
 	}
 }
 
-// {"steps":[e..]}: a generator compute's body. each in order; {"yield":p} pauses the run on a
-// promise named p (made as wait makes it), and what it settles with is taken; the last one's value
-// is the result
+// {"steps":[e..]}: a generator compute's body. Each runs in order; {"yield":p} pauses the run on a
+// promise named p (made as wait makes it) and takes what it settles with. The last value is the
+// result.
 typedef struct stepper {
 	const op_value *list;
 	size_t i;
 	prog *p;
 	ctx c;
-	// held
 	op_value *last;
 } stepper;
 
@@ -1005,9 +944,7 @@ static char *program_effect(void *value, void *previous, void *data) {
 	return error_of(evaluate(p->act, &c));
 }
 
-// requests --------------------------------------------------------------------------------------
 
-// the lines asked, kept to the end: the programs and pairs point into them
 static hh_line **lines;
 static size_t nlines, caplines;
 
@@ -1034,7 +971,6 @@ static const char *ended_name(sc_ended e) {
 }
 static op_value *name_json(const sc_computer *c) { return op_str((const char *)sc_scope_user(c)); }
 
-// reads: an ends moment with its reads, the keys (the store's strings)
 static op_value *moment_json(const moment *x, bool reads) {
 	const sc_told *m = &x->m;
 	op_value *o = op_map();
@@ -1093,7 +1029,6 @@ static sc_scope *need_scope(const op_value *name, char **bad) {
 	return o;
 }
 
-// a computer made with a scope open
 struct making {
 	sc_def def;
 	bool effect;
@@ -1147,7 +1082,6 @@ static op_value *make_computer(const op_value *r, bool effect) {
 	return op_map();
 }
 
-// the computation named, old under the scope open: its program, else NULL
 static prog *old_here(const char *name) {
 	sc_scope *o = scope_named(name);
 	if (o == NULL || !sc_scope_old(o) || sc_scope_parent(o) != sc_get_current_scope(sch)) return NULL;
@@ -1156,9 +1090,9 @@ static prog *old_here(const char *name) {
 	return NULL;
 }
 
-// {"effect":[c,f,act,early?]}: an effect under the scope open; {"compute":[c,f,to?]}: a compute,
-// its results kept at to. c old under the scope open: claimed, given the new code. c taken by one
-// torn down or old elsewhere: taken over
+// {"effect":[c,f,act,early?]}: an effect under the scope open. {"compute":[c,f,to?]}: a compute
+// whose results land at to. If c is old under the scope open it is claimed and given the new code.
+// If c is taken by one torn down or old elsewhere, it is taken over.
 static val made_in(const char *form, const op_value *a0, const op_value *a1, const op_value *a2,
 	const op_value *arg) {
 	const char *name = text(a0);
@@ -1171,7 +1105,6 @@ static val made_in(const char *form, const op_value *a0, const op_value *a1, con
 		if (old->effect == effect) {
 			sc_claim(old->self);
 		} else {
-			// made again as the other kind: it takes that kind too
 			sc_def def = {.f = program_f, .equal = object_is, .data = old};
 			if (effect) {
 				def.effect = program_effect;
@@ -1206,7 +1139,6 @@ static val made_in(const char *form, const op_value *a0, const op_value *a1, con
 		p->to = to ? entry_of(to)->key : NULL;
 		def.set = program_set;
 	}
-	// an early one runs and acts before it is given back: itself, the scope open then (self_of)
 	PUSH(naming, nnaming, capnaming, name);
 	sc_computer *c = effect ? sc_create_effect(sch, def, NULL, 0) : sc_create_computer(sch, def, NULL, 0);
 	nnaming--;
@@ -1282,7 +1214,6 @@ static op_value *answer(const op_value *r) {
 		if (why) return answer_error(copyString(why));
 		if (in.v.k == V_THROW) return answer_error(in.v.err);
 		if (in.v.k == V_PENDS) return answer_error(copyString("pending"));
-		// PENDING or a promise: no value
 		if (in.v.k == V_PENDING || in.v.k == V_PROMISE) {
 			release(in.v);
 			return op_map();
@@ -1330,7 +1261,6 @@ static op_value *answer(const op_value *r) {
 		sc_pulse(sch);
 		pulsing = false;
 		char *out = sc_escaped(sch);
-		// what was carried for it first, then its own
 		if (carried) {
 			free(out);
 			out = carried;
