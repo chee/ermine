@@ -72,11 +72,17 @@ cbor-lines = encoding/c/cbor-harness
 cbor-lines_test = HARNESS encoding/typescript/cbor_fuzz_test.ts
 LIBS += cbor-lines
 # crow (crow): a root's writes change in place what its own earlier writes copied, until someone else has the value
-crow_src = $(harness_src) conformance/c/protocol_harness.c crow/c/crow.c places/c/crowify.c crow/c/crow_harness.c graph/c/node.c changeable/c/apply.c changeable/c/invert.c reactivity/c/scheduler.c reactivity/c/order.c reactivity/c/rank.c reactivity/c/causes.c changeable/c/ptrmap.c reactivity/c/tracker.c
+crow_src = $(harness_src) conformance/c/protocol_harness.c crow/c/crow.c crow/c/crow_harness.c graph/c/node.c changeable/c/apply.c changeable/c/invert.c changeable/c/ptrmap.c
 crow = crow/c/crow-harness
 crow_suite = crow
 crow_tests = $(wildcard crow/typescript/crow_harness_test.ts)
 LIBS += crow
+# crowify (places): crow through a scheduler's runs and an entry's writes
+crowify_src = $(harness_src) conformance/c/protocol_harness.c crow/c/crow.c places/c/crowify.c places/c/crowify_harness.c graph/c/node.c changeable/c/apply.c changeable/c/invert.c reactivity/c/scheduler.c reactivity/c/order.c reactivity/c/rank.c reactivity/c/causes.c changeable/c/ptrmap.c reactivity/c/tracker.c
+crowify = places/c/crowify-harness
+crowify_suite = crowify
+crowify_tests = $(wildcard places/typescript/crowify_harness_test.ts)
+LIBS += crowify
 # ermine (system): the process api and createErmine, over core's scheduler, table, places, guard, protect and status, ermine's processes (rows, start, scopes), and runs. five files (ermine.h says each's job), the last the line protocol; no places or world harness
 system_src = $(filter-out places/c/places_harness.c places/c/world_harness.c,$(places_src)) processes/c/guard.c processes/c/status.c protect/c/protect.c processes/c/processes.c processes/c/scopes.c processes/c/start.c processes/c/runs.c system/c/nodes.c system/c/computers.c system/c/actions.c system/c/host.c system/c/ermine_harness.c
 system = system/c/ermine-harness
@@ -283,7 +289,7 @@ test-check: $(addprefix test-check-,$(TESTED))
 test-leaks: $(addprefix test-leaks-,$(TESTED))
 
 # benches, -O2, not part of all
-BENCHES = reactivity/c/paths-bench changeable/c/squish-bench changeable/c/apply-bench crow/c/crow-bench
+BENCHES = reactivity/c/paths-bench changeable/c/squish-bench changeable/c/apply-bench places/c/crowify-bench
 bench: $(BENCHES)
 reactivity/c/paths-bench: reactivity/c/paths.c changeable/c/value.c reactivity/c/paths_bench.c
 	$(CC) $(CFLAGS) -o $@ $^ -lm
@@ -291,7 +297,7 @@ changeable/c/squish-bench: changeable/c/squish.c changeable/c/squish_bench.c
 	$(CC) $(CFLAGS) -o $@ $^ -lm
 changeable/c/apply-bench: changeable/c/apply.c changeable/c/value.c changeable/c/apply_bench.c
 	$(CC) $(CFLAGS) -o $@ $^ -lm
-crow/c/crow-bench: changeable/c/frame.c graph/c/node.c graph/c/update.c changeable/c/value.c changeable/c/apply.c changeable/c/invert.c crow/c/crow.c places/c/crowify.c crow/c/crow_bench.c reactivity/c/scheduler.c reactivity/c/order.c reactivity/c/rank.c reactivity/c/causes.c changeable/c/ptrmap.c reactivity/c/tracker.c
+places/c/crowify-bench: changeable/c/frame.c graph/c/node.c graph/c/update.c changeable/c/value.c changeable/c/apply.c changeable/c/invert.c crow/c/crow.c places/c/crowify.c places/c/crowify_bench.c reactivity/c/scheduler.c reactivity/c/order.c reactivity/c/rank.c reactivity/c/causes.c changeable/c/ptrmap.c reactivity/c/tracker.c
 	$(CC) $(CFLAGS) -o $@ $^ -lm
 
 clean:

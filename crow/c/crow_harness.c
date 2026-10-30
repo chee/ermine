@@ -1,5 +1,5 @@
 // the C crow (crow.h) on the line protocol of typescript/crow_harness.ts, which documents
-// it (conformance/c/harness.h has the loop). one entry and its crow last for the process, and
+// it (conformance/c/harness.h has the loop). one root and its crow last for the process, and
 // what was held and marked: each kept alive (op_ref) and compared by pointer
 #define _POSIX_C_SOURCE 200809L // strdup
 #include <stdio.h>
@@ -8,10 +8,14 @@
 
 #include "../../conformance/c/protocol_harness.h"
 #include "crow.h"
-#include "../../places/c/crowify.h"
 
 static cr_crow *crow;
-static nd_entry *entry;
+// the root crow writes through (any pointer: its address), what it holds, and the undo of the last
+// write that landed
+static char root;
+static op_value *root_value;
+static op_undo last_undo;
+static int has_undo;
 // a name and what it stands for (NULL: nothing)
 typedef struct {
 	char *name;
@@ -22,81 +26,6 @@ typedef struct {
 	size_t count, capacity;
 } names;
 static names held, marked;
-// the undo the entry's last change refers to as its patches, when an unwrite wrote it: kept
-// alive while the entry refers to it
-static op_undo spare;
-
-static void drop(void *value, void *data) {
-	(void)data;
-	op_free(value);
-}
-static struct {
-	sc_scheduler *s;
-	op_value *k;
-	// keep's writes (NULL: none), and whether the run writes them (else its set)
-	const op_value *writes;
-	int by_run;
-} run;
-static ch_header change(void);
-// keep's writes written to the entry, by the set or the run; refused: nothing written
-static void writes(void) {
-	if (run.writes == NULL || run.writes->type != OP_LIST) return;
-	size_t n = run.writes->count;
-	op_patch *patches = hh_take((n + 1) * sizeof *patches);
-	for (size_t i = 0; i < n; i++) hh_patch(run.writes->items[i], &patches[i]);
-	pl_update_entry(crow, entry, patches, n, change(), NULL);
-}
-// the key a computation tracks; handed (keeping's) names what is at path by it
-static char tracked;
-static const op_value *handed_by(const void *key, void *ctx) { return key == &tracked ? ctx : NULL; }
-// what a computer returns, one reference given to the scheduler
-static sc_out compute(void *previous, void *data) {
-	(void)previous;
-	sc_track(run.s, &tracked);
-	if (run.by_run) writes();
-	return (sc_out){.kind = SC_VALUE, .value = op_ref(data)};
-}
-static char *set_nothing(void *value, void *data) {
-	(void)value, (void)data;
-	if (!run.by_run) writes();
-	return NULL;
-}
-static char *set_fails(void *value, void *data) {
-	(void)value, (void)data;
-	if (!run.by_run) writes();
-	return strdup("set failed");
-}
-static char *act_nothing(void *value, void *previous, void *data) {
-	(void)value, (void)previous, (void)data;
-	return NULL;
-}
-static const char *mode;
-static void make_computer(void *data) {
-	(void)data;
-	if (strcmp(mode, "effect") == 0) sc_create_effect(run.s, (sc_def){.f = compute, .effect = act_nothing, .data = run.k}, NULL, 0);
-	else if (strcmp(mode, "fails") == 0) sc_create_computer(run.s, (sc_def){.f = compute, .set = set_fails, .data = run.k}, NULL, 0);
-	else sc_create_computer(run.s, (sc_def){.f = compute, .set = set_nothing, .data = run.k}, NULL, 0);
-}
-// k kept as a computation's result at its run's end: a scheduler wired by pl_crowify, a computer
-// returning k (mode: "compute", "fails": its set fails, "effect": an effect), a pulse
-static void keep_through_scheduler(op_value *k, const char *how, const op_value *handed) {
-	mode = how;
-	sc_scheduler *s = sc_new((sc_options){.drop = drop});
-	pl_crowified *wired = pl_crowify(s, crow, handed != NULL ? handed_by : NULL, (void *)handed);
-	op_value *actor = op_str("test");
-	sc_pair info = {"actor", actor};
-	run.s = s, run.k = k;
-	sc_run_with_scope(sc_create_root_scope(s, &info, 1), make_computer, NULL);
-	op_free(actor);
-	sc_pulse(s);
-	pl_crowify_stop(wired);
-	sc_free(s);
-}
-
-static ch_header change(void) {
-	return (ch_header){.has_time = 1, .time = 1, .actor = "test"};
-}
-
 static void keep(names *n, const char *name, op_value *value) {
 	for (size_t i = 0; i < n->count; i++) {
 		if (strcmp(n->items[i].name, name) != 0) continue;
@@ -123,17 +52,16 @@ static void forget(names *n) {
 }
 
 static void reset(void) {
-	if (entry != NULL) nd_free_entry(entry);
+	op_free(root_value);
 	cr_free(crow);
-	op_undo_free(&spare);
+	op_undo_free(&last_undo);
 	forget(&held);
 	forget(&marked);
-	entry = NULL;
+	root_value = NULL, last_undo = (op_undo){0}, has_undo = 0;
 }
 
 void hh_start(void) {
 	crow = cr_new();
-	entry = nd_make_entry(NULL, &(ch_header){.has_time = 1, .time = 1, .actor = "test"});
 }
 
 void hh_finish(void) {
@@ -180,7 +108,8 @@ static void put_value(FILE *out, const op_value *v) {
 	putc('}', out);
 }
 
-// crow's update of the patches: the undo, or the error and the patch
+// crow's update of the patches: the undo, or the error and the patch. a landed write's undo is
+// the root's from then (the last one's let go of)
 static void write(FILE *out, const op_patch *patches, size_t n, const char *hold) {
 	if (hold != NULL) {
 		op_value *list = op_list();
@@ -189,15 +118,21 @@ static void write(FILE *out, const op_patch *patches, size_t n, const char *hold
 		keep(&held, hold, list);
 	}
 	size_t failed = 0;
-	int code = pl_update_entry(crow, entry, patches, n, change(), &failed);
+	op_value *after;
+	op_undo made = {0};
+	int code = cr_update(crow, &root, root_value, patches, n, &after, &made, &failed);
 	if (code != OP_OK) {
 		fprintf(out, "{\"error\":\"%s\",\"patch\":%zu}", op_code_name(code), failed);
 		return;
 	}
+	op_free(root_value);
+	root_value = after;
+	op_undo_free(&last_undo);
+	last_undo = made, has_undo = 1;
 	fputs("{\"undo\":[", out);
-	for (size_t i = 0; i < entry->undo.n; i++) {
+	for (size_t i = 0; i < last_undo.n; i++) {
 		if (i) putc(',', out);
-		hh_put_patch(out, &entry->undo.patches[i]);
+		hh_put_patch(out, &last_undo.patches[i]);
 	}
 	fputs("]}", out);
 }
@@ -210,7 +145,7 @@ void hh_answer(const op_value *r, FILE *out) {
 	} else if (strcmp(op, "start") == 0) {
 		reset();
 		crow = cr_new();
-		entry = nd_make_entry(op_get(r, "value"), &(ch_header){.has_time = 1, .time = 1, .actor = "test"});
+		root_value = op_ref((op_value *)op_get(r, "value"));
 		fputs("{}", out);
 	} else if (strcmp(op, "write") == 0) {
 		const op_value *list = op_get(r, "patches");
@@ -231,42 +166,33 @@ void hh_answer(const op_value *r, FILE *out) {
 		}
 		write(out, patches, n, hold);
 	} else if (strcmp(op, "unwrite") == 0) {
-		if (!entry->change.has_op) {
+		if (!has_undo) {
 			fputs("{\"error\":\"nothing-written\"}", out);
 			return;
 		}
-		// the undo is the next change's patches: the entry lets go of it, this keeps it alive
-		op_undo undo = entry->undo;
-		entry->undo = (op_undo){0};
+		// the undo is written while this holds it; a write that lands makes its own
+		op_undo undo = last_undo;
+		last_undo = (op_undo){0}, has_undo = 0;
 		write(out, undo.patches, undo.n, hold);
-		if (entry->change.patches == undo.patches) {
-			op_undo_free(&spare);
-			spare = undo;
-		} else {
-			entry->undo = undo;
-		}
+		if (has_undo) op_undo_free(&undo);
+		else last_undo = undo, has_undo = 1;
 	} else if (strcmp(op, "read") == 0) {
-		cr_let_go(crow, entry);
-		if (hold != NULL) keep(&held, hold, op_ref(entry->value));
-		put_value(out, entry->value);
+		cr_let_go(crow, &root);
+		if (hold != NULL) keep(&held, hold, op_ref(root_value));
+		put_value(out, root_value);
 	} else if (strcmp(op, "keep") == 0) {
-		const op_value *v = at(entry->value, op_get(r, "path"));
+		const op_value *v = at(root_value, op_get(r, "path"));
 		op_value *k = op_ref((op_value *)v);
 		const op_value *hd = op_get(r, "handed");
 		int handed = hd != NULL && hd->type == OP_BOOL && hd->bool_;
-		const op_value *wrap = op_get(r, "wrap"), *sched = op_get(r, "scheduler");
-		const char *by = hh_str(r, "by");
-		run.writes = op_get(r, "writes"), run.by_run = by != NULL && strcmp(by, "run") == 0;
+		const op_value *wrap = op_get(r, "wrap");
 		if (wrap != NULL && wrap->type == OP_BOOL && wrap->bool_) {
 			// nothing there, in a list: null, as the line has it
 			op_value *list = op_list();
 			op_push(list, k != NULL ? k : op_null());
 			k = list;
 		}
-		if (sched != NULL && sched->type == OP_BOOL && sched->bool_) keep_through_scheduler(k, "compute", handed ? v : NULL);
-		else if (sched != NULL && sched->type == OP_STR) keep_through_scheduler(k, sched->str, handed ? v : NULL);
-		else cr_let_go_in(crow, k, handed ? &v : NULL, handed ? 1 : 0);
-		run.writes = NULL, run.by_run = 0;
+		cr_let_go_in(crow, k, handed ? &v : NULL, handed ? 1 : 0);
 		if (hold != NULL) keep(&held, hold, k);
 		else op_free(k);
 		fputs("{}", out);
@@ -275,18 +201,18 @@ void hh_answer(const op_value *r, FILE *out) {
 		named *h = name ? look(&held, name) : NULL;
 		put_value(out, h ? h->value : NULL);
 	} else if (strcmp(op, "value") == 0) {
-		put_value(out, entry->value);
+		put_value(out, root_value);
 	} else if (strcmp(op, "mark") == 0) {
 		const char *name = hh_str(r, "name");
 		if (name == NULL) hh_error(out, "mark: no name");
 		else {
-			keep(&marked, name, op_ref((op_value *)at(entry->value, op_get(r, "path"))));
+			keep(&marked, name, op_ref((op_value *)at(root_value, op_get(r, "path"))));
 			fputs("{}", out);
 		}
 	} else if (strcmp(op, "same") == 0) {
 		const char *name = hh_str(r, "name");
 		named *m = name ? look(&marked, name) : NULL;
-		fprintf(out, "{\"same\":%s}", same(m ? m->value : NULL, at(entry->value, op_get(r, "path"))) ? "true" : "false");
+		fprintf(out, "{\"same\":%s}", same(m ? m->value : NULL, at(root_value, op_get(r, "path"))) ? "true" : "false");
 	} else {
 		hh_unknown(out, r);
 	}

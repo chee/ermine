@@ -1,69 +1,33 @@
 // deno run crow/typescript/crow_bench.ts [name…]
-// µs per write, fastest of 31 rounds (the machine may be busy): node's update copying on write
-// ("copy"), in place (op's apply with cow: false: "in place"), and crow.
+// µs per write, fastest of 31 rounds (the machine may be busy): update copying on write ("copy"),
+// in place (op's apply with cow: false: "in place"), and crow.
 // a burst: writes with no read between; read between: crow is told of a read before each write
-import createEntry, { type ChangeHeader, type Entry } from "@ermine/graph/entry"
 import update from "@ermine/changeable/update"
-import apply, { type Patch } from "@ermine/changeable/apply"
-import { createPlaces, type Places } from "@ermine/places"
-import { createChangeHeader } from "@ermine/places/header"
-import { createScheduler } from "@ermine/reactivity"
-import { createPaths } from "@ermine/reactivity/paths"
-import { createTable } from "@ermine/graph/table"
+import type { Patch } from "@ermine/changeable/apply"
 import { createCrow } from "./crow.ts"
-import { crowify, crowifyTable, updateEntry } from "@ermine/places/crowify"
+import { createRoot, write } from "./root_harness.ts"
+import { changeable, fastest, h, inPlace, only, row } from "./bench_harness.ts"
 
-const only = Deno.args
-const h: ChangeHeader = { time: 1, actor: "bench", frame: { info: {}, parent: undefined } }
-
-// in place, as op's apply does with cow: false: the value changed where it is, the change made
-// as node's update makes it
-function inPlace(e: Entry<unknown>, ps: Patch[], change: ChangeHeader) {
-	const undo: Patch[] = []
-	const after = apply(e.value, ps, { undo, cow: false })
-	if (after === undefined) delete e.value
-	else e.value = after
-	e.change = { ...change, op: { patches: ps, undo } }
-}
-
-function fastest(f: () => void, calls: number): number {
-	for (let i = 0; i < calls; i++) f()
-	const times: number[] = []
-	for (let r = 0; r < 31; r++) {
-		const t0 = performance.now()
-		for (let i = 0; i < calls; i++) f()
-		times.push((performance.now() - t0) * 1000 / calls)
-	}
-	return Math.min(...times)
-}
-function row(name: string, ways: Record<string, () => () => void>, calls: number) {
-	if (only.length && !only.some((o) => name.includes(o))) return
-	const cols = Object.entries(ways).map(([way, make]) =>
-		`${way} ${fastest(make(), calls).toFixed(2)}`
-	)
-	console.log(`${name}\t${cols.join("\t")} µs`)
-}
-
-// three ways to write an entry made by start; patch(i): the i-th write
+// three ways to write a value made by start; patch(i): the i-th write
 function ways(start: () => unknown, patch: (i: number) => Patch[], read = false) {
 	const out: Record<string, () => () => void> = {
 		copy: () => {
-			const e = createEntry(start(), h)
+			const e = changeable(start(), h)
 			let i = 0
 			return () => update(e, patch(i++), h)
 		},
 		"in place": () => {
-			const e = createEntry<unknown>(start(), h)
+			const e = changeable(start(), h)
 			let i = 0
 			return () => inPlace(e, patch(i++), h)
 		},
 		crow: () => {
 			const u = createCrow()
-			const e = createEntry(start(), h) as Entry<unknown>
+			const e = createRoot(start())
 			let i = 0
 			return () => {
 				if (read) u.letGo(e)
-				updateEntry(u, e, patch(i++), h)
+				write(u, e, patch(i++))
 			}
 		},
 	}
@@ -132,7 +96,7 @@ row("one sample of a 10k Float64Array, read between", ways(floats, sample, true)
 {
 	const name = "a first write to each of 10k entries"
 	if (!only.length || only.some((o) => name.includes(o))) {
-		const docs = () => Array.from({ length: 10000 }, () => createEntry<unknown>(doc(), h))
+		const docs = () => Array.from({ length: 10000 }, () => changeable(doc(), h))
 		const cols = (["copy", "crow"] as const).map((way) => {
 			let best = Infinity
 			for (let r = 0; r < 11; r++) {
@@ -140,7 +104,7 @@ row("one sample of a 10k Float64Array, read between", ways(floats, sample, true)
 				const t0 = performance.now()
 				for (const e of es) {
 					if (way === "copy") update(e, field(1), h)
-					else updateEntry(u, e, field(1), h)
+					else write(u, e, field(1))
 				}
 				best = Math.min(best, (performance.now() - t0) * 1000 / es.length)
 			}
@@ -166,90 +130,5 @@ row("one sample of a 10k Float64Array, read between", ways(floats, sample, true)
 		const whole = fastest(() => u.letGoIn(v), calls),
 			stops = fastest(() => u.letGoIn(v, handed), calls)
 		console.log(`${name}\twhole ${whole.toFixed(2)}\thanded ${stops.toFixed(2)} µs`)
-	}
-}
-
-// through places: a place into a folder of 1000 names, a reader of one name, a pulse after each
-// write. crow's world gives places the table through reading: places' reads are reads
-function world(way: "copy" | "in place" | "crow") {
-	const u = createCrow()
-	const s = createScheduler()
-	s.onTrackingEnd((key) => places.release(key))
-	const table = createTable((part, id) => places.onTableChange(part, id))
-	const places: Places = createPlaces({
-		root: "R",
-		table: way === "crow" ? crowifyTable(table, u) : table,
-		paths: createPaths(),
-		scheduler: s,
-	})
-	const host = s.createRootScope({ actor: "host" })
-	const header = s.runWithScope(host, () => createChangeHeader(s))
-	table.sub("children", "F", createEntry(folder(1000)(), header) as never)
-	const e = table.get("children", "F")! as Entry<unknown>
-	s.runWithScope(
-		s.createRootScope({ actor: "r" }),
-		() => s.createComputer(() => places.readValue("children", "F", ["name0"]), () => {}),
-	)
-	s.pulse()
-	let i = 0
-	return () => {
-		const ps = rename(++i)
-		if (way === "crow") updateEntry(u, e, ps, header)
-		else if (way === "in place") inPlace(e, ps, header)
-		else update(e, ps, header)
-		places.commit([e])
-		s.pulse()
-	}
-}
-row("places: a name in a folder of 1000 + pulse, a reader of name0", {
-	copy: () => world("copy"),
-	"in place": () => world("in place"),
-	crow: () => world("crow"),
-}, 1000)
-
-// crowify's cost to the scheduler: a chain of 100 computes, one write at its head, µs per pulse.
-// any run-end listener has every run keep its reads (onRunEnd's reads), so a plain listener is
-// measured too
-{
-	const name = "scheduler: a chain of 100 computes, a pulse"
-	if (!only.length || only.some((o) => name.includes(o))) {
-		const chain = (listen: "none" | "listener" | "crowify") => {
-			const s = createScheduler()
-			const u = createCrow()
-			if (listen === "listener") s.onRunEnd(() => {})
-			if (listen === "crowify") crowify(s, u)
-			const store = new Map<unknown, unknown>()
-			const o = s.createRootScope({ actor: "bench" })
-			let prev: unknown = "head"
-			store.set(prev, { n: 0 })
-			for (let i = 0; i < 100; i++) {
-				const from = prev, key = { i }
-				s.runWithScope(o, () =>
-					s.createComputer(
-						() => {
-							s.track(from)
-							return { n: (store.get(from) as { n: number }).n + 1 }
-						},
-						(v) => {
-							store.set(key, v)
-							s.mark([key], s.getRun())
-						},
-						undefined,
-						key,
-					))
-				prev = key
-			}
-			s.pulse()
-			let i = 0
-			return () => {
-				store.set("head", { n: ++i })
-				s.mark(["head"])
-				s.pulse()
-			}
-		}
-		const cols = (["none", "listener", "crowify"] as const).map((l) =>
-			`${l} ${fastest(chain(l), 200).toFixed(2)}`
-		)
-		console.log(`${name}\t${cols.join("\t")} µs`)
 	}
 }

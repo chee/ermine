@@ -5,24 +5,11 @@
 // (crow's read): none (a burst), before every write, every 10 writes. µs per write after the
 // first (fastest of 15 rounds); the first write (the caller's map: copied, fastest round); the
 // slowest write after the first in any round (a copy after a read, and the collector's pauses)
-import createEntry, { type ChangeHeader, type Entry } from "@ermine/graph/entry"
 import update from "@ermine/changeable/update"
-import apply, { type Patch } from "@ermine/changeable/apply"
+import type { Patch } from "@ermine/changeable/apply"
 import { createCrow } from "./crow.ts"
-import { updateEntry } from "@ermine/places/crowify"
-
-const h: ChangeHeader = { time: 1, actor: "bench", frame: { info: {}, parent: undefined } }
-
-// in place, as op's apply does with cow: false: the value changed where it is, the change made
-// as node's update makes it
-function inPlace(e: Entry<unknown>, ps: Patch[], change: ChangeHeader) {
-	const undo: Patch[] = []
-	const after = apply(e.value, ps, { undo, cow: false })
-	if (after === undefined) delete e.value
-	else e.value = after
-	e.change = { ...change, op: { patches: ps, undo } }
-}
-const only = Deno.args
+import { createRoot, write as writeRoot } from "./root_harness.ts"
+import { changeable, h, inPlace, only } from "./bench_harness.ts"
 
 const folder = (n: number) =>
 	Object.fromEntries(Array.from({ length: n }, (_, i) => [`name${i}`, `id${i}`]))
@@ -51,12 +38,12 @@ function measure(way: Way, n: number, write: (i: number) => Patch[], every: numb
 	let best = Infinity, first = Infinity, worst = 0
 	for (let r = 0; r < 15; r++) {
 		const u = createCrow()
-		const e = createEntry<unknown>(folder(n), h)
+		const e = changeable(folder(n), h), root = createRoot(folder(n))
 		const one = (i: number) => {
 			if (way === "copy") return update(e, write(i), h)
 			if (way === "in place") return inPlace(e, write(i), h)
-			if (every && i % every === 0) u.letGo(e as Entry<unknown>)
-			updateEntry(u, e as Entry<unknown>, write(i), h)
+			if (every && i % every === 0) u.letGo(root)
+			writeRoot(u, root, write(i))
 		}
 		const t = performance.now()
 		one(0)

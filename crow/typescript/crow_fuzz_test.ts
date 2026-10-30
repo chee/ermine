@@ -1,25 +1,16 @@
 // crow at random, a few dozen seeds each, on random values (maps, lists, strings, typed arrays,
 // bytes) and patches (random_harness.ts):
-// - one entry against its twin under node's update: the same values, undos and throws; nothing
+// - one root against its twin under update: the same values, undos and throws; nothing
 //   read, kept, put or held by an undo ever changes; and two writes with no read between change
 //   the root in place (the first owns it)
-// - places and a scheduler wired with crowify (walking results whole, or stopping at what each
-//   run was handed): computations read paths and keep what they read (alone, in a list, or only
-//   a number from it); after every pulse each holds what a read now gives, and nothing one kept
-//   has changed since
 import { assert, assertEquals, assertStrictEquals } from "@std/assert"
-import createEntry, { type ChangeHeader, type Entry } from "@ermine/graph/entry"
+import type { ChangeHeader } from "@ermine/changeable"
 import update from "@ermine/changeable/update"
 import apply, { ApplyError, type Patch } from "@ermine/changeable/apply"
-import { at as read, createPlaces, type Places } from "@ermine/places"
-import { createChangeHeader } from "@ermine/places/header"
-import { createScheduler } from "@ermine/reactivity"
-import { createPaths } from "@ermine/reactivity/paths"
-import { createTable } from "@ermine/graph/table"
 import { rand } from "../../conformance/typescript/rand.ts"
 import { above, at, isMap, made, patch, paths } from "./random_harness.ts"
 import { createCrow } from "./crow.ts"
-import { crowify, updateEntry } from "@ermine/places/crowify"
+import { createRoot, write as writeRoot } from "./root_harness.ts"
 
 const h = (): ChangeHeader => ({ time: 1, actor: "test", frame: { info: {}, parent: undefined } })
 // a root with names, so most paths are into something
@@ -33,8 +24,8 @@ Deno.test("crow: as node's update, nothing held ever changes, and in place when 
 		const p = rand(seed)
 		const u = createCrow()
 		const v = start(p)
-		const e = createEntry<unknown>(structuredClone(v), h())
-		const twin = createEntry<unknown>(structuredClone(v), h())
+		const e = createRoot(structuredClone(v))
+		const twin = { value: structuredClone(v) as unknown, change: h() }
 		// what is held (read, kept, put, held by an undo) and what it was then
 		const held: [unknown, unknown, string][] = []
 		const hold = (x: unknown, what: string) => held.push([x, structuredClone(x), what])
@@ -52,7 +43,7 @@ Deno.test("crow: as node's update, nothing held ever changes, and in place when 
 			if (threw) {
 				let error: unknown
 				try {
-					updateEntry(u, e, ps, h())
+					writeRoot(u, e, ps)
 				} catch (x) {
 					error = x
 				}
@@ -63,10 +54,10 @@ Deno.test("crow: as node's update, nothing held ever changes, and in place when 
 				return
 			}
 			update(twin, ps, h())
-			updateEntry(u, e, ps, h())
+			writeRoot(u, e, ps)
 			assertEquals(e.value, twin.value, where)
-			assertEquals(e.change.op?.undo, twin.change.op?.undo, `${where}, undo`)
-			for (const x of e.change.op!.undo) if ("value" in x) hold(x.value, `${where}, an undo's`)
+			assertEquals(e.undo, twin.change.op?.undo, `${where}, undo`)
+			for (const x of e.undo!) if ("value" in x) hold(x.value, `${where}, an undo's`)
 			// below the root everywhere: the root a write before owned is changed in place
 			const below = ps.every((x) => x.path.length > 0 && (!x.move || x.move.path.length > 0))
 			if (below && owned !== undefined) {
@@ -91,7 +82,7 @@ Deno.test("crow: as node's update, nothing held ever changes, and in place when 
 				hold(kept, `${where}, kept`)
 				if (x === e.value) owned = undefined
 			} else if (k < 27) {
-				const undo = e.change.op?.undo
+				const undo = e.undo
 				if (undo) write([...undo], `${where} (unwrite)`)
 			} else if (k < 34) {
 				// a put of a container the entry itself made and owns, alone or in a list: the
@@ -112,75 +103,6 @@ Deno.test("crow: as node's update, nothing held ever changes, and in place when 
 				write(Array.from({ length: 1 + p(3) }, () => patch(p, e.value)), where)
 			}
 			for (const [x, was, what] of held) assertEquals(x, was, what)
-		}
-	}
-})
-
-Deno.test("crow: through places and a scheduler with crowify, what a computation keeps never changes, at random", () => {
-	for (let seed = 1; seed <= 30; seed++) {
-		const p = rand(seed)
-		const u = createCrow()
-		const s = createScheduler()
-		// odd seeds walk results whole; even ones stop at what the run was handed, as a host wires it
-		crowify(
-			s,
-			u,
-			seed % 2 ? undefined : (key) => {
-				const where = places.describe(key)
-				return where?.path
-					? read(table.get(where.part, where.id)?.value, where.path)
-					: undefined
-			},
-		)
-		s.onTrackingEnd((key) => places.release(key))
-		const table = createTable((part, id) => places.onTableChange(part, id))
-		const places: Places = createPlaces({
-			root: "R",
-			table,
-			paths: createPaths(),
-			scheduler: s,
-		})
-		const host = s.createRootScope({ actor: "host" })
-		const header = () => s.runWithScope(host, () => createChangeHeader(s))
-		table.sub("value", "N", createEntry(start(p), header()) as never)
-		const e = table.get("value", "N")! as Entry<unknown>
-		// a computation: reads a path, keeps it alone, in a list, or only a number from it
-		type Watch = { path: (string | number)[]; how: number; kept?: unknown; was?: unknown }
-		const watches: Watch[] = []
-		const shape = (w: Watch, x: unknown) =>
-			w.how === 0 ? x : w.how === 1 ? [x] : JSON.stringify(x ?? null).length
-		for (let i = 0; i < 8; i++) {
-			const ps = paths(e.value)
-			const w: Watch = { path: ps[p(ps.length)], how: p(3) }
-			watches.push(w)
-			s.runWithScope(
-				s.createRootScope({ actor: "reader" }),
-				() =>
-					s.createComputer(
-						() => shape(w, places.readValue("value", "N", w.path)),
-						(v) => void (w.kept = v, w.was = structuredClone(v)),
-					),
-			)
-		}
-		s.pulse()
-		for (let step = 0; step < 50; step++) {
-			const where = `seed ${seed}, step ${step}`
-			const ps = Array.from({ length: 1 + p(2) }, () => patch(p, e.value))
-			let ok = true
-			try {
-				apply(e.value, ps)
-			} catch {
-				ok = false
-			}
-			if (ok) {
-				updateEntry(u, e, ps, header())
-				places.commit([e])
-			}
-			s.pulse()
-			for (const w of watches) {
-				assertEquals(w.kept, w.was, `${where}: what ${JSON.stringify(w.path)}'s reader kept`)
-				assertEquals(w.kept, shape(w, read(e.value, w.path)), `${where}: told`)
-			}
 		}
 	}
 })

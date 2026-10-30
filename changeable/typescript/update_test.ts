@@ -1,11 +1,21 @@
 import { assertEquals, assertStrictEquals, assertThrows } from "@std/assert"
 import apply, { ApplyError, type Patch } from "@ermine/changeable/apply"
-import createEntry, { type ChangeHeader, type Entry } from "@ermine/graph/entry"
+import { type Changeable, type ChangeHeader } from "@ermine/changeable"
 import update from "./update.ts"
 
+// a changeable of this value and change (no change given: the time now, whole seconds since 1970)
+const createChangeable = <V>(
+	value: V,
+	change: ChangeHeader = {} as ChangeHeader,
+): Changeable<V> => {
+	if (change.time === undefined) change = { ...change, time: Math.floor(Date.now() / 1000) }
+	const c: Changeable<V> = { change }
+	if (value !== undefined) c.value = value
+	return c
+}
 const host: ChangeHeader = { time: 0, actor: "host", frame: { info: {}, parent: undefined } }
 const by: ChangeHeader = { time: 5, actor: "me", frame: { info: {}, parent: undefined } }
-const make = (value?: unknown): Entry<unknown> => createEntry(value, host)
+const make = (value?: unknown): Changeable<unknown> => createChangeable(value, host)
 const code = (f: () => unknown) => (assertThrows(f, ApplyError) as ApplyError).code
 
 Deno.test("update: the value the patches make; the change, the header with its op", () => {

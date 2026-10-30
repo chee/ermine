@@ -28,14 +28,24 @@
 // Errors as text, { error: "text" }, the harness going on with the entry as it was: an op not
 // understood or not given; an update with no patches, or patches not a list; a value whose JSON
 // form stands for none, in a start or an update.
-import createEntry, { type ChangeHeader, type Entry } from "@ermine/graph/entry"
+import type { Changeable, ChangeHeader } from "@ermine/changeable"
 import update from "@ermine/changeable/update"
 import { ApplyError, type Patch } from "@ermine/changeable/apply"
 import { type Request, serve } from "../../conformance/typescript/harness.ts"
 import { revive, toJson } from "../../conformance/typescript/form.ts"
 import { fromList, toList } from "../../conformance/typescript/frames.ts"
 
-let entry: Entry<unknown> = createEntry(undefined)
+// a changeable of this value and change (no change given: the time now, whole seconds since 1970)
+const createChangeable = <V>(
+	value: V,
+	change: ChangeHeader = {} as ChangeHeader,
+): Changeable<V> => {
+	if (change.time === undefined) change = { ...change, time: Math.floor(Date.now() / 1000) }
+	const c: Changeable<V> = { change }
+	if (value !== undefined) c.value = value
+	return c
+}
+let entry: Changeable<unknown> = createChangeable(undefined)
 
 // a change as answered: the header's own fields, a patch's path, range, value and move only
 const pick = (o: Record<string, unknown>, keys: string[]) => {
@@ -45,7 +55,7 @@ const pick = (o: Record<string, unknown>, keys: string[]) => {
 }
 const patchShape = (p: Patch) =>
 	pick(p as unknown as Record<string, unknown>, ["path", "range", "value", "move"])
-const changeShape = (c: Entry<unknown>["change"]) => {
+const changeShape = (c: Changeable<unknown>["change"]) => {
 	const out = pick(c, ["time", "actor", "reader"])
 	if (c.frame !== undefined) out.frame = toList(c.frame)
 	if (c.op) {
@@ -77,7 +87,10 @@ function answer(r: Request) {
 function run(r: Request) {
 	switch (r.op) {
 		case "start":
-			entry = createEntry(r.value === undefined ? undefined : revive(r.value), given(r.header))
+			entry = createChangeable(
+				r.value === undefined ? undefined : revive(r.value),
+				given(r.header),
+			)
 			return {}
 		case "entry": {
 			const change = changeShape(entry.change)

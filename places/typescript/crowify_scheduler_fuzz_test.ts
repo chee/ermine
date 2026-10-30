@@ -5,7 +5,7 @@
 // writes, unwrites and reads between pulses. checked after every step: what a run kept, a set was
 // given, an effect acted on, a read gave, an undo holds, never changes; the value is what
 // copy-on-write apply gives.
-// off by default, each a way a value held changes (crow_scheduler_fuzz_test.ts --set, --async,
+// off by default, each a way a value held changes (crowify_scheduler_fuzz_test.ts --set, --async,
 // --run, run as a program, says what it finds): a set that writes the entry (it is given the
 // result before the run's end lets go of it), an async computation (what it read before its
 // await, written while it waits), a run that writes the entry after it read (its own write, in
@@ -15,10 +15,10 @@ import createEntry, { type Entry } from "@ermine/graph/entry"
 import apply, { ApplyError, type Key, type Patch } from "@ermine/changeable/apply"
 import { createScheduler } from "@ermine/reactivity"
 import { rand } from "../../conformance/typescript/rand.ts"
-import { at, container, show, sorted } from "./model_harness.ts"
-import { made, patch, paths } from "./random_harness.ts"
-import { createCrow } from "./crow.ts"
-import { crowify, updateEntry } from "@ermine/places/crowify"
+import { at, container, show, sorted } from "../../crow/typescript/model_harness.ts"
+import { made, patch, paths } from "../../crow/typescript/random_harness.ts"
+import { createCrow } from "@ermine/crow"
+import { crowify, updateEntry } from "./crowify.ts"
 
 const h = () => ({ time: 1, actor: "host", frame: { info: {}, parent: undefined } })
 const SEEDS = Number(Deno.env.get("SEEDS") ?? 30)

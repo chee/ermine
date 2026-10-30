@@ -11,10 +11,10 @@ import createEntry, { type Entry } from "@ermine/graph/entry"
 import apply, { ApplyError, type Patch } from "@ermine/changeable/apply"
 import { createScheduler } from "@ermine/reactivity"
 import { rand } from "../../conformance/typescript/rand.ts"
-import { show, sorted } from "./model_harness.ts"
-import { text } from "./random_harness.ts"
-import { createCrow } from "./crow.ts"
-import { crowify, updateEntry } from "@ermine/places/crowify"
+import { show, sorted } from "../../crow/typescript/model_harness.ts"
+import { text } from "../../crow/typescript/random_harness.ts"
+import { createCrow } from "@ermine/crow"
+import { crowify, updateEntry } from "./crowify.ts"
 
 const h = () => ({ time: 1, actor: "host", frame: { info: {}, parent: undefined } })
 const SEEDS = Number(Deno.env.get("SEEDS") ?? 30)

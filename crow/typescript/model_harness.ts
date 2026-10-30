@@ -1,9 +1,9 @@
 // crow against a model, for its fuzzers: a run is a list of steps (writes, reads, keeps,
-// unwrites, a write again where the last one was), each done to one entry under crow and to a
+// unwrites, a write again where the last one was), each done to one root under crow and to a
 // plain copy-on-write apply (the oracle) side by side. after each step:
 // - nothing handed out has changed: what a read gave, what was kept, a write's patches (as given,
 //   refused or not) and its undo, each as it was when handed (key order too)
-// - the entry's value is the oracle's, the undo the oracle's undo, a refusal the oracle's, and a
+// - the root's value is the oracle's, the undo the oracle's undo, a refusal the oracle's, and a
 //   refused write leaves the root and its content as they were (values by content: a map's key
 //   order is not part of its value, op's apply.ts)
 // - copies stay bounded: a write makes at most a few containers per patch (the paths it walks), and
@@ -11,9 +11,8 @@
 // a failing run shrinks to its fewest steps (and fewest patches in each). steps are data: a value
 // put is content (cloned as it is put) or a reference to something handed earlier (aliasing)
 import apply, { ApplyError, type Key, type Patch } from "@ermine/changeable/apply"
-import createEntry, { type Entry } from "@ermine/graph/entry"
 import { createCrow, type Crow } from "./crow.ts"
-import { updateEntry } from "@ermine/places/crowify"
+import { createRoot, type Root, write as writeRoot } from "./root_harness.ts"
 
 // a value put: content, something handed earlier (at a path in it), or the value the j-th patch
 // of the same write puts (the same object twice)
@@ -137,7 +136,7 @@ export type Options = {
 
 export type State = {
 	u: Crow
-	e: Entry<unknown>
+	e: Root
 	oracle: unknown
 	handed: { thing: unknown; was: string; what: string; loop?: boolean }[]
 	// the last write landed, one plain put, with nothing read, kept or refused since
@@ -145,7 +144,6 @@ export type State = {
 	steps: Step[]
 }
 
-const h = () => ({ time: 1, actor: "test", frame: { info: {}, parent: undefined } })
 const TRACE = Deno.env.get("TRACE")
 
 // a value given in a spec, made now
@@ -180,7 +178,7 @@ export function start(value: unknown): State {
 	const u = make()
 	return {
 		u,
-		e: createEntry<unknown>(clone(value), h()),
+		e: createRoot(clone(value)),
 		oracle: clone(value),
 		handed: [],
 		steps: [],
@@ -219,7 +217,7 @@ export function step(s: State, st: Step, i: number, o: Options = {}): Failure | 
 		let ps: Patch[]
 		if (st.k === "write") ps = patches(s, st.ps)
 		else if (st.k === "unwrite") {
-			const undo = s.e.change.op?.undo
+			const undo = s.e.undo
 			if (undo === undefined) return
 			ps = undo as Patch[]
 			s.last = undefined
@@ -269,7 +267,7 @@ function write(
 	const root = s.e.value, before = sorted(root), was = containers(root)
 	let got: unknown
 	try {
-		updateEntry(s.u, s.e, ps, h())
+		writeRoot(s.u, s.e, ps)
 	} catch (e) {
 		got = e
 	}
@@ -295,7 +293,7 @@ function write(
 	s.oracle = next
 	const v = sorted(s.e.value), want2 = sorted(s.oracle)
 	if (v !== want2) return no("value", `crow ${cut(v)}, oracle ${cut(want2)}`)
-	const undo = s.e.change.op!.undo
+	const undo = s.e.undo!
 	if (sorted(undo) !== sorted(ou)) {
 		return no("undo", `crow ${cut(show(undo))}, oracle ${cut(show(ou))}`)
 	}

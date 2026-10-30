@@ -12,7 +12,7 @@ import apply from "@ermine/changeable/apply"
 import createEntry, { type Entry } from "@ermine/graph/entry"
 import { createTable } from "@ermine/graph/table"
 import { move, PlacesError } from "@ermine/places"
-import { differ, isMap, rand, snap } from "./gen_harness.ts"
+import { differ, isMap, rand, snap } from "../../conformance/typescript/gen.ts"
 import { createWorld, show, type Wrote } from "./world_harness.ts"
 import { get, list, lookup } from "@ermine/places/lib"
 

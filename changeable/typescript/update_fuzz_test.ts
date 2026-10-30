@@ -5,9 +5,19 @@
 // seeds (fuzz runs small)
 import { assert, assertEquals, assertStrictEquals, assertThrows } from "@std/assert"
 import apply, { ApplyError, type Patch } from "@ermine/changeable/apply"
-import createEntry, { type ChangeHeader, type Entry } from "@ermine/graph/entry"
+import type { Changeable, ChangeHeader } from "@ermine/changeable"
 import update from "./update.ts"
-import { differ, patch, rand, show, snap, start } from "../../places/fuzz/gen_harness.ts"
+import { differ, patch, rand, show, snap, start } from "../../conformance/typescript/gen.ts"
+// a changeable of this value and change (no change given: the time now, whole seconds since 1970)
+const createChangeable = <V>(
+	value: V,
+	change: ChangeHeader = {} as ChangeHeader,
+): Changeable<V> => {
+	if (change.time === undefined) change = { ...change, time: Math.floor(Date.now() / 1000) }
+	const c: Changeable<V> = { change }
+	if (value !== undefined) c.value = value
+	return c
+}
 
 const SEEDS = 40
 const STEPS = 30
@@ -18,7 +28,7 @@ Deno.test(`update fuzz: ${SEEDS} seeds × ${STEPS} updates, every change kept wa
 	for (let seed = 1; seed <= SEEDS; seed++) {
 		const { pick } = rand(seed)
 		const first = start(pick)
-		const n: Entry<unknown> = createEntry(first, {
+		const n: Changeable<unknown> = createChangeable(first, {
 			time: 0,
 			actor: "host",
 			frame: { info: {}, parent: undefined },
@@ -122,7 +132,7 @@ Deno.test(`update fuzz: ${SEEDS} seeds, one update of many patches, as one updat
 			}
 		}
 		const h: ChangeHeader = { time: 1, actor: "me", frame: { info: {}, parent: undefined } }
-		const all = createEntry(first, h), each = createEntry(first, h)
+		const all = createChangeable(first, h), each = createChangeable(first, h)
 		update(all, ps, h)
 		const undos: Patch[][] = []
 		for (const p of ps) {

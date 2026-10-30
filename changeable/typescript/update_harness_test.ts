@@ -11,12 +11,23 @@
 // the harness alone, then all that were valid in one change. Whatever answers must equal the
 // reference's answers, and the one change must end where the reference's patches one by one did.
 import { assert, assertEquals } from "@std/assert"
-import createEntry from "@ermine/graph/entry"
+import type { Changeable, ChangeHeader } from "@ermine/changeable"
 import update from "@ermine/changeable/update"
 import apply, { ApplyError, type Patch } from "@ermine/changeable/apply"
 import { ask, command, reference, suite } from "../../conformance/typescript/ask.ts"
 import { line, revive, toJson } from "../../conformance/typescript/form.ts"
 import { rand } from "../../conformance/typescript/rand.ts"
+
+// a changeable of this value and change (no change given: the time now, whole seconds since 1970)
+const createChangeable = <V>(
+	value: V,
+	change: ChangeHeader = {} as ChangeHeader,
+): Changeable<V> => {
+	if (change.time === undefined) change = { ...change, time: Math.floor(Date.now() / 1000) }
+	const c: Changeable<V> = { change }
+	if (value !== undefined) c.value = value
+	return c
+}
 
 // deno-lint-ignore no-explicit-any
 type Request = Record<string, any>
@@ -159,7 +170,7 @@ function patch(pick: (n: number) => number, v: Record<string, unknown>): Patch {
 Deno.test(`fuzz: ${SEEDS} seeds × ${STEPS} patches, as the reference`, async () => {
 	for (let seed = 1; seed <= SEEDS; seed++) {
 		const pick = rand(seed)
-		const n = createEntry<Record<string, unknown>>(content())
+		const n = createChangeable<Record<string, unknown>>(content())
 		const patches: Patch[] = [], good: Patch[] = []
 		for (let k = 0; k < STEPS; k++) {
 			const p = patch(pick, structuredClone(n.value!))

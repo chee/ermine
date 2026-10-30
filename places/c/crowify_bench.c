@@ -1,17 +1,17 @@
-// crow (crow.h) on what typescript/crow_bench.ts measures at the entry (its places row is
-// the TypeScript's): fastest of 31 rounds, µs per write. copy: nd_update on a copying entry; in
+// crow (crow.h) through crowify (crowify.h) on what crow/typescript/crow_bench.ts measures, at the
+// entry (its places row is places/typescript/crowify_bench.ts'): fastest of 31 rounds, µs per write. copy: nd_update on a copying entry; in
 // place: op_apply with in_place on the entry's value; crow. a burst: no read between;
 // read between: crow is told of a read before each write. then a first write to each of many
 // entries, kept, and the scheduler's chain (what the TypeScript bench has, but its places row)
-// make crow/c/crow-bench
+// make places/c/crowify-bench
 #define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 
 #include "../../graph/c/update.h"
-#include "crow.h"
-#include "../../places/c/crowify.h"
+#include "../../crow/c/crow.h"
+#include "crowify.h"
 #include "../../reactivity/c/scheduler.h"
 
 static double now(void) {
