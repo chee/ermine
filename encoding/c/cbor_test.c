@@ -1,13 +1,8 @@
-// cbor_test.c: checks cbor.c (cbor.h). c/build.sh builds it as cbor-test.
+// cbor_test.c: tests cbor.c (cbor.h), built by c/build.sh as cbor-test.
 //
-// The fixed vectors are newcore/encoding/conformance/cbor/vectors.json, a list of
-// {"value": <its JSON form, json_text.h>, "cbor": "<hex>"}, so every codec checks
-// against the same bytes: each value encodes to exactly its bytes, and the
-// bytes decode to a value equal to it; {"cbor", "refused"}: bytes no value
-// encodes as; {"form", "refused"}: a JSON form that is no value. Each value written by pieces (the
-// cborPut* writer, keys sorted by cborKeyCompare) and into a buffer that grows: the same bytes. Then
-// round trips, rejected inputs, values with no encoding, a short buffer, numbers by pieces, and values
-// as deep as CBOR_DEPTH and deeper.
+// The fixed vectors are encoding/conformance/cbor/vectors.json, shared with every codec: values
+// that must encode to exact bytes, bytes and JSON forms that must be refused. Also covers writing
+// by pieces, round trips, short buffers, numbers, and values as deep as CBOR_DEPTH and deeper.
 
 #include "cbor.h"
 #include "json.h"
@@ -44,7 +39,6 @@ static unsigned char *bytesOfHex(const char *hex, size_t *length) {
 	return data;
 }
 
-/** the value's encoding, fresh, or NULL with *why */
 static unsigned char *encode(const Json *value, size_t *length, const char **why) {
 	if (!cborEncode(value, NULL, 0, length, why)) return NULL;
 	unsigned char *out = allocate(*length);
@@ -53,7 +47,6 @@ static unsigned char *encode(const Json *value, size_t *length, const char **why
 	return out;
 }
 
-/** the value written by pieces, as a writer of values of its own would (recursing: the vectors are shallow); false when it has none */
 static bool byPieces(const Json *v, CborOut *o) {
 	switch (v->type) {
 		case JSON_NULL: cborPutNull(o); return true;
@@ -90,7 +83,6 @@ static bool byPieces(const Json *v, CborOut *o) {
 	return false;
 }
 
-/** written by pieces and by cborPut into a buffer that grows, the value is the bytes cborEncode writes */
 static void expectPieces(const char *name, const Json *value, const unsigned char *bytes, size_t length) {
 	CborOut pieces = { NULL, 0, 0, true }, grown = { NULL, 0, 0, true };
 	if (!byPieces(value, &pieces) || pieces.length != length || memcmp(pieces.data, bytes, length) != 0) {
@@ -105,7 +97,6 @@ static void expectPieces(const char *name, const Json *value, const unsigned cha
 	free(grown.data);
 }
 
-/** the value encodes to the bytes, and the bytes decode to it */
 static void expectBoth(const char *name, const Json *value, const char *hex) {
 	size_t length;
 	const char *why = NULL;
@@ -146,7 +137,6 @@ static int argc_default;
 
 static void vectors(const char *path) {
 	FILE *file = fopen(path, "rb");
-	// run from newcore/encoding/c, or from newcore
 	if (!file && argc_default) file = fopen("encoding/conformance/cbor/vectors.json", "rb");
 	if (!file) {
 		printf("FAIL cannot open %s\n", path);
@@ -173,12 +163,10 @@ static void vectors(const char *path) {
 		const char *hex = jsonText(jsonGet(vector, "cbor"));
 		Json *form = jsonGet(vector, "form");
 		if (form && !value && !hex && jsonGet(vector, "refused")) {
-			// a JSON form that stands for no value
 			expectNoForm(form, jsonText(jsonGet(vector, "refused")));
 			continue;
 		}
 		if (!value && hex && jsonGet(vector, "refused")) {
-			// no value: the bytes are no encoding
 			expectRejected(hex, jsonText(jsonGet(vector, "refused")));
 			continue;
 		}
@@ -189,7 +177,6 @@ static void vectors(const char *path) {
 			failures++;
 		} else {
 			expectBoth(name, value, hex);
-			// what it reads back as, when the vector says
 			if (back) expectBoth(name, back, hex);
 		}
 		free(name);
@@ -199,7 +186,6 @@ static void vectors(const char *path) {
 	free(text);
 }
 
-/** the hex is rejected by the decoder */
 static void expectRejected(const char *hex, const char *what) {
 	size_t n, at = 0;
 	const char *why = NULL;
@@ -215,7 +201,6 @@ static void expectRejected(const char *hex, const char *what) {
 	free(bytes);
 }
 
-/** the JSON form is no value: jsonDecode refuses it (in place, as the values are decoded) */
 static void expectNoForm(Json *form, const char *what) {
 	if (jsonDecode(&form)) {
 		char *printed = jsonPrint(form);
@@ -231,7 +216,6 @@ static void expectNoEncoding(const char *what, const Json *value) {
 	expectTrue(what, !cborEncode(value, NULL, 0, &length, &why) && why);
 }
 
-/** encode, then decode: the same value, and its encoding the same bytes */
 static void roundTrip(const char *what, const Json *value) {
 	size_t length, again;
 	const char *why = NULL;
@@ -262,7 +246,6 @@ static uint64_t random64(void) {
 	return state;
 }
 
-/** the bytes of a whole number as cbor.h has it: the shortest head, a bignum past 64 bits */
 static bool isInteger(const unsigned char *out, size_t length) {
 	unsigned major = out[0] >> 5, info = out[0] & 31;
 	if (major <= 1) return info < 24 ? length == 1 : length == 1 + (1u << (info - 24));
@@ -270,13 +253,11 @@ static bool isInteger(const unsigned char *out, size_t length) {
 }
 
 static void numbers(void) {
-	// every half decodes and encodes back to itself, but whole ones (integers) and NaNs not 7e00
 	for (unsigned h = 0; h < 0x10000; h++) {
 		unsigned char bytes[3] = { 0xf9, (unsigned char)(h >> 8), (unsigned char)h };
 		bool nan = (h & 0x7c00) == 0x7c00 && (h & 0x3ff);
 		bool inf = (h & 0x7fff) == 0x7c00;
 		int e = (h >> 10) & 31;
-		// whole: zero, or a normal half with no fraction bits below its point
 		bool whole = (h & 0x7fff) == 0 || (!nan && !inf && e >= 15 && (e >= 25 || !((h & 0x3ff) & ((1u << (25 - e)) - 1))));
 		Json *value = cborDecode(bytes, 3, NULL, NULL);
 		if (nan && h != 0x7e00) {
@@ -295,7 +276,6 @@ static void numbers(void) {
 		expectTrue("a half encodes to itself", cborEncode(value, out, sizeof out, &length, NULL) && length == 3 && memcmp(out, bytes, 3) == 0);
 		jsonFree(value);
 	}
-	// singles and doubles: each comes back, in the width the value needs; a whole one an integer
 	for (int i = 0; i < 200000; i++) {
 		uint64_t bits = random64();
 		uint32_t word = (uint32_t)bits;
@@ -318,7 +298,6 @@ static void numbers(void) {
 			jsonFree(value);
 		}
 	}
-	// whole numbers at the edges: the integer, the same from int64, uint64 and bytes, back as made
 	struct {
 		bool negative;
 		const char *magnitude; // hex
@@ -367,7 +346,6 @@ static void numbers(void) {
 	double near;
 	expectTrue("as double: 2^64 - 1 is 2^64", jsonDouble(max, &near) && near == 18446744073709551616.0);
 	jsonFree(max), jsonFree(min), jsonFree(five), jsonFree(half), jsonFree(minus);
-	// a NaN with a payload is the one NaN
 	double payload;
 	uint64_t bits = UINT64_C(0xfff8000000000123);
 	memcpy(&payload, &bits, 8);
@@ -376,7 +354,6 @@ static void numbers(void) {
 	size_t length;
 	expectTrue("a NaN is f97e00", cborEncode(nan, out, sizeof out, &length, NULL) && length == 3 && out[0] == 0xf9 && out[1] == 0x7e && out[2] == 0);
 	jsonFree(nan);
-	// a float typed array's NaNs are the one NaN of the width
 	uint32_t nans32[2] = { 0xffc00001u, 0x7f800001u };
 	Json *typed = jsonTyped(JSON_FLOAT32, nans32, 2);
 	expectTrue("float32 NaNs", cborEncode(typed, out, sizeof out, &length, NULL) && length == 11 &&
@@ -470,7 +447,6 @@ static void unencodable(void) {
 }
 
 static void stands(void) {
-	// a stand-in holding a stand-in, in a list: it comes back, equal and in the same bytes
 	Json *list = jsonArray();
 	jsonPush(list, jsonStand(jsonString("canvas")));
 	jsonPush(list, jsonStand(jsonStand(jsonNull())));
@@ -497,7 +473,6 @@ static void shortBuffer(void) {
 	jsonFree(value);
 }
 
-/** a number by pieces as its Json writes it */
 static void expectNumber(const char *name, Json *value, void (*put)(CborOut *o, const void *given), const void *given) {
 	size_t length;
 	unsigned char *want = encode(value, &length, NULL);
@@ -524,7 +499,6 @@ static void pieces(void) {
 	for (size_t i = 0; i < sizeof ints / sizeof *ints; i++) expectNumber("an integer", jsonInteger(ints[i]), putInteger, &ints[i]);
 	static const double ds[] = { 0.0, -0.0, 0.5, -1.5, 1e300, 5e-324, 65504, 65505, 0x1p-24, 1e15, 9007199254740993.0, 1.8446744073709552e19, -1.8446744073709552e19, INFINITY, -INFINITY, NAN };
 	for (size_t i = 0; i < sizeof ds / sizeof *ds; i++) expectNumber("a double", jsonNumber(ds[i]), putDouble, &ds[i]);
-	// magnitudes: leading zeros, 0 and -0, 2^64 and past, exact in a double, past 128 bytes
 	Magnitude w[8];
 	memset(w, 0, sizeof w);
 	w[0] = (Magnitude){ true, { 0 }, 1 };
@@ -539,7 +513,6 @@ static void pieces(void) {
 }
 
 static void keys(void) {
-	// U+0000 in a key is the byte 00, and sorts first among keys of its length
 	char *why = NULL;
 	Json *value = jsonParse("{\"b\": 1, \"\\u0000\": 2, \"a\\u0000\": 3}", strlen("{\"b\": 1, \"\\u0000\": 2, \"a\\u0000\": 3}"), &why);
 	expectBoth("U+0000 in keys", value, "a361000261620162610003");
@@ -549,7 +522,6 @@ static void keys(void) {
 	jsonFree(value);
 }
 
-// n containers, one in another, a map among them halfway
 static Json *nest(int n) {
 	Json *root = jsonArray(), *at = root;
 	for (int i = 1; i < n; i++) {
@@ -561,7 +533,6 @@ static Json *nest(int n) {
 	return root;
 }
 
-// n lists, one in another, as bytes: 81 n - 1 times, then 80
 static void expectNestedRejected(const char *what, size_t n) {
 	unsigned char *bytes = allocate(n);
 	memset(bytes, 0x81, n - 1);
@@ -574,11 +545,9 @@ static void expectNestedRejected(const char *what, size_t n) {
 }
 
 static void deep(void) {
-	// CBOR_DEPTH containers, one in another: the deepest a value goes, nothing recursing
 	Json *most = nest(CBOR_DEPTH);
 	roundTrip("CBOR_DEPTH deep", most);
 	jsonFree(most);
-	// one more, or a million: no encoding, and their bytes are not one
 	Json *over = nest(CBOR_DEPTH + 1), *million = nest(1000000);
 	expectNoEncoding("CBOR_DEPTH + 1 deep", over);
 	expectNoEncoding("a million deep", million);

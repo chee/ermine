@@ -1,4 +1,4 @@
-// blake3, one-shot: a tiny wasm one and the noble js one, pick with use()
+// blake3, one-shot: a tiny wasm build and the noble js one, chosen with use()
 import { blake3 as noble } from "npm:@noble/hashes@1.8.0/blake3"
 import { bytes } from "./wasm.ts"
 
@@ -34,8 +34,7 @@ export function use(choice: "wasm" | "js"): void {
 	which = choice
 }
 
-// the js one only when wasm is not to be had (no WebAssembly, or a host that refuses to compile
-// it); a failure of the hash itself is not hidden
+// the js one is used only when wasm is unavailable; a failure of the hash itself is not hidden
 export function blake3(bytes: Uint8Array): Uint8Array {
 	if (which === "wasm") {
 		try {

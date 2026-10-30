@@ -144,7 +144,6 @@ Deno.test("cbor: decoding gives fresh values of their own class", () => {
 	const b = decode(input)
 	if (!(b instanceof Uint8Array)) throw new Error("bytes are not a Uint8Array")
 	assertEquals(Array.from(b), [1, 2, 3, 4])
-	// fresh: not a view pinning the input
 	assertEquals([b.byteOffset, b.buffer.byteLength], [0, 4])
 	input[1] = 9
 	assertEquals(b[0], 1)
@@ -261,7 +260,6 @@ Deno.test("cbor: a value that holds itself has no encoding", () => {
 	assertEquals(hex(encode([shared, shared])), "8281018101")
 })
 
-// a symbol anywhere: none, getting rid of them is the caller's
 const s = Symbol("s"), r = Symbol.for("ermine.places.root")
 const SYMBOLS: [string, unknown][] = [
 	["a symbol for a name", r],
@@ -279,7 +277,6 @@ for (const [name, x] of SYMBOLS) {
 	})
 }
 
-// a small deterministic generator for round trips
 function rng(seed: number) {
 	return () => {
 		seed = (seed * 1103515245 + 12345) & 0x7fffffff
@@ -432,7 +429,6 @@ function fromJson(x: unknown): Value {
 }
 
 Deno.test("cbor: agrees with cbor/conformance/vectors.json", async () => {
-	// one set of vectors for every codec
 	const text = await Deno.readTextFile(
 		new URL("../conformance/cbor/vectors.json", import.meta.url),
 	)
@@ -448,7 +444,6 @@ Deno.test("cbor: agrees with cbor/conformance/vectors.json", async () => {
 				fromJson(v.form)
 				disagree.push(`${JSON.stringify(v.form)}: a value, the vector says none (${v.refused})`)
 			} catch {
-				// no value, as it should be
 			}
 		} else if (has("value") || has("json")) {
 			const value = fromJson(has("value") ? v.value : v.json)
@@ -471,14 +466,12 @@ Deno.test("cbor: agrees with cbor/conformance/vectors.json", async () => {
 				decode(unhex(want))
 				disagree.push(`${name}: decodes, the vector says it is no encoding`)
 			} catch {
-				// rejected, as it should be
 			}
 		}
 	}
 	assertEquals(disagree, [])
 })
 
-// found by the pack fuzz: a string written as the buffer grows keeps its bytes
 Deno.test("cbor: strings across the buffer's growing", () => {
 	for (let pad = 0; pad < 300; pad += 7) {
 		const v = ["x".repeat(pad), "é水😀".repeat(1 + pad % 13), "ü".repeat(30)]
@@ -486,7 +479,6 @@ Deno.test("cbor: strings across the buffer's growing", () => {
 	}
 })
 
-// DEPTH containers, one in another, a map among them halfway
 function nest(n: number): Value {
 	let v: Value = []
 	for (let i = n - 1; i >= 1; i--) v = i === Math.floor(n / 2) ? { k: v } : [v]
@@ -505,7 +497,6 @@ Deno.test("cbor: a value nests at most DEPTH containers, either way, refused wit
 	assertThrows(() => decode(new Uint8Array(DEPTH + 1).fill(0xd8)), CborError)
 })
 
-// encode(x, { live: true }): a live value or symbol is a stand-in naming it
 function named() {}
 class Kennel {}
 const LIVE: [string, unknown, string][] = [

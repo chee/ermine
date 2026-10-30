@@ -1,23 +1,18 @@
-// Ed25519 for ermine, in TS (c/ed25519.h the same in C): a 32-byte secret (an RFC 8032 seed), its
-// 32-byte public key, a 64-byte signature. sign and verify go through WebCrypto (every browser, Deno
-// and Node have it); verify takes only what strict (below) takes, as the C does, so every device
-// takes the same signatures
+// Ed25519 in TS (c/ed25519.h is the same in C): a 32-byte secret (RFC 8032 seed), a 32-byte public
+// key, a 64-byte signature. sign and verify use WebCrypto. Verify first applies the strict checks
+// below, as the C does, so every device accepts the same signatures.
 //
 //   const key = await publicKeyOf(secret)
 //   const signature = await sign(secret, message)
-//   await verify(key, message, signature)     // true | false; a throw only when WebCrypto has no Ed25519
+//   await verify(key, message, signature)     // true | false; throws only if WebCrypto lacks Ed25519
 //
-// what an Ed25519 signature must be before the equation is asked, as the C (ed25519.h) has it, so
-// every device takes the same ones: S below the group order L; the key (A) and R each in their one
-// canonical encoding (y below p, and no sign bit when x is 0); neither of small order. WebCrypto
-// checks the equation without the cofactor, as the C does; alone it takes some of these (the
-// identity as a key, with R the identity and S 0, is good for every message)
+// Strict checks (ed25519.h): S below the group order L; the key and R each in their one canonical
+// encoding; neither of small order. WebCrypto alone accepts some of these (the identity as a key,
+// with R the identity and S 0, verifies every message).
 
 const P = 2n ** 255n - 19n
 const L = 2n ** 252n + 27742317777372353535851937790883648493n
 
-// the eight points of small order, each in its canonical encoding: the identity, the point of order
-// 2, two of order 4, four of order 8
 const SMALL = /* @__PURE__ */ new Set([
 	"0100000000000000000000000000000000000000000000000000000000000000",
 	"ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
@@ -29,7 +24,6 @@ const SMALL = /* @__PURE__ */ new Set([
 	"26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc85",
 ])
 
-// 32 bytes, little-endian
 function number(b: Uint8Array): bigint {
 	let n = 0n
 	for (let i = b.length - 1; i >= 0; i--) n = n * 256n + BigInt(b[i])
@@ -49,14 +43,12 @@ function point(b: Uint8Array): boolean {
 	return !SMALL.has(hex(b))
 }
 
-// whether a raw signature (R then S, 64 bytes) and raw key may be good at all
 export function strict(signature: Uint8Array, key: Uint8Array): boolean {
 	if (signature.length !== 64 || key.length !== 32) return false
 	if (number(signature.subarray(32)) >= L) return false
 	return point(key) && point(signature.subarray(0, 32))
 }
 
-// what a seed is wrapped in for WebCrypto to take it (RFC 8410, PKCS#8)
 const PKCS8 = Uint8Array.of(
 	0x30,
 	0x2e,
@@ -82,7 +74,6 @@ const imported = (secret: Uint8Array, extractable: boolean) => {
 	return crypto.subtle.importKey("pkcs8", der, { name: "Ed25519" }, extractable, ["sign"])
 }
 
-// a secret's public key, read from its JWK
 export async function publicKeyOf(secret: Uint8Array): Promise<Uint8Array> {
 	const x = (await crypto.subtle.exportKey("jwk", await imported(secret, true))).x!
 	const b64 = x.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(x.length / 4) * 4, "=")
@@ -94,7 +85,6 @@ export async function sign(secret: Uint8Array, message: Uint8Array): Promise<Uin
 	return new Uint8Array(await crypto.subtle.sign("Ed25519", k, message.slice()))
 }
 
-// whether signature is key's over message: strict first, then the equation
 export async function verify(
 	key: Uint8Array,
 	message: Uint8Array,
@@ -107,7 +97,6 @@ export async function verify(
 		])
 		return await crypto.subtle.verify("Ed25519", k, signature.slice(), message.slice())
 	} catch (e) {
-		// a key that is no point, a signature that is bad: false. no Ed25519 here is not a bad one
 		if (e instanceof DOMException && (e.name === "DataError" || e.name === "OperationError")) {
 			return false
 		}

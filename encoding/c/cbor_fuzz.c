@@ -1,10 +1,7 @@
-// libFuzzer target (fuzz.sh cbor): the input bytes decoded as one value with cborDecode. Checked:
-// - cborCheck says the same: taken or not, and on a no the same reason at the same byte;
-// - taken: encoding the value gives the input exactly (decoding takes only the canonical
-//   encoding), and the value read again is equal to it; a short buffer gets the first bytes and
-//   the whole length, a buffer that grows (CborOut) the same bytes;
-// - nothing leaks (the leak checker), nothing reads or writes out of bounds (ASan), no undefined
-//   behaviour (UBSan).
+// libFuzzer target (fuzz.sh cbor): decodes the input with cborDecode. cborCheck must agree. When
+// taken, re-encoding must give the input exactly (also into a short or growing buffer), and the
+// value read again must be equal. Leaks, out-of-bounds access and undefined behaviour are caught
+// by the sanitizers.
 #include "cbor.h"
 
 #include <stdio.h>

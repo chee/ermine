@@ -1,21 +1,17 @@
-// the canonical encoding of values: RFC 8949 core deterministic, typed arrays as RFC 8746. this
-// header is the rule (vectors.json in encoding/conformance/cbor holds its bytes).
-// - whole numbers: integers, major type 0 or 1 in the shortest head; past 64 bits a bignum, tag 2
-//   or 3 over its bytes, big-endian, no leading zero. -0 is 0. a number or a bigint: the same bytes
-// - other numbers: the shortest float that holds them exactly; the one NaN f97e00; the infinities
-//   f97c00, f9fc00
-// - read back: a number while |n| <= 2^53 - 1, a bigint past that (5n is read back as 5)
-// - bytes major type 2, strings 3, lists 4, maps 5; map keys strings, sorted bytewise by encoding
-// - typed arrays: tag over little-endian bytes (uint16 69 … float64 86); NaN elements quiet, no
-//   payload; -0 elements kept; no uint8 kind (tag 64 never written)
-// - stand-ins: tag 0x12345678 over the kind; live values and symbols have no encoding, unless
-//   encode(x, { live: true }): each then a stand-in of a string kind naming it ("function f",
-//   "function anonymous", a symbol's toString, a class object's constructor name or "object")
+// Deterministic CBOR (RFC 8949 4.2.1) for values, with typed arrays as RFC 8746. This header is the
+// rule; encoding/conformance/cbor/vectors.json holds the bytes.
+// - whole numbers: integers in the shortest head; past 64 bits a bignum (tag 2 or 3, big-endian,
+//   no leading zero). -0 is 0. A number or bigint of the same value gives the same bytes.
+// - other numbers: the shortest float that holds them exactly; one NaN f97e00; infinities f97c00, f9fc00
+// - read back: a number up to 2^53 - 1, a bigint past that
+// - map keys are strings, sorted bytewise by their encodings
+// - typed arrays: a tag over little-endian bytes (uint16 69 ... float64 86); NaNs are the quiet NaN,
+//   -0 is kept, and there is no uint8 kind
+// - stand-ins: tag 0x12345678 over the kind. Live values and symbols have no encoding, unless
+//   encode(x, { live: true }) writes each as a stand-in naming it.
 // - at most DEPTH nested containers
-// bytes: any Uint8Array view in, a fresh one out. a stand-in is the class Stand; a function, Map,
-// ArrayBuffer (for now) or other class object is live. decoding accepts exactly what encoding
-// gives: never a float holding a whole number, an integer in a longer head, or a bignum a plain
-// integer holds.
+// Decoding accepts exactly what encoding gives: no float holding a whole number, no overlong
+// head, no bignum that a plain integer holds.
 
 /** A value as this codec holds it. */
 export type Value =
@@ -53,7 +49,6 @@ export class CborError extends Error {
 	override name = "CborError"
 }
 
-// Each kind: its class, its tag, its element size.
 type Kind = { tag: number; size: number; make: new (n: number) => Typed }
 const KINDS: Kind[] = [
 	{ tag: 69, size: 2, make: Uint16Array },
@@ -175,7 +170,6 @@ function integer(out: Out, x: bigint) {
 
 function number(out: Out, x: number) {
 	if (Number.isInteger(x)) {
-		// -0 is 0; a negative's argument -1 - x is exact up to 2^53, a bigint's past it
 		if (x >= 0 && x < TWO64) return out.head(0, x === 0 ? 0 : x)
 		if (x < 0 && x >= -(2 ** 53)) return out.head(1, -1 - x)
 		return integer(out, BigInt(x))
@@ -240,7 +234,6 @@ const size = (arg: number) =>
 function text(out: Out, s: string) {
 	const length = s.length
 	if (length < 24) {
-		// short and ASCII: byte by byte
 		out.room(1 + length)
 		const buf = out.buf, n = out.n
 		let i = 0
@@ -257,7 +250,6 @@ function text(out: Out, s: string) {
 	}
 	if (!s.isWellFormed()) throw new CborError("a string with a lone surrogate has no encoding")
 	const most = length * 3, guess = size(most)
-	// room for the head too: growing copies only what is written
 	out.room(9 + most)
 	const n = out.n
 	const written = utf8.encodeInto(s, out.buf.subarray(n + guess)).written
@@ -267,7 +259,6 @@ function text(out: Out, s: string) {
 	out.n = n + real + written
 }
 
-// keys' encodings, made once: keys repeat
 const keys = new Map<string, Uint8Array>()
 function key(k: string): Uint8Array {
 	let b = keys.get(k)
@@ -287,14 +278,12 @@ function compare(a: Uint8Array, b: Uint8Array): number {
 	return a.length - b.length
 }
 
-// containers deeper than this are tracked: a value holding itself is found within one turn of it
 const SHALLOW = 64
 
 /** How many containers a value nests at most, one inside the next (cbor.h's CBOR_DEPTH). */
 export const DEPTH = 1024
 const tooDeep = `nested deeper than ${DEPTH}`
 
-// what a live value is called, as the kind of its stand-in
 function liveKind(x: unknown): string {
 	if (typeof x === "function") return `function ${x.name || "anonymous"}`
 	if (typeof x === "symbol") return x.toString()
@@ -337,7 +326,6 @@ function value(out: Out, x: unknown, open: Set<object>, depth: number, live: boo
 		const t = x as Typed
 		out.head(6, kind.tag)
 		out.head(2, t.byteLength)
-		// little-endian and no NaN: its bytes as they are
 		if ((LITTLE || kind.size === 1) && !hasNaN(t, kind)) {
 			return out.bytes(new Uint8Array(t.buffer, t.byteOffset, t.byteLength))
 		}
@@ -366,7 +354,6 @@ function value(out: Out, x: unknown, open: Set<object>, depth: number, live: boo
 		}
 		let ks = Object.keys(x), bs = ks.map(key)
 		if (ks.length <= 16) {
-			// insertion sort: most maps are small
 			for (let i = 1; i < ks.length; i++) {
 				const k = ks[i], b = bs[i]
 				let j = i - 1
@@ -374,7 +361,7 @@ function value(out: Out, x: unknown, open: Set<object>, depth: number, live: boo
 				ks[j + 1] = k, bs[j + 1] = b
 			}
 		} else {
-			// a big one (a folder of 30k names): n log n, not n²
+			// big maps (a folder of 30k names) sort once: n log n, not n²
 			const order = ks.map((_, i) => i).sort((a, b) => compare(bs[a], bs[b]))
 			ks = order.map((i) => ks[i]), bs = order.map((i) => bs[i])
 		}
@@ -457,7 +444,6 @@ class In {
 	}
 }
 
-// a text: short and ASCII byte by byte, else strict UTF-8
 function string(input: In, n: number): string {
 	const at = input.at
 	input.need(n)
@@ -484,7 +470,6 @@ function string(input: In, n: number): string {
 	}
 }
 
-// depth: how many containers hold what is read
 function read(input: In, depth: number): Value {
 	input.need(1)
 	const start = input.at
@@ -493,7 +478,6 @@ function read(input: In, depth: number): Value {
 	switch (major) {
 		case 0:
 		case 1: {
-			// a number while it is safe, a bigint past that
 			if (info < 27) {
 				const n = input.arg(info)
 				return major === 0 ? n : -1 - n
@@ -529,7 +513,6 @@ function read(input: In, depth: number): Value {
 				const at = input.at
 				if (at < b.length && b[at] >> 5 !== 3) throw wrong("a map key that is not a string")
 				const key = read(input, depth + 1) as string
-				// after the last key, bytewise
 				if (from >= 0) {
 					const end = input.at, k = Math.min(to - from, end - at)
 					let c = 0
@@ -622,7 +605,6 @@ function read(input: In, depth: number): Value {
 				x = input.view.getFloat64(input.at)
 				input.at += 8
 			} else throw wrong("a simple value that is not false, true or null")
-			// in its shortest float: the one NaN is f97e00; a half is a half
 			if (ib === 0xf9) {
 				if (x !== x && input.view.getUint16(start + 1) !== 0x7e00) {
 					throw wrong("a number not in its shortest float")

@@ -1,20 +1,12 @@
-// json.h: a value (cbor.h), value equality, and code point helpers; parser and printer are
-// json_text.h. nothing here knows about graphs.
+// json.h: JSON values plus bytes, typed arrays and stand-ins, with equality and code point helpers.
+// The parser and printer are in json_text.h. Nothing here recurses; free and equality use heap stacks.
 //
-// values: JSON plus bytes, typed arrays (each in its own buffer; no uint8 kind) and stand-ins.
-// numbers: any binary64 but -0 (it is 0: whole numbers are integers), and every whole number, of
-// any size: one no double holds exactly (past 2^53) is `big` beside the double nearest it.
-// jsonDecode turns "/" forms into these; the printer writes them back (base64, no padding; typed
-// arrays little-endian; one NaN per width; a whole number past 2^53 - 1 as {"/":{"bigint":...}}).
-// holders: a value is immutable once shared. whoever made it holds it; jsonRef adds a hold,
-// jsonFree drops one (the last frees). a function borrows what it is given; jsonPush, jsonAdd,
-// jsonSet, jsonStand take the caller's hold. to change, jsonShallow and change the copy.
-// nothing recurses: parse, print, free and equality keep heap stacks.
-// absent: a NULL `Json *`; a present null is JSON_NULL.
-// strings: UTF-8, NUL-terminated, `stringLength` bytes. U+0000 is held as C0 80 (one code point,
-// sorts first). a lone surrogate is held as WTF-8 and printed back as \udxxx; jsonDecode rejects
-// it, so none reaches the graph.
-// order: utf8Compare or textCompare, never strcmp.
+// A value is immutable once shared. Whoever made it holds it; jsonRef adds a hold and jsonFree
+// drops one (the last frees). Functions borrow their arguments, except jsonPush, jsonAdd, jsonSet
+// and jsonStand, which take the caller's hold. To change a value, jsonShallow it and edit the copy.
+// An absent value is a NULL `Json *`; a present null is JSON_NULL.
+// Strings are UTF-8 with U+0000 held as C0 80 (so it sorts first). Lone surrogates are held as
+// WTF-8; jsonDecode rejects them. Compare with utf8Compare or textCompare, never strcmp.
 
 #ifndef JSON_H
 #define JSON_H
@@ -30,7 +22,7 @@ typedef enum { JSON_INT8, JSON_INT16, JSON_UINT16, JSON_INT32, JSON_UINT32, JSON
 
 typedef struct Json Json;
 
-/** one key of an object, in the order the keys were given; a key is `keyLength` bytes and may hold NUL */
+/** One key of an object, in insertion order; the key is `keyLength` bytes and may hold NUL. */
 typedef struct JsonMember {
 	char *key;
 	size_t keyLength;
@@ -43,8 +35,7 @@ struct Json {
 		bool boolean;
 		struct {
 			double number; // the number; a big one's, the double nearest it
-			// a whole number no double holds exactly: its magnitude, big-endian, no leading zero
-			// (whole.h), and its sign. NULL for every other number
+			// a whole number no double holds exactly: magnitude (big-endian) and sign; NULL for other numbers
 			unsigned char *big;
 			size_t bigLength;
 			bool bigNegative;
@@ -81,8 +72,6 @@ struct Json {
 };
 
 // making values ----------------------------------------------------------------
-// Every constructor returns a fresh value the caller may change until it
-// hands it on.
 
 Json *jsonNull(void);
 Json *jsonBoolean(bool value);
@@ -90,7 +79,7 @@ Json *jsonBoolean(bool value);
 Json *jsonNumber(double value);
 Json *jsonInteger(int64_t value);
 Json *jsonUnsigned(uint64_t value);
-/** a whole number from its sign and magnitude, big-endian (leading zeros allowed): a double when one holds it exactly */
+/** A whole number from sign and big-endian magnitude; a double when one holds it exactly. */
 Json *jsonWhole(bool negative, const unsigned char *magnitude, size_t length);
 /** copies the text (up to its NUL) */
 Json *jsonString(const char *text);
@@ -137,30 +126,17 @@ bool jsonIsString(const Json *value);
 bool jsonIsNumber(const Json *value);
 /** a string's C text (every string is one, see STRINGS), or NULL when the value is not a string */
 const char *jsonText(const Json *value);
-/**
- * a whole number (Number.isInteger), of any size: puts it in *out when out
- * is not NULL, held at INT64_MIN or INT64_MAX past them (no list, slot or
- * string is that long, so comparing it with a length or an index still
- * answers right)
- */
+/** A whole number of any size into *out (if not NULL), clamped to INT64_MIN/INT64_MAX. */
 bool jsonIsWhole(const Json *value, int64_t *out);
 /** a whole number from INT64_MIN to INT64_MAX into *out; false for anything else (a fraction, past them) */
 bool jsonInt64(const Json *value, int64_t *out);
 /** a number as a double into *out (a big whole one: the double nearest it); false when not a number */
 bool jsonDouble(const Json *value, double *out);
-/**
- * a whole number's sign and magnitude (big-endian, no leading zero), of any size: a big one's own
- * bytes, else written to scratch (128 bytes is room for any double's); false when not a whole number
- */
+/** A whole number's sign and magnitude (big-endian), borrowed or written to a 128-byte scratch. */
 bool jsonMagnitude(const Json *value, bool *negative, const unsigned char **magnitude, size_t *length, unsigned char scratch[128]);
 /**
- * Value equality: of the same kind with equal parts. Numbers by value, NaN
- * equal to NaN (no -0 is made: 0 and -0 are equal, as are whole numbers by value);
- * strings and bytes byte for byte; typed arrays only of the same kind,
- * element by element as numbers are; lists element by element in order;
- * objects with the same keys holding equal values in any key order;
- * stand-ins with equal kinds. Two NULLs (absent) are equal;
- * NULL and a value are not.
+ * Value equality. Numbers compare by value (NaN equals NaN, 0 equals -0), typed arrays only within
+ * a kind, objects ignore key order, and two NULLs are equal.
  */
 bool jsonEqual(const Json *a, const Json *b);
 
