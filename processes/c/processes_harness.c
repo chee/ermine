@@ -1,7 +1,4 @@
-// The C processes (processes.h) on the line protocol of typescript/processes_harness.ts, which documents
-// it and the programs (conformance/c/harness.h has the loop). Its world is places' (the scheduler, the
-// table, the writes: places/c/world_harness.h), made with the contributors [processes("R"),
-// children]; programs are data, evaluated here as the reference does.
+// The C processes on the line protocol of typescript/processes_harness.ts.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -23,7 +20,6 @@
 static pr_processes rows;
 static const pl_contributor *walk[2];
 
-// the rows' contributor, each ask counted (the asked request): its step and names
 static size_t steps_asked, names_asked;
 static int counted_step(void *ctx, const pl_here *here, const char *name, pl *l, tb_key *out) {
 	steps_asked++;
@@ -37,8 +33,6 @@ static pl_contributor counted;
 static int begun;
 static sn *nodes;
 
-// reads -----------------------------------------------------------------------------------------
-
 static op_value *path_json(const char *const *from, size_t depth, const char *const *names,
 	size_t n) {
 	op_value *a = op_list();
@@ -47,7 +41,6 @@ static op_value *path_json(const char *const *from, size_t depth, const char *co
 	return a;
 }
 
-// the lookup of names from a path, as JSON: the nearest path, or null
 static op_value *lookup_json(const char *const *names, size_t n, const char *const *from,
 	size_t nfrom) {
 	size_t *depths = world_alloc((nfrom + 1) * sizeof *depths);
@@ -102,7 +95,6 @@ static op_value *members_json(const op_value *path) {
 	for (size_t i = 0; i < list.n; i++) {
 		op_value *m = op_map();
 		op_set(m, "name", op_str(list.items[i].name));
-		// a level: no id
 		if (list.items[i].id.string != NULL) op_set(m, "id", op_str(list.items[i].id.string));
 		if (list.items[i].from) op_set(m, "from", op_str(list.items[i].from));
 		op_push(a, m);
@@ -110,8 +102,6 @@ static op_value *members_json(const op_value *path) {
 	pl_members_free(&list);
 	return a;
 }
-
-// programs --------------------------------------------------------------------------------------
 
 typedef struct {
 	bool stopped;
@@ -175,9 +165,6 @@ static sc_out program_f(void *previous, void *data) {
 	return (sc_out){.kind = SC_VALUE, .value = v};
 }
 
-// writes ----------------------------------------------------------------------------------------
-
-// a start or a stop, made in the host's scope
 typedef struct {
 	const op_value *request;
 	bool stop;
@@ -220,7 +207,6 @@ static void write(void *data) {
 	if (c->code > 0) c->why = pl_code_name(c->code);
 }
 
-// scope nodes: a write of a part's entry at an id, in the host's scope
 typedef struct {
 	const op_value *request;
 	const char *why;
@@ -252,8 +238,6 @@ static op_value *id_answer(const char *id) {
 	if (id != NULL) op_set(o, "id", op_str(id));
 	return o;
 }
-
-// requests --------------------------------------------------------------------------------------
 
 static op_value *answer(const op_value *r) {
 	const char *op = world_text(op_get(r, "op"));

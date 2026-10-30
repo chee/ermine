@@ -1,13 +1,5 @@
-// each scope's node: an id of its own beside the scheduler's scope. nothing saves it today (nothing
-// saved reaches it). a process's value, its status and its pin are written there. at the scope's
-// teardown its node's entries go, as table events, so whoever read them is told. which node a scope
-// has, for a write's frames: its own node key (changeable's Info), given as it is made; this is
-// only the teardown. a memo's or effect's node is the api's: a computer's teardowns run after each
-// of its runs, so its node's entries are the api's to take out
-//
-// the scheduler imports no table, so the map is kept here, beside it.
-// core candidate: the scheduler's teardown could take a node key's entries, instead of a map and a
-// teardown registered from outside
+// Each scope's node: an id of its own beside the scheduler's scope. The scheduler imports no
+// table, so the scope-to-node map is kept here.
 import type { Scheduler, Scope } from "@ermine/reactivity"
 import type { Id, Key, Table } from "@ermine/graph/table"
 
@@ -17,8 +9,6 @@ export type Setup = {
 }
 
 export type ScopeNodes = {
-	// the scope's node id, made the first time (given, or `scope:<uuid>`); the same after; a scope
-	// torn down has none
 	give: (scope: Scope, id?: Id) => Id | undefined
 }
 

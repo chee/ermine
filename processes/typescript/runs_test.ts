@@ -17,7 +17,6 @@ import { createScheduler, PENDING } from "@ermine/reactivity"
 import { createPaths } from "@ermine/reactivity/paths"
 import { createRuns, type Read } from "./runs.ts"
 
-// a world: each computer given a node has its latest run in the runs' table as its runs end
 function world() {
 	const s = createScheduler()
 	s.onTrackingEnd((k) => places.release(k))
@@ -37,7 +36,6 @@ function world() {
 			}),
 		)
 	}
-	// patches to the value under k, from outside, with scope open (the host: o)
 	const edit = (k: string, patches: Patch[], scope = o) =>
 		s.runWithScope(scope, () => {
 			const e = table.get("value", k)!
@@ -47,7 +45,6 @@ function world() {
 	return { s, table, places, runs, o, other, edit }
 }
 
-// a read's where, without its change
 const where = (r: Read) => "key" in r ? { key: r.key } : { part: r.part, id: r.id, path: r.path }
 
 Deno.test("runs: a computer reading two nodes records both, in the order first read, each once", () => {
@@ -159,7 +156,6 @@ Deno.test("runs: a pending run records what it read before pending; its landing,
 	const done = runs.read("C")!
 	assertEquals([done.n, done.end, done.started], [1, "done", pending.started])
 	assertStrictEquals(done.reads, pending.reads)
-	// and a compute returning the scheduler's PENDING
 	const w = s.runWithScope(o, () =>
 		s.createComputer(() => {
 			places.readValue("value", "b")
@@ -185,7 +181,6 @@ Deno.test("runs: a failed run, its error; looping too", () => {
 	assertInstanceOf(run.error, Error)
 	assertEquals((run.error as Error).message, "boom")
 	assertEquals(run.reads.map(where), [{ part: "value", id: "a", path: [] }])
-	// a compute setting what it reads: a loop through itself
 	const l = s.runWithScope(
 		o,
 		() =>
@@ -204,7 +199,6 @@ Deno.test("runs: a failed run, its error; looping too", () => {
 
 Deno.test("runs: writes, each with its change: the run's code, its set, an effect's act; a host's write in it is not", () => {
 	const { s, table, places, runs, o, edit } = world()
-	// a compute whose set writes b, and whose run writes a's y
 	const c = s.runWithScope(o, () =>
 		s.createComputer(() => {
 			const x = places.readValue("value", "a", ["x"]) as number
@@ -225,7 +219,6 @@ Deno.test("runs: writes, each with its change: the run's code, its set, an effec
 		["value", "b", [{ path: ["x"], value: 0 }]],
 	])
 	assertStrictEquals(run.writes[1].change, table.get("value", "b")!.change)
-	// an effect: its act's writes come after its run's end
 	const e = s.runWithScope(
 		o,
 		() =>
@@ -238,7 +231,6 @@ Deno.test("runs: writes, each with its change: the run's code, its set, an effec
 	runs.give(e, "E")
 	s.pulse()
 	assertEquals(runs.read("E")!.writes.map((w) => [w.part, w.id]), [["value", "a"]])
-	// a write from outside lands in no record
 	const writes = runs.read("C")!.writes
 	edit("b", [{ path: ["y"], value: 9 }])
 	assertStrictEquals(runs.read("C")!.writes, writes)
@@ -277,7 +269,6 @@ Deno.test("runs: records read in a loop (its own, each other's) end looping, as 
 	edit("a", [{ path: ["x"], value: 1 }])
 	s.pulse()
 	assertEquals(runs.read("S")!.end, "looping")
-	// each ran again a bounded number of times
 	assert(counts.S - before.S <= 2 && counts.P - before.P <= 3 && counts.Q - before.Q <= 3)
 })
 
@@ -375,7 +366,6 @@ Deno.test("runs: an act that does not throw is done; one that throws is failed; 
 	const act = runs.read("E")!.act!
 	assertEquals(act.end, "failed")
 	assertEquals((act as { error: Error }).error.message, "act boom")
-	// a compute has none
 	const c = s.runWithScope(o, () => s.createComputer(() => 1, () => {}))
 	runs.give(c, "C")
 	s.pulse()

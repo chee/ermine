@@ -1,24 +1,18 @@
-// runs harness: places' harness (places/typescript/places_harness.ts: its world, its
-// computes by name, its programs) and the runs (runs.ts), on the line protocol.
+// The reference runs (runs.ts) on places' harness, on the line protocol.
 // { op: "runs" }                            → {}   the runs listener, made once
 // { op: "giveRun", name, id }               → {}   the compute's runs written by node id
-// { op: "runOf", id }                       → { run }   outside a run, the policy asked: null |
-//    { n, frame, end, error?, act?, timed, reads, writes }; frame: the run's frame as a header's
-//    (world_harness.ts: infos innermost first); timed: started then ended; error: the
-//    Error's message, else what was thrown as it was; act: { end, error? } the same; read: { part,
-//    id, path, keys?, actor } | null; write: { part, id, actor }. refused: { error: "refused" }
+// { op: "runOf", id }                       → { run } | { error: "refused" }
+//    run: null | { n, frame, end, error?, act?, timed, reads, writes }; timed is started then ended;
+//    act is { end, error? }; a read is { part, id, path, keys?, actor }; a write { part, id, actor }
 // { op: "dropRun", id }                     → {}   the record out (its computer gone)
 // { op: "deny", id }                        → {}   from now on the policy says no to reading id
-// { op: "effect", name, scope, f, act }     → {}   an effect (the name, as watch's) running f (a
-//    list of {"read":[part,id,path?]}, its value the values read) and acting with act: a program of
-//    this harness: a value, {"read":[part,id,path?]}, {"if":[c,a,b]}, {"throw":message} (an
-//    Error), {"throwRaw":v} (v thrown as it is; typescript only). wait: p, the effect returns a
-//    promise named p, its run pending until settled
-// { op: "settle", promise }                 → {}   the promise made settles (done), landing at the next pulse
-// { op: "statusValue", id }                 → { value }   typescript only: the node's status as it is
-//    (statusOf tells only an Error's message): null | "pending" | { error } | { thrown }
+// { op: "effect", name, scope, f, act }     → {}
+//    an effect running f (a list of {"read":[part,id,path?]}) and acting with act: a value, a read,
+//    {"if":[c,a,b]}, {"throw":message}, {"throwRaw":v} (typescript only). wait: p returns a promise p
+// { op: "settle", promise }                 → {}   settles the promise (done), landing at the next pulse
+// { op: "statusValue", id }                 → { value }   typescript only: the node's status as it
+//    is: null | "pending" | { error } | { thrown }
 // program e, besides places' harness's:
-//   {"run":[id, field?]}        the record as runOf tells it, or that field of it; tracked
 import { type Computer, PENDING } from "@ermine/reactivity"
 import { status } from "./status.ts"
 import { createGuard, Refusal } from "./guard.ts"
@@ -42,12 +36,10 @@ const guard = createGuard({
 	may: (ask) => denied.has(String(ask.target.id)) ? no("denied") : yes,
 })
 
-// what was thrown as it is told: an Error's message, else the value
 const thrown = (e: unknown): Json => e instanceof Error ? e.message : e
 const actJson = (a: Act): Json =>
 	a.end === "done" ? { end: "done" } : { end: "failed", error: thrown(a.error) }
 
-// a harness program, the small part of it effects use
 function evaluate(e: Json): Json {
 	if (e === null || typeof e !== "object") return e
 	if (Array.isArray(e)) return e.map(evaluate)
@@ -65,7 +57,6 @@ function evaluate(e: Json): Json {
 	throw new Error("unknown program")
 }
 
-// a run as runOf tells it
 function runJson(run: Run | undefined): Json {
 	if (run === undefined) return null
 	const actor = (c: { actor: unknown } | undefined) => c === undefined ? null : c.actor ?? null
@@ -96,7 +87,6 @@ forms.push((m) => {
 	if (field === undefined) return { value: runJson(runs.read(id, guard)) }
 	const v = runs.read(id, field, guard)
 	if (v === undefined) return { value: null }
-	// as runOf tells it: the one field of a record holding just it
 	if (field === "error") return { value: thrown(v) }
 	if (field === "act") return { value: actJson(v as Act) }
 	const one = runJson(

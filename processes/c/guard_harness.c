@@ -1,7 +1,4 @@
-// The C guard (guard.h) on the line protocol of typescript/guard_harness.ts, which documents it,
-// the policies and the programs (conformance/c/harness.h has the loop). The world (the table, the
-// writes, the scheduler) is world_harness.h's. Each program asks its guard, then reads and writes itself,
-// as a process layer will.
+// The C guard on the line protocol of typescript/guard_harness.ts.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,9 +16,6 @@
 		(v)[(n)++] = (x); \
 	} while (0)
 
-// policies ---------------------------------------------------------------------------------------
-
-// every ask of a guard's policy is recorded, whole, for the asks request
 static op_value *asked;
 
 static op_value *strings_json(const char *const *names, size_t n) {
@@ -39,7 +33,6 @@ static op_value *target_json(const pr_target *x) {
 	return t;
 }
 
-// who asked, as the world shows a header: its frame's infos
 static op_value *who_json(const op_value *who) {
 	op_value *o = op_map();
 	for (size_t i = 0; i < who->count; i++) {
@@ -54,7 +47,6 @@ static op_value *ask_json(const pr_ask *ask) {
 	const pr_target *n = &ask->node;
 	op_set(o, "op", op_str(ask->op));
 	op_set(o, "target", target_json(&ask->target));
-	// a node, when one was given
 	if (n->part || n->id.string || n->field || n->path) op_set(o, "node", target_json(n));
 	if (ask->who) op_set(o, "who", who_json(ask->who));
 	if (ask->from.path || ask->from.box.string) {
@@ -66,7 +58,6 @@ static op_value *ask_json(const pr_ask *ask) {
 	return o;
 }
 
-// the policies of a request, and what they refer to, kept to the end
 static void **kept;
 static size_t nkept, capkept;
 static pr_policy **policies;
@@ -84,7 +75,6 @@ typedef struct {
 static pr_answer yes(void) { return (pr_answer){.verdict = PR_YES}; }
 static pr_answer no(const char *reason) { return (pr_answer){.verdict = PR_NO, .reason = reason}; }
 
-// {access: [part, id]}: the value there: not there, pending; "allow", yes; else no
 static pr_answer access_policy(void *ctx, const pr_ask *ask, const pr_read *read) {
 	(void)ask;
 	const op_value *m = ((data *)ctx)->m;
@@ -92,19 +82,16 @@ static pr_answer access_policy(void *ctx, const pr_ask *ask, const pr_read *read
 	if (a == NULL) return (pr_answer){.verdict = PR_PENDING};
 	return a->type == OP_STR && strcmp(a->str, "allow") == 0 ? yes() : no("closed");
 }
-// {denyid: id}: no for that target id
 static pr_answer denyid_policy(void *ctx, const pr_ask *ask, const pr_read *read) {
 	(void)read;
 	const char *id = ask->target.id.string;
 	return id && strcmp(id, ((data *)ctx)->m->str) == 0 ? no("denied id") : yes();
 }
-// {denynode: id}: no for that node id, a placement's
 static pr_answer denynode_policy(void *ctx, const pr_ask *ask, const pr_read *read) {
 	(void)read;
 	const char *id = ask->node.id.string;
 	return id && strcmp(id, ((data *)ctx)->m->str) == 0 ? no("denied node") : yes();
 }
-// {whois: [actor, reader]}: yes for that actor and reader of who
 static pr_answer whois_policy(void *ctx, const pr_ask *ask, const pr_read *read) {
 	(void)read;
 	const op_value *m = ((data *)ctx)->m;
@@ -158,16 +145,12 @@ static pr_policy *policy(const op_value *p) {
 	return NULL;
 }
 
-// a policy that writes down what it is asked
 static pr_answer recording(void *ctx, const pr_ask *ask, const pr_read *read) {
 	if (asked == NULL) asked = op_list();
 	op_push(asked, ask_json(ask));
 	return pr_ask_of(ctx, ask, read->reader, read->ctx);
 }
 
-// guards -----------------------------------------------------------------------------------------
-
-// an action's caller, given by the guard request: its place and box, always open
 typedef struct {
 	const char **from;
 	size_t nfrom;
@@ -192,22 +175,16 @@ static gd *guard_named(const char *name) {
 	return NULL;
 }
 
-// programs ---------------------------------------------------------------------------------------
-
 typedef enum { RAN, REFUSED, PENDING, CODE } ended;
 
-// what a program is evaluated in: its guard, the value a `then` is given, and how it ended early,
-// if it did: stopped (a read said the run must end), or an exception
 typedef struct {
 	gd *g;
 	const op_value *given;
 	bool stopped;
 	ended ended;
 	gd_refusal refusal;
-	// the field of the target refused (borrowed from the program), NULL: none
 	const op_value *refused_field;
 	char *code;
-	// the paths a start names, let go at the end
 	const char ***held;
 	size_t nheld, capheld;
 } ctx;
@@ -220,7 +197,6 @@ static op_value *thrown_code(ctx *c, char *code) {
 	else free(code);
 	return NULL;
 }
-// what an answer of the guard does to the program: false when it must end
 static bool allowed(ctx *c, gd_answer a, const gd_refusal *why, const gd_target *targets) {
 	if (a == GD_FAILED) c->stopped = true;
 	else if (a == GD_PENDING && c->ended == RAN) c->ended = PENDING;
@@ -230,21 +206,18 @@ static bool allowed(ctx *c, gd_answer a, const gd_refusal *why, const gd_target 
 	}
 	return a == GD_OK;
 }
-// whether the reads the program told let it go on
 static bool alive(ctx *c) {
 	sc_track_status status = pl_status(world_places);
 	if (status == SC_STOP) c->stopped = true;
 	return status == SC_OK;
 }
 
-// the names of a path given as a list of strings, kept till the program ends
 static const char *const *names_of(ctx *c, const op_value *list, size_t *n) {
 	const char **names = world_address(list, n);
 	PUSH(c->held, c->nheld, c->capheld, names);
 	return names;
 }
 
-// the member at a path, asked through the guard; nothing there: 0. *out may be a refused one
 static bool guarded(ctx *c, const char *const *path, size_t n, pl_member *out) {
 	tb_key id;
 	bool found = pl_get(world_places, path, n, &id);
@@ -258,7 +231,6 @@ static bool guarded(ctx *c, const char *const *path, size_t n, pl_member *out) {
 	return true;
 }
 
-// where a program starts: an id, or {"at": path}, the thing at that path, asked (maybe refused)
 static bool start_of(ctx *c, const op_value *ts, gd_thing *out) {
 	*out = (gd_thing){0};
 	if (world_is(ts, OP_STR)) {
@@ -319,8 +291,6 @@ static op_value *eval_members(const op_value *x, bool full, ctx *c) {
 	return out;
 }
 
-// members given, each [name, id, from?], asked as a list's (at: the path they are under; none: no
-// path): rows [id, name, from?]
 static op_value *eval_ask(const op_value *x, const op_value *at, ctx *c) {
 	size_t n = 0;
 	const char *const *path = at != NULL ? names_of(c, at, &n) : NULL;
@@ -354,7 +324,6 @@ static op_value *eval_read(const op_value *x, ctx *c) {
 	return alive(c) ? world_snap(v) : NULL;
 }
 
-// each patch asked by its path (and a move's), then written
 static op_value *eval_edit(const op_value *x, ctx *c) {
 	gd_thing s;
 	if (!start_of(c, x->items[0], &s)) return NULL;
@@ -382,7 +351,6 @@ static op_value *eval_edit(const op_value *x, ctx *c) {
 	return world_summary(&node->change);
 }
 
-// the slot asked, then placed
 static op_value *eval_place(const op_value *x, ctx *c) {
 	const op_value *slot = x->items[0];
 	gd_thing s;
@@ -406,8 +374,6 @@ static op_value *eval_place(const op_value *x, ctx *c) {
 	return op_null();
 }
 
-// the slot asked with the node beside it, then the node's own ops (none given: read, edit), then
-// placed
 static op_value *eval_name(const op_value *x, ctx *c) {
 	const op_value *slot = x->items[0];
 	gd_thing s;
@@ -439,7 +405,6 @@ static op_value *eval_name(const op_value *x, ctx *c) {
 	return op_null();
 }
 
-// the exception a program ended on, as the value `try` gives; no exception: NULL
 static op_value *caught(ctx *c) {
 	op_value *v;
 	switch (c->ended) {
@@ -497,9 +462,6 @@ static void finish_ctx(ctx *c) {
 	free(c->code);
 }
 
-// requests ---------------------------------------------------------------------------------------
-
-// eval: the program with the scope open
 typedef struct {
 	const op_value *e;
 	gd *g;
@@ -534,7 +496,6 @@ static void in_eval(void *d) {
 	finish_ctx(&c);
 }
 
-// a watch's code: counts its run, evaluates its program, its `then` in its set or its act
 typedef struct {
 	world_watch watch;
 	gd *g;
@@ -563,7 +524,6 @@ static sc_out program_f(void *previous, void *d) {
 	return out;
 }
 
-// then, given the value
 static char *then_of(program *p, void *value) {
 	if (p->then == NULL) return NULL;
 	ctx c = start_ctx(p->g, value);

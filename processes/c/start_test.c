@@ -1,5 +1,4 @@
-// start's stop (start.h): what its scope's teardown throws is given back, as start.ts' stop
-// rethrows it. make test-start-processes (and its -check, with the sanitizers)
+// Tests that start's stop gives back what its scope's teardown throws.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -47,12 +46,10 @@ static void run(void *data) {
 	pr_refusal no;
 	pr_process *p = pr_start(life, places, at, 1, &(pr_options){.body = body}, &no);
 	CHECK(p != NULL);
-	// the teardown's error comes back, to be freed; the process is stopped all the same
 	char *error = pr_stop(life, p);
 	CHECK(error != NULL && strcmp(error, "boom") == 0);
 	free(error);
 	CHECK(!sc_scope_alive(pr_scope(p)));
-	// twice: nothing
 	CHECK(pr_stop(life, p) == NULL);
 }
 

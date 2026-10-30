@@ -1,9 +1,5 @@
-// processes (processes.ts) on the line protocol: one JSON request per line in, one answer per line
-// out, in order. one world per process: a scheduler, table, paths, and places (root "R",
-// contributors [processes("R"), children]). ids are strings, a path a list of names. the host
-// writes with its scope open, info {"actor":"test"}. a PlacesError answers { error: code }
-//
-// the world:
+// The reference processes (processes.ts) on the line protocol: one JSON request per line in, one
+// answer per line out. A PlacesError answers { error: code }.
 // { op: "root", name, info }               → {}   a scope with no parent, that info
 // { op: "kids", id, value }                → {}   the children entry, replaced (a table event)
 // { op: "place", at, name, id }            → {}   places' place, at the parent's id
@@ -12,21 +8,17 @@
 // { op: "stop", path }                     → {}   removeProcess, said written
 // { op: "rows" }                           → { value? }   the root's process trie, as in the table
 // { op: "patches" }                        → { patches? }   the trie's latest change's patches
-// { op: "asked" }                          → { steps, names }   steps and names asked of the rows'
-//    contributor since last asked (its level not counted)
-// reads, outside any run (lib.ts):
+// { op: "asked" }                          → { steps, names }   asked of the rows' contributor since last asked
 // { op: "get", path }                      → { id? }
 // { op: "entries", path }                  → { entries }   each { id, from }
 // { op: "list", at }                       → { names }
 // { op: "members", at }                    → { members }   each { name, id?, from } (level: no id)
 // { op: "lookup", names, from }            → { path? }
-// scope nodes (scopes.ts):
 // { op: "scope", name, parent, info }      → {}   a scope under the named one, that info
 // { op: "give", scope, id? }               → { id }   the scope's node id, made the first time
 // { op: "write", id, part, value }         → {}   the entry, replaced (a table event)
 // { op: "parts", id }                      → { parts }   the parts at the id, sorted
 // { op: "teardown", scope }                → {}
-// computes:
 // { op: "watch", name, scope, f }          → {}   a compute in scope running f each run, results
 //    compared as JSON. f: {"get":path} {"entries":path} {"names":path} {"members":path}
 //    {"lookup":[names,from]}, or a list of them
@@ -55,7 +47,6 @@ type Json = unknown
 const s = createScheduler()
 const table = createTable((part, id) => places.onTableChange(part as Key, id))
 const paths = createPaths<unknown>()
-// the rows' contributor, each ask counted
 const asked = { steps: 0, names: 0 }
 const rows = processes("R")
 const counted: Contributor = {

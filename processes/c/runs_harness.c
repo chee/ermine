@@ -1,20 +1,15 @@
-// The C runs (runs.h) on the line protocol of typescript/runs_harness.ts, which documents it and the
-// programs (conformance/c/harness.h has the loop). Built on places' harness (places/c/places_harness.h,
-// compiled with PH_LIB): its world, its programs, its requests, and this one's besides.
+// The C runs on the line protocol of typescript/runs_harness.ts.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "../../places/c/places_harness.h"
 #include "guard.h"
-// status's and places' requests (status_harness.c, built with SH_LIB)
 op_value *sh_answer(const op_value *r);
 void sh_finish(void);
 #include "runs.h"
 
-// the runs listener, once it is asked for
 static crn *runs;
-// the policy: no to reading the ids denied; the guard on it
 static char **denied;
 static size_t ndenied, capdenied;
 static pr_policy *policy;
@@ -29,7 +24,6 @@ static pr_answer may(void *ctx, const pr_ask *ask, const pr_read *read) {
 	return (pr_answer){.verdict = PR_YES};
 }
 
-// the guard, asked as crn_read wants
 static int ask_guard(void *ctx, tb_key id, const char **op, const char **reason) {
 	(void)ctx;
 	gd_target t = gd_target_of((gd_thing){.id = id}, NULL, NULL);
@@ -39,13 +33,11 @@ static int ask_guard(void *ctx, tb_key id, const char **op, const char **reason)
 	return a;
 }
 
-// an effect made by the effect request: its run counted, f and act programs
 typedef struct {
 	world_watch watch;
 	const op_value *f, *act;
 	const char *wait;
 } effect_p;
-// the promises effects made, by name, until settled (or the end)
 typedef struct {
 	char *name;
 	sc_promise *p;
@@ -87,7 +79,6 @@ static char *effect_act(void *value, void *previous, void *data) {
 	return c.error;
 }
 
-// the actor of a change as runOf tells it: null for none
 static op_value *actor_of(const op_value *change) {
 	const op_value *a = change != NULL && change->type == OP_MAP ? op_get(change, "actor") : NULL;
 	return a != NULL ? op_ref((op_value *)a) : op_null();
@@ -140,7 +131,6 @@ static op_value *act_json(const crn_run *run) {
 	return a;
 }
 
-// a run as runOf tells it (typescript/runs_harness.ts)
 static op_value *run_json(const crn_run *run) {
 	if (run == NULL) return op_null();
 	op_value *o = op_map();
@@ -155,7 +145,6 @@ static op_value *run_json(const crn_run *run) {
 	return o;
 }
 
-// one field of a record as runOf tells it (started and ended: null, runOf tells only whether timed)
 static op_value *field_json(const crn_run *run, crn_field field) {
 	if (run == NULL) return op_null();
 	switch (field) {
@@ -178,7 +167,6 @@ static int field_of(const char *name, crn_field *out) {
 	return 0;
 }
 
-// program e, besides places' harness's: {"run": [id, field?]}
 static op_value *run_form(const op_value *e, ph_eval *c, bool *handled) {
 	const op_value *x = op_get(e, "run");
 	if (x == NULL) return NULL;

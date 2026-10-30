@@ -1,4 +1,4 @@
-// Runs (runs.h), in C.
+// Runs; see runs.h.
 #include "runs.h"
 
 #include <stdlib.h>
@@ -25,24 +25,19 @@ static char *xdup(const char *s) { return s != NULL ? strcpy(xalloc(strlen(s) + 
 
 #define FIELDS 9
 
-// a key as the run first tracked it: the change there then (a ref; NULL: none, or not named)
 typedef struct {
 	const void *key;
 	op_value *change;
 } saw;
 
-// a computer given, and its run as it goes: its number, its start, its writes so far, how many
-// the record holds, and the keys it first tracked so far (on while the run is open)
 typedef struct {
 	sc_computer *c;
 	char *id;
-	// where it is in gs
 	size_t at;
 	int going;
 	unsigned n;
 	int has_started;
 	double started;
-	// the run's own frame, as the scheduler told it at the run's start (held); NULL: given while it ran
 	ch_frame *frame;
 	crn_wrote *writes;
 	size_t nwrites, capwrites, written;
@@ -52,7 +47,6 @@ typedef struct {
 	pl_set sawn;
 } given;
 
-// a record, and its keys: one a field (their addresses), told when read
 typedef struct {
 	char *id;
 	crn_run *run;
@@ -69,11 +63,9 @@ struct crn {
 	void *hold_ctx;
 	sc_listener *starts, *ends, *effects, *tracks, *freed;
 	pl_watch *all;
-	// the computers given, by address, and in a list
 	tb_table *by;
 	given **gs;
 	size_t ngs, capgs;
-	// the runs' table: by the computer's node id
 	tb_table *records;
 	held **hs;
 	size_t nhs, caphs;
@@ -99,13 +91,8 @@ static held *held_of(crn *r, const char *id) {
 	return h;
 }
 
-// milliseconds since 1970, fractional
 static double now(void) { return PF_NOW_MS(); }
 
-// values -------------------------------------------------------------------------------------------
-
-// a header's pieces as a value, held (the caller's to op_free): places' own (pl_change_value, made
-// once a header and shared); one places didn't make, built here
 static op_value *change_value(crn *r, const ch_header *h) {
 	const op_value *shared = pl_change_value(r->places, h);
 	if (shared != NULL) return op_ref((op_value *)shared);
@@ -117,7 +104,6 @@ static op_value *change_value(crn *r, const ch_header *h) {
 	return m;
 }
 
-// whether two values are alike: the same one, or the same in every piece
 static int same(const op_value *a, const op_value *b) {
 	if (a == b) return 1;
 	if (a == NULL || b == NULL || a->type != b->type) return 0;
@@ -147,8 +133,6 @@ static int same_text(const char *a, const char *b) {
 }
 
 static char *text(tb_key k) { return xdup(k.string); }
-
-// reads and writes --------------------------------------------------------------------------------
 
 static void read_free(crn_saw *r) {
 	free(r->part);
@@ -181,8 +165,6 @@ static void writes_unref(const crn_writes *b) {
 	free(k);
 }
 
-// a read named: where, and the change there as the run first read it (seen; NULL: as it ended); a
-// key places can't name: unnamed
 static crn_saw name_read(crn *r, const void *key, const saw *seen) {
 	crn_saw out = {0};
 	pl_where w;
@@ -228,14 +210,11 @@ static int same_read(const crn_saw *a, const crn_saw *b) {
 	return 1;
 }
 
-// the run's reads, each once in the order first read, named: a block, unless they are the ones
-// there already (then those, held again)
 static const crn_reads *reads_of(crn *r, const void *const *keys, size_t n, const crn_reads *was,
 	const given *g) {
 	crn_saw *out = xalloc((n + 1) * sizeof *out);
 	size_t count = 0;
 	pl_set seen = {0};
-	// the keys first tracked come in the order the reads do: a cursor through them
 	size_t at = 0;
 	for (size_t i = 0; i < n; i++) {
 		if (n < 16) {
@@ -276,7 +255,6 @@ static int writes_same(const crn_writes *was, const given *g) {
 	return 1;
 }
 
-// the writes so far, a block of their own (the pieces held again)
 static const crn_writes *writes_of(const given *g) {
 	crn_writes *b = xalloc(sizeof *b);
 	b->refs = 1;
@@ -299,7 +277,6 @@ static void run_free(crn_run *run) {
 	free(run);
 }
 
-// the keys first tracked, let go
 static void clear_saws(given *g) {
 	for (size_t i = 0; i < g->nsaws; i++) {
 		if (g->saws[i].change != NULL) op_free(g->saws[i].change);
@@ -314,11 +291,6 @@ static void clear_writes(given *g) {
 	g->nwrites = g->written = 0;
 }
 
-// writing a record ----------------------------------------------------------------------------------
-
-// whether a field of the record written differs from the one there: numbers and times by value,
-// reads and writes by block (shared when the same), an error always (a new one each time) unless
-// the record is the same run's again
 static int differs(const crn_run *was, const crn_run *run, int f, int same_error) {
 	if (was == NULL) return 1;
 	switch (f) {
@@ -329,7 +301,6 @@ static int differs(const crn_run *was, const crn_run *run, int f, int same_error
 	case CRN_ENDED: return was->ended != run->ended;
 	case CRN_END: return was->end != run->end;
 	case CRN_ERROR: return !same_error && (was->error != NULL || run->error != NULL);
-	// done again is the same; a failed act is a new one each time
 	case CRN_ACT: return was->act != run->act || run->act == CRN_ACT_FAILED;
 	case CRN_READS: return was->reads != run->reads;
 	case CRN_WRITES: return was->writes != run->writes;
@@ -337,7 +308,6 @@ static int differs(const crn_run *was, const crn_run *run, int f, int same_error
 	return 0;
 }
 
-// the record held (taken): the fields that differ marked, the computer's latest run their writer
 static void put_record(crn *r, held *h, sc_run *by, crn_run *run, int same_error) {
 	crn_run *was = h->run;
 	const void *marked[FIELDS];
@@ -350,7 +320,6 @@ static void put_record(crn *r, held *h, sc_run *by, crn_run *run, int same_error
 	if (n > 0) sc_mark(r->scheduler, marked, n, by);
 }
 
-// a record on its way through the hold hook: what take puts
 typedef struct {
 	crn *r;
 	held *h;
@@ -367,7 +336,6 @@ static void take_record(void *taking) {
 	put_record(k->r, k->h, k->by, k->run, k->same_error);
 }
 
-// the record written (taken), through the hold hook when given: not taken, let go
 static void write_record(crn *r, held *h, sc_run *by, crn_run *run, int same_error) {
 	if (r->hold == NULL) {
 		put_record(r, h, by, run, same_error);
@@ -377,8 +345,6 @@ static void write_record(crn *r, held *h, sc_run *by, crn_run *run, int same_err
 	r->hold(r->hold_ctx, tb_string(h->id), run, take_record, &k);
 	if (!k.taken) run_free(run);
 }
-
-// the record read ------------------------------------------------------------------------------------
 
 int crn_read(crn *r, crn_ask ask, void *ctx, tb_key id, crn_field field, const crn_run **out,
 	const char **op, const char **reason) {
@@ -425,9 +391,6 @@ void crn_drop(crn *r, tb_key id) {
 	sc_mark(r->scheduler, marked, n, NULL);
 }
 
-// the scheduler's ----------------------------------------------------------------------------------
-
-// a fact landing with a run open of a computer given: that run's write
 static void landed(const pl_fact *fact, void *ctx) {
 	crn *r = ctx;
 	sc_run *run = sc_get_run(r->scheduler);
@@ -439,7 +402,6 @@ static void landed(const pl_fact *fact, void *ctx) {
 	PUSH(g->writes, g->nwrites, g->capwrites, w);
 }
 
-// a key tracked in a run of a computer given: the change there, if it is the run's first track of it
 static void tracked(const void *key, sc_run *run, void *ctx) {
 	crn *r = ctx;
 	given *g = find(r, sc_run_computer(run));
@@ -486,10 +448,8 @@ static void run_end(sc_computer *c, unsigned n, sc_ended ended, const void *cons
 	given *g = find(r, c);
 	const char *end = end_name(ended);
 	if (g == NULL || end == NULL) return;
-	// gone: nothing
 	sc_run *by = sc_latest(c);
 	if (by == NULL) return;
-	// given while it ran: its start not seen
 	if (!g->going || g->n != n) {
 		clear_writes(g);
 		clear_saws(g);
@@ -504,7 +464,6 @@ static void run_end(sc_computer *c, unsigned n, sc_ended ended, const void *cons
 	const crn_run *was = h->run;
 	crn_run *run = xalloc(sizeof *run);
 	run->n = n;
-	// the run's own frame; given while it ran: its computer's
 	run->frame = ch_frame_ref(g->frame != NULL ? g->frame : sc_scope_frame(c));
 	run->has_started = g->has_started;
 	run->started = g->started;
@@ -513,7 +472,6 @@ static void run_end(sc_computer *c, unsigned n, sc_ended ended, const void *cons
 	if (ended == SC_FAIL) run->error = xdup(more->error != NULL ? more->error : "error");
 	if (ended == SC_LOOPING) run->error = xdup("looping");
 	run->reads = reads_of(r, reads, nreads, was != NULL ? was->reads : NULL, g);
-	// pending: it may land done, naming the changes as first read
 	if (ended != SC_PENDED) {
 		g->saw_on = 0;
 		clear_saws(g);
@@ -526,7 +484,6 @@ static void run_end(sc_computer *c, unsigned n, sc_ended ended, const void *cons
 	write_record(r, h, by, run, 0);
 }
 
-// an effect's act ran (error: what it threw): the record's act, and its writes again
 static void acted(sc_computer *c, unsigned n, const char *error, void *data) {
 	crn *r = data;
 	given *g = find(r, c);
@@ -561,7 +518,6 @@ static void given_free(given *g) {
 	free(g);
 }
 
-// a computer freed: what was kept of it goes (the reference's WeakMaps by computer)
 static void computer_freed(sc_scope *o, void *data) {
 	crn *r = data;
 	given *g = find(r, o);
