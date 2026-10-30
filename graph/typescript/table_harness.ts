@@ -1,53 +1,46 @@
-// the table (table.ts) on the line protocol (conformance/typescript/harness.ts). State lasts for the
-// process: one table, one node object per name and one symbol per name, so identity is testable.
-// Another implementation joins by speaking this (HARNESS).
+// The table (table.ts) on the line protocol. State lasts for the process: one table, one node
+// object and one symbol per name.
 //
-// key: a string, or {"symbol": name}; a node: its name, a string; both are the request's "part",
-// "id" and "node" fields. strings are equal when the same text, whole: NUL, lone surrogates,
-// "__proto__", "" are keys like any other. a symbol is never equal to a string, even of its name;
-// two {"symbol": name} of one name are one symbol. node names and key names are apart: a node "n"
-// and a part "n" have nothing to do with each other
+// A key is a string or {"symbol": name}; a node is its name, a string. Strings are equal when
+// the text is the same (NUL, lone surrogates, "__proto__" and "" are keys like any other). A
+// symbol never equals a string; two symbols of one name are one symbol. Node names and key names
+// are separate.
 //
-// { op: "add" | "sub", part, id, node }   → {}                         sub never fails
-//                                         → { error: "already-there" } add, a different node there
-// { op: "get", part, id }                 → { node? }                  absent: nothing there
-// { op: "ids", part, node }               → { ids }                    the node's ids under the part
-// { op: "at", id }                        → { entries }                [[part, node]], every part at the id
-// { op: "who", node }                     → { keys }                   [[part, id]], every key it is under
-// { op: "del", part, id }                 → {}                         the key
-// { op: "del", part, node }               → {}                         the node from every id under the part
-//                                                                      (an id given too is not read)
-// { op: "del", node }                     → {}                         the node from every key
-//                                         → { error: "nothing-there" } nothing to delete
-// { op: "events" }                        → { events }                 [[part, id]], every table event
-//                                                                      since last asked, in order
-// { op: "events", at: true }              → { events }                 [[part, id, entries]]: the same,
-//                                                                      each with every part at its id
-//                                                                      as it was when told ("at")
+// { op: "add" | "sub", part, id, node }  → {}, or { error: "already-there" } for an add over a
+//                                           different node. sub never fails.
+// { op: "get", part, id }                → { node? }
+// { op: "ids", part, node }              → { ids }      the node's ids under the part
+// { op: "at", id }                       → { entries }  [[part, node]], every part at the id
+// { op: "who", node }                    → { keys }     [[part, id]], every key it is under
+// { op: "del", part, id }                → {}
+// { op: "del", part, node }              → {}  the node from every id under the part
+// { op: "del", node }                    → {}  the node from every key
+//                                          (a del of nothing: { error: "nothing-there" })
+// { op: "events" }                       → { events }   [[part, id]], every event since last asked
+// { op: "events", at: true }             → { events }   [[part, id, entries]], each with every part
+//                                                       at its id as it was when told
 //
-// add of the node already there: {}, nothing changes, no event. sub of the node already there: the
-// same. sub of a different node: the old node loses that key only; one event. sub with nothing
-// there: an add. an error changes nothing and tells nothing. no answer ever lists a node's or an
-// id's empty leftovers: what has no keys is not there.
+// Adding the node already there changes nothing and tells nothing; so does a sub of it. A sub of
+// a different node removes the old node's key only, with one event. An error changes nothing. A
+// node or id with no keys is not there.
 //
-// events: one per key added, replaced or taken out, told after it landed. a del of many keys takes
-// them all, then tells one event per key, in who's order (del part node: the ids order).
+// Events: one per key added, replaced or removed, told after it landed. A del of many keys takes
+// them all, then tells one event per key, in who's order (for del part node, the ids order).
 //
-// orders (lists in answers, never sorted):
-//   ids    the order each id was put under the node and part
-//   at     the order each part was put at the id; sub of a different node puts the key last
-//   who    grouped by part, the parts in the order each was first taken by the node; within a part,
-//          ids order. a part whose last id is gone leaves; taken again, it goes last
-//   a key taken out and put back is new: it goes last everywhere
+// Lists are never sorted:
+//   ids  the order each id was put under the node and part
+//   at   the order each part was put at the id; a sub of a different node puts the key last
+//   who  grouped by part, parts in the order the node first took them, ids in ids order; a part
+//        whose last id is gone leaves, and goes last when taken again
+//   a key removed and put back is new, and goes last everywhere
 //
-// anything not understood (an unknown or missing op, a field missing, a key not a string or a
-// {"symbol": string}, a node not a string): { error: why }, why any text that is not a code; the
-// next line is answered as ever.
+// Anything not understood (unknown or missing op, missing field, bad key or node): { error: why },
+// why being any text. The next line is answered as usual.
 import { createTable, type Event, type Id, TableError } from "./table.ts"
 import { type Answer, type Request, serve } from "../../conformance/typescript/harness.ts"
 import type { Entry } from "@ermine/graph/entry"
 
-// the table checks no name and no shape: here, any key is a table name and any entry goes
+// The table checks no name and no shape, so here any key is a table name and any entry goes.
 type Loose = {
 	add: (part: Id, id: Id, node: Entry<unknown>) => void
 	sub: (part: Id, id: Id, node: Entry<unknown>) => void
@@ -66,10 +59,10 @@ type Loose = {
 const loose = (event?: (part: Id, id: Id) => void) =>
 	createTable(event as Event | undefined) as unknown as Loose
 
-// a node by name: an object the table never reads
+// A node by name: an object the table never reads.
 type N = Entry<unknown>
 
-// every table event, until asked, with every part at its id as it was when told
+// Every table event until asked, with every part at its id as it was when told.
 const events: [Id, Id, [Id, N][]][] = []
 const table: Loose = loose((part, id) => events.push([part, id, table.get(id)]))
 const nodes = new Map<string, N>()

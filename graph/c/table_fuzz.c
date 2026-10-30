@@ -1,8 +1,7 @@
-// libFuzzer target: the input bytes are operations on the table, over 4 parts, 4 ids and 4 nodes
-// (strings and symbols), applied to the table and to a small model (table.ts in C): a list of
-// [part, id, node] triples in the order put, and each node's parts in the order first taken.
-// Every return is checked against the model, and after each step every key's node. The strings
-// given are scribbled over after each call: the table keeps its own copies.
+// libFuzzer target: the input bytes are operations on the table over 4 parts, 4 ids and 4 nodes,
+// applied to the table and to a small model (triples in the order put, and each node's parts in
+// the order first taken). Every return and every key's node is checked against the model. The
+// strings given are scribbled over after each call, because the table keeps its own copies.
 #include "table.h"
 
 #include <stdio.h>
@@ -12,8 +11,8 @@
 enum { KEYS = 4, NODES = 4, MAX = KEYS * KEYS };
 
 static const char tokens[2];
-// as WTF-8: a pair and a modifier, a lone high, the first code point of 0 alone; 3: a symbol. no
-// NUL: a key's string ends at one (tb_string)
+// WTF-8: a pair and a modifier, a lone high, the first code point of 0 alone. Index 3 is a
+// symbol. No NUL, because a key's string ends at one.
 static const char *const strings[KEYS] = {"\xf0\x9f\x91\x8d\xf0\x9f\x8f\xbd", "\xed\xa0\xbd", "\xf0\x9f\x91\x8d", NULL};
 static int nodes[NODES];
 
@@ -29,7 +28,6 @@ static void die(const char *why, int step) {
 	abort();
 }
 
-// a key, its string in a buffer of the caller's (scribbled after the call)
 static char buffer[2][16];
 static tb_key key(int k, int which) {
 	if (k == 3) return tb_symbol(&tokens[which]);
@@ -37,7 +35,6 @@ static tb_key key(int k, int which) {
 	return tb_string(buffer[which]);
 }
 static void scribble(void) { memset(buffer, 'x', sizeof buffer); }
-// which key of the kind (0 part, 1 id) k is; -1: none
 static int key_index(tb_key k, int which) {
 	if (k.symbol != NULL) return k.symbol == &tokens[which] ? 3 : -1;
 	for (int i = 0; i < 3; i++)
@@ -156,7 +153,6 @@ int LLVMFuzzerTestOneInput(const unsigned char *data, size_t size) {
 				if (model[j].node == node) take(j), any = 1;
 			if (code != (any ? 0 : TB_NOTHING_THERE)) die("del_node's code", step);
 		} else {
-			// what get gives for a key, against the model, before the check of every key
 			void *got = tb_get(t, p, k);
 			if (got != (at < 0 ? NULL : &nodes[model[at].node])) die("get is not the model's", step);
 		}

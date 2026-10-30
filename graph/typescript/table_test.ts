@@ -2,7 +2,7 @@ import { assertEquals, assertStrictEquals, assertThrows } from "@std/assert"
 import createEntry, { type Entry } from "@ermine/graph/entry"
 import { createTable, type Event, type Id, TableError } from "./table.ts"
 
-// the table checks no name and no shape: here, any key is a table name and any entry goes
+// Any key is a table name and any entry goes.
 type Loose = {
 	add: (part: Id, id: Id, node: Entry<unknown>) => void
 	sub: (part: Id, id: Id, node: Entry<unknown>) => void

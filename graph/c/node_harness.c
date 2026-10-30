@@ -1,13 +1,11 @@
-// The C node on the line protocol (graph/typescript/node_harness.ts documents it):
-// {op: "entry", value?, header?} -> {entry: {value?, change}}
-// {op: "node", values: {<table>: value}, header?} -> {node: {<table>: {value?, change}}}
+// The C node on the line protocol (graph/typescript/node_harness.ts documents it).
 #include <stdio.h>
 #include <string.h>
 
 #include "../../conformance/c/harness.h"
 #include "../../conformance/c/protocol_harness.h"
 
-// a header with a frame that is no list of objects: answered an error, 1
+// A header with a frame that is no list of objects is answered with an error (returns 1).
 static int bad_header(const op_value *request, FILE *out) {
 	const char *why = hh_bad_header(op_get(request, "header"));
 	if (why == NULL) return 0;

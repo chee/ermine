@@ -1,6 +1,5 @@
-// the C table (table.h) on the line protocol of graph/typescript/table_harness.ts, which
-// documents it. State lasts for the process: one table, one object per node name and one per symbol
-// name, their addresses the nodes and the tokens.
+// The C table (table.h) on the line protocol of graph/typescript/table_harness.ts. State lasts
+// for the process: one table, and one object per node name and per symbol name.
 #define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <stdlib.h>
@@ -9,7 +8,6 @@
 #include "table.h"
 #include "../../conformance/c/harness.h"
 
-// named things: a node and a symbol are each an object whose address is the identity
 typedef struct named named;
 struct named {
 	named *next;
@@ -31,7 +29,6 @@ static named *node_of(const op_value *v, int *bad) {
 	if (!v || v->type != OP_STR) { *bad = 1; return NULL; }
 	return intern(&nodes, v->str);
 }
-// a key: a string, or {"symbol": name}
 static tb_key key_of(const op_value *v, int *bad) {
 	if (v && v->type == OP_STR) return tb_string(v->str);
 	if (v && v->type == OP_MAP) {
@@ -59,8 +56,8 @@ static void result(FILE *out, int code) {
 
 static tb_table *table;
 
-// every table event until asked: the keys, strings copied, and every part at the id as it was
-// when told (tb_at), its parts copied
+// Every table event until asked: the keys (strings copied) and every part at the id as it was
+// when told.
 typedef struct {
 	tb_key part, id;
 	tb_entry *at;

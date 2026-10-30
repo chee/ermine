@@ -29,7 +29,7 @@ nd_node *nd_make_node(const nd_value *values, size_t length, const ch_header *he
 	if (n == NULL) return NULL;
 	n->slots = calloc(length ? length : 1, sizeof *n->slots);
 	if (n->slots == NULL) return free(n), NULL;
-	// one time for every table
+	// One time for every table.
 	ch_header h = header != NULL ? *header : (ch_header){0};
 	if (!h.has_time) h.has_time = 1, h.time = ND_NOW();
 	for (size_t i = 0; i < length; i++) {

@@ -1,16 +1,13 @@
-// deno bench newcore/nodes/ts/node_bench.ts
-// a node's info and children as new Map (now) against a plain object and a null-prototype object:
-// made empty, made from entries, made from one given as is; then used the way places and graph use
-// them (get, set, place and remove, keys)
-// self-contained: node.ts's own types, copied, so the bench runs while node.ts is mid-change
+// deno bench graph/typescript/node_bench.ts
+// Compares a node's info and children as a Map against a plain object and a null-prototype
+// object: made empty, made from entries, made as given, then used the way places and graph use
+// them. Self-contained, with node.ts's types copied.
 type V = { content: unknown; change: number }
 type L = { content: readonly (string | symbol)[]; change: number }
 
 const bench = (name: string, o: Omit<Deno.BenchDefinition, "fn" | "name">, fn: () => void) =>
 	Deno.bench(name, { n: 500_000, warmup: 100_000, ...o }, fn)
 
-// the three shapes, made the way createNode makes a node; the outside site is left out, the same
-// for all three
 const map = (
 	id: string,
 	info?: Iterable<readonly [string, V[]]>,
@@ -54,7 +51,6 @@ const nulled = (
 
 let sink: unknown
 
-// empty: no info, no children
 const empty = "make, empty"
 bench("new Map (now)", { group: empty, baseline: true }, () => {
 	sink = map("a")
@@ -66,7 +62,6 @@ bench("Object.create(null)", { group: empty }, () => {
 	sink = nulled("a")
 })
 
-// from entries, as Contents takes them: 3 info, 2 children
 const version = (content: unknown): V => ({ content, change: 1 })
 const infos: [string, V[]][] = [["title", [version("t")]], ["icon", [version("i")]], ["kind", [
 	version("k"),
@@ -86,7 +81,6 @@ bench("Object.create(null) + loop", { group: entries }, () => {
 	sink = nulled("a", infos, kids)
 })
 
-// given as is: the caller's map or object kept, not copied
 const infoMap = new Map(infos), kidsMap = new Map(kids)
 const infoObject = Object.fromEntries(infos), kidsObject = Object.fromEntries(kids)
 const given = "make, 3 info + 2 children given as is"
@@ -97,7 +91,6 @@ bench("object kept", { group: given }, () => {
 	sink = { id: "a", value: [], info: infoObject, children: kidsObject, changed: {} }
 })
 
-// use: 1000 nodes of 8 children each, every name looked at once per run
 const names = ["items", "on", "a", "b", "c", "d", "e", "f"]
 const list = (k: number): L[] => [{ content: [`x${k}`], change: 1 }]
 const filled = names.map((n, k) => [n, list(k)] as [string, L[]])
@@ -157,8 +150,8 @@ bench("Object.create(null) for in", { group: keys, ...use }, () => {
 	sink = s
 })
 
-// place a new name and remove it again (places' insert and remove); objects go to dictionary
-// mode on the first delete and stay there, so this group runs last, on its own nodes
+// Place a new name and remove it again. Objects go to dictionary mode on the first delete and
+// stay there, so this group runs last, on its own nodes.
 const placeMaps = Array.from({ length: 1000 }, (_, k) => map(`n${k}`, undefined, filled))
 const placeObjects = Array.from({ length: 1000 }, (_, k) => object(`n${k}`, undefined, filled))
 const placeNulls = Array.from({ length: 1000 }, (_, k) => nulled(`n${k}`, undefined, filled))
@@ -182,7 +175,6 @@ bench("Object.create(null) = + delete", { group: place, ...use }, () => {
 	}
 })
 
-// after a delete, gets on the objects that went to dictionary mode
 const after = "get after remove: 8 names of 1000 nodes"
 bench("Map", { group: after, baseline: true, ...use }, () => {
 	let s = 0

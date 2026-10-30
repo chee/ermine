@@ -1,13 +1,11 @@
 // libFuzzer target: the input bytes are an entry's value, then rounds of a header and patches
-// (../../changeable/c/fuzz_values.h) given to nd_update. Checked each round:
-// - done: the value is op_apply's on a copy of the one before; the change is the header given,
-//   with has_op, the very patches given and the entry's own undo; that undo applied to the value
-//   gives the one before back (maps by content);
-// - refused: op_apply's code and index; the value, the change and the undo just as they were;
-// - every string in the value (and the undo's) is WTF-8 as op holds it: a lone high never right
-//   before a lone low (fz_wtf8);
-// - at the end, nd_free_entry lets go of everything: no patch's value is held past the caller (and the
-//   leak checker sees nothing left).
+// (../../changeable/c/fuzz_values.h) given to nd_update. Each round checks:
+// - done: the value is op_apply's on a copy of the one before, the change is the header given
+//   with has_op, the patches given and the entry's own undo, and applying that undo gives back
+//   the previous value (maps by content);
+// - refused: op_apply's code and index, with value, change and undo as they were;
+// - every string in the value and the undo is WTF-8 (fz_wtf8);
+// - at the end, nd_free_entry lets go of everything and the leak checker sees nothing left.
 #include "update.h"
 #include "../../changeable/c/fuzz_values.h"
 
@@ -34,7 +32,6 @@ int LLVMFuzzerTestOneInput(const unsigned char *data, size_t size) {
 		die("nd_make_entry's change is not the header given", 0);
 	op_free(value); // the entry's now
 
-	// the patches the entry's change refers to, and the next ones
 	static fz_patches ps[2];
 	int now = 0, landed = 0;
 	for (int round = 0; round < 8 && b.at < b.size; round++) {
@@ -43,7 +40,6 @@ int LLVMFuzzerTestOneInput(const unsigned char *data, size_t size) {
 		fz_patch_list(&b, entry->value, next);
 		ch_header h = {.has_time = 1, .time = c >> 1, .actor = "me", .reader = c & 2 ? "r" : NULL,
 			.frame = c & 4 ? frame : NULL,
-			// op fields given are replaced
 			.has_op = 1, .patches = (const op_patch *)sites, .patches_length = 99};
 
 		op_value *was = fz_copy(entry->value), *expect = NULL, *const at_was = entry->value;
@@ -72,7 +68,6 @@ int LLVMFuzzerTestOneInput(const unsigned char *data, size_t size) {
 			if (!same(back, was)) die("the undo does not give the value back", round);
 			if (!fz_wtf8(back)) die("undone, a string not WTF-8", round);
 			op_free(back);
-			// what the change referred to before is the caller's again
 			if (landed) fz_patches_free(&ps[now]);
 			now = !now, landed = 1;
 		}

@@ -1,10 +1,6 @@
-// The C update on the line protocol (changeable/typescript/update_harness.ts documents it): one
-// entry lasts for the process.
-//   {op: "start", value?, header?} -> {}
-//   {op: "update", patches, header?} -> {} | {error: {code, patch}}
-//   {op: "entry"} -> {entry: {value?, change}}, change.op as {patches, undo}
-// The entry's change refers to the patches and the header's pieces: the line that made them is kept
-// (hh_retain) until the next update that works, or start.
+// The C update on the line protocol (changeable/typescript/update_harness.ts documents it). One
+// entry lasts for the process. The entry's change refers to the patches and the header's pieces,
+// so the line that made them is retained (hh_retain) until the next update that works, or start.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,9 +10,9 @@
 #include "../../conformance/c/protocol_harness.h"
 
 static nd_entry *entry;
-// the line the entry's change refers to
+// The line the entry's change refers to.
 static hh_line *kept;
-// the line now being answered is the one the entry's change refers to
+// The line now being answered is the one the entry's change refers to.
 static void keep_line(void) {
 	hh_line *line = hh_retain();
 	hh_release(kept);
