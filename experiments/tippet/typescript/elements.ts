@@ -4,8 +4,9 @@
 // their place. A splice by ids goes after its element, past any whose ids sort after its own (so two
 // inserts at one place land the same in any order), and takes its gone elements away wherever they
 // are now; a splice by range goes as written. A put makes the sequences under it new; a move does
-// too.
-import apply, { type Patch } from "@ermine/changeable/apply"
+// too, and the sequences it moves out of and into. A removal at an index of an array is a splice of
+// that one, by its place as written.
+import apply, { type Patch, type Target } from "@ermine/changeable/apply"
 import { type Anchor, type Id, inserts, type Step } from "./step.ts"
 
 // a step's place: lamport, device
@@ -154,11 +155,16 @@ export function step(
 				continue
 			}
 			const anchor = name ? null : s.ids?.[i] ?? null
-			const out = p.range && units(at(state.value, p.path)) >= 0
-				? splice(state, ref, c, p, anchor, back, name)
-				: (renew(state, ref, p.path, back),
-					p.move && renew(state, ref, p.move.path, back),
+			const listed = inArray(state.value, p)
+			const out = p.move
+				? (renew(state, ref, end(state.value, p), back),
+					renew(state, ref, end(state.value, p.move), back),
 					{ patches: [p], anchor: null })
+				: p.range && units(at(state.value, p.path)) >= 0
+				? splice(state, ref, c, p, anchor, back, name)
+				: listed && p.value === undefined
+				? { ...splice(state, ref, c, listed, null, back, false), anchor: null }
+				: (renew(state, ref, p.path, back), { patches: [p], anchor: null })
 			ids.push(out.anchor)
 			for (const q of out.patches) {
 				const u: Patch[] = []
@@ -174,6 +180,16 @@ export function step(
 	for (const u of mine.reverse()) undo.push(...u)
 	return { applied, ids }
 }
+
+// a patch at an index of an array (no range): as a splice of that one, into the array
+function inArray(value: unknown, p: Target): Patch | undefined {
+	const k = p.path.at(-1)
+	if (p.range || typeof k !== "number" || !Array.isArray(at(value, p.path.slice(0, -1)))) return
+	return { path: p.path.slice(0, -1), range: [k, k + 1] }
+}
+// what a move makes new at one end: the sequence a range is in, or the array an index is in, or
+// what is at the path
+const end = (value: unknown, t: Target) => inArray(value, t)?.path ?? t.path
 
 // the sequences at path and under it made new by this step (a put, a removal, a move there); self
 // false: under it only (a splice into an array: a position under it now names another element)

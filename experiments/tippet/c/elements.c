@@ -336,11 +336,39 @@ static int renew(work *w, tp_span prefix, int self) {
 	return 0;
 }
 
-// a put, a removal or a move
-static int other(work *w, const op_patch *p, const tp_patch *tp) {
-	int code = renew(w, tp->path, 1);
-	if (!code && p->has_move) code = renew(w, move_path(tp->move), 1);
+// a target at an index of an array (no range): 1, and the array's path (the target's less its last
+// item) in b; 0 not; -1 no memory
+static int in_array(const op_value *cur, const op_target *t, tp_span path, tp_buf *b) {
+	if (t->has_range || !t->length || t->path[t->length - 1].type != OP_NUM_KEY) return 0;
+	op_target up = *t;
+	up.length--;
+	const op_value *a = at_path(cur, &up);
+	if (!a || a->type != OP_LIST) return 0;
+	tp_in in = {path.p, path.p + path.n};
+	uint64_t k;
+	tp_span item;
+	tp_array(&in, &k);
+	const uint8_t *from = in.p;
+	for (uint64_t i = 0; i + 1 < k; i++) tp_skip(&in, &item);
+	tp_put_head(b, 4, k - 1), tp_put(b, from, (size_t)(in.p - from));
+	return tp_buf_why(b) ? -1 : 1;
+}
+
+// what a move makes new at one end: the sequence a range is in, or the array an index is in, or
+// what is at the path
+static int end(work *w, const op_value *cur, const op_target *t, tp_span path) {
+	tp_buf b = {NULL, 0, 0, (size_t)-1, w->c->mem, 0};
+	int r = in_array(cur, t, path, &b);
+	int code = r < 0 ? TP_NOMEM : renew(w, r ? (tp_span){b.p, b.len} : path, 1);
+	tp_buf_free(&b);
 	return code;
+}
+
+// a put, a removal or a move
+static int other(work *w, const op_value *cur, const op_patch *p, const tp_patch *tp) {
+	if (!p->has_move) return renew(w, tp->path, 1);
+	int code = end(w, cur, &p->place, tp->path);
+	return code ? code : end(w, cur, &p->move, move_path(tp->move));
 }
 
 
@@ -614,10 +642,24 @@ int el_step(const el_ctx *c, el_state *st, op_value **value, const el_ref *ref, 
 		op_patch *qs = (op_patch *)p, *made_qs = NULL;
 		size_t nq = 1, qcap = 0;
 		const el_anchor *anchor = !name && ids && ids[i].named ? &ids[i] : NULL;
-		if (p->place.has_range && units(at_path(cur, &p->place)) >= 0) {
+		tp_buf up = {NULL, 0, 0, (size_t)-1, c->mem, 0};
+		int listed = !p->has_move && !p->place.has_range && !p->has_value ? in_array(cur, &p->place, tp.path, &up) : 0;
+		if (p->has_move) code = other(&w, cur, p, &tp);
+		else if (p->place.has_range && units(at_path(cur, &p->place)) >= 0) {
 			code = splice(&w, cur, p, &tp, counter, anchor, name, &made_qs, &nq, &qcap, nm ? &nm[i] : NULL);
 			if (!code) qs = made_qs;
-		} else code = other(&w, p, &tp);
+		} else if (listed < 0) code = TP_NOMEM;
+		else if (listed) {
+			// a removal at an index of an array: a splice of that one, by its place as written
+			op_patch q = *p;
+			tp_patch tq = tp;
+			long k = p->place.path[p->place.length - 1].n;
+			q.place.length--, q.place.has_range = 1, q.place.from = k, q.place.to = k + 1;
+			tq.path = (tp_span){up.p, up.len};
+			code = splice(&w, cur, &q, &tq, counter, NULL, 0, &made_qs, &nq, &qcap, NULL);
+			if (!code) qs = made_qs;
+		} else code = other(&w, cur, p, &tp);
+		tp_buf_free(&up);
 		for (size_t q = 0; q < nq && !code; q++) {
 			op_value *next = NULL;
 			size_t failed;
