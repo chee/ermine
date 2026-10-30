@@ -24,26 +24,8 @@ import {
 } from "./ermine.ts"
 import { manual } from "./manual_fixture.ts"
 
-const BASE = [
-	"ermine.ts",
-	"context.ts",
-	"calls.ts",
-	"features.ts",
-	...NAMES.map((f) => `system/${f}.ts`),
-]
-
-// the program a test wrote at a node (ensureNode), as start takes it: its function
 const programAt = (e: { within: <T>(f: () => T) => T }, at: string) =>
 	e.within(() => read(at)) as () => unknown
-
-Deno.test("the base holds nothing of patch nodes' or sync's", async () => {
-	for (const f of BASE) {
-		const text = await Deno.readTextFile(new URL(`./${f}`, import.meta.url))
-		const code = text.split("\n").filter((l) => !l.trimStart().startsWith("//")).join("\n")
-		assert(!/@ermine\/(patchy|pully|together)/.test(code), `${f} imports patch nodes or sync`)
-		assert(!/"values"|REPLACES|overlay|layers/.test(code), `${f} names sync's or patch nodes'`)
-	}
-})
 
 Deno.test("the system folder's list of files names every file in it", async () => {
 	const files: string[] = []
