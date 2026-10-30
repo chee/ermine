@@ -102,7 +102,16 @@ const clean = (p: Patch): Patch => ({
 export const keptByDefault = (_: string, part: string) =>
 	part === "value" || part === "attributes" || part === "children"
 
-export type History = ReturnType<typeof createHistory>
+export type History = {
+	failed: readonly Failed[]
+	unkept: readonly Omit<Failed, "device" | "n">[]
+	onChange(f: () => void): () => void
+	snapshot: () => Promise<void>
+	versions: (node: string, part: string) => Version[]
+	forget(sync: Pick<Sync, "passed">): Promise<void>
+	load(): Promise<void>
+	stop(): void
+}
 
 export function createHistory(o: {
 	log: Log
@@ -114,7 +123,7 @@ export function createHistory(o: {
 	run?: <T>(f: () => T) => T
 	// not a history keeper (above)
 	forgets?: boolean
-}) {
+}): History {
 	const { log, table, places } = o
 	const kept = o.kept ?? keptByDefault
 	const run = o.run ?? (<T>(f: () => T) => f())

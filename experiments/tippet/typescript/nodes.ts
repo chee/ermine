@@ -20,7 +20,10 @@ export type Shown = {
 }
 
 // a kept predicate that never keeps these nodes; kept: history's default when none
-export function notKept(ids: Iterable<string>, kept = keptByDefault) {
+export function notKept(
+	ids: Iterable<string>,
+	kept: (node: string, part: string) => boolean = keptByDefault,
+): (node: string, part: string) => boolean {
 	const not = new Set(ids)
 	return (node: string, part: string) => !not.has(node) && kept(node, part)
 }

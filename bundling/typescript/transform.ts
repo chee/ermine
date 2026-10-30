@@ -80,7 +80,7 @@ export function refusedSpecifier(
 const bare = (path: string) => path.replace(/\/index(?=\.|$)/, "").replace(/\.[cm]?[jt]sx?$/, "")
 
 // a module that may need either: it names @ermine/system, a guarded name, or a file named site
-export const mayNeed = (code: string) =>
+export const mayNeed = (code: string): boolean =>
 	code.includes("ermine") || code.includes(RESERVED) || code.includes("site")
 
 // code's rewrite; nothing to rewrite: undefined. a refused name: throws Refused

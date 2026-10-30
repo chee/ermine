@@ -19,7 +19,7 @@
 // reverse of children, kept up from table events and commits: an entry already in the table when
 // places is made is not in it).
 import type { ChangeHeader, Entry } from "@ermine/graph/entry"
-import { createCrow } from "@ermine/crow"
+import { createCrow, type Crow } from "@ermine/crow"
 import { updateEntry } from "./crowify.ts"
 import type { Key as Step, Patch } from "@ermine/changeable/apply"
 import type { Scheduler } from "@ermine/reactivity"
@@ -629,7 +629,7 @@ export type Places = {
 // one step, not n (a copy each place: 10k names in one folder 12.6 s, in place 8 ms). it lets go
 // only of what it is told is held: a host wires crowify(scheduler, crow, subtreeOf) (crowify.ts);
 // unwired, a folder held past a run changes under its holder. one handed on: crow.letGo(entry)
-export const crow = /* @__PURE__ */ createCrow()
+export const crow: Crow = /* @__PURE__ */ createCrow()
 
 // writing: a parent's children entry, given as it is, changed through crow (crowify.ts' updateEntry). each gives back the
 // entries it changed, in order, for commit: their change has the patches that landed. refused: it
