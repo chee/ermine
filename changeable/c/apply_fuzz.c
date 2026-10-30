@@ -1,19 +1,6 @@
-// libFuzzer target: the input bytes are a value and a list of patches (fuzz_values.h), applied
-// with op_apply, and again on copies in place. Checked:
-// - nothing given changes (the value and the patches' values, against copies made before);
-// - refused: *out and the undo as they were; the patches before the refused one apply, and the
-//   refused one alone then fails the same way, at index 0; op_invert says the same;
-// - done: the same value with no undo asked for; the undo applied to the result gives the value
-//   back (maps by content); op_invert gives an undo as long;
-// - references balance: once what came out is freed, nothing given has a holder past the caller
-//   (and the leak checker sees nothing left);
-// - in place, on copies of the value and the patches' values: refused, the copy as it was (by
-//   content) and the same code and index; done, the same value and undo as copy-on-write, and the
-//   undo applied to the result gives the value back.
-// - every string made is WTF-8 as op holds it: a lone high never right before a lone low (fz_wtf8);
-// - a string value: one more span put, removal or move within it, against a model counting
-//   positions as the TypeScript reference does (UTF-16 units, a high then a low one position), so
-//   lone halves joined or split at a span's edges land where they should.
+// libFuzzer target: applies fuzzed values and patches, copy-on-write and in place, and checks that
+// refusals change nothing, undo restores the value, references balance, strings stay WTF-8, and
+// string spans match a UTF-16 model.
 #include "apply.h"
 #include "invert.h"
 #include "fuzz_values.h"
@@ -27,7 +14,6 @@ static void die(const char *why) {
 
 static int same(const op_value *a, const op_value *b) { return fz_equal(a, b); }
 
-// strings as UTF-16 units, the model's: a span of positions is a span of units
 enum { FZ_UNITS = 64 };
 typedef struct {
 	unsigned u[FZ_UNITS];
@@ -49,7 +35,6 @@ static void decode(const op_value *s, units *out) {
 		i += n;
 	}
 }
-// a high then a low: four bytes; a lone half: three
 static size_t encode(const units *s, char *out) {
 	unsigned char *o = (unsigned char *)out;
 	size_t n = 0;
@@ -69,7 +54,6 @@ static size_t encode(const units *s, char *out) {
 	}
 	return n;
 }
-// the unit where position k starts; -1 past the end
 static long unit_at(const units *s, int64_t k) {
 	size_t i = 0;
 	for (; k > 0; k--) {
@@ -78,7 +62,6 @@ static long unit_at(const units *s, int64_t k) {
 	}
 	return (long)i;
 }
-// s's units [x, y) replaced with those of in
 static units splice(const units *s, size_t x, size_t y, const units *in, size_t ix, size_t iy) {
 	units o = {.n = 0};
 	for (size_t i = 0; i < x; i++) o.u[o.n++] = s->u[i];
@@ -87,7 +70,6 @@ static units splice(const units *s, size_t x, size_t y, const units *in, size_t 
 	return o;
 }
 
-// one span put, removal or move within the string value v, against the model
 static void model(fz_bytes *b, const op_value *v) {
 	unsigned k = fz_byte(b) % 3;
 	int64_t x = fz_byte(b) % 8, y = fz_byte(b) % 8, g = fz_byte(b) % 8;
@@ -134,7 +116,6 @@ static void model(fz_bytes *b, const op_value *v) {
 	op_free(piece);
 }
 
-// the patches p, aimed at the same places, with these values in them
 static void patches_with(const fz_patches *ps, op_patch *out, op_value **values) {
 	for (size_t i = 0; i < ps->n; i++) {
 		out[i] = ps->p[i];
@@ -143,7 +124,6 @@ static void patches_with(const fz_patches *ps, op_patch *out, op_value **values)
 	}
 }
 
-// the undo of both ways is the same patches
 static int same_undo(const op_undo *a, const op_undo *b) {
 	if (a->n != b->n) return 0;
 	for (size_t i = 0; i < a->n; i++) {
@@ -156,8 +136,6 @@ static int same_undo(const op_undo *a, const op_undo *b) {
 	return 1;
 }
 
-// the same in place, on copies of the value and the patches' values: the code and index as op_apply
-// gave, a refused call leaving the copy as it was, a good one the same value and undo
 static void in_place(const op_value *was, const fz_patches *ps, int code, size_t failed,
 	const op_value *out, const op_undo *undo) {
 	op_value *v = fz_copy(was), *values[FZ_PATCHES] = {0};
@@ -196,7 +174,6 @@ static void in_place(const op_value *was, const fz_patches *ps, int code, size_t
 int LLVMFuzzerTestOneInput(const unsigned char *data, size_t size) {
 	fz_bytes b = {data, size, 0};
 	unsigned flags = fz_byte(&b);
-	// now and then a string: the model has one to work on
 	op_value *value = flags & 2 ? NULL : (flags & 12) == 12 ? fz_text(&b) : fz_value(&b, 0);
 	fz_patches ps;
 	fz_patch_list(&b, value, &ps);
@@ -224,7 +201,6 @@ int LLVMFuzzerTestOneInput(const unsigned char *data, size_t size) {
 		if (undo.n != 0 || undo.patches != NULL) die("refused, and the undo changed");
 		if (failed >= ps.n) die("refused at no patch");
 		if (ifailed != failed) die("op_invert refused another patch");
-		// the patches before it land; then it alone fails the same way
 		op_value *before = NULL, *after = sentinel;
 		if (op_apply(value, ps.p, failed, &o, &before, NULL) != OP_OK) die("the patches before the refused one fail");
 		op_undo_free(&undo);
@@ -260,7 +236,6 @@ int LLVMFuzzerTestOneInput(const unsigned char *data, size_t size) {
 
 	if (value != NULL && value->type == OP_STR) model(&b, value);
 
-	// all let go of: what was given has no holder but the caller
 	if (!fz_unshared(value)) die("a hold on the value is left");
 	for (size_t i = 0; i < ps.n; i++)
 		if (!fz_unshared(ps.values[i])) die("a hold on a patch's value is left");

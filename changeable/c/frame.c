@@ -28,7 +28,6 @@ ch_frame *ch_frame_ref(ch_frame *f) {
 }
 
 void ch_frame_free(ch_frame *f) {
-	// up the chain, each frame this one was the last hold of
 	while (f != NULL && --f->refs == 0) {
 		ch_frame *up = f->parent;
 		for (size_t i = 0; i < f->n; i++) {

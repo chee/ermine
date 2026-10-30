@@ -4,9 +4,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-// most maps hold one to three keys: the smallest table is four slots
 #define MIN_CAP 4
-// a reset map bigger than this is freed: one that was once huge does not keep its memory
+// A reset map bigger than this is freed, so one that was once huge does not keep its memory.
 #define KEEP_CAP 1024
 
 static size_t hash(const void *p, size_t cap) {
@@ -15,7 +14,6 @@ static size_t hash(const void *p, size_t cap) {
 	return (size_t)(x >> 20) & (cap - 1);
 }
 
-// the slot of key, or of the empty slot it would go in
 static size_t slot(const pm *m, const void *key) {
 	size_t i = hash(key, m->cap);
 	while (m->keys[i] != NULL && m->keys[i] != key) i = (i + 1) & (m->cap - 1);
@@ -36,7 +34,6 @@ bool pm_has(const pm *m, const void *key) {
 static void grow(pm *m) {
 	pm old = *m;
 	m->cap = old.cap ? old.cap * 2 : MIN_CAP;
-	// one block: the keys, then the values
 	m->keys = calloc(2 * m->cap, sizeof *m->keys);
 	if (m->keys == NULL) abort();
 	m->vals = (void **)(m->keys + m->cap);
@@ -64,7 +61,6 @@ bool pm_delete(pm *m, const void *key) {
 	size_t i = slot(m, key);
 	if (m->keys[i] == NULL) return false;
 	m->count--;
-	// shift back what probed past the hole
 	size_t mask = m->cap - 1;
 	size_t j = i;
 	for (;;) {
@@ -74,7 +70,6 @@ bool pm_delete(pm *m, const void *key) {
 			j = (j + 1) & mask;
 			if (m->keys[j] == NULL) return true;
 			size_t home = hash(m->keys[j], m->cap);
-			// j can move to i unless its home lies cyclically in (i, j]
 			if (i <= j ? (home <= i || home > j) : (home <= i && home > j)) break;
 		}
 		m->keys[i] = m->keys[j];

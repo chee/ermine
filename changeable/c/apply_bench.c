@@ -1,6 +1,6 @@
-// one change on a big value, copy-on-write against in place (op_apply's in_place): append to a list
-// of 10k, and edit deep in a map of 10k. each call changes the value and changes it back, so it
-// stays the size it is; the mean per call. make bench, then changeable/c/apply-bench
+// Times one change on a big value, copy-on-write against in place: append to a list of 10k and
+// edit deep in a map of 10k. Each call changes the value and changes it back; reports the mean
+// per call. Build with make bench, then run changeable/c/apply-bench.
 #define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <stdlib.h>

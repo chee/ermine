@@ -1,6 +1,5 @@
-// Squishing patches, and patches as columns, in C. The rules: squish.ts; this follows it step for
-// step, merges reaching back included. Joined values are the squisher's own, a buffer per patch
-// that grows in place, so typing one character at a time is amortised linear.
+// Squishing patches and patches as columns, in C. The rules are squish.ts's, followed step for
+// step. Joined values are the squisher's own buffers, so typing one character at a time is linear.
 #include "squish.h"
 
 #include <stdint.h>
@@ -17,8 +16,8 @@ static void *grow(void *p, size_t *cap, size_t want, size_t each) {
 	return p;
 }
 
-// a string's positions: code points. a lone surrogate is held as WTF-8 (three bytes, ED A0..BF
-// xx): a position of its own
+// A string's positions are code points. A lone surrogate is held as WTF-8 (three bytes,
+// ED A0..BF xx) and is a position of its own.
 sq_value sq_str(const char *s, size_t size) {
 	size_t n = 0;
 	int lone = 0;
@@ -38,13 +37,11 @@ sq_value sq_typed(int of, size_t each, const void *data, size_t n) {
 }
 sq_value sq_any(const void *v) { return (sq_value){SQ_ANY, 0, 0, v, 0, 0, 0}; }
 
-// the byte offset of position i (element for the rest): code points for strings
 static size_t offset(const sq_value *v, size_t i) {
 	size_t total = v->n;
 	if (i >= total) return v->size;
 	if (v->kind != SQ_STR) return i * v->each;
 	const unsigned char *s = v->data;
-	// the back half from the end: where typing and backspacing happen
 	if (i > total / 2) {
 		size_t at = v->size, seen = total;
 		while (seen > i) {
@@ -73,12 +70,11 @@ static int same(const sq_key *p, size_t pn, const sq_key *q, size_t qn) {
 		if (!same_key(&p[i], &q[i])) return 0;
 	return 1;
 }
-// q is at or above p
 static int under(const sq_key *p, size_t pn, const sq_key *q, size_t qn) {
 	return qn <= pn && same(p, qn, q, qn);
 }
 
-// x + y, x - y in *out; 0: past what an int64_t holds (a range there is never joined)
+// x + y or x - y in *out. Returns 0 past what an int64_t holds (a range there is never joined).
 static int add(int64_t x, int64_t y, int64_t *out) {
 	if (y > 0 ? x > INT64_MAX - y : x < INT64_MIN - y) return 0;
 	*out = x + y;
@@ -90,13 +86,11 @@ static int sub(int64_t x, int64_t y, int64_t *out) {
 	return 1;
 }
 
-// a patch's own buffer: its value's data, made here; no one else points into it
 typedef struct {
 	void *p;
 	size_t cap;
 } own;
 
-// a fouled place: its keys a patch's, or made here (made: the same, to free)
 typedef struct {
 	const sq_key *keys;
 	size_t depth;
@@ -105,10 +99,8 @@ typedef struct {
 
 struct sq {
 	sq_patch *buf;
-	// one per patch: its own buffer, or none (p NULL)
 	own *own;
 	size_t n, cap;
-	// where a lone surrogate was put, or was moved to: nothing at or under is merged again
 	place *fouled;
 	size_t nfouled, capfouled;
 };
@@ -133,9 +125,6 @@ static void unfoul(sq *s) {
 	s->nfouled = 0;
 }
 
-// a move takes what is fouled under where it takes from along: fouled under where it lands. 1: its
-// own place is fouled, as it takes from at or under a fouled place, or takes or lands in a span
-// (what was under the span is somewhere else there)
 static int moved(sq *s, const sq_patch *p) {
 	if (is_fouled(s, p->move_path, p->move_depth)) return 1;
 	for (size_t i = 0, n = s->nfouled; i < n; i++) {
@@ -152,14 +141,12 @@ static int moved(sq *s, const sq_patch *p) {
 	return 0;
 }
 
-// the last patch is going: its own buffer with it
 static void drop_tail(sq *s) {
 	s->n--;
 	free(s->own[s->n].p);
 	s->own[s->n] = (own){NULL, 0};
 }
 
-// patch i's value's [x, y) (positions) replaced by w's data; w NULL: removed. 0: the kinds differ
 static int splice(sq *s, size_t i, size_t x, size_t y, const sq_value *w) {
 	sq_value *v = &s->buf[i].value;
 	if (w && (w->kind != v->kind || w->of != v->of)) return 0;
@@ -167,7 +154,6 @@ static int splice(sq *s, size_t i, size_t x, size_t y, const sq_value *w) {
 	size_t n = v->n - (y - x) + (w ? w->n : 0);
 	size_t size = bx + wsize + (v->size - by);
 	own *o = &s->own[i];
-	// its own buffer: in place
 	if (o->p) {
 		if (size > o->cap) {
 			size_t c = o->cap * 2 > size ? o->cap * 2 : size;
@@ -192,7 +178,6 @@ static int splice(sq *s, size_t i, size_t x, size_t y, const sq_value *w) {
 	return 1;
 }
 
-// patch i made to do what it and next do; 0: it cannot
 static int merge(sq *s, size_t i, const sq_patch *next) {
 	sq_patch *prev = &s->buf[i];
 	if (!prev->has_range || !next->has_range || prev->move || next->move) return 0;
@@ -202,7 +187,6 @@ static int merge(sq *s, size_t i, const sq_patch *next) {
 	int64_t x, y, to;
 	if (prev->has_value) {
 		if (prev->value.kind == SQ_ANY) return 0;
-		// the span prev made is [a, end)
 		int64_t n = (int64_t)prev->value.n, end;
 		if (!add(a, n, &end)) return 0;
 		if (a <= c && d <= end) {
@@ -217,7 +201,6 @@ static int merge(sq *s, size_t i, const sq_patch *next) {
 		}
 		return 0;
 	}
-	// prev removed [a, b)
 	if (!w) {
 		if (c <= a && a <= d) {
 			if (!sub(d, a, &y) || !add(b, y, &to)) return 0;
@@ -226,7 +209,6 @@ static int merge(sq *s, size_t i, const sq_patch *next) {
 		}
 		return 0;
 	}
-	// a removal and an insert of something that is no sequence stay apart
 	if (c == a && d == a && w->kind != SQ_ANY) {
 		prev->has_value = 1, prev->value = *w;
 		return 1;
@@ -234,7 +216,6 @@ static int merge(sq *s, size_t i, const sq_patch *next) {
 	return 0;
 }
 
-// prev and next might merge, by their ranges alone: cheaper than a merge that fails
 static int could(const sq_patch *prev, const sq_patch *next) {
 	if (!prev->has_range || !next->has_range) return 0;
 	int64_t a = prev->from, c = next->from, d = next->to, end;
@@ -245,12 +226,9 @@ static int could(const sq_patch *prev, const sq_patch *next) {
 	       ((a <= c && d <= end) || (c == end && d > c));
 }
 
-// merges reach back: the last patch, just merged, merged into the one before it, while they do.
-// at the path just merged, so never fouled
 static void back(sq *s) {
 	while (s->n > 1 && could(&s->buf[s->n - 2], &s->buf[s->n - 1])) {
 		if (!merge(s, s->n - 2, &s->buf[s->n - 1])) return;
-		// the last's own buffer: the one before's now, if its value is it (an insert after a removal)
 		own *last = &s->own[s->n - 1];
 		if (last->p && s->buf[s->n - 2].value.data == last->p) s->own[s->n - 2] = *last;
 		else free(last->p);
@@ -259,13 +237,11 @@ static void back(sq *s) {
 	}
 }
 
-// the patches taken back, the lone surrogates seen still kept
 static void reset(sq *s) {
 	while (s->n) drop_tail(s);
 }
 
 void sq_push(sq *s, const sq_patch *p) {
-	// the whole put: what was fouled is gone with the rest
 	if (p->depth == 0 && !p->has_range && !p->move) {
 		reset(s);
 		unfoul(s);
@@ -273,14 +249,12 @@ void sq_push(sq *s, const sq_patch *p) {
 		while (s->n) {
 			const sq_patch *t = &s->buf[s->n - 1];
 			if (p->has_range || p->move || t->move || !under(t->path, t->depth, p->path, p->depth)) break;
-			// t removing a list element (a number last) moves the ones after it: p at the same place
-			// is at another element
 			if (!t->has_value && !t->has_range && t->depth == p->depth && !t->path[t->depth - 1].s) break;
 			drop_tail(s);
 		}
 	}
-	// a lone surrogate makes positions depend on what is around it (a lone high meeting a lone low
-	// is one pair, a position fewer): never merged, nor what is at or under where it went
+	// A lone surrogate makes positions depend on what surrounds it, so it is never merged, nor is
+	// anything at or under where it went.
 	if ((p->has_value && p->value.lone) || (p->move && moved(s, p))) {
 		foul(s, p->path, p->depth, NULL);
 	} else if (s->n && !is_fouled(s, p->path, p->depth) && merge(s, s->n - 1, p)) {
@@ -317,7 +291,6 @@ void sq_free(sq *s) {
 	free(s);
 }
 
-// columns
 
 typedef struct {
 	sq_runs r;
@@ -352,8 +325,7 @@ static uint64_t hash(const sq_key *k, size_t depth) {
 	return h;
 }
 
-// x + y, wrapping past the ends: so a column's steps and sizes come back as they went, whatever
-// the ranges
+// x + y, wrapping past the ends, so a column's steps and sizes come back as they went.
 static int64_t wrap(int64_t x, uint64_t y) { return (int64_t)((uint64_t)x + y); }
 
 sq_columns sq_encode(const sq_patch *ps, size_t n) {
@@ -414,7 +386,6 @@ typedef struct {
 	int64_t left;
 } cursor;
 
-// 0: the runs are used up
 static int next(cursor *k, int64_t *out) {
 	while (k->left <= 0) {
 		if (k->i + 1 >= k->r->n) return 0;
@@ -426,7 +397,6 @@ static int next(cursor *k, int64_t *out) {
 	return 1;
 }
 
-// how many the runs hold, in *n; 0: more than a size_t holds
 static int count(const sq_runs *r, size_t *n) {
 	*n = 0;
 	for (size_t i = 1; i < r->n; i += 2) {
@@ -437,7 +407,6 @@ static int count(const sq_runs *r, size_t *n) {
 	return 1;
 }
 
-// how many of the shapes have the bit, in *n
 static int count_bit(const sq_runs *r, int bit, size_t *n) {
 	*n = 0;
 	for (size_t i = 1; i < r->n; i += 2) {
@@ -448,7 +417,6 @@ static int count_bit(const sq_runs *r, int bit, size_t *n) {
 	return 1;
 }
 
-// do the columns hold what the shapes need? counted by runs, before anything is made for them
 static int covers(const sq_columns *c, size_t n) {
 	size_t path, from, size, ranged, values, moves;
 	if (!count(&c->path, &path) || !count(&c->from, &from) || !count(&c->size, &size)) return 0;

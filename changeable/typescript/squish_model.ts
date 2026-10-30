@@ -1,5 +1,5 @@
-// op's patches on plain values (maps, lists, strings), a plain second apply for the squish fuzzer
-// to check against. Shares what it does not touch.
+// A plain second implementation of apply on maps, lists and strings, for the squish fuzzer to
+// check against.
 import type { Key, Patch, Target as Place } from "@ermine/changeable/apply"
 
 export type V = unknown
@@ -18,7 +18,6 @@ function edit(v: V, keys: readonly Key[], f: (v: V) => V): V {
 	const o = v as Record<Key, V>
 	return { ...o, [k]: edit(o[k], more, f) }
 }
-// strings by code point
 export function slice(seq: V, a: number, b: number): V {
 	if (typeof seq === "string") return Array.from(seq).slice(a, b).join("")
 	return (seq as V[]).slice(a, b)
@@ -47,7 +46,6 @@ function remove(v: V, p: Place): V {
 		return rest
 	})
 }
-// one: a single thing moved into a list's gap is one element there
 function put(v: V, p: Place, what: V, one: boolean): V {
 	if (p.range) {
 		return edit(

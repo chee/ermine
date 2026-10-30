@@ -1,15 +1,4 @@
-// What the update suite asks of a harness besides its scenarios (conformance/run.ts): an entry
-// request around every update of every scenario, an unknown op is an error and the harness goes on,
-// and a fuzzer against the reference library. Against HARNESS, else the reference
-// (update_harness.ts). The protocol: update_harness.ts.
-//
-// Around each update an entry request is made before and after, and the answers must say: a
-// successful update's undo, applied to the value after, gives the value before (maps by content),
-// and a failed one leaves the entry as it was.
-//
-// The fuzzer makes patches against content it follows with the reference library; each goes to
-// the harness alone, then all that were valid in one change. Whatever answers must equal the
-// reference's answers, and the one change must end where the reference's patches one by one did.
+// Tests update on the harness named by HARNESS (default update_harness.ts), with a fuzzer.
 import { assert, assertEquals } from "@std/assert"
 import type { Changeable, ChangeHeader } from "@ermine/changeable"
 import update from "@ermine/changeable/update"
@@ -18,7 +7,6 @@ import { ask, command, reference, suite } from "../../conformance/typescript/ask
 import { line, revive, toJson } from "../../conformance/typescript/form.ts"
 import { rand } from "../../conformance/typescript/rand.ts"
 
-// a changeable of this value and change (no change given: the time now, whole seconds since 1970)
 const createChangeable = <V>(
 	value: V,
 	change: ChangeHeader = {} as ChangeHeader,
@@ -34,8 +22,6 @@ type Request = Record<string, any>
 // deno-lint-ignore no-explicit-any
 type Answer = Record<string, any>
 
-// keys sorted, so maps compare by content (a map's key order is not part of its value: op's
-// apply.ts)
 const canon = (v: unknown): unknown =>
 	Array.isArray(v)
 		? v.map(canon)
@@ -43,8 +29,6 @@ const canon = (v: unknown): unknown =>
 		? Object.fromEntries(Object.keys(v).sort().map((k) => [k, canon((v as Answer)[k])]))
 		: v
 
-// an entry request before and after every update, and what they must say:
-// asked: the requests to send; check: the answers to them (the scenario's own at its indexes)
 function around(
 	steps: Request[],
 ): { asked: Request[]; at: number[]; check: (a: Answer[]) => void } {
@@ -76,7 +60,6 @@ function around(
 	return { asked, at, check }
 }
 
-// every scenario
 Deno.test("around every update: the undo takes the value back, a failed one changes nothing", async () => {
 	const dir = suite("update").fixtures
 	for (
@@ -98,17 +81,14 @@ Deno.test("an unknown op is an error, and the harness goes on", async () => {
 	assertEquals(b, {})
 })
 
-// a few dozen seeds (memory: fuzz runs small)
 const SEEDS = 40
 const STEPS = 30
 
 const KEYS = ["a", "b", "c"]
-// s: lone halves apart, a pair and a modifier, NUL; edits bring halves together and split pairs
 const content = () => ({ l: [1, 2, 3], s: "a\uD83D中👍🏽\u0000\uDE00b", m: { a: 1 } })
 const PIECES = ["x", "é", "😀", "👍🏽", "\uD83D", "\uDE00", "\uD800\uDC00", "\u0000"]
 const start = { op: "start", value: content(), header: { time: 0, actor: "host" } }
 
-// a patch against content v; some are not valid
 function patch(pick: (n: number) => number, v: Record<string, unknown>): Patch {
 	const l = v.l as unknown[], s = [...(v.s as string)]
 	const i = pick(l.length + 1), j = i + pick(l.length - i + 1)
@@ -195,7 +175,6 @@ Deno.test(`fuzz: ${SEEDS} seeds × ${STEPS} patches, as the reference`, async ()
 			)
 		}
 		check(mine)
-		// the one change ends where the patches one by one did
 		assertEquals(
 			canon(mine[mine.length - 1].entry.value),
 			canon(toJson(n.value)),

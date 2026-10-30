@@ -1,5 +1,5 @@
-// a changeable changed in place: the patches applied to its value (apply's, the undo kept), its
-// change the one given with op: { patches, undo }
+// Applies patches to a changeable's value in place, and sets its change with the patches and
+// their undo.
 import apply, { type Patch } from "./apply.ts"
 import type { Changeable, ChangeHeader } from "./changeable.ts"
 

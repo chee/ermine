@@ -2,7 +2,6 @@ import { assert, assertEquals, assertThrows } from "@std/assert"
 import apply, { ApplyError, type Key, type Patch } from "./apply.ts"
 import invert from "./invert.ts"
 
-// a fuzz's numbers: xorshift (an LCG's low bits repeat, so % k of one is patterned)
 const xs = (x: number) => {
 	x = x || 1
 	x ^= x << 13
@@ -16,9 +15,6 @@ const isMap = (v: unknown): v is Record<string, unknown> =>
 const view = (v: unknown): v is ArrayLike<unknown> & object =>
 	ArrayBuffer.isView(v) && !(v instanceof DataView)
 
-// where a and b differ ("": nowhere). lists, strings and typed arrays element for element; maps
-// by content (a map's key order is not part of its value: apply.ts). order: in key order too, for
-// telling a value changed in place after it was handed out
 function differ(a: unknown, b: unknown, order = false, at = "$"): string {
 	if (typeof a === "string" || typeof b === "string") return a === b ? "" : `${at}: string`
 	if (Array.isArray(a) || Array.isArray(b)) {
@@ -51,11 +47,8 @@ function differ(a: unknown, b: unknown, order = false, at = "$"): string {
 	return Object.is(a, b) ? "" : `${at}: ${String(a)} ≠ ${String(b)}`
 }
 
-// a copy that keeps lone surrogates, typed arrays, key order
 const snap = (v: unknown) => v === undefined ? undefined : structuredClone(v)
 
-// the patches, their undo, and the way back. the value given and the patches' values unchanged,
-// key order too
 function round(value: unknown, ps: Patch[], why = ""): Patch[] {
 	const was = snap(value), values = ps.map((p) => snap(p?.value))
 	const out = apply(value, ps)
@@ -80,12 +73,10 @@ Deno.test("invert: puts, each undone by a put of what was there or a removal", (
 	assertEquals(round(v, [{ path: ["m", "a"], value: 9 }]), [{ path: ["m", "a"], value: 1 }])
 	assertEquals(round(v, [{ path: ["l", 1], value: [9] }]), [{ path: ["l", 1], value: 2 }])
 	assertEquals(round(v, [{ path: [], value: null }]), [{ path: [], value: v }])
-	// nested, in a value put by an earlier patch
 	assertEquals(
 		round(v, [{ path: ["n"], value: { x: [1] } }, { path: ["n", "x", 0], value: 2 }]),
 		[{ path: ["n", "x", 0], value: 1 }, { path: ["n"] }],
 	)
-	// a key put over and put back: as it was, by content
 	const back = apply(apply(v, [{ path: ["m", "a"], value: 9 }]), [{ path: ["m", "a"], value: 1 }])
 	assertEquals(differ(back, v), "")
 })
@@ -96,7 +87,6 @@ Deno.test("invert: removals; a missing map key's is nothing", () => {
 	assertEquals(round(v, [{ path: ["m", "q"] }]), [])
 	assertEquals(round(v, [{ path: ["l", 0] }]), [{ path: ["l"], range: [0, 0], value: ["x"] }])
 	assertEquals(round(v, [{ path: [] }]), [{ path: [], value: v }])
-	// the key put back goes last: the same content
 	const back = apply(apply(v, [{ path: ["m", "a"] }]), [{ path: ["m", "a"], value: 1 }])
 	assertEquals(Object.keys((back as typeof v).m), ["b", "a"])
 	assertEquals(differ(back, v), "")
@@ -122,9 +112,7 @@ Deno.test("invert: spans of strings in code points, lists, typed arrays", () => 
 	assertEquals(round(v, [{ path: ["t"], range: [0, 1] }]), [
 		{ path: ["t"], range: [0, 0], value: new Int16Array([1]) },
 	])
-	// nothing put, nothing taken: nothing to undo
 	assertEquals(round(v, [{ path: ["l"], range: [1, 1] }]), [])
-	// bytes are one value
 	const b = { b: new Uint8Array([1, 2]) }
 	assertEquals(round(b, [{ path: ["b"], value: new Uint8Array([3]) }]), [
 		{ path: ["b"], value: b.b },
@@ -145,7 +133,6 @@ Deno.test("invert: many patches, undone last first", () => {
 		{ path: ["m", "k", 0] },
 		{ path: ["l"], range: [0, 2] },
 	])
-	// any iterable
 	function* gen(): Generator<Patch> {
 		yield { path: ["a"], value: 1 }
 		yield { path: ["a"] }
@@ -197,16 +184,13 @@ const moved = (undo: Patch[]) => undo.some((p) => p.move !== undefined)
 
 Deno.test("invert: moves of one thing move it back", () => {
 	const v = { l: ["a", "b", "c"], m: { x: 1, y: { z: 2 } }, s: "str" }
-	// to a new key: back
 	assertEquals(round(v, [{ path: ["m", "w"], move: { path: ["m", "x"] } }]), [
 		{ path: ["m", "x"], move: { path: ["m", "w"] } },
 	])
-	// onto a key: back, then what it replaced put back
 	assertEquals(round(v, [{ path: ["m", "x"], move: { path: ["s"] } }]), [
 		{ path: ["s"], move: { path: ["m", "x"] } },
 		{ path: ["m", "x"], value: 1 },
 	])
-	// onto an element: what it replaced goes in beside it, then back
 	assertEquals(round(v, [{ path: ["l", 0], move: { path: ["m", "x"] } }]), [
 		{ path: ["l"], range: [1, 1], value: ["a"] },
 		{ path: ["m", "x"], move: { path: ["l", 0] } },
@@ -215,11 +199,9 @@ Deno.test("invert: moves of one thing move it back", () => {
 		{ path: ["l"], range: [2, 2], value: ["c"] },
 		{ path: ["l"], range: [0, 0], move: { path: ["l", 1] } },
 	])
-	// out of a list: back into its gap
 	assertEquals(round(v, [{ path: ["k"], move: { path: ["l", 1] } }]), [
 		{ path: ["l"], range: [1, 1], move: { path: ["k"] } },
 	])
-	// into a list's span
 	assertEquals(round(v, [{ path: ["l"], range: [0, 2], move: { path: ["m", "y"] } }]), [
 		{ path: ["l"], range: [1, 1], value: ["a", "b"] },
 		{ path: ["m", "y"], move: { path: ["l", 0] } },
@@ -227,14 +209,12 @@ Deno.test("invert: moves of one thing move it back", () => {
 	assertEquals(round(v, [{ path: ["l"], range: [2, 2], move: { path: ["l", 0] } }]), [
 		{ path: ["l"], range: [0, 0], move: { path: ["l", 2] } },
 	])
-	// into a list in the element after it
 	assertEquals(
 		round({ l: ["a", ["b"]] }, [{ path: ["l", 0], range: [0, 0], move: { path: ["l", 0] } }]),
 		[
 			{ path: ["l"], range: [0, 0], move: { path: ["l", 0, 0] } },
 		],
 	)
-	// a key in a list after the gap it left: its path back as it was
 	round({ l: [{ k: 1 }, "a"] }, [{ path: ["l", 0, "k"], move: { path: ["l", 1] } }])
 	assertEquals(
 		round({ l: ["a", "b", { k: 1 }] }, [{ path: ["l", 1, "k"], move: { path: ["l", 0] } }]),
@@ -243,7 +223,6 @@ Deno.test("invert: moves of one thing move it back", () => {
 			{ path: ["l", 2, "k"], value: 1 },
 		],
 	)
-	// a string, out of a key, into a string
 	assertEquals(round(v, [{ path: ["s"], range: [3, 3], move: { path: ["l", 0] } }]).length, 2)
 	assertEquals(
 		round({ e: "😀!", s: "ab" }, [{ path: ["s"], range: [1, 2], move: { path: ["e"] } }]),
@@ -256,7 +235,6 @@ Deno.test("invert: moves of one thing move it back", () => {
 	assertEquals(round(t, [{ path: ["t"], range: [1, 1], move: { path: ["u"] } }]), [
 		{ path: ["u"], move: { path: ["t"], range: [1, 4] } },
 	])
-	// onto itself: nothing
 	assertEquals(round(v, [{ path: ["l", 2], move: { path: ["l", 2] } }]), [])
 	assertEquals(round(v, [{ path: [], move: { path: [] } }]), [])
 })
@@ -283,7 +261,6 @@ Deno.test("invert: moves of a span move it back", () => {
 			{ path: ["k"], range: [0, 1], move: { path: ["l"], range: [4, 5] } },
 		] as Patch[]
 	) assert(moved(round(v, [p])), JSON.stringify(p))
-	// to a key: the span back, then what the key held put back
 	assertEquals(round(v, [{ path: ["w"], move: { path: ["s"], range: [1, 3] } }]), [
 		{ path: ["s"], range: [1, 1], move: { path: ["w"], range: [0, 2] } },
 		{ path: ["w"] },
@@ -292,7 +269,6 @@ Deno.test("invert: moves of a span move it back", () => {
 		{ path: ["l"], range: [0, 0], move: { path: ["k", 0], range: [0, 1] } },
 		{ path: ["k", 0], value: "a" },
 	])
-	// an empty span: nothing moves
 	assertEquals(
 		round(v, [{ path: ["k"], range: [0, 0], move: { path: ["l"], range: [2, 2] } }]),
 		[],
@@ -300,7 +276,6 @@ Deno.test("invert: moves of a span move it back", () => {
 })
 
 Deno.test("invert: a span or an item taken from a list and landed in the same list", () => {
-	// a span taken from the front, landed on an item after it: the item's place shifts back
 	for (
 		const [v, p] of [
 			[[false, false, false], { path: [1], move: { path: [], range: [0, 1] } }],
@@ -326,24 +301,18 @@ Deno.test("invert: a span or an item taken from a list and landed in the same li
 
 Deno.test("invert: moves that cannot move back: what was put undone, what was taken put back", () => {
 	const v = { l: ["a", "b"], m: { x: 1, y: { z: 2 } }, n: [["p", "q"]], s: "s" }
-	// the whole replaced by a part of it
 	assertEquals(round(v, [{ path: [], move: { path: ["m"] } }]), [
 		{ path: [], value: { l: ["a", "b"], n: [["p", "q"]], s: "s" } },
 		{ path: ["m"], value: { x: 1, y: { z: 2 } } },
 	])
-	// a key's value replaced by its own part
 	assertEquals(round(v, [{ path: ["m"], move: { path: ["m", "x"] } }]), [
 		{ path: ["m"], value: { y: { z: 2 } } },
 		{ path: ["m", "x"], value: 1 },
 	])
-	// a span to a key it is under
 	assert(!moved(round(v, [{ path: ["n"], move: { path: ["n", 0], range: [0, 1] } }])))
-	// a string out of a list: no move puts a string in a list
 	assert(!moved(round(v, [{ path: ["s"], range: [0, 0], move: { path: ["l", 0] } }])))
-	// a list's element replaced by its own part: back would be into-itself
 	round({ l: [["a", ["b"]]] }, [{ path: ["l", 0], move: { path: ["l", 0, 1, 0] } }])
 	round({ l: [["a"], "x"] }, [{ path: ["l", 1], move: { path: ["l", 0, 0] } }])
-	// the moved thing changed after: the undo's copy of it is not
 	const w = { a: { k: [1] }, l: ["x"] }
 	round(w, [
 		{ path: ["a", "k"], range: [1, 1], value: [2] },
@@ -353,26 +322,19 @@ Deno.test("invert: moves that cannot move back: what was put undone, what was ta
 	])
 })
 
-// a lone high (H) met by a lone low (L) at an edge is one pair: one position fewer. the undo
-// widens over the pair and gives back the exact units
 const H = "\uD83D", L = "\uDE00", H2 = "\uD800", L2 = "\uDC00"
 Deno.test("invert: lone surrogates joined at an edge, by a put", () => {
-	// the left edge: a lone high before, a lone low first in what goes in
 	assertEquals(round({ s: "x" + H }, [{ path: ["s"], range: [2, 2], value: L + "y" }]), [
 		{ path: ["s"], range: [1, 3], value: H },
 	])
-	// the right edge: a lone high last in what goes in, a lone low after
 	assertEquals(round({ s: L + "z" }, [{ path: ["s"], range: [0, 0], value: "a" + H }]), [
 		{ path: ["s"], range: [0, 2], value: L },
 	])
-	// both, replacing
 	assertEquals(round({ s: H + "Q" + L }, [{ path: ["s"], range: [1, 2], value: L2 + H2 }]), [
 		{ path: ["s"], range: [0, 2], value: H + "Q" + L },
 	])
-	// one lone unit put between: joined on one side
 	round({ s: H + L2 }, [{ path: ["s"], range: [1, 1], value: L }])
 	round({ s: H2 + L }, [{ path: ["s"], range: [1, 1], value: H }])
-	// joined, then typed after
 	round({ s: "ab" + H }, [
 		{ path: ["s"], range: [3, 3], value: L },
 		{ path: ["s"], range: [3, 3], value: "c" },
@@ -387,13 +349,11 @@ Deno.test("invert: lone surrogates joined by a removal", () => {
 	assertEquals(round({ s: "a" + H + "xy" + L + "b" }, [{ path: ["s"], range: [2, 4] }]), [
 		{ path: ["s"], range: [1, 2], value: H + "xy" + L },
 	])
-	// not joined: a pair is never split, a high after a low is two
 	round({ s: L + "Q" + H }, [{ path: ["s"], range: [1, 2] }])
 	round({ s: "😀Q😀" }, [{ path: ["s"], range: [1, 2] }])
 })
 
 Deno.test("invert: lone surrogates joined by a ranged move", () => {
-	// the take joins what it leaves: no move back
 	let undo = round({ s: H + "Q" + L + "ab" }, [
 		{ path: ["s"], range: [3, 3], move: { path: ["s"], range: [1, 2] } },
 	])
@@ -409,7 +369,6 @@ Deno.test("invert: lone surrogates joined by a ranged move", () => {
 		),
 		{ s: H + L + "ab" },
 	)
-	// the landing joins at its left edge, then its right
 	undo = round({ s: H + "x", t: "y" + L }, [
 		{ path: ["s"], range: [1, 1], move: { path: ["t"], range: [1, 2] } },
 	])
@@ -418,23 +377,18 @@ Deno.test("invert: lone surrogates joined by a ranged move", () => {
 		{ path: ["s"], range: [1, 1], move: { path: ["t"], range: [0, 1] } },
 	])
 	assert(!moved(undo))
-	// what moved ends in a lone high, what it replaced begins with a lone low
 	undo = round({ s: "a" + L + "b", t: H }, [
 		{ path: ["s"], range: [1, 2], move: { path: ["t"], range: [0, 1] } },
 	])
 	assert(!moved(undo))
-	// a string out of a key, joined where it lands
 	round({ s: H + "b", e: L }, [{ path: ["s"], range: [1, 1], move: { path: ["e"] } }])
 	round({ s: H + "b", e: L }, [{ path: ["s"], range: [1, 2], move: { path: ["e"] } }])
-	// a span to a key, its take joined
 	round({ s: H + "Q" + L }, [{ path: ["k"], move: { path: ["s"], range: [1, 2] } }])
-	// lone surrogates not joined: moved back
 	assert(moved(round({ s: H + "ab", t: L }, [
 		{ path: ["s"], range: [3, 3], move: { path: ["t"], range: [0, 1] } },
 	])))
 })
 
-// values, and patches of every kind on them: many valid, some not
 const PARTS = ["a", "b", "xy", "é", "中", "😀", "\uD83D", "\uDE00", "\uD800", "\uDC00"]
 const KEYS = ["a", "b", "c", "k"]
 const KINDS = [Int8Array, Int16Array, Float64Array, BigInt64Array]
@@ -525,7 +479,6 @@ function patch(pick: Pick, v: unknown): Patch {
 			return { ...gap(), move: { path: any()[0] } }
 		case 9:
 		case 10: {
-			// a span within its sequence
 			const [f, s] = seq()
 			const n = isSeq(s) ? len(s) : 0, r = span(pick, n)
 			const g = pick(n - (r[1] - r[0]) + 1)
@@ -540,7 +493,6 @@ function patch(pick: Pick, v: unknown): Patch {
 		}
 		case 12:
 		case 13: {
-			// a value into a sequence of its kind
 			const [p, s] = seq()
 			const fits = all.filter(([q, x]) =>
 				q.length > 0 && (Array.isArray(s) ||
@@ -560,7 +512,6 @@ function patch(pick: Pick, v: unknown): Patch {
 			return { path: [], value: made(pick, 2) }
 		case 16:
 		case 17: {
-			// a span or an item of a list, landed in that list: on an item (or deeper), or in a span
 			const lists = all.filter(([, x]) => Array.isArray(x))
 			if (!lists.length) return { path: any()[0], move: { path: any()[0] } }
 			const [f, l] = lists[pick(lists.length)]
@@ -573,14 +524,12 @@ function patch(pick: Pick, v: unknown): Patch {
 			return { ...to, move: take }
 		}
 		default: {
-			// what is not there, or a key of the wrong kind
 			const [p] = any()
 			return { path: [...p, [["x"], [0], [9], ["a", "b"]][pick(4)]].flat(), value: 1 }
 		}
 	}
 }
 
-// a few dozen seeds (memory: fuzz runs small)
 Deno.test("invert: fuzz, the round trip of random patches; refused ones as apply refuses them", () => {
 	for (let seed = 1; seed <= 40; seed++) {
 		let x = seed
@@ -607,7 +556,6 @@ Deno.test("invert: fuzz, the round trip of random patches; refused ones as apply
 			}
 		}
 		round(start, good, `seed ${seed}`)
-		// every patch alone, and every way back from part way
 		for (let k = 1; k < good.length; k += 5) {
 			round(start, good.slice(0, k), `seed ${seed} ${k}`)
 		}

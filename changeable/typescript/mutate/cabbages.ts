@@ -1,16 +1,12 @@
-// a fork of cabbages 0.2.10 (chee, MIT; ~/soft/chee/cabbages), for mutate_bench.ts only
-// updated to apply.ts' patches: { path, range?, value? | move? }; strings in code points;
-// typed arrays; moves; the whole at []. kept from cabbages: changes the target in place,
-// nothing copied, nothing undone when a patch fails
+// A fork of cabbages 0.2.10 (MIT, ~/soft/chee/cabbages), for mutate_bench.ts only. It applies
+// apply.ts's patches in place, copies nothing, and does not undo anything when a patch fails.
 import type { Key, Patch } from "../apply.ts"
 import { unit } from "@ermine/changeable/walk-string"
 
-// bytes, a Uint8Array, are one whole value: never spliced
 type Typed = Int8Array | Uint16Array | Int16Array | Uint32Array | Int32Array
 const typed = (v: unknown): v is Typed =>
 	ArrayBuffer.isView(v) && !(v instanceof DataView) && !(v instanceof Uint8Array)
 
-// the container holding path's last key
 function walk(root: any, path: readonly Key[]): any {
 	let t = root
 	for (let i = 0; i < path.length - 1; i++) {
@@ -23,7 +19,6 @@ function walk(root: any, path: readonly Key[]): any {
 const at = (root: any, path: readonly Key[]) =>
 	path.length ? walk(root, path)[path[path.length - 1]] : root
 
-// what is at path becomes w (undefined: removed); the root after it
 function set(root: any, path: readonly Key[], w: any): any {
 	if (!path.length) return w
 	const t = walk(root, path), k = path[path.length - 1]
@@ -32,8 +27,6 @@ function set(root: any, path: readonly Key[], w: any): any {
 	return root
 }
 
-// [a, b) of the sequence at path replaced by w (undefined: removed); the root after it,
-// and what was there
 function splice(root: any, path: readonly Key[], a: number, b: number, w: any, utf16: boolean) {
 	const seq = at(root, path)
 	if (Array.isArray(seq)) {
@@ -56,8 +49,7 @@ function splice(root: any, path: readonly Key[], a: number, b: number, w: any, u
 	return { root: set(root, path, out), taken }
 }
 
-// applies p to target in place; the root after it (new only when p acts at [])
-// utf16: string positions count UTF-16 units, as cabbages did, not code points
+// utf16: string positions count UTF-16 units, as cabbages did, not code points.
 export function apply(target: any, p: Patch, utf16 = false): any {
 	let root = target
 	let w: any = p.value
@@ -68,7 +60,6 @@ export function apply(target: any, p: Patch, utf16 = false): any {
 		} else {
 			w = at(root, f.path)
 			root = set(root, f.path, undefined)
-			// one element into a list's span: as a list of one
 			if (p.range && Array.isArray(at(root, p.path))) w = [w]
 		}
 	}

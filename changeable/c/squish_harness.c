@@ -1,5 +1,4 @@
-// The C squish library on the line protocol of changeable/typescript/squish_harness.ts. List
-// elements, moves and other values are the request's own op_values, which squish never reads.
+// The C squish library on the line protocol of changeable/typescript/squish_harness.ts.
 #define _POSIX_C_SOURCE 200809L
 #include <limits.h>
 #include <stdio.h>
@@ -9,7 +8,6 @@
 #include "squish.h"
 #include "../../conformance/c/harness.h"
 
-// a lone surrogate in a string anywhere in v
 static int lone(const op_value *v) {
 	if (v->type == OP_STR) return sq_str(v->str, v->bytes).lone;
 	if (v->type != OP_LIST && v->type != OP_MAP) return 0;
@@ -30,7 +28,6 @@ static sq_value value_of(const op_value *v) {
 	return a.lone = lone(v), a;
 }
 
-// out
 
 static void put_value(FILE *out, const sq_value *v) {
 	op_value *s;
@@ -90,7 +87,6 @@ static void put_runs(FILE *out, const char *name, const sq_runs *r) {
 	putc(']', out);
 }
 
-// in
 
 static int64_t num(const op_value *v) {
 	if (!v || v->type != OP_NUM) return 0;
@@ -98,7 +94,6 @@ static int64_t num(const op_value *v) {
 	if (op_as_int64(v, &exact)) return exact;
 	return v->num >= 9e18 ? INT64_MAX : v->num <= -9e18 ? INT64_MIN : (int64_t)v->num;
 }
-// a key's number: past what a long holds, the nearest it does
 static long index_of(const op_value *v) {
 	int64_t n = num(v);
 	return n > LONG_MAX ? LONG_MAX : n < LONG_MIN ? LONG_MIN : (long)n;
@@ -165,7 +160,6 @@ static sq_columns columns_of(const op_value *o) {
 }
 
 static int is_list(const op_value *v) { return v && v->type == OP_LIST; }
-// columns with each of its fields a list
 static int columns_ok(const op_value *c) {
 	static const char *fields[] = {"paths", "path", "shape", "from", "size", "value", "move"};
 	if (!c || c->type != OP_MAP) return 0;

@@ -1,7 +1,5 @@
 // deno bench changeable/typescript/mutate_bench.ts
-// mutate against a fork of cabbages (mutate/cabbages.ts): the same patches, the same result
-// mutate: what is touched copied, the old content kept, all or nothing
-// cabbages: in place; "cabbages, cloned": a structuredClone first, so the old content is kept
+// Compares mutate with a fork of cabbages (mutate/cabbages.ts), which changes in place.
 import { assertEquals } from "@std/assert"
 import { apply as cabbage } from "./mutate/cabbages.ts"
 import apply, { type Patch } from "./apply.ts"
@@ -15,12 +13,10 @@ const rnd = (() => {
 
 type Work = { start: () => unknown; patches: Patch[] }
 
-// one character at a time, at a caret
 const typing: Patch[] = Array.from(
 	{ length: N },
 	(_, i) => ({ path: ["t"], range: [i, i], value: "a" }),
 )
-// typing, every fifth a backspace
 const fixing: Patch[] = []
 for (let i = 0, caret = 0; i < N; i++) {
 	if (i % 5 === 4) fixing.push({ path: ["t"], range: [caret - 1, caret] }), caret--
@@ -30,12 +26,10 @@ const work: Record<string, Work> = {
 	typing: { start: () => ({ t: "" }), patches: typing },
 	"typing, squished": { start: () => ({ t: "" }), patches: squish(typing) },
 	fixing: { start: () => ({ t: "" }), patches: fixing },
-	// a list grown at the end
 	appending: {
 		start: () => ({ l: [] }),
 		patches: Array.from({ length: N }, (_, i) => ({ path: ["l"], range: [i, i], value: [i] })),
 	},
-	// a typed array grown at the end (bytes are never spliced)
 	typed: {
 		start: () => ({ b: new Int8Array() }),
 		patches: Array.from(
@@ -43,7 +37,6 @@ const work: Record<string, Work> = {
 			(_, i) => ({ path: ["b"], range: [i, i], value: new Int8Array([i & 127]) }),
 		),
 	},
-	// inserts at random places in 100 strings of 1000
 	scattered: {
 		start: () => ({
 			docs: Object.fromEntries(
@@ -55,7 +48,6 @@ const work: Record<string, Work> = {
 			return { path: ["docs", `d${rnd(100)}`], range: [at, at], value: "y" }
 		}),
 	},
-	// puts to fields of 10 rows of 100 fields
 	puts: {
 		start: () => ({
 			rows: Array.from(
@@ -68,7 +60,6 @@ const work: Record<string, Work> = {
 			(_, i) => ({ path: ["rows", rnd(10), `f${rnd(100)}`], value: i }),
 		),
 	},
-	// one element of 1000 moved to another place
 	moves: {
 		start: () => ({ l: Array.from({ length: 1000 }, (_, i) => i) }),
 		patches: Array.from({ length: N }, () => {
@@ -85,7 +76,6 @@ const viaCabbages = (w: Work) => {
 	return root
 }
 
-// the same end, before anything is timed
 for (const [name, w] of Object.entries(work)) {
 	assertEquals(viaApply(w), viaCabbages(w), name)
 }
@@ -112,8 +102,7 @@ for (const [name, w] of Object.entries(work)) {
 	})
 }
 
-// each patch its own change: an editor's keystrokes. 1000 here: mutate copies what it touches
-// each time, so a list grown this way costs its length squared
+// Each patch is its own change, and mutate copies what it touches, so growing a list is quadratic.
 const M = 1000
 const each: Record<string, Work> = {
 	"typing, a change each": { start: work.typing.start, patches: typing.slice(0, M) },
@@ -138,7 +127,6 @@ for (const [name, w] of Object.entries(each)) {
 	})
 }
 
-// strings: positions as code points, walked. emoji typing: every character is four bytes
 const emoji: Patch[] = Array.from(
 	{ length: N },
 	(_, i) => ({ path: ["t"], range: [i, i], value: "😀" }),
@@ -165,8 +153,6 @@ for (const [name, w] of Object.entries(strings)) {
 	})
 }
 
-// one change on a big value, copy-on-write against cow: false (in place). each call changes the
-// value and changes it back, so it stays the size it is
 const big = {
 	list: Array.from({ length: 10_000 }, (_, i) => i),
 	map: Object.fromEntries(

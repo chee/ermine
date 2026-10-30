@@ -1,6 +1,4 @@
-// edit: each mutation as the patches it should be, and the oracle: apply(base, edit(base,
-// recipe)) is what the recipe makes of a clone of base, base is untouched, and the undo restores it.
-// a few dozen seeds (fuzz runs small)
+// Tests edit against an oracle: apply(base, edit(base, recipe)) equals the recipe run on a clone.
 import { assertEquals, assertNotStrictEquals, assertStrictEquals, assertThrows } from "@std/assert"
 import apply, { type Patch } from "./apply.ts"
 import edit, { type Helpers, nothing } from "./edit.ts"
@@ -66,7 +64,6 @@ Deno.test("list: splice, length", () => {
 
 Deno.test("list: sort and reverse are moves, few", () => {
 	const base = { l: [3, 1, 2, 9] }
-	// the run 1 2 9 stays: the 3 is taken out of 0 and put at the gap 2
 	assertEquals(run(base, (d) => void d.l.sort()), [
 		{ path: ["l"], range: [2, 2], move: { path: ["l"], range: [0, 1] } },
 	])
@@ -77,9 +74,7 @@ Deno.test("list: sort and reverse are moves, few", () => {
 	assertEquals(after(base, (d) => void d.l.sort((a: number, b: number) => b - a)), {
 		l: [9, 3, 2, 1],
 	})
-	// a sorted list with one out of place: one move
 	assertEquals(run({ l: [1, 2, 5, 3, 4, 6] }, (d) => void d.l.sort()).length, 1)
-	// equal elements are not moved among themselves
 	assertEquals(run({ l: ["a", "b", "a", "b"] }, (d) => void d.l.sort()).length, 1)
 	assertEquals(after({ l: ["b", "a", "b", "a"] }, (d) => void d.l.sort()), {
 		l: ["a", "a", "b", "b"],
@@ -141,7 +136,6 @@ Deno.test("a part of the draft assigned elsewhere is put as the value it has the
 	})
 	assertEquals(patches[1], { path: ["b"], value: { x: [1, 2, 3] } })
 	assertEquals(patches[2], { path: ["a", "x"], range: [3, 3], value: [4] })
-	// what was never touched is shared
 	assertStrictEquals(patches[3].value as any, base.big)
 	assertEquals((apply(base, patches) as any).b, { x: [1, 2, 3] })
 })
@@ -333,8 +327,6 @@ Deno.test("a draft used after edit returned throws", () => {
 	assertThrows(() => void (kept.x = 2), TypeError)
 })
 
-// the oracle -------------------------------------------------------------------------------
-
 function rng(seed: number) {
 	let s = seed >>> 0
 	const next = () => {
@@ -378,7 +370,6 @@ function make(r: Rng, depth: number): unknown {
 }
 
 const list = Array.isArray
-// a draft of a typed array is no view: it is seen by what it can do
 const isTyped = (v: any) =>
 	typeof v === "object" && v !== null && !list(v) && !(v instanceof Uint8Array) &&
 	typeof v.copyWithin === "function"
@@ -387,8 +378,6 @@ const container = (v: unknown): v is any =>
 	(list(v) || isTyped(v) || Object.getPrototypeOf(v) === Object.prototype)
 const keysof = (v: any): (string | number)[] => list(v) ? [...v.keys()] : Object.keys(v)
 
-// descend from the root by random steps; the containers met. the draft and a clone read the same,
-// so both runs choose the same
 function descend(root: any, r: Rng): any[] {
 	const at = [root]
 	for (let v = root; r.int(3) > 0;) {
@@ -400,11 +389,8 @@ function descend(root: any, r: Rng): any[] {
 	return at
 }
 
-// one random change; same choices on a draft and on a clone. a copy is of a draft's part itself,
-// of a clone's a structuredClone of it
 function change(root: any, r: Rng, drafted: boolean, h?: Helpers) {
 	const at = descend(root, r), t = at[at.length - 1]
-	// not what holds t (that would be a cycle)
 	const share = (v: unknown) =>
 		at.includes(v) ? leaf(r) : drafted || !container(v) ? v : structuredClone(v)
 	if (isTyped(t)) {
@@ -453,7 +439,6 @@ function change(root: any, r: Rng, drafted: boolean, h?: Helpers) {
 			case 7:
 				return void t.sort()
 			case 11: {
-				// a string in the list, spanned
 				const ss = keysof(t).filter((k) => typeof (t as any)[k] === "string")
 				return ss.length ? respan(t, r.pick(ss), r, h) : void t.pop()
 			}
@@ -462,11 +447,10 @@ function change(root: any, r: Rng, drafted: boolean, h?: Helpers) {
 			case 9:
 				return void t.fill(leaf(r), r.int(len + 1))
 			case 10:
-				// copying parts of a list of parts would alias them in a clone, and not in patches
+				// Copying parts of a list of parts would alias them in a clone but not in patches.
 				if (t.some(container)) return
 				return void t.copyWithin(r.int(len + 1), r.int(len + 1))
 			default: {
-				// a copy of a part somewhere else in
 				const from = descend(root, r), src = from[from.length - 1]
 				return void t.push(share(src))
 			}
@@ -479,7 +463,6 @@ function change(root: any, r: Rng, drafted: boolean, h?: Helpers) {
 		case 1: {
 			if (!ks.length) return
 			const k = r.pick(ks), undef = r.int(2)
-			// undefined is a removal
 			return void (drafted && undef ? t[k] = undefined : delete t[k])
 		}
 		case 5: {
@@ -492,7 +475,6 @@ function change(root: any, r: Rng, drafted: boolean, h?: Helpers) {
 			return void (t[r.pick(keys)] = share(from[from.length - 1]))
 		}
 		case 3: {
-			// a change held across a change of the list it is in
 			const lists = at.filter((x) => list(x) && x.some(container))
 			if (!lists.length) return void (t[r.pick(keys)] = leaf(r))
 			const l = r.pick(lists), held = l[r.pick(keysof(l).filter((k) => container(l[k])))]
@@ -504,7 +486,6 @@ function change(root: any, r: Rng, drafted: boolean, h?: Helpers) {
 	}
 }
 
-// a span of the string or typed array at t[k] replaced: by the helper, or in a clone by hand
 function respan(t: any, k: string | number, r: Rng, h?: Helpers) {
 	const v = t[k], typed = typeof v !== "string"
 	const items: any[] = typed ? [...v] : [...v as string]
@@ -527,7 +508,6 @@ Deno.test(`edit oracle: ${SEEDS} seeds, apply(edit) is the recipe on a clone`, (
 		for (let tries = 0; !container(base); tries++) base = make(rng(seed * 1000 + tries), 0)
 		const was = structuredClone(base)
 		const recipe = (root: any, drafted: boolean, helpers?: Helpers) => {
-			// the same choices both times
 			const r = rng(seed + 7777)
 			for (let i = 1 + r.int(7); i > 0; i--) change(root, r, drafted, helpers)
 		}

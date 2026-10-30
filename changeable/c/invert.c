@@ -1,5 +1,4 @@
-// invert (invert.h), in C: op_apply with its undo option (apply.c builds the undo as the patches
-// land), the value made let go of
+// invert (invert.h) in C: op_apply with its undo option, then the value made is let go of.
 #include "invert.h"
 
 int op_invert(const op_value *value, const op_patch *patches, size_t n, op_undo *out,

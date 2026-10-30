@@ -1,6 +1,5 @@
-// patches pushed in, fewer patches out; and patches as columns, run-length encoded
-// patches are apply.ts': this reads them, never applies them, and never needs the content
-// squishing keeps the end result and drops the in-between: only an edit's end is ever seen
+// Squishes patches: fewer patches that give the same end result. It reads patches (apply.ts's)
+// and never needs the content they hold. Also encodes patches as run-length columns.
 import type { Key, Patch, Span } from "./apply.ts"
 import { count, near } from "@ermine/changeable/walk-string"
 
@@ -9,14 +8,11 @@ type Ranged = Patch & { range: Span }
 const isList = Array.isArray
 const ranged = (p: Patch): p is Ranged => p.range !== undefined
 const plain = (p: Patch) => p.move === undefined && !("value" in p)
-// what joins and cuts: a string, a list, a typed array
 const sequence = (v: unknown) => typeof v === "string" || isList(v) || typed(v)
 
-// a range end past 2^53 - 1 is a bigint (cbor.ts): sums and steps stay exact, and are a number
-// again whenever one holds them
+// Range ends past 2^53 - 1 are bigints; sums stay exact.
 type Pos = number | bigint
 const norm = (x: bigint): Pos => x >= -9007199254740991n && x <= 9007199254740991n ? Number(x) : x
-// a number sum or difference no number holds exactly (nor a whole one): redone in bigints
 const sound = (r: number, x: number, y: number) =>
 	Number.isSafeInteger(r) || !Number.isInteger(x) || !Number.isInteger(y)
 function add(x: Pos, y: Pos): Pos {
@@ -34,27 +30,21 @@ function sub(x: Pos, y: Pos): Pos {
 	return norm(BigInt(x) - BigInt(y))
 }
 
-// strings count code points: walk-string.ts
 function len(v: unknown): number {
 	if (typeof v === "string") return count(v)
 	if (isList(v) || typed(v)) return v.length
 	return NaN
 }
-// bytes, a Uint8Array, are one whole value: never joined or cut
 type Typed = Int8Array | Uint16Array | Int16Array | Uint32Array | Int32Array
 const typed = (v: unknown): v is Typed =>
 	ArrayBuffer.isView(v) && !(v instanceof DataView) && !(v instanceof Uint8Array)
 
 const same = (a: readonly Key[], b: readonly Key[]) =>
 	a.length === b.length && a.every((k, i) => k === b[i])
-// q is at or above p
 const under = (p: readonly Key[], q: readonly Key[]) =>
 	q.length <= p.length && q.every((k, i) => k === p[i])
 
-// next puts or removes the whole of prev's place, so prev is dead
-// a move in prev may take from anywhere: never dead
-// prev removing a list element (a number last) moves the ones after it: next at the same place is
-// at another element
+// True when next puts or removes the whole of prev's place. A move is never dead.
 function dies(prev: Patch, next: Patch): boolean {
 	return next.range === undefined && next.move === undefined && prev.move === undefined &&
 		under(prev.path, next.path) &&
@@ -62,19 +52,16 @@ function dies(prev: Patch, next: Patch): boolean {
 			prev.path.length === next.path.length)
 }
 
-// the last patch's value, as known: so typing one at a time costs what it types
+// The last patch's value as known, so typing one character at a time is cheap.
 type Tail = {
-	// its length; -1: not counted
 	n: number
-	// a string whose places are its UTF-16 units: no surrogate pairs
 	simple: boolean
-	// made here and never given out: may change in place. a typed array: a view of back
+	// Made here and never given out, so it may change in place. A typed array is a view of back.
 	own: boolean
 	back: Typed | null
 }
 const fresh = (): Tail => ({ n: -1, simple: false, own: false, back: null })
 
-// v, n long, with [x, y) replaced by w (undefined: removed); undefined when the kinds differ
 function splice(t: Tail, v: unknown, x: number, y: number, w: unknown): unknown {
 	const n = t.n
 	if (typeof v === "string") {
@@ -120,7 +107,6 @@ function splice(t: Tail, v: unknown, x: number, y: number, w: unknown): unknown 
 	return back.subarray(0, size)
 }
 
-// one patch doing what prev and then next do, or null; t: prev's value, then the result's
 function merge(t: Tail, prev: Patch, next: Patch): Patch | null {
 	if (!ranged(prev) || !ranged(next) || prev.move || next.move) return null
 	if (!same(prev.path, next.path)) return null
@@ -132,7 +118,6 @@ function merge(t: Tail, prev: Patch, next: Patch): Patch | null {
 			t.n = len(prev.value)
 			t.simple = typeof prev.value === "string" && prev.value.length === t.n
 		}
-		// the span prev made is [a, a + n)
 		const n = t.n
 		let value: unknown, range: readonly Pos[]
 		if (a <= c && d <= add(a, n)) {
@@ -145,20 +130,16 @@ function merge(t: Tail, prev: Patch, next: Patch): Patch | null {
 		return { path, range: range as Span, value }
 	}
 	if (!plain(prev)) return null
-	// prev removed [a, b)
 	if (w === undefined) {
 		if (c <= a && a <= d) return { path, range: [c, add(b, sub(d, a))] as unknown as Span }
 		return null
 	}
-	// a removal and an insert of something that is no sequence stay apart
 	if (c === a && d === a && sequence(w)) {
 		return Object.assign(t, fresh()), { path, range: [a, b] as unknown as Span, value: w }
 	}
 	return null
 }
 
-// prev and next might merge, by their ranges alone: cheaper than a merge that fails. t: prev's
-// tail; its length not counted yet, the UTF-16 length is as long or longer
 function could(t: Tail, prev: Patch, next: Patch): boolean {
 	if (!ranged(prev) || !ranged(next)) return false
 	const a = prev.range[0] as Pos, [c, d] = next.range as readonly Pos[]
@@ -170,7 +151,6 @@ function could(t: Tail, prev: Patch, next: Patch): boolean {
 	return sequence(v) && a <= c && c <= add(a, (v as string | unknown[] | Typed).length)
 }
 
-// a lone surrogate anywhere in v
 function lone(v: unknown): boolean {
 	if (typeof v === "string") return !v.isWellFormed()
 	if (v === null || typeof v !== "object" || ArrayBuffer.isView(v)) return false
@@ -179,30 +159,18 @@ function lone(v: unknown): boolean {
 }
 
 export type Squish = {
-	// the patch is kept as given, never changed
 	push(patch: Patch): void
-	// what has been pushed, squished; a copy
 	patches(): Patch[]
 	[Symbol.iterator](): Iterator<Patch>
 }
 
-// typing at one place becomes one insert; a backspace after it, a shorter one;
-// a put makes earlier patches under it dead; moves are never merged. merges reach back: a last
-// patch just merged is merged into the one before it, and that into the one before, while they do
+// Typing at one place becomes one insert. Moves are never merged.
 export default function createSquish(): Squish {
 	const buf: Patch[] = []
-	// counting code points, a lone surrogate makes positions depend on what is around it, which
-	// squish never sees (a lone high meeting a lone low is one pair, a position fewer). so a patch
-	// that puts one somewhere is never merged, and nothing at or under where it went, or was moved
-	// to, is merged again
-	// PROBLEM (open, flagged by the designer 10-11): the content squish starts on is taken to be
-	// well-formed. lone halves already in it are never seen (squish stays content-free), so a
-	// removal that brings two together is merged wrong (squish_test.ts, "removal joins them")
+	// A patch that puts a lone surrogate is never merged, since positions then depend on the
+	// surroundings. Known gap: a removal that joins two lone halves is merged wrongly.
 	const fouled: (readonly Key[])[] = []
 	const isFouled = (path: readonly Key[]) => fouled.some((f) => under(path, f))
-	// a move takes what is fouled under where it takes from along: fouled under where it lands.
-	// true: its own place is fouled, as it takes from at or under a fouled place, or takes or lands
-	// in a span (what was under the span is somewhere else there)
 	function moved(p: Patch): boolean {
 		const from = p.move!
 		if (isFouled(from.path)) return true
@@ -215,11 +183,8 @@ export default function createSquish(): Squish {
 		return false
 	}
 	let tail = fresh()
-	// one per patch before the last: the tail it had, retired. its length stays counted; never
-	// changed in place again
 	const kept: Tail[] = []
 	const retire = (t: Tail): Tail => ({ n: t.n, simple: t.simple, own: false, back: null })
-	// the tail is given out: never changed in place again, a typed array cut to its length
 	function seen() {
 		const last = buf[buf.length - 1]
 		if (tail.own && tail.back) {
@@ -230,7 +195,6 @@ export default function createSquish(): Squish {
 	return {
 		push(patch) {
 			if (patch.path.length === 0 && patch.range === undefined && patch.move === undefined) {
-				// the whole put: what was fouled is gone with the rest
 				buf.length = 0, kept.length = 0, fouled.length = 0
 			} else {
 				while (buf.length && dies(buf[buf.length - 1], patch)) {
@@ -249,7 +213,6 @@ export default function createSquish(): Squish {
 				return
 			}
 			let last: Patch = buf[buf.length - 1] = m
-			// reaching back: at the path just merged, so never fouled
 			while (kept.length) {
 				const t = kept[kept.length - 1], prev = buf[buf.length - 2]
 				const back = could(t, prev, last) ? merge(t, prev, last) : null
@@ -269,17 +232,12 @@ export function squish(patches: Iterable<Patch>): Patch[] {
 	return s.patches()
 }
 
-// patches as columns: [value, count, value, count, ...] runs, equal paths once
+// Patches as columns. Each column is run-length encoded as [value, count, ...].
 export type Columns = {
-	// each distinct path once
 	paths: (readonly Key[])[]
-	// which path, per patch
 	path: number[]
-	// per patch: 1 has a range, 2 has a value, 4 has a move
 	shape: number[]
-	// per ranged patch: its from, as the step from the last ranged patch's from
 	from: number[]
-	// per ranged patch: to - from
 	size: number[]
 	value: unknown[]
 	move: NonNullable<Patch["move"]>[]
@@ -329,7 +287,6 @@ export function encode(patches: Iterable<Patch>): Columns {
 	}
 }
 
-// columns that do not cover their shape: an error
 export function decode(c: Columns): Patch[] {
 	const path = unruns(c.path),
 		shape = unruns(c.shape),

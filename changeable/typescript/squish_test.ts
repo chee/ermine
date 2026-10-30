@@ -36,7 +36,6 @@ Deno.test("squish: lists and typed arrays join; bytes and kinds that differ do n
 		squish([ins(0, new Int16Array([1]), ["t"]), ins(1, new Int16Array([2]), ["t"])]),
 		[ins(0, new Int16Array([1, 2]), ["t"])],
 	)
-	// bytes are one whole value, never spliced
 	assertEquals(
 		squish([ins(0, new Uint8Array([1]), ["b"]), ins(1, new Uint8Array([2]), ["b"])]),
 		[ins(0, new Uint8Array([1]), ["b"]), ins(1, new Uint8Array([2]), ["b"])],
@@ -81,7 +80,6 @@ Deno.test("squish: pushed patches are not changed; iterable", () => {
 	assertEquals(s.patches().length, 1)
 })
 
-// the patches on a string, as code points: apply's ranges, nothing checked
 function edit(t: string, ps: Patch[]): string {
 	const cs = Array.from(t)
 	for (const p of ps) {
@@ -154,8 +152,6 @@ Deno.test("squish: values given in, or given out, never change after", () => {
 	assertEquals(s.patches(), [ins(0, [1, 2, 3], ["l"]), ins(0, new Int16Array([1, 2, 3]), ["b"])])
 })
 
-// found by the audit of 10-11
-
 Deno.test("squish: a long list typed into a list is one insert", () => {
 	const big = Array.from({ length: 200000 }, (_, i) => i)
 	const out = squish([ins(0, [1, 2], ["l"]), ins(1, big, ["l"])])
@@ -163,16 +159,12 @@ Deno.test("squish: a long list typed into a list is one insert", () => {
 	assertEquals((out[0].value as unknown[]).length, 200002)
 })
 
-// squished patches mean what the patches meant: applied at once, the same end as applied one by
-// one. strings with lone surrogates break this for code points (squish never sees the content,
-// and a lone high meeting a lone low makes one pair, a position fewer); never for UTF-16 units,
-// where a pair is two units however it was made
+// Lone surrogates break this for code points, since squish never sees the content.
 import apply, { ApplyError } from "./apply.ts"
 
 const whole = ["a", "é", "😀", "中", "xy", "👍🏽"]
 const lone = [...whole, "\uD83D", "\uDE00", "\uD800", "\uDFFF"]
 
-// applies ps one call each, leaving out those that fail; what was kept, and the end
 function oneByOne(start: string, ps: Patch[]) {
 	let v: unknown = { t: start }
 	const kept: Patch[] = []
@@ -193,7 +185,6 @@ function atOnce(start: string, ps: Patch[]): string {
 		return `throws ${(e as Error).message}`
 	}
 }
-// a fuzz's numbers: xorshift, as the conformance fuzz (an LCG's low bits repeat: % k patterned)
 function xorshift(seed: number) {
 	let x = seed * 2654435761 >>> 0 || 1
 	return (k: number) => {
@@ -203,8 +194,6 @@ function xorshift(seed: number) {
 		return (x >>> 0) % k
 	}
 }
-// runs of typing, backspace and delete at a caret, now and then a new caret
-// start: what the content is made of (default: parts)
 function editing(seed: number, parts: string[], start_ = parts) {
 	const rand = xorshift(seed)
 	const size = (s: string) => Array.from(s).length
@@ -228,7 +217,6 @@ function editing(seed: number, parts: string[], start_ = parts) {
 	}
 	return { start, ps }
 }
-// the seeds whose squished patches mean something else
 function broken(parts: string[], seeds: number, start_ = parts): string[] {
 	const out: string[] = []
 	for (let seed = 1; seed <= seeds; seed++) {
@@ -253,42 +241,33 @@ Deno.test("squish means what the patches meant: lone surrogates typed into well-
 	assertEquals(broken(lone, 300, whole), [])
 })
 
-// a value with a lone surrogate: never merged, nor anything after it there
 Deno.test("squish with lone surrogates: a typed high and low stay apart", () => {
 	const ps: Patch[] = [ins(0, "\uD83D"), ins(1, "\uDE00"), ins(1, "b"), ins(2, "c")]
-	// one by one: the low joins the high, so position 1 is after the pair
 	assertEquals(oneByOne("", ps).end, "😀bc")
-	// merged, b would land between the halves: so nothing is
 	assertEquals(squish(ps), ps)
 	assertEquals(atOnce("", squish(ps)), "😀bc")
-	// and well-formed typing before the lone value still merges
 	assertEquals(squish([ins(0, "a"), ins(1, "b"), ins(2, "\uD83D")]), [
 		ins(0, "ab"),
 		ins(2, "\uD83D"),
 	])
 })
 
-// PROBLEM (open): content that already holds lone surrogates, which squish never sees (squish.ts)
+// Known gap: content that already holds lone surrogates, which squish never sees.
 
 Deno.test("squish with lone surrogates in the content: a removal joins them", () => {
-	// x, a lone high, y, a lone low: four positions
 	const start = "x\uD83Dy\uDE00z"
 	const ps: Patch[] = [del(2, 3), del(1, 2)]
-	// one by one: removing y joins the halves into one pair at 1; then [1, 2) removes the pair
 	assertEquals(oneByOne(start, ps).end, "xz")
-	// squished: [1, 3) removes the high and y, and leaves the low
 	assertEquals(squish(ps), [del(1, 3)])
 	assertEquals(atOnce(start, squish(ps)), "x\uDE00z")
 })
 
 Deno.test("squish with lone surrogates in the content: the fuzz finds more", () => {
-	// content mostly lone halves, so removals bring them together
 	const found = broken(whole, 300, ["\uD83D", "\uDE00", "x"])
 	assertEquals(found.length > 0, true, "no counterexample found")
 })
 
-// PROBLEM (open, squish.ts): passes once squish keeps the meaning on content that already holds
-// lone surrogates. skipped until then
+// Skipped until squish keeps the meaning on content that already holds lone surrogates.
 Deno.test({
 	name: "squish means what the patches meant: content with lone surrogates (open)",
 	ignore: true,
