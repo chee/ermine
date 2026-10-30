@@ -4,9 +4,9 @@ import createEntry, { type ChangeHeader } from "@ermine/graph/entry"
 import { type Id, type Path, type Places, PlacesError, type Writer } from "@ermine/places"
 import { parse } from "@ermine/places/path"
 import { createChangeHeader, locationsHere } from "@ermine/places/header"
-import { createStatus, STATUS, TABLE } from "./status.ts"
+import { createStatus, STATUS, type StatusTables, TABLE } from "./status.ts"
 import { type Computer, PENDING, type Scheduler, type Scope } from "@ermine/reactivity"
-import type { Table } from "@ermine/graph/table"
+import type { Table, Tables } from "@ermine/graph/table"
 import type { Location } from "@ermine/changeable/stacktrace"
 import { addProcess, removeProcess } from "./processes.ts"
 import { createRuns, type Runs } from "./runs.ts"
@@ -44,9 +44,7 @@ export type Refused = { readonly refused: "taken"; readonly at: Path }
 
 export type Setup = {
 	scheduler: Scheduler
-	table: Table
-	// where status.ts' writes are committed: the host's. with
-	// describe and watchAll, give's run is written too (runs.ts)
+	table: Table<Tables & StatusTables>
 	places: Pick<Places, "commit"> & Partial<Pick<Places, "describe" | "watchAll">>
 	scopes: Pick<ScopeNodes, "give">
 	owner?: Scope

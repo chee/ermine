@@ -74,6 +74,7 @@ import {
 import {
 	type CreatedFunction,
 	createProcessContext,
+	type ErmineTable,
 	type Inner,
 	type Node,
 	type NodeData,
@@ -180,7 +181,7 @@ export type Ermine = {
 	handleOf: (node: NodeData) => Node
 	dataOf: (x: unknown) => { node: NodeData } | undefined
 	readonly scheduler: Scheduler
-	readonly table: Table
+	readonly table: ErmineTable
 	readonly places: Places
 	readonly features: readonly Shown[]
 	readonly id: Id
@@ -242,7 +243,7 @@ export function createErmine(options: Options = {}): Ermine {
 			viewOf: (change: ChangeHeader) => ChangeView
 		}
 		| undefined
-	const table: Table<Tables & StatusTables> = createTable<Tables & StatusTables>((part, id) =>
+	const table: ErmineTable = createTable<Tables & StatusTables>((part, id) =>
 		first.onTableChange(part as Key, id)
 	)
 	// A copy of the scheduler for features. Each on... function is wrapped so its off runs at close,

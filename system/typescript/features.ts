@@ -37,6 +37,7 @@ import type { Key, Table } from "@ermine/graph/table"
 import { Refusal } from "@ermine/processes/guard"
 import type {
 	CreatedFunction,
+	ErmineTable,
 	Node,
 	NodeData,
 	ProcessContext,
@@ -155,8 +156,7 @@ export type Slot<T> = {
 
 export type FeatureAPI = {
 	readonly scheduler: Scheduler
-	readonly table: Table
-	// made after setup: read them in a hook (before: not-yet)
+	readonly table: ErmineTable
 	readonly places: Places
 	readonly processes: Processes
 	onTable: (hook: Hooks["onTable"]) => void
@@ -238,7 +238,7 @@ export function install(
 	features: readonly Feature[],
 	parts: {
 		scheduler: Scheduler
-		table: Table
+		table: ErmineTable
 		places: () => Places | undefined
 		processes: () => Processes | undefined
 		getProcessContext: () => ((process?: Process) => ProcessContext | undefined) | undefined
