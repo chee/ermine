@@ -221,3 +221,34 @@ Deno.test("a store that refuses an append doesn't crash: saved() says it, no run
 	}
 	assertEquals(threw, "the store failed")
 })
+
+Deno.test("late runs into a long entry land in one working out: 320 late steps after 4000, well under a second", async () => {
+	const b = await device(), a = await device()
+	b.put("doc", { t: "" })
+	for (let i = 0; i < 320; i++) b.edit("doc", [{ path: ["t"], range: [i, i], value: "b" }])
+	a.put("doc", { t: "" })
+	for (let i = 0; i < 400; i++) a.put("other", i)
+	for (let i = 0; i < 4000; i++) a.edit("doc", [{ path: ["t"], range: [i, i], value: "a" }])
+	const t = performance.now()
+	join(a, b)
+	await until(() => (a.value("doc") as { t: string }).t.length === 4320, 30_000)
+	assert(performance.now() - t < 1000, `${Math.round(performance.now() - t)} ms`)
+	closeAll()
+})
+
+Deno.test("a late step is worked in when the log goes quiet, even when the last take is refused", async () => {
+	const b = await device(), a = await device()
+	b.put("doc", { t: "" })
+	b.edit("doc", [{ path: ["t"], range: [0, 0], value: "b" }])
+	a.put("doc", { t: "" })
+	for (let i = 0; i < 400; i++) a.put("other", i)
+	a.edit("doc", [{ path: ["t"], range: [0, 0], value: "a" }])
+	const dev = b.log.device!, r = (await b.log.run(dev, 1))!
+	const late = a.log.take(r)
+	const forged = a.log.take({ ...r, device: "ab".repeat(32) })
+	assertEquals(await late, { added: 2 })
+	assert("refused" in await forged)
+	// b's splice sorts first, a's after it: worked out again
+	assertEquals(a.value("doc"), { t: "ab" })
+	assertEquals(a.history.failed, [])
+})
