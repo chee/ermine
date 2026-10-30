@@ -1,15 +1,12 @@
-# core's tests on every push: the TypeScript tests, and core's conformance suites against the
-# TypeScript harnesses, the C harnesses and their sanitizer builds (address, undefined behaviour),
-# on Linux and macOS.
+# the tests on every push: the TypeScript tests, and the conformance suites against the TypeScript
+# harnesses, the C harnesses and their sanitizer builds (address, undefined behaviour), on Linux
+# and macOS. the Makefile says what each runs.
 
 name: core
 
 on:
   push:
   workflow_dispatch:
-
-env:
-  SUITES: apply invert squish node update table unread tracker paths scheduler places guard protect
 
 jobs:
   typescript:
@@ -19,10 +16,8 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
-      - name: TypeScript tests
-        run: deno test --quiet --allow-run --allow-read --allow-env core
-      - name: Conformance, TypeScript
-        run: deno task conformance $SUITES
+      - name: TypeScript tests and conformance
+        run: make test
 
   c:
     strategy:
@@ -36,17 +31,11 @@ jobs:
         with:
           deno-version: v2.x
       - name: Build the harnesses
-        run: |
-          bins="changeable/c/apply-harness changeable/c/squish-harness graph/c/node-harness
-            graph/c/update-harness graph/c/table-harness core/unread/c/unread-harness
-            reactivity/c/tracker-harness reactivity/c/paths-harness
-            reactivity/c/scheduler-harness places/c/places-harness places/c/guard-harness
-            protect/c/protect-harness"
-          make -s $bins $(for b in $bins; do printf '%s-check ' "$b"; done)
+        run: make -s all check
       - name: Conformance, C
-        run: deno task conformance $SUITES --c
+        run: make -s test-c
       - name: Conformance, C with sanitizers
-        run: deno task conformance $SUITES --check
+        run: make -s test-check
 
   # how cost grows with size (conformance/perf.ts): reported, never failing the build, until its
   # sizes and perf.sadly_known_fail lists are tuned on a quiet machine
@@ -64,7 +53,7 @@ jobs:
           deno-version: v2.x
       - name: Build the harnesses
         run: |
-          make -s changeable/c/apply-harness changeable/c/squish-harness core/unread/c/unread-harness \
+          make -s changeable/c/apply-harness changeable/c/squish-harness crow/c/crow-harness \
             reactivity/c/scheduler-harness
       - name: Performance, TypeScript
         run: deno task perf

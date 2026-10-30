@@ -43,13 +43,14 @@ export function isOutside(scheduler: Pick<Scheduler, "getCurrentFrame" | "getRun
 	return true
 }
 
-// the locations of a call made now, when it is from outside the graph: every line of the stack, or
-// build's alone (a location known without a stack); inside: undefined
+// the locations of a call made now, when it is from outside the graph: the stack (from cut's caller
+// out, cut given: capture's), or build's alone (a location known without a stack); inside: undefined
 export function outsideAt(
 	scheduler: Pick<Scheduler, "getCurrentFrame" | "getRun">,
 	build?: Location,
+	cut?: unknown,
 ): Location[] | undefined {
-	return isOutside(scheduler) ? capture(build) : undefined
+	return isOutside(scheduler) ? capture(build, cut) : undefined
 }
 
 // frames made for a call from outside the graph (callFrame): its locations, captured once
@@ -75,9 +76,11 @@ export const isCallFrame = (f: Frame | undefined): boolean => f !== undefined &&
 export function locationsHere(
 	scheduler: Pick<Scheduler, "getCurrentFrame" | "getRun">,
 	build?: Location,
+	cut?: unknown,
 ): Location[] | undefined {
 	const open = scheduler.getCurrentFrame()
-	return outsideAt(scheduler, build) ?? (isCallFrame(open) ? open!.info.locations : undefined)
+	return outsideAt(scheduler, build, cut) ??
+		(isCallFrame(open) ? open!.info.locations : undefined)
 }
 
 // the change base the frame open makes, extra its innermost level. none open: undefined
@@ -101,16 +104,17 @@ export function createChangeBase(
 	return out
 }
 
-// the header of a write made now. build: the location of the call as the caller knows it without
-// a stack, standing in for the capture when the write is from outside
+// the header of a write made now. extra: the innermost level of its change base (createChangeBase's).
+// build: the location of the call as the caller knows it without a stack, standing in for the
+// capture when the write is from outside. now: the clock its time is read from, ms since 1970
+// (none: Date.now)
 export function createChangeHeader(
 	scheduler: Pick<Scheduler, "getCurrentFrame" | "getRun">,
-	extra?: Info,
-	build?: Location,
+	{ extra, build, now = Date.now }: { extra?: Info; build?: Location; now?: () => number } = {},
 ): ChangeHeader {
 	const w = createChangeBase(scheduler, extra)
 	if (w === undefined) throw new SchedulerError("unscoped", "a write with no frame open")
-	const h: ChangeHeader = { ...w, time: Math.floor(Date.now() / 1000) }
+	const h: ChangeHeader = { ...w, time: Math.floor(now() / 1000) }
 	const locations = outsideAt(scheduler, build)
 	if (locations !== undefined) h.frame = { info: { locations }, parent: h.frame }
 	return h

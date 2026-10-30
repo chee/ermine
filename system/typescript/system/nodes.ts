@@ -11,21 +11,25 @@ import type { System } from "./shapes.ts"
 
 // public (mod.ts exports them): each runs its implementation below, named with As, as the
 // context it finds (acting.ts' go)
-export const getNode: System["getNode"] = /* @__PURE__ */ marked((path) =>
-	go("getNode", false, getNodeAs, path)
+export const getNode: System["getNode"] = /* @__PURE__ */ marked(function getNode(path) {
+	return go(getNode, "getNode", false, getNodeAs, path)
+})
+export const hasNode: System["hasNode"] = /* @__PURE__ */ marked(function hasNode(x) {
+	return go(hasNode, "hasNode", false, hasNodeAs, x)
+})
+export const ensureNode: System["ensureNode"] = /* @__PURE__ */ marked(
+	function ensureNode(path, value) {
+		return go(ensureNode, "ensureNode", true, ensureNodeAs, path, value)
+	},
 )
-export const hasNode: System["hasNode"] = /* @__PURE__ */ marked((x) =>
-	go("hasNode", false, hasNodeAs, x)
+export const createNode: System["createNode"] = /* @__PURE__ */ marked(
+	function createNode(folder, value) {
+		return go(createNode, "createNode", true, createNodeAs, folder, value)
+	},
 )
-export const ensureNode: System["ensureNode"] = /* @__PURE__ */ marked((path, value) =>
-	go("ensureNode", true, ensureNodeAs, path, value)
-)
-export const createNode: System["createNode"] = /* @__PURE__ */ marked((folder, value) =>
-	go("createNode", true, createNodeAs, folder, value)
-)
-export const ref: System["ref"] = /* @__PURE__ */ marked((path, make) =>
-	go("ref", true, refAs, path, make)
-)
+export const ref: System["ref"] = /* @__PURE__ */ marked(function ref(path, make) {
+	return go(ref, "ref", true, refAs, path, make)
+})
 
 // the node at p, as a handle: made nothing
 export function getNodeAs(inner: Inner, p: string | Path): Node {

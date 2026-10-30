@@ -4,7 +4,7 @@
 // { op: "squish", patches }  →  { patches }   the patches pushed one by one, then what is left
 // { op: "encode", patches }  →  { columns }
 // { op: "decode", columns }  →  { patches }
-// values (a patch's, and columns' value) in ENCODING.tex's JSON form: bytes are
+// values (a patch's, and columns' value) in their JSON form (conformance/typescript/form.ts): bytes are
 // {"/": {"bytes": b64}}, one whole value that squish never joins or cuts
 // an op not named here, or none: { error: text }, the text not compared. each line is its own
 // squisher: nothing lasts between lines

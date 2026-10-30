@@ -1673,7 +1673,8 @@ int es_create(const es_options *given, es_ermine **out) {
 	h->contributors[0] = &h->rows_walk.contributor;
 	h->contributors[1] = &pl_children;
 	pl_connect(e->places, &(pl_setup){.root = tb_string(e->root), .table = e->front, .paths = e->paths,
-		.scheduler = e->scheduler, .contributors = h->contributors, .ncontributors = 2, .tracking = 1});
+		.scheduler = e->scheduler, .contributors = h->contributors, .ncontributors = 2, .tracking = 1,
+		.now = o->now, .now_ctx = o->now_ctx});
 	h->tracking = sc_on_tracking_end(e->scheduler, pl_forget, e->places);
 	h->tracking_first = sc_on_tracking_start(e->scheduler, pl_tracking, e->places);
 	h->crow = pl_crowify(e->scheduler, pl_crow(e->places), NULL, NULL);

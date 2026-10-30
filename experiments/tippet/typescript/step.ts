@@ -89,10 +89,12 @@ const patch = (p: unknown) =>
 	isMap(p) && only(p, ["path", "range", "value", "move"]) && target(p) &&
 	(p.move === undefined || (isMap(p.move) && only(p.move, ["path", "range"]) && target(p.move)))
 
+// text a node or part can be: no NUL
+const name = (x: unknown): x is string => typeof x === "string" && !x.includes("\0")
+
 // a node relative to the device: [rest], rest "" or "/…"
 const relative = (x: unknown): x is [string] =>
-	Array.isArray(x) && x.length === 1 && typeof x[0] === "string" &&
-	(x[0] === "" || x[0][0] === "/")
+	Array.isArray(x) && x.length === 1 && name(x[0]) && (x[0] === "" || x[0][0] === "/")
 
 // one of on's: this device's step n - k (k from 1, n - k from 1), or another device's [device, n]
 export const onOf = (device: Uint8Array, n: number) => (o: unknown) =>
@@ -101,15 +103,19 @@ export const onOf = (device: Uint8Array, n: number) => (o: unknown) =>
 
 // a step, only as tippet writes one: eight elements, then on (an array) when it says, then who (a
 // string) when there is one, each of its kind, every number whole, so it packs and unpacks to the
-// same bytes. anything else throws
+// same bytes; node and part without NUL; nested at most cbor's DEPTH less one, as a run message
+// holds its patches one deeper. anything else throws
 export function decodeStep(bytes: Uint8Array): Step {
-	const a = decode(bytes)
+	// read inside one more array: a step nested to cbor's DEPTH throws
+	const inside = new Uint8Array(bytes.length + 1)
+	inside[0] = 0x81, inside.set(bytes, 1)
+	const a = (decode(inside) as Value[])[0]
 	if (!Array.isArray(a) || a.length < 8 || a.length > 10) throw new TypeError("not a step")
 	const said = Array.isArray(a[8]), at = said ? 9 : 8
 	if (
 		!(a.length === at || (a.length === at + 1 && typeof a[at] === "string")) ||
 		!key(a[0]) || !whole(a[1]) || a[1] < 1 || !(a[2] === null || key(a[2])) ||
-		!(typeof a[3] === "string" || relative(a[3])) || typeof a[4] !== "string" ||
+		!(name(a[3]) || relative(a[3])) || !name(a[4]) ||
 		!Array.isArray(a[5]) ||
 		!a[5].every(patch) || !whole(a[6]) || !whole(a[7]) ||
 		(said && !(a[8] as unknown[]).every(onOf(a[0], a[1])))

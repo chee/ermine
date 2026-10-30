@@ -15,29 +15,41 @@ import type { Item, System } from "./shapes.ts"
 
 // public (mod.ts exports them): each runs its implementation below, named with As, as the
 // context it finds (acting.ts' go)
-export const read: System["read"] = /* @__PURE__ */ marked((x, key) =>
-	go("read", false, readAs, x, key)
+export const read: System["read"] = /* @__PURE__ */ marked(function read(x, key) {
+	return go(read, "read", false, readAs, x, key)
+})
+export const readAttributes: System["readAttributes"] = /* @__PURE__ */ marked(
+	function readAttributes(x, key) {
+		return go(readAttributes, "readAttributes", false, readAttributesAs, x, key)
+	},
 )
-export const readAttributes: System["readAttributes"] = /* @__PURE__ */ marked((x, key) =>
-	go("readAttributes", false, readAttributesAs, x, key)
+export const readChildren: System["readChildren"] = /* @__PURE__ */ marked(
+	function readChildren(x) {
+		return go(readChildren, "readChildren", false, readChildrenAs, x)
+	},
 )
-export const readChildren: System["readChildren"] = /* @__PURE__ */ marked((x) =>
-	go("readChildren", false, readChildrenAs, x)
+export const readAll: System["readAll"] = /* @__PURE__ */ marked(function readAll(x, key) {
+	return go(readAll, "readAll", false, readAllAs, x, key)
+})
+export const readAllAttributes: System["readAllAttributes"] = /* @__PURE__ */ marked(
+	function readAllAttributes(x, key) {
+		return go(readAllAttributes, "readAllAttributes", false, readAllAttributesAs, x, key)
+	},
 )
-export const readAll: System["readAll"] = /* @__PURE__ */ marked((x, key) =>
-	go("readAll", false, readAllAs, x, key)
+export const readAllChildren: System["readAllChildren"] = /* @__PURE__ */ marked(
+	function readAllChildren(x) {
+		return go(readAllChildren, "readAllChildren", false, readAllChildrenAs, x)
+	},
 )
-export const readAllAttributes: System["readAllAttributes"] = /* @__PURE__ */ marked((x, key) =>
-	go("readAllAttributes", false, readAllAttributesAs, x, key)
-)
-export const readAllChildren: System["readAllChildren"] = /* @__PURE__ */ marked((x) =>
-	go("readAllChildren", false, readAllChildrenAs, x)
-)
-export const readEntries: System["readEntries"] = /* @__PURE__ */ marked((x) =>
-	go("readEntries", false, readEntriesAs, x)
-)
-export const peep: System["peep"] = /* @__PURE__ */ marked((f) => go("peep", false, peepAs, f))
-export const list: System["list"] = /* @__PURE__ */ marked((x) => go("list", false, listAs, x))
+export const readEntries: System["readEntries"] = /* @__PURE__ */ marked(function readEntries(x) {
+	return go(readEntries, "readEntries", false, readEntriesAs, x)
+})
+export const peep: System["peep"] = /* @__PURE__ */ marked(function peep(f) {
+	return go(peep, "peep", false, peepAs, f)
+})
+export const list: System["list"] = /* @__PURE__ */ marked(function list(x) {
+	return go(list, "list", false, listAs, x)
+})
 
 export function readAs(inner: Inner, x: Target, path: readonly Step[] = []): unknown {
 	const { base, calls, state, places, guarded } = here(inner)

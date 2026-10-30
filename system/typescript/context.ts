@@ -6,6 +6,7 @@
 //   o.resolve("./notes")                          // ["work", "notes"]: the api's paths
 //   o.within(() => o.write("value", id, [{ path: ["n"], value: 2 }]))
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/graph/entry"
+import type { Location } from "@ermine/changeable/stacktrace"
 import update from "@ermine/changeable/update"
 import apply, { type Key as Step, type Patch } from "@ermine/changeable/apply"
 import { crow, type Id, type Path, type Places, type Writer } from "@ermine/places"
@@ -93,6 +94,9 @@ export type Parts = {
 	readonly may?: Policy
 	// a write's header now: the frame open's; from outside the graph, with the locations of the call
 	readonly header: () => ChangeHeader
+	// a call of ermine's from outside the graph (cut: the function called; build: its location, if a
+	// build wrote one in): its locations captured once, f run in a frame of its own holding them
+	readonly enter: <T>(cut: unknown, build: Location | undefined, f: () => T) => T
 	// the onWrite hooks, around land
 	readonly put: (context: ProcessContext, write: Write, land: (write: Write) => void) => void
 	readonly queuePulse: () => void
@@ -246,8 +250,14 @@ export function createProcessContext(
 				leaveScheduler()
 			}
 		},
-		write: (part, at, patches) => change(part, at, patches),
-		remove: (part, at) => change(part, at, [], true),
+		// a call of ermine's: from outside the graph, entered once its scope is open (the host's
+		// falls back to its own), so a capture of where it was called starts at its caller
+		write: function write(part, at, patches) {
+			return inside(() => parts.enter(write, undefined, () => change(part, at, patches)))
+		},
+		remove: function remove(part, at) {
+			return inside(() => parts.enter(remove, undefined, () => change(part, at, [], true)))
+		},
 		ask,
 		queuePulse: parts.queuePulse,
 	}

@@ -1,11 +1,11 @@
 // a fork of cabbages 0.2.10 (chee, MIT; ~/soft/chee/cabbages), for mutate_bench.ts only
-// updated to GRAPH.tex's patches: { path, range?, value? | move? }; strings in code points;
+// updated to apply.ts' patches: { path, range?, value? | move? }; strings in code points;
 // typed arrays; moves; the whole at []. kept from cabbages: changes the target in place,
 // nothing copied, nothing undone when a patch fails
 import type { Key, Patch } from "../apply.ts"
 import { unit } from "@ermine/changeable/walk-string"
 
-// bytes, a Uint8Array, are one whole value: never spliced (MUTATE.tex)
+// bytes, a Uint8Array, are one whole value: never spliced
 type Typed = Int8Array | Uint16Array | Int16Array | Uint32Array | Int32Array
 const typed = (v: unknown): v is Typed =>
 	ArrayBuffer.isView(v) && !(v instanceof DataView) && !(v instanceof Uint8Array)

@@ -1,5 +1,5 @@
 // patches pushed in, fewer patches out; and patches as columns, run-length encoded
-// patches are GRAPH.tex's: this reads them, never applies them, and never needs the content
+// patches are apply.ts': this reads them, never applies them, and never needs the content
 // squishing keeps the end result and drops the in-between: only an edit's end is ever seen
 import type { Key, Patch, Span } from "./apply.ts"
 import { count, near } from "@ermine/changeable/walk-string"
@@ -34,13 +34,13 @@ function sub(x: Pos, y: Pos): Pos {
 	return norm(BigInt(x) - BigInt(y))
 }
 
-// strings count code points: walk.ts
+// strings count code points: walk-string.ts
 function len(v: unknown): number {
 	if (typeof v === "string") return count(v)
 	if (isList(v) || typed(v)) return v.length
 	return NaN
 }
-// bytes, a Uint8Array, are one whole value: never joined or cut (MUTATE.tex)
+// bytes, a Uint8Array, are one whole value: never joined or cut
 type Typed = Int8Array | Uint16Array | Int16Array | Uint32Array | Int32Array
 const typed = (v: unknown): v is Typed =>
 	ArrayBuffer.isView(v) && !(v instanceof DataView) && !(v instanceof Uint8Array)

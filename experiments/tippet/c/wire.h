@@ -33,6 +33,13 @@ int tp_null(tp_in *in);
 int tp_is(tp_span t, const char *s);
 // the bytes are one canonical cbor item (encoding/c/cbor.h)
 int tp_canonical(const uint8_t *p, size_t n);
+// how deep a step may nest: cbor's 1024 (CBOR_DEPTH) less one, as a run message holds its patches
+// one deeper
+#define TP_DEPTH 1023
+// whether a container (a list, a map, a stand-in) is inside most others, in one canonical item
+// (tp_canonical's): 1 it is, 0 not, -1 no memory. past 64 deep its stack is malloc's, let go
+// before it returns, as cborCheck's own is
+int tp_deeper(const uint8_t *p, size_t n, size_t most);
 
 // writing: into p, growing through mem (NULL: p is fixed, cap long) up to max. len counts every
 // byte, past cap too; bad: a grow failed or went past max

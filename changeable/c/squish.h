@@ -1,4 +1,4 @@
-// Squishing patches, and patches as columns (newcore/opstreams/ts/squish.ts), in C. Same rules as squish.ts.
+// Squishing patches, and patches as columns (typescript/squish.ts), in C. Same rules.
 // Never applies a patch and never needs the content.
 #ifndef SQUISH_H
 #define SQUISH_H
@@ -14,7 +14,7 @@ typedef struct {
 
 // what joins and cuts: a string (UTF-8, with a lone surrogate as WTF-8: n counts code points), a
 // list (n opaque elements), a typed array (n elements, each bytes long, of a kind: joins only with
-// its own kind); anything else, bytes included (one whole value, never spliced: MUTATE.tex), is
+// its own kind); anything else, bytes included (one whole value, never spliced), is
 // SQ_ANY and never joins. size: data's length in bytes. lone: a lone surrogate is in it, or in
 // anything it holds (a string sets it itself; for a list or any other value, the caller does:
 // squish never reads those)
@@ -36,7 +36,7 @@ sq_value sq_list(const void *const *elements, size_t n);
 sq_value sq_typed(int of, size_t each, const void *data, size_t n);
 sq_value sq_any(const void *v);
 
-// GRAPH.tex's patch. move: opaque, NULL for none; only move_path of it is read
+// a patch (apply.ts' Patch). move: opaque, NULL for none; only move_path of it is read
 typedef struct {
 	const sq_key *path;
 	size_t depth;

@@ -110,7 +110,7 @@ crypto.getRandomValues = (<T extends ArrayBufferView>(a: T): T => {
 	return a
 }) as typeof crypto.getRandomValues
 
-// takes and runs going on, every device's: idle at none
+// takes (a message's too) and runs going on, every device's: idle at none
 let pending = 0
 const track = <T>(p: Promise<T>) => {
 	pending++
@@ -158,7 +158,7 @@ function made(log: Log, relay: boolean, signer?: Signer): Device {
 	const tracked = new Proxy(log, {
 		get(t, k) {
 			const v = Reflect.get(t, k)
-			return k === "take" || k === "run"
+			return k === "take" || k === "takePack" || k === "run"
 				? (...a: unknown[]) => track((v as (...a: unknown[]) => Promise<unknown>)(...a))
 				: v
 		},

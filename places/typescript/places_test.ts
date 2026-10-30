@@ -473,7 +473,7 @@ Deno.test("places: a header's frame is the scope open's own, the write's extra a
 	const { s, l } = world()
 	const chee = s.createRootScope({ actor: "chee", reader: "juno", why: "test" })
 	const save = s.createScope({ cause: "x", why: "again" }, chee)
-	const h = s.runWithScope(save, () => createChangeHeader(s, { then: "y" }))
+	const h = s.runWithScope(save, () => createChangeHeader(s, { extra: { then: "y" } }))
 	assertEquals([h.actor, h.reader], ["chee", "juno"])
 	// from outside the graph: a frame of locations, then the extra's, then the scope open's own,
 	// shared: nothing copied
@@ -489,7 +489,7 @@ Deno.test("places: a header's frame is the scope open's own, the write's extra a
 	assertStrictEquals(s.runWithScope(save, () => createChangeHeader(s)).frame.parent, save.frame)
 	// a nearer actor or reader wins
 	const near = s.createScope({ reader: "sam" }, save)
-	const n = s.runWithScope(near, () => createChangeHeader(s, { actor: "notes" }))
+	const n = s.runWithScope(near, () => createChangeHeader(s, { extra: { actor: "notes" } }))
 	assertEquals([n.actor, n.reader], ["notes", "sam"])
 })
 
@@ -502,7 +502,7 @@ Deno.test("places: a write's actor is the nearest: a scope or extra naming one w
 	assertEquals(forged.actor, "chee")
 	assertEquals(forged.frame.parent?.info, { actor: "chee" })
 	assertEquals(
-		s.runWithScope(notes, () => createChangeHeader(s, { actor: "chee" })).actor,
+		s.runWithScope(notes, () => createChangeHeader(s, { extra: { actor: "chee" } })).actor,
 		"chee",
 	)
 	// no actor named under it: the one above

@@ -1,8 +1,8 @@
 // ermine (system/typescript: system/, ermine.ts, context.ts, calls.ts, features.ts,
 // handles.ts, registry.ts), in C. prefix es_. the TypeScript is the reference; the suite,
 // system/conformance/ermine/, holds both to it, on the line protocol of
-// typescript/ermine_harness.ts (c/ermine_harness.c speaks it). the plan and the choices:
-// ermine-plans/ermine/system-c-plan.org. this header is what the five files are written against.
+// typescript/ermine_harness.ts (c/ermine_harness.c speaks it). this header is what the five files
+// are written against.
 //
 //   es_options o = {.id = ids, .may = policy};
 //   es_ermine *e;  es_create(&o, &e);                         // D
@@ -935,6 +935,9 @@ typedef struct {
 	// a new node's id, processes' too, malloc'd; NULL: uuidv7 (nodes), proc:<boot>-<n> (processes)
 	char *(*id)(void *ctx);
 	void *id_ctx;
+	// the clock every change's time is read from: ms since 1970, as Date.now gives; NULL: the time now
+	int64_t (*now)(void *ctx);
+	void *now_ctx;
 	// the policy every read and write is asked of; NULL: all allowed. not freed
 	const pr_policy *may;
 	// how a pulse is asked for: f(data) run soon, once; NULL: run at once

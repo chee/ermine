@@ -1,4 +1,4 @@
-// The trackgraph (newcore/trackgraph/TRACKGRAPH.tex), in C. Same shape as trackgraph.ts.
+// The tracker (typescript/tracker.ts), in C. Same shape.
 #ifndef TRACKER_H
 #define TRACKER_H
 

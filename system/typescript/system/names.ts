@@ -23,19 +23,19 @@ import type { System } from "./shapes.ts"
 
 // public (mod.ts exports them): each runs its implementation below, named with As, as the
 // context it finds (acting.ts' go)
-export const place: System["place"] = /* @__PURE__ */ marked((path, x) =>
-	go("place", true, placeAs, path, x)
-)
-export const unplace: System["unplace"] = /* @__PURE__ */ marked((path) =>
-	go("unplace", true, unplaceAs, path)
-)
-export const rename: System["rename"] = /* @__PURE__ */ marked((from, to) =>
-	go("rename", true, renameAs, from, to)
-)
+export const place: System["place"] = /* @__PURE__ */ marked(function place(path, x) {
+	return go(place, "place", true, placeAs, path, x)
+})
+export const unplace: System["unplace"] = /* @__PURE__ */ marked(function unplace(path) {
+	return go(unplace, "unplace", true, unplaceAs, path)
+})
+export const rename: System["rename"] = /* @__PURE__ */ marked(function rename(from, to) {
+	return go(rename, "rename", true, renameAs, from, to)
+})
 // unplaced and its entries gone, every part's (asked "remove")
-export const remove: System["remove"] = /* @__PURE__ */ marked((x) =>
-	go("remove", true, removeAs, x)
-)
+export const remove: System["remove"] = /* @__PURE__ */ marked(function remove(x) {
+	return go(remove, "remove", true, removeAs, x)
+})
 
 export function placeAs(inner: Inner, p: string | Path, x: Target) {
 	const { inside, resolve } = here(inner)

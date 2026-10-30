@@ -36,7 +36,7 @@ Deno.test("squish: lists and typed arrays join; bytes and kinds that differ do n
 		squish([ins(0, new Int16Array([1]), ["t"]), ins(1, new Int16Array([2]), ["t"])]),
 		[ins(0, new Int16Array([1, 2]), ["t"])],
 	)
-	// bytes are one whole value, never spliced (MUTATE.tex)
+	// bytes are one whole value, never spliced
 	assertEquals(
 		squish([ins(0, new Uint8Array([1]), ["b"]), ins(1, new Uint8Array([2]), ["b"])]),
 		[ins(0, new Uint8Array([1]), ["b"]), ins(1, new Uint8Array([2]), ["b"])],

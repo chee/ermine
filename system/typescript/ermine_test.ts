@@ -7,6 +7,7 @@ import {
 	executeAction,
 	patch,
 	read,
+	readAll,
 	remove,
 } from "@ermine/system"
 import { registrations } from "./registry.ts"
@@ -48,6 +49,19 @@ Deno.test("the system folder's list of files names every file in it", async () =
 	const files: string[] = []
 	for await (const f of Deno.readDir(new URL("./system/", import.meta.url))) files.push(f.name)
 	assertEquals(files.sort(), NAMES.map((f) => `${f}.ts`).sort())
+})
+
+Deno.test("every change takes its time from the clock createErmine is given", () => {
+	const e = createErmine({ now: () => 1_700_000_000_999 })
+	e.within(() => ensureNode("/a", 1))
+	e.within(() => patch("/a", [{ path: [], value: 2 }]))
+	const p = e.start(() => ensureNode("made", 3), "/code/p")
+	assert(!("refused" in p))
+	const times = e.within(() =>
+		["/a", "/code/p", "/code/p/made"].map((at) => readAll(at)[0]?.from.change?.time)
+	)
+	assertEquals(times, [1_700_000_000, 1_700_000_000, 1_700_000_000])
+	e.close()
 })
 
 Deno.test("close() finishes when a feature holds every teardown back", () => {

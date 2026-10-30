@@ -122,6 +122,8 @@ int tp_step_decode(const uint8_t *bytes, size_t length, tp_step *s) {
 	uint64_t items, k;
 	memset(s, 0, sizeof *s);
 	if (!tp_canonical(bytes, length)) return TP_NOTSTEP;
+	int deeper = tp_deeper(bytes, length, TP_DEPTH);
+	if (deeper) return deeper < 0 ? TP_NOMEM : TP_NOTSTEP;
 	if (tp_array(&in, &items) || items < 8 || items > 10) return TP_NOTSTEP;
 	if (tp_bytes(&in, 32, &device) || tp_whole(&in, &s->n) || s->n < 1) return TP_NOTSTEP;
 	if (!tp_null(&in) && tp_bytes(&in, 32, &before)) return TP_NOTSTEP;
@@ -131,6 +133,8 @@ int tp_step_decode(const uint8_t *bytes, size_t length, tp_step *s) {
 		if (tp_text(&in, &s->node) || (s->node.n && *s->node.p != '/')) return TP_NOTSTEP;
 	} else if (tp_text(&in, &s->node)) return TP_NOTSTEP;
 	if (tp_text(&in, &s->part)) return TP_NOTSTEP;
+	// node and part: no NUL
+	if (memchr(s->node.p, 0, s->node.n) || memchr(s->part.p, 0, s->part.n)) return TP_NOTSTEP;
 	const uint8_t *start = in.p;
 	if (tp_array(&in, &k)) return TP_NOTSTEP;
 	s->count = (size_t)k;

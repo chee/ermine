@@ -72,14 +72,8 @@ export type Base = {
 	readonly changes: WeakMap<ChangeView, ChangeHeader>
 	// a pulse now (the pulse function's)
 	readonly pulse: () => void
-	// f(inner, ...a) with build here: the location of the call, a build's (site.ts), standing in for
-	// the capture of a write made in it from outside the graph
-	readonly enter: <A extends unknown[], T>(
-		f: (inner: Inner, ...a: A) => T,
-		inner: Inner,
-		a: A,
-		build?: Location,
-	) => T
+	// a call of ermine's from outside the graph: Parts' enter
+	readonly enter: Parts["enter"]
 	// the onRead hooks
 	readonly shown: (x: Reading, items: readonly Version[]) => readonly Version[]
 	// the onTeardown hooks around fn(why)

@@ -52,13 +52,19 @@
 import type { ChangeHeader } from "@ermine/graph/entry"
 import { children, createPlaces, crow, type Id, type Path, type Places } from "@ermine/places"
 import { crowify } from "@ermine/places/crowify"
+import { keepStackTraceLimit } from "@ermine/changeable/stacktrace"
 import { place } from "./system/names.ts"
 import { getStatus } from "./system/status.ts"
 import { enterScheduler, leaveScheduler, registerScheduler, registerScope } from "./registry.ts"
 import { isHandle, mint } from "./handles.ts"
 import { callFrame, createChangeHeader, locationsHere, outsideAt } from "@ermine/places/header"
 import type { Location } from "@ermine/changeable/stacktrace"
-import { createStatus, STATUS, TABLE as STATUS_TABLE } from "@ermine/processes/status"
+import {
+	createStatus,
+	STATUS,
+	type StatusTables,
+	TABLE as STATUS_TABLE,
+} from "@ermine/processes/status"
 import type { Policy } from "@ermine/protect"
 import { idAt, PROCESS, processes as rows } from "@ermine/processes"
 import { createRuns, type Run } from "@ermine/processes/runs"
@@ -81,7 +87,7 @@ import {
 } from "@ermine/reactivity"
 import { isPromise } from "@ermine/reactivity/helpers"
 import { createPaths } from "@ermine/reactivity/paths"
-import { createTable, type Key, type Table } from "@ermine/graph/table"
+import { createTable, type Key, type Table, type Tables } from "@ermine/graph/table"
 import { type Call, createCalls, type Wait } from "./calls.ts"
 import {
 	type Ahead,
@@ -176,6 +182,9 @@ export type Options = {
 		setup?: () => unknown
 	}
 	info?: Info
+	// the clock every change's time is taken from, ms since 1970, as Date.now gives (a replay's,
+	// a device's with no clock of its own); none: Date.now
+	now?: () => number
 }
 
 // a process's folder: the one it is in (its path but the last name) [chee 10-26: "im not sure if
@@ -254,13 +263,8 @@ export function createErmine(options: Options = {}): Ermine {
 
 	// 1. the scheduler
 	const s = options.scheduler ?? createScheduler()
-
-	// the build location of the public function called innermost (enter's), if it was given one,
-	// and the frame open as it was called: it is that call's own, so it stands only while that frame
-	// is the one open (a run, a call or a process's own writes begun inside it are not that call's)
-	let built: Location | undefined
-	let builtAt: Frame | undefined
-	const builtNow = () => built !== undefined && s.getCurrentFrame() === builtAt ? built : undefined
+	// how many stack lines a capture keeps: the host's Error.stackTraceLimit now, kept for ermine
+	keepStackTraceLimit()
 
 	// 3. the table; each feature's setup; onTable's layers over it
 	// made later, reached from closures made now
@@ -282,7 +286,9 @@ export function createErmine(options: Options = {}): Ermine {
 			viewOf: (change: ChangeHeader) => ChangeView
 		}
 		| undefined
-	const table: Table = createTable((part, id) => first.onTableChange(part as Key, id))
+	const table: Table<Tables & StatusTables> = createTable<Tables & StatusTables>((part, id) =>
+		first.onTableChange(part as Key, id)
+	)
 	// the scheduler as features see it: a copy of its functions (a scheduler is a plain object of
 	// closures: no getters, no prototype, no this), each on… wrapped by name so its off is taken out
 	// at close, as ermine's own listeners are (a scheduler given in options outlives ermine)
@@ -341,6 +347,7 @@ export function createErmine(options: Options = {}): Ermine {
 		paths: createPaths<unknown>(),
 		scheduler: s,
 		contributors: [rows(root), children],
+		now: options.now,
 	})
 	const offRelease = s.onTrackingEnd((key) => places!.release(key))
 	// each run a loan of what it reads: crow lets go of what outlives it (its result, what it holds
@@ -373,30 +380,16 @@ export function createErmine(options: Options = {}): Ermine {
 	const offSettle = s.onSettle(queuePulse)
 
 	// a write's header: its frame the one open (the rule is index.ts'); from outside the graph, with
-	// the locations of the call, or its build location (the public function called innermost)
-	const header = (): ChangeHeader => createChangeHeader(s, undefined, builtNow())
-	// f(inner, ...a) with build here. from outside the graph, the call's locations are captured once
-	// (build's alone, if given) and f runs in a frame of its own holding them: its writes and makes
-	// are under it, and capture nothing again
-	function enter<A extends unknown[], T>(
-		f: (inner: Inner, ...a: A) => T,
-		inner: Inner,
-		a: A,
-		build?: Location,
-	): T {
-		const had = built
-		const hadAt = builtAt
-		built = build
-		builtAt = s.getCurrentFrame()
-		try {
-			const scope = s.getCurrentScope()
-			const locations = scope === undefined ? undefined : outsideAt(s, build)
-			if (locations === undefined) return f(inner, ...a)
-			return s.runWith(scope!, callFrame(s, locations), () => f(inner, ...a))
-		} finally {
-			built = had
-			builtAt = hadAt
-		}
+	// the locations of where it was written from
+	const header = (): ChangeHeader => createChangeHeader(s, { now: options.now })
+	// a call of ermine's from outside the graph (cut: the function called; build: its location, if a
+	// build wrote one in): its locations captured once, from cut's caller out (build's alone, if
+	// given), and f run in a frame of its own holding them, so what it writes and makes is under it
+	// and captures nothing again. inside, or nothing open: f as it is
+	function enter<T>(cut: unknown, build: Location | undefined, f: () => T): T {
+		const scope = s.getCurrentScope()
+		const locations = scope === undefined ? undefined : outsideAt(s, build, cut)
+		return locations === undefined ? f() : s.runWith(scope!, callFrame(s, locations), f)
 	}
 
 	// the hooks: onWrite around each write, onRead around reads' items, onTeardown around each
@@ -500,6 +493,7 @@ export function createErmine(options: Options = {}): Ermine {
 		may: options.may,
 		caller,
 		header,
+		enter,
 		put: (o, w, land) => {
 			const was = deepest
 			deepest = undefined
@@ -614,6 +608,7 @@ export function createErmine(options: Options = {}): Ermine {
 		owner,
 		write: hostInner.writer,
 		id: () => idFor("process"),
+		now: options.now,
 	})
 	const statuses = createStatus({
 		places: { commit },
@@ -621,6 +616,7 @@ export function createErmine(options: Options = {}): Ermine {
 		scheduler: s,
 		write: (part, id, patches, header) =>
 			(computerAt(madeNodes, id)?.inner ?? hostInner).writer(part, id, patches, header),
+		now: options.now,
 	})
 	const runs = createRuns({
 		places: { describe: p.describe, watchAll: p.watchAll },
@@ -648,7 +644,7 @@ export function createErmine(options: Options = {}): Ermine {
 	const whys = new Map<Id, Why>()
 	const base: Base = {
 		parts,
-		locations: () => locationsHere(s, builtNow()),
+		locations: () => locationsHere(s),
 		statuses,
 		runs,
 		calls,
@@ -739,6 +735,7 @@ export function createErmine(options: Options = {}): Ermine {
 			at: string | Path,
 			o: StartOptions = {},
 			under?: Scope,
+			cut?: unknown,
 		): Started | (Refused & { held?: { process: Id; feature: string } }) {
 			alive()
 			if (typeof fn !== "function") {
@@ -749,7 +746,6 @@ export function createErmine(options: Options = {}): Ermine {
 			}
 			const paths = pathsOf(at)
 			const here = o.places ?? p
-			const build = builtNow()
 			enterScheduler(s)
 			let made: ReturnType<Processes["start"]>
 			try {
@@ -760,7 +756,7 @@ export function createErmine(options: Options = {}): Ermine {
 						args: o.args,
 						folder: paths.folder,
 						...under !== undefined && { under },
-						...build !== undefined && { build },
+						...cut !== undefined && { cut },
 					},
 					(inside) => {
 						const pid = inside.id
@@ -928,7 +924,10 @@ export function createErmine(options: Options = {}): Ermine {
 		const ermine = Object.defineProperties({}, {
 			within: { value: <T>(f: () => T): T => hostInner.context.within(f) },
 			start: {
-				value: (fn: () => unknown, at: string | Path, o?: StartOptions) => start(fn, at, o),
+				// the host's: a capture of where it was called starts at its caller
+				value: function startFrom(fn: () => unknown, at: string | Path, o?: StartOptions) {
+					return start(fn, at, o, undefined, startFrom)
+				},
 			},
 			close: { value: close },
 			getProcessContext: {

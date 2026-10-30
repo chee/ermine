@@ -1,4 +1,4 @@
-// tracked paths: which reads a patch reaches (reactivity/fine-grained.md, the rule).
+// tracked paths: which reads a patch reaches.
 // a spot is (source, id, path): a read of path in the value at that key, deep (the reader was
 // handed all under path). a keys spot is a read of which keys there are at path, not what is
 // under them (see keyed). a here spot is a read of what is at path itself, not under it: told by

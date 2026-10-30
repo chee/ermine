@@ -18,9 +18,9 @@ import { type Status, type System, WAITING, type Waiting } from "./shapes.ts"
 
 // public (mod.ts exports them): each runs its implementation below, named with As, as the
 // context it finds (acting.ts' go)
-export const getStatus = /* @__PURE__ */ marked((x: Target, key?: string) =>
-	go("getStatus", false, getStatusAs, x, key)
-) as System["getStatus"]
+export const getStatus = /* @__PURE__ */ marked(function getStatus(x: Target, key?: string) {
+	return go(getStatus, "getStatus", false, getStatusAs, x, key)
+}) as System["getStatus"]
 
 // the base's, then what features show (onStatus). key: that field alone, the base reading only
 // what it takes [the hedgehog2's wall 3, 10-28: a reader of state reran at every run, n moving;

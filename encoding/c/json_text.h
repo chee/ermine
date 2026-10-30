@@ -14,7 +14,7 @@
  */
 Json *jsonParse(const char *text, size_t length, char **why);
 /**
- * ENCODING.tex, JSON form: turns the "/" forms in a value read from a line
+ * the JSON form (conformance/typescript/form.ts): turns the "/" forms in a value read from a line
  * into the values they stand for, in place (the value must be fresh, not yet
  * shared): bytes, typed arrays, numbers JSON cannot write, a map whose only
  * key is "/", and a stand-in (its kind decoded in turn). False when a form
@@ -23,7 +23,7 @@ Json *jsonParse(const char *text, size_t length, char **why);
  */
 bool jsonDecode(Json **value);
 
-/** the value in its JSON form (ENCODING.tex, JSON form), as JSON.stringify writes the rest: one line, a fresh C string */
+/** the value in its JSON form (conformance/typescript/form.ts), as JSON.stringify writes the rest: one line, a fresh C string */
 char *jsonPrint(const Json *value);
 
 /**

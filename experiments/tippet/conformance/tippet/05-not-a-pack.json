@@ -79,6 +79,13 @@
 			"expect": {
 				"refused": true
 			}
+		},
+		{
+			"op": "unpack",
+			"pack": "880282001affffffff8080808080a0",
+			"expect": {
+				"refused": true
+			}
 		}
 	]
 }
