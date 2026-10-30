@@ -11,7 +11,6 @@
 #include "processes.h"
 #include "platform.h"
 
-#define PENDING_NAME "ermine.pending"
 
 static void *xalloc(size_t n) {
 	void *p = calloc(1, n ? n : 1);
@@ -42,7 +41,7 @@ struct pr_process {
 	op_value *at_value;
 	char **folder;
 	size_t nfolder;
-	// its scope's: ["process", at], [PL_NODE, id], and, started from outside the graph, ["locations", the call's]
+	// its scope's: ["process", at], [CH_NODE, id], and, started from outside the graph, ["locations", the call's]
 	sc_pair info[3];
 	op_value *id_value;
 	sc_scope *scope;
@@ -469,7 +468,7 @@ static void make_attributes(void *data) {
 		return;
 	}
 	op_value *st = op_map();
-	op_set(st, CST_ATTRIBUTE, op_stand(op_str(PENDING_NAME)));
+	op_set(st, CST_ATTRIBUTE, cst_pending_value());
 	if (s->s.write != NULL) {
 		op_patch whole = {.has_value = 1, .value = st};
 		handed(s, s->s.places, CST_TABLE, p->id, &whole, 1, &sh, smade);
@@ -510,7 +509,7 @@ pr_process *pr_start_at(pr *s, pl *where, const char *const *steps, size_t nstep
 	p->id = s->s.id != NULL ? s->s.id(s->s.id_ctx) : proc_id(s->boot, ++s->made);
 	p->id_value = op_str(p->id);
 	p->info[0] = (sc_pair){"process", p->at_value};
-	p->info[1] = (sc_pair){PL_NODE, p->id_value};
+	p->info[1] = (sc_pair){CH_NODE, p->id_value};
 	// from outside the graph (no run open, no frame up the chain holding locations): the call's
 	// location in its info too
 	size_t ninfo = 2;

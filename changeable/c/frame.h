@@ -14,6 +14,10 @@
 #ifndef CH_FRAME_H
 #define CH_FRAME_H
 
+// the key of the pair naming a scope's node (its value: the id, an op_value string): Info's node
+// (changeable.ts). the one spelling: use this, never the string
+#define CH_NODE "node"
+
 #include <stddef.h>
 
 #include "value.h"

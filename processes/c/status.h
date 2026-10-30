@@ -64,6 +64,8 @@ const op_value *cst_status(pl *p, tb_key id);
 // whether a computer's run is pending, by its node's id, the read told
 int cst_pending(pl *p, tb_key id);
 // whether a status value is pending; an error's message, or NULL if it is no error
+// what the status entry holds while a run is pending: a new value, the caller's
+op_value *cst_pending_value(void);
 int cst_is_pending(const op_value *status);
 const char *cst_error(const op_value *status);
 

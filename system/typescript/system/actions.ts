@@ -1,6 +1,5 @@
 import type { Id, Path } from "@ermine/places"
 import { get } from "@ermine/places/lib"
-import { NODE } from "@ermine/places/header"
 import { type Frame, PENDING, type Scope } from "@ermine/reactivity"
 import { isPromise } from "@ermine/reactivity/helpers"
 import type { Going } from "../calls.ts"
@@ -146,7 +145,7 @@ export function executeActionAs(inner: Inner, p: Target, ...args: unknown[]): un
 	const at = n.path !== undefined ? { path: n.path } : { id: n.id }
 	// in a run, the computer waits; else whoever this context is
 	const run = s.getRun()
-	const caller = (run?.computer.info[NODE] as Id | undefined) ?? inner.node
+	const caller = (run?.computer.info.node as Id | undefined) ?? inner.node
 	// tracked in a run, so the handler coming reruns it
 	const fn = id === undefined ? undefined : places.readValue("value", id)
 	if (fn === undefined) {

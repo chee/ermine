@@ -33,7 +33,7 @@ struct cst {
 
 #define PENDING_NAME "ermine.pending"
 
-static op_value *pending_value(void) { return op_stand(op_str(PENDING_NAME)); }
+op_value *cst_pending_value(void) { return op_stand(op_str(PENDING_NAME)); }
 static op_value *error_value(const char *message) {
 	op_value *m = op_map();
 	op_set(m, "name", op_str("Error"));
@@ -170,7 +170,7 @@ static void run_end(sc_computer *c, unsigned n, sc_ended ended, const void *cons
 	const char *id = g->id;
 	op_value *status;
 	switch (ended) {
-	case SC_PENDED: status = pending_value(); break;
+	case SC_PENDED: status = cst_pending_value(); break;
 	case SC_FAIL: status = error_value(more->error != NULL ? more->error : "error"); break;
 	case SC_LOOPING: status = error_value("looping"); break;
 	case SC_DONE: status = NULL; break;

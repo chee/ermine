@@ -112,7 +112,7 @@
 // place, unplace, rename "place" on the slot; remove "remove"; executeAction "execute"; a memo's
 // and effect's own writes not asked.
 // scope nodes: a lookup up a write's frames (nearest) stops after the first frame whose info holds the
-// NODE key. a process's scope holds its node's; each memo and effect is made with { [NODE]: its
+// node key. a process's scope holds its node's; each memo and effect is made with { node: its
 // node's id }.
 //
 // the files of this folder, one for each job:

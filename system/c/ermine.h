@@ -487,7 +487,7 @@ typedef struct {
 
 // the info key the base sets in the frame it puts on a write a hook changed
 #define ES_FEATURES "features"
-// the attribute a memo's or effect's node holds its scope in: the PL_NODE key's id of the nearest
+// the attribute a memo's or effect's node holds its scope in: the CH_NODE key's id of the nearest
 // scope above it with one, written once as the node is made
 #define ES_SCOPE "ermine.computer.scope"
 // what a pending process waits on, written by what started it

@@ -12,7 +12,7 @@
 //
 // start(places, at, opts, body): at, folder: paths from the places' root, names or a string ("." here, ".." back one); folder default: at's folder. refused "taken",
 // nothing made: a process already at exactly the path (above or under it is fine; whether it may is protect's). else, in order:
-//   1. its node's id (setup.id's, else proc:<boot>-<n>), then a scope { process: at, [NODE]: id } (given the node,
+//   1. its node's id (setup.id's, else proc:<boot>-<n>), then a scope { process: at, node: id } (given the node,
 //      scopes.ts) under options.under (none: the owner); started from outside the graph (no run open,
 //      no frame up the chain holding locations), its info holds locations too: every line of the
 //      stack of the call into start, or options.build
@@ -30,7 +30,7 @@
 import createEntry, { type ChangeHeader } from "@ermine/graph/entry"
 import { type Id, type Path, type Places, PlacesError, type Writer } from "@ermine/places"
 import { parse } from "@ermine/places/path"
-import { createChangeHeader, NODE, outsideAt } from "@ermine/places/header"
+import { createChangeHeader, outsideAt } from "@ermine/places/header"
 import { createStatus, STATUS, TABLE } from "./status.ts"
 import { type Computer, PENDING, type Scheduler, type Scope } from "@ermine/reactivity"
 import type { Table } from "@ermine/graph/table"
@@ -181,7 +181,7 @@ export function createProcesses(setup: Setup): Processes {
 		const header = headerOf
 		const locations = outsideAt(s, options.build)
 		const scope = s.createScope(
-			{ process: at, [NODE]: id, ...locations !== undefined && { locations } },
+			{ process: at, node: id, ...locations !== undefined && { locations } },
 			options.under ?? owner,
 		)
 		scopes.give(scope, id)

@@ -14,16 +14,12 @@ import { capture } from "@ermine/changeable/stacktrace"
 // without its time and op
 export type ChangeBase = Omit<ChangeHeader, "time" | "op">
 
-// the key naming a frame's node (its id): a lookup up the frames stops after the first holding it
-// (nearest). the one spelling: use this, never the string
-export const NODE = "node"
-
 // the nearest value of key up from frame, innermost first, stopping after the first frame whose
-// info holds NODE (what is above a node's scope is not its); none: undefined
+// info names a node (Info's node: what is above a node's scope is not its); none: undefined
 export function nearest(frame: Frame | undefined, key: string): unknown {
 	for (let f = frame; f !== undefined; f = f.parent) {
 		if (key in f.info) return f.info[key]
-		if (NODE in f.info) return undefined
+		if ("node" in f.info) return undefined
 	}
 	return undefined
 }

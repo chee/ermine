@@ -1,7 +1,7 @@
 import type { ChangeHeader, Entry } from "@ermine/graph/entry"
 import { type Id, PlacesError } from "@ermine/places"
 import { get } from "@ermine/places/lib"
-import { locationsOf, nearest, NODE } from "@ermine/places/header"
+import { locationsOf, nearest } from "@ermine/places/header"
 import type { Run } from "@ermine/processes/runs"
 import type { Key } from "@ermine/graph/table"
 import type { Call } from "../calls.ts"
@@ -124,8 +124,8 @@ function writerOf(inner: Inner, change: ChangeHeader): Explained & { change: Cha
 	const holds = (writes: readonly { change: ChangeHeader | undefined }[]) =>
 		writes.some((w) => w.change === change)
 	const view = viewOf(base, change)
-	if (at("run") !== undefined && at(NODE) !== undefined) {
-		const computer = at(NODE) as Id
+	if (at("run") !== undefined && at("node") !== undefined) {
+		const computer = at("node") as Id
 		const run = runs.read(computer)
 		return run !== undefined && run.n === at("run") && holds(run.writes)
 			? {
@@ -146,13 +146,13 @@ function writerOf(inner: Inner, change: ChangeHeader): Explained & { change: Cha
 		}
 		return { change: view, writer: { kind: "method", ...pathOf(inner, handler) } }
 	}
-	// pipe-extension: core gap. a scope whose info holds NODE and a feature's name: that feature's
+	// pipe-extension: core gap. a scope whose info holds node and a feature's name: that feature's
 	// thing, writing as itself, at its node
 	const feature = at("feature")
-	if (typeof feature === "string" && at(NODE) !== undefined) {
+	if (typeof feature === "string" && at("node") !== undefined) {
 		return {
 			change: view,
-			writer: { kind: "feature", feature, ...pathOf(inner, at(NODE) as Id) },
+			writer: { kind: "feature", feature, ...pathOf(inner, at("node") as Id) },
 		}
 	}
 	const locations = locationsOf(change.frame)

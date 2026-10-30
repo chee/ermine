@@ -13,7 +13,7 @@ import type { Id, Table, Tables } from "@ermine/graph/table"
 import createEntry, { type Entry } from "@ermine/graph/entry"
 import update from "@ermine/changeable/update"
 import type { Patch } from "@ermine/changeable/apply"
-import type { Computer, Ended, Scheduler } from "@ermine/reactivity"
+import { type Computer, type Ended, PENDING, type Scheduler } from "@ermine/reactivity"
 import { createChangeHeader } from "@ermine/places/header"
 import type { Places, Writer } from "@ermine/places"
 
@@ -23,10 +23,11 @@ declare module "@ermine/graph/table" {
 	}
 }
 
-// the table, the key in its entry, and what it holds while a run is pending
+// the table, and the key in its entry
 export const TABLE = "status"
 export const STATUS = "ermine.computer.status"
-export const PENDING: unique symbol = /* @__PURE__ */ Symbol.for("ermine.pending") as never
+// what the entry holds while a run is pending: the scheduler's PENDING
+export { PENDING }
 
 export type Setup = {
 	// none: written here (table.add, or update and commit); given: each status write handed to it

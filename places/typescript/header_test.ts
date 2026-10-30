@@ -4,7 +4,7 @@ import { assert, assertEquals, assertStrictEquals } from "@std/assert"
 import type { Location } from "@ermine/changeable/stacktrace"
 import type { ChangeHeader } from "@ermine/graph/entry"
 import { createScheduler } from "@ermine/reactivity"
-import { createChangeHeader, isOutside, locationsOf, nearest, NODE } from "./header.ts"
+import { createChangeHeader, isOutside, locationsOf, nearest } from "./header.ts"
 
 const given: Location = { file: "program.js", line: 12, external: true }
 
@@ -52,11 +52,11 @@ Deno.test("header: inside, the frame open itself: in a run, or under a frame hol
 Deno.test("header: nearest looks up the frames and stops after the first holding the node key", () => {
 	const s = createScheduler()
 	const top = s.createRootScope({ run: 1, why: "top" })
-	const node = s.createScope({ why: "node", [NODE]: "N" }, top)
+	const node = s.createScope({ why: "node", node: "N" }, top)
 	const click = s.createScope({ event: "click" }, node)
 	assertEquals(nearest(click.frame, "event"), "click")
 	assertEquals(nearest(click.frame, "why"), "node")
-	assertEquals(nearest(click.frame, NODE), "N")
+	assertEquals(nearest(click.frame, "node"), "N")
 	assertEquals(nearest(click.frame, "run"), undefined)
 	assertEquals(nearest(undefined, "why"), undefined)
 })

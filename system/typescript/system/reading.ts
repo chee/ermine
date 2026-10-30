@@ -1,7 +1,6 @@
 import type { ChangeHeader, Entry } from "@ermine/graph/entry"
 import type { Id, Path } from "@ermine/places"
 import { get, gets, list as listAt } from "@ermine/places/lib"
-import { NODE } from "@ermine/places/header"
 import { REFUSED } from "@ermine/processes/guard"
 import { isPending } from "@ermine/processes/status"
 import { PENDING } from "@ermine/reactivity"
@@ -175,7 +174,7 @@ const handlesFor = (inner: Inner, v: unknown) =>
 function waitFor(inner: Inner, path: Path) {
 	const { base, s, runs } = here(inner)
 	const run = s.getRun()
-	const computer = run?.computer.info[NODE] as Id | undefined
+	const computer = run?.computer.info.node as Id | undefined
 	if (computer === undefined && !base.setting.has(inner.node)) return
 	const key = computer ?? inner.node
 	const n = computer === undefined ? undefined : (runs.read(computer)?.n ?? 0) + 1
