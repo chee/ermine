@@ -2,16 +2,18 @@ import { assert, assertEquals, assertStrictEquals } from "@std/assert"
 import type { Entry } from "@ermine/graph/entry"
 import { createScheduler, PENDING, type Scope } from "@ermine/reactivity"
 import { createPaths } from "@ermine/reactivity/paths"
-import { createTable, type Key } from "@ermine/graph/table"
+import { createTable, type Key, type Tables } from "@ermine/graph/table"
 import { children, createPlaces } from "@ermine/places"
-import { STATUS } from "./status.ts"
+import { STATUS, type StatusTables } from "./status.ts"
 import { PROCESS, processes as rows } from "./processes.ts"
 import { createScopeNodes } from "./scopes.ts"
 import { ARGS, createProcesses, FOLDER, type Inside, PIN, type Process } from "./start.ts"
 
 function world() {
 	const s = createScheduler()
-	const table = createTable((part, id) => places.onTableChange(part as Key, id))
+	const table = createTable<Tables & StatusTables>((part, id) =>
+		places.onTableChange(part as Key, id)
+	)
 	const paths = createPaths<unknown>()
 	const places = createPlaces({
 		root: "R",

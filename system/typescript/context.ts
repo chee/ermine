@@ -19,10 +19,12 @@ import type { Computer, Scheduler, Scope } from "@ermine/reactivity"
 import { ErmineError } from "./features.ts"
 import { enterScheduler, leaveScheduler } from "./registry.ts"
 import type { Handle } from "./handles.ts"
-import type { Key, Table } from "@ermine/graph/table"
+import type { Key, Table, Tables } from "@ermine/graph/table"
+import type { StatusTables } from "@ermine/processes/status"
 
-// what a node handle reaches (handles.ts; the host's and features' side): walked to by its path at
-// each use, or its id (a node with no place); never both
+export type ErmineTable = Table<Tables & StatusTables>
+
+// What a node handle reaches: its path (walked at each use) or its id, never both.
 export type NodeData =
 	| { readonly path: Path; readonly id?: undefined; readonly part: Key }
 	| { readonly id: Id; readonly path?: undefined; readonly part: Key }
@@ -72,8 +74,7 @@ export type { At, ProcessContext }
 
 export type Parts = {
 	readonly scheduler: Scheduler
-	// the table, and where a write to it is said (the first layer's commit)
-	readonly table: Table
+	readonly table: ErmineTable
 	readonly commit: (changed: readonly Entry<unknown>[]) => void
 	readonly may?: Policy
 	readonly header: () => ChangeHeader
