@@ -3,7 +3,8 @@
 // Bytes are lowercase hex; a device is named by its 64-hex key. Deterministic: keys come from
 // seeds,
 // a write's when is the request's or 1760000000, and the k-th random call gives k big-endian.
-//   encode  { step: { device, n, before, node, relative?, part, patches, lamport, when, on?, who? } } -> { bytes }
+//   encode  { step: { device, n, before, node, relative?, part, patches, lamport, when, on?, ids?, who? } } -> { bytes }
+//           ids: per patch null or { after: id | null, gone: [[id, count], …] }, an id [device, n, k]
 //   decode  { bytes } -> { step } | { refused: true }
 //   hash    { bytes } -> { hash }        blake3
 //   sign    { seed, bytes } -> { sig }   ed25519
@@ -11,7 +12,7 @@
 //   unpack  { pack, before? } -> { steps } | { refused: true }
 //   message { message } -> { bytes }     a run is ["run", device, sig, steps]
 //   read    { bytes } -> { message } | { refused: true }
-//   device  { name, seed, rebase? } -> { key }    a log that writes, with its graph and sync;
+//   device  { name, seed, rebase?, forgets? } -> { key }    a log that writes, with its graph and sync;
 //                                        rebase: history's (how many steps an entry can undo)
 //   relay   { name } -> {}               no key, no graph
 //   write   { device, node, part?, patches, when?, who? } -> { n, lamport }
@@ -53,7 +54,7 @@ import { fileStore } from "./store_file.ts"
 import { createHistory } from "./history.ts"
 import { createSync, type Link, type Message, read, type Sync, wire } from "./sync.ts"
 import { createSigner, type Signer } from "./sign.ts"
-import { decodeStep, encodeStep, hashStep, hex, type Step, unhex } from "./step.ts"
+import { decodeStep, encodeStep, hashStep, hex, type Id, type Step, unhex } from "./step.ts"
 import { firstOf, pack, type Packed, priorOf, stepsIn, unpack } from "./pack.ts"
 
 const WHEN = 1_760_000_000
@@ -117,7 +118,11 @@ function made(log: Log, relay: boolean, signer?: Signer): Device {
 	return d
 }
 
-async function createDevice(seed: Uint8Array, rebase?: number): Promise<Device> {
+async function createDevice(
+	seed: Uint8Array,
+	rebase?: number,
+	forgets?: boolean,
+): Promise<Device> {
 	const s = createScheduler()
 	const table = createTable((part, id) => places.onTableChange(part as Key, id))
 	const places = createPlaces({
@@ -131,7 +136,7 @@ async function createDevice(seed: Uint8Array, rebase?: number): Promise<Device> 
 	const scope = s.createRootScope({ actor: "harness" })
 	const run = <T>(f: () => T) => s.runWithScope(scope, f)
 	const log = createLog({ writes: true, seed })
-	const history = createHistory({ log, table, places, run, rebase })
+	const history = createHistory({ log, table, places, run, rebase, forgets })
 	await history.load()
 	const d = made(log, false, await createSigner(seed))
 	d.graph = {
@@ -217,9 +222,24 @@ function stepIn(s: Request, device?: string, before?: Uint8Array | null): Step {
 	if (s.on !== undefined) {
 		out.on = (s.on as [string, number][]).map(([d, n]) => ({ device: keyOf(d), n }))
 	}
+	if (s.ids !== undefined) {
+		const id = ([d, n, k]: [string, number, number]) => ({ device: keyOf(d), n, k })
+		out.ids = (s.ids as ({
+			after: [string, number, number] | null
+			gone: [[string, number, number], number][]
+		} | null)[])
+			.map((x) =>
+				x &&
+				{
+					after: x.after && id(x.after),
+					gone: x.gone.map(([i, c]) => [id(i), c] as [Id, number]),
+				}
+			)
+	}
 	if (s.who !== undefined) out.who = s.who
 	return out
 }
+const idOut = (i: Id) => [i.device, i.n, i.k]
 function stepOut(s: Step) {
 	return {
 		device: s.device,
@@ -232,6 +252,11 @@ function stepOut(s: Step) {
 		lamport: s.lamport,
 		when: s.when,
 		...(s.on !== undefined && { on: s.on.map((o) => [o.device, o.n]) }),
+		...(s.ids !== undefined && {
+			ids: s.ids.map((x) =>
+				x && { after: x.after && idOut(x.after), gone: x.gone.map(([i, c]) => [idOut(i), c]) }
+			),
+		}),
 		...(s.who !== undefined && { who: s.who }),
 	}
 }
@@ -372,7 +397,7 @@ async function one(r: Request): Promise<Answer> {
 
 		case "device": {
 			if (devices.has(r.name)) throw new Error(`${r.name} is made`)
-			const d = await createDevice(unhex(r.seed), r.rebase)
+			const d = await createDevice(unhex(r.seed), r.rebase, r.forgets)
 			devices.set(r.name, d)
 			return { key: d.log.device! }
 		}

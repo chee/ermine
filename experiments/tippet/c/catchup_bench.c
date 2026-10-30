@@ -81,7 +81,7 @@ static size_t typing(uint8_t p[32], unsigned i) {
 static void type(tp_log *log, unsigned i) {
 	uint8_t p[32];
 	tp_write w = {{(const uint8_t *)"text", 4}, {(const uint8_t *)"value", 5}, {p, typing(p, i)},
-		{NULL, 0}, 1760000000 + i / 5, {NULL, 0}};
+		{NULL, 0}, 1760000000 + i / 5, {NULL, 0}, {NULL, 0}};
 	uint64_t n, lamport;
 	if (tp_log_write(log, &w, &n, &lamport)) abort();
 }
@@ -96,7 +96,7 @@ static tp_log *writer(void) {
 	tp_log_load(log);
 	uint8_t first[] = {0x81, 0xa2, 0x64, 'p', 'a', 't', 'h', 0x80, 0x65, 'v', 'a', 'l', 'u', 'e', 0x60};
 	tp_write w = {{(const uint8_t *)"text", 4}, {(const uint8_t *)"value", 5}, {first, sizeof first},
-		{NULL, 0}, 1760000000, {NULL, 0}};
+		{NULL, 0}, 1760000000, {NULL, 0}, {NULL, 0}};
 	tp_log_write(log, &w, &n, &lamport);
 	for (unsigned i = 0; i < CHARS; i++) type(log, i);
 	return log;

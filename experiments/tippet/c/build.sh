@@ -17,7 +17,7 @@ mkdir -p "$out"
 
 own="wire step pack sign log store store_file sync http"
 # on the graph: C11
-graph="history"
+graph="history elements"
 reused="encoding/ed25519/c/ed25519 encoding/ed25519/c/sha2 encoding/c/cbor encoding/c/json encoding/c/blake3/blake3 encoding/c/blake3/blake3_dispatch encoding/c/blake3/blake3_portable"
 # the graph: table, node, op, places, scheduler (the root Makefile's places_src, but its harnesses)
 places="places/c/places crow/c/crow places/c/crowify processes/c/status graph/c/table graph/c/node graph/c/update changeable/c/value changeable/c/frame changeable/c/apply changeable/c/invert reactivity/c/paths reactivity/c/scheduler reactivity/c/order reactivity/c/rank reactivity/c/causes changeable/c/ptrmap reactivity/c/tracker"
@@ -67,7 +67,7 @@ link() {
 	case "$main" in
 		*harness*) $CC $opt -o "$here/$bin" $objs "$mainobj" ;;
 		catchup* | check_c_review*) $CC $opt -o "$here/$bin" $(echo "$objs" | tr ' ' '\n' | grep -v -e conformance_c_) "$mainobj" ;;
-		*) $CC $opt -o "$here/$bin" $(echo "$objs" | tr ' ' '\n' | grep -vE 'conformance_c_|/core_(op|node|table|scheduler|crow|places|protect)_|history') "$mainobj" ;;
+		*) $CC $opt -o "$here/$bin" $(echo "$objs" | tr ' ' '\n' | grep -vE 'conformance_c_|/core_(op|node|table|scheduler|crow|places|protect)_|history|elements') "$mainobj" ;;
 	esac
 }
 

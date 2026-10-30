@@ -55,6 +55,7 @@ typedef struct {
 	uint64_t lamport, when;
 	int relative;
 	tp_span on;
+	tp_span ids; // per patch: null or [after, gone] (WIRE.md, ids); p NULL: none
 } tp_step;
 
 #define TP_OWN_ID 75
@@ -178,6 +179,7 @@ typedef struct {
 	tp_span node, part, patches, who;
 	uint64_t when;
 	tp_span on;
+	tp_span ids; // after on only; none: p NULL
 } tp_write;
 // Stays open in the store until its run closes (32 steps or 2048 bytes).
 int tp_log_write(tp_log *log, const tp_write *w, uint64_t *n, uint64_t *lamport);

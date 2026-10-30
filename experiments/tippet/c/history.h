@@ -19,7 +19,7 @@ typedef struct {
 	void (*run)(void *ctx, void (*f)(void *data), void *data);
 	void *ctx;
 	int forgets;
-	long rebase; // how many of each entry's newest steps hold what undoes them: 0 the default (256), negative none. forgets: none
+	long rebase; // how many of each entry's newest steps hold what undoes them: 0 the default (256), negative none (its own value is still held, and names ids). forgets: no own value at all
 } tp_history_options;
 
 tp_history *tp_history_new(const tp_history_options *o);
