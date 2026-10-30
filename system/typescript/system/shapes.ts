@@ -38,9 +38,6 @@ export type Status = {
 	readonly phase?: "run" | "act"
 	readonly waiting?: readonly Waiting[]
 	readonly n?: number
-	// what to do, where ermine has advice (the hints feature, hints.ts)
-	readonly hint?: string
-	// a feature's own fields (onStatus): pully's provider …
 	readonly [field: string]: unknown
 }
 
