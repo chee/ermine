@@ -279,7 +279,12 @@ changeable-invert = $(changeable-apply)
 $(eval $(call run,changeable-invert))
 
 test:
-	$(DENO)
+	$(DENO) --ignore=experiments/tippet,bundling
+# tippet's stores write under the temp dir; its net is a free port, localhost, and a unix socket in a
+# temp dir (deno takes a socket's whole path only, so net can't be held to that dir)
+	$(DENO) --allow-write="$${TMPDIR:-/tmp}" --allow-net experiments/tippet
+# a build is written in a temp dir beside its test
+	$(DENO) --allow-write=bundling/typescript bundling
 	deno task conformance
 
 TESTED = $(LIBS) changeable-invert
