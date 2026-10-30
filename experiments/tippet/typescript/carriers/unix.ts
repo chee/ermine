@@ -1,16 +1,10 @@
-// links over unix domain sockets, for processes on one machine (deno). each message is a frame, as
-// http's: its length as 4 bytes, big-endian, then its bytes
-//
-//   const server = listen("/tmp/pigs.sock", (link) => a.link(link))
-//   b.link(await connect("/tmp/pigs.sock"))
-//   server.close()   // its links closed, the socket file removed
+// Links over unix domain sockets, for processes on one machine (deno). Each message is a frame as
+// in http: its length as 4 bytes big-endian, then its bytes.
 import type { Link } from "../sync.ts"
 import { frames } from "./http.ts"
 
-// the biggest frame read: a longer one ends the link
 const most = 64 * 1024 * 1024
 
-// a connection as a link. it reads once something listens; a later listener takes its place
 function framed(conn: Deno.Conn): Link {
 	const closes: (() => void)[] = []
 	let open = true, writing = Promise.resolve()
@@ -21,11 +15,9 @@ function framed(conn: Deno.Conn): Link {
 		try {
 			conn.close()
 		} catch {
-			// closed already
 		}
 		for (const f of closes) f()
 	}
-	// fill buf from the connection; false: it ended first
 	async function fill(buf: Uint8Array) {
 		for (let at = 0; at < buf.length;) {
 			const n = await conn.read(buf.subarray(at))
@@ -34,7 +26,6 @@ function framed(conn: Deno.Conn): Link {
 		}
 		return true
 	}
-	// each frame: its length, then one buffer of that size
 	async function read() {
 		const head = new Uint8Array(4)
 		try {
@@ -46,7 +37,6 @@ function framed(conn: Deno.Conn): Link {
 				on!(bytes)
 			}
 		} catch {
-			// the socket broke, or was closed here
 		}
 		end()
 	}
@@ -67,7 +57,6 @@ function framed(conn: Deno.Conn): Link {
 	}
 }
 
-// a socket at path; each connection made to it, a link
 export function listen(path: string, onLink: (link: Link) => void): { close(): void } {
 	const listener = Deno.listen({ transport: "unix", path })
 	const links = new Set<Link>()
@@ -80,7 +69,6 @@ export function listen(path: string, onLink: (link: Link) => void): { close(): v
 				onLink(link)
 			}
 		} catch {
-			// closed
 		}
 	})()
 	return {
@@ -88,18 +76,15 @@ export function listen(path: string, onLink: (link: Link) => void): { close(): v
 			try {
 				listener.close()
 			} catch {
-				// closed already
 			}
 			for (const l of links) l.close!()
 			try {
 				Deno.removeSync(path)
 			} catch {
-				// gone already
 			}
 		},
 	}
 }
 
-// a link to the socket at path
 export const connect = async (path: string): Promise<Link> =>
 	framed(await Deno.connect({ transport: "unix", path }))

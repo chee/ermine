@@ -1,10 +1,5 @@
-// sync: a log's steps, caught up over links (WIRE.md, messages). a link is anything that carries
-// bytes both ways (carriers/). each side says what it has, and is sent what it lacks, a run at a
-// time; a step added later goes to every link that lacks it. live things are passed on, never kept
-//
-//   const sync = createSync({ log })
-//   const unlink = sync.link(link)
-//   sync.live(bytes); sync.onLive((bytes) => ...)
+// Sync catches a log's steps up over links (WIRE.md). A link is anything that carries bytes both
+// ways (see carriers/). Each side says what it has and is sent what it lacks, a run at a time.
 import { decode, encode, type Value } from "@ermine/encoding/cbor"
 import type { Log } from "./log.ts"
 import { firstOf, pack, type Packed, stepsIn } from "./pack.ts"
@@ -15,18 +10,11 @@ export type Link = {
 	onMessage(fn: (bytes: Uint8Array) => void): void
 	onClose?(fn: () => void): void
 	close?(): void
-	// one link to any number of peers (a broadcast): what they have is not kept, only answered, and
-	// with this device's own steps alone
 	many?: boolean
-	// kept once it can take more: a run goes only after it
 	wait?(): Promise<void>
-	// forgetting (history.ts): the other side keeps every run it is sent (galaxy), as the host knows
 	keeper?: boolean
 }
 
-// theirs: how many of each device's steps it has, or has been sent; pushing: by device, the push
-// going on, and whether it was asked again while it ran; refused: devices it refused; turn: its
-// runs, one after another; said: how many of this device's own its last have said it holds
 type Linked = {
 	link: Link
 	theirs: Map<string, number>
@@ -35,8 +23,6 @@ type Linked = {
 	turn: Promise<void>
 	said?: number
 }
-// refused: n, how many of the device's steps the refusing side holds. devices hex, as the log has
-// them; a live id hex
 export type Message =
 	| { t: "have"; have: Record<string, number> }
 	| { t: "run"; device: string; sig: Uint8Array; pack: Packed }
@@ -44,7 +30,6 @@ export type Message =
 	| { t: "live"; id: string; data: Uint8Array }
 
 const sized = (x: unknown, n: number) => x instanceof Uint8Array && x.length === n
-// a message as this side reads it, or undefined
 export function read(b: Uint8Array): Message | undefined {
 	let m: unknown
 	try {
@@ -71,7 +56,6 @@ export function read(b: Uint8Array): Message | undefined {
 	}
 }
 
-// a message's bytes
 export function wire(m: Message): Uint8Array {
 	const a = m.t === "have"
 		? [m.t, Object.entries(m.have).map(([d, n]) => [unhex(d), n])]
@@ -96,17 +80,14 @@ export function createSync(o: { log: Log; relay?: boolean }): Sync {
 	const { log } = o
 	const links = new Set<Linked>()
 	const lives: ((data: Uint8Array) => void)[] = []
-	// told when a link is added or gone
 	const linked: (() => void)[] = []
 	const tell = () => linked.forEach((f) => f())
-	// live ids lately seen, oldest first
 	const seen = new Set<string>()
 	const mark = (id: string) => {
 		seen.add(id)
 		if (seen.size > 1024) seen.delete(seen.values().next().value!)
 	}
 	const drop = (l: Linked) => links.delete(l) && tell()
-	// a link that can't send any more is gone, and closed
 	const send = (l: Linked, bytes: Uint8Array) => {
 		try {
 			l.link.send(bytes)
@@ -118,24 +99,19 @@ export function createSync(o: { log: Log; relay?: boolean }): Sync {
 	const say = (l: Linked, m: Message) => send(l, wire(m))
 	const have = (): Message => ({ t: "have", have: log.have() })
 
-	// one run of a device's to a link, once the link can take it; false: nothing more to send
 	async function one(l: Linked, device: string): Promise<boolean> {
 		await l.link.wait?.()
 		const from = (l.theirs.get(device) ?? 0) + 1
 		if (!links.has(l) || l.refused.has(device) || from > log.count(device)) return false
 		const b = await log.run(device, from)
 		if (!b) return false
-		// they said what they have meanwhile: this run may not be what they lack
+		// They said what they have meanwhile, so this run may not be what they lack.
 		if (!links.has(l) || (l.theirs.get(device) ?? 0) !== from - 1) return true
-		// as the log keeps it, when it is all of it
-		// packed against the step before, which they hold
 		const p = () => pack(b.steps, from > 1 ? log.prior(device, from - 1) : undefined)
 		send(l, b.message ?? wire({ t: "run", device, sig: b.sig, pack: p() }))
 		l.theirs.set(device, from + b.steps.length - 1)
 		return true
 	}
-	// a device's steps to one link, a run at a time, until it has them all, in turn with the
-	// link's other pushes. one per link and device: asked again while it runs, it goes on
 	function push(l: Linked, device: string) {
 		if (l.pushing.has(device)) return void l.pushing.set(device, true)
 		l.pushing.set(device, false)
@@ -144,7 +120,6 @@ export function createSync(o: { log: Log; relay?: boolean }): Sync {
 			try {
 				more = await one(l, device)
 			} catch {
-				// a store that can't be read: this push ends
 			}
 			if (more || l.pushing.get(device)) {
 				l.pushing.set(device, false)
@@ -159,7 +134,6 @@ export function createSync(o: { log: Log; relay?: boolean }): Sync {
 		if (!m) return
 		const many = l.link.many
 		if (m.t === "have") {
-			// on a broadcast, each says what is its own
 			const me = log.device
 			if (many) {
 				if (me === undefined) return
@@ -170,22 +144,17 @@ export function createSync(o: { log: Log; relay?: boolean }): Sync {
 			l.said = me === undefined ? 0 : m.have[me] ?? 0
 			for (const [d, n] of Object.entries(log.have())) if ((m.have[d] ?? 0) < n) push(l, d)
 		} else if (m.t === "run") {
-			// last: the n of the run's last step, which they hold
 			let last = 0
 			try {
 				last = firstOf(m.pack).n + stepsIn(m.pack) - 1
 			} catch {
-				// not a pack: refused when taken
 			}
 			const r = await log.takePack({ ...m, message: bytes }, l)
-			// a gap: say what this side has, and it is sent again from there. refused for good: say
-			// so, and it is sent no more
 			if ("added" in r) {
 				l.theirs.set(m.device, Math.max(l.theirs.get(m.device) ?? 0, last))
 			} else if (r.refused === "gap") say(l, have())
 			else if (!many) say(l, { t: "refused", device: m.device, n: log.count(m.device) })
 		} else if (m.t === "refused") {
-			// one peer of a broadcast refusing is not the rest refusing
 			if (!many && log.count(m.device)) l.refused.add(m.device)
 		} else {
 			if (seen.has(m.id)) return
@@ -195,14 +164,12 @@ export function createSync(o: { log: Log; relay?: boolean }): Sync {
 		}
 	}
 
-	// steps added (written here, or taken): to every link that lacks them, but the one they came on
 	log.on((device, _, from) => {
 		for (const l of links) if (l !== from) push(l, device)
 	})
 
 	return {
 		link(link: Link): () => void {
-			// a broadcast is sent only what comes from now on, and what its peers say they lack
 			const theirs = new Map(
 				link.many ? Object.keys(log.have()).map((d) => [d, log.count(d)]) : [],
 			)
@@ -240,10 +207,6 @@ export function createSync(o: { log: Log; relay?: boolean }): Sync {
 			lives.push(f)
 			return () => void lives.splice(lives.indexOf(f), 1)
 		},
-		// forgetting (history.ts): per device, how many of its steps have passed on. another's: as
-		// many as every link has, or has been sent (a broadcast is sent only this device's own; one
-		// that refused them is sent no more); none without a link. this device's own: as many as a
-		// link to a keeper last said it holds, so they are never let go before a keeper has them
 		passed(): Record<string, number> {
 			const out: Record<string, number> = {}
 			const all = [...links]

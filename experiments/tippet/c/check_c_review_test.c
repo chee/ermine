@@ -1,7 +1,5 @@
-// check_c_review_test: tries to break tippet's C. each check prints what it saw; a FAIL line is a
-// bug it found. ONLY=123456789rfl picks checks; NOA=1 skips 6a; UNLINK=1 unlinks 7's link. build.sh
-// builds it, with the sanitizers and the graph (8's history)
-//   ./tippet-review-test-check dir     dir: made, used, removed
+// Tries to break tippet's C; a FAIL line is a bug it found. ONLY=123456789rfl picks checks, NOA=1
+// skips 6a, UNLINK=1 unlinks 7's link. Run ./tippet-review-test-check dir (build.sh builds it).
 #define _POSIX_C_SOURCE 200809L
 #include <dirent.h>
 #include <fcntl.h>
@@ -38,7 +36,6 @@ static int failed;
 		if (!(x)) printf("  FAIL %s:%d: %s\n", __FILE__, __LINE__, #x), failed++; \
 	} while (0)
 
-// every file in dir, then dir
 static void wipe(const char *dir) {
 	DIR *in = opendir(dir);
 	struct dirent *e;
@@ -56,11 +53,9 @@ static double now(void) {
 	return t.tv_sec + t.tv_nsec / 1e9;
 }
 
-// ---- a writer's steps
 
 static uint8_t ps[64];
 static tp_write put(int x) {
-	// [{path: [], value: x}]
 	uint8_t p[] = {0x81, 0xa2, 0x64, 'p', 'a', 't', 'h', 0x80, 0x65, 'v', 'a', 'l', 'u', 'e', (uint8_t)(x % 24)};
 	memcpy(ps, p, sizeof p);
 	tp_write w = {{(const uint8_t *)"pig", 3}, {(const uint8_t *)"value", 5}, {ps, sizeof p}, {NULL, 0}, 1760000000, {NULL, 0}};
@@ -74,7 +69,6 @@ static tp_log *memlog(const uint8_t *seed, size_t max, tp_told told, void *ctx) 
 	return log;
 }
 
-// a device's run from n to its end: steps copied into bytes, spans into spans
 typedef struct {
 	uint8_t device[32], sig[64];
 	uint8_t bytes[1 << 16];
@@ -96,7 +90,6 @@ static int run_of(tp_log *log, uint64_t from, run *r) {
 	return 0;
 }
 
-// a device made from seed s, k steps written, a run closed at its last
 static tp_log *writer(uint8_t s, int k, run *r) {
 	uint8_t seed[32];
 	memset(seed, s, 32);
@@ -110,7 +103,6 @@ static tp_log *writer(uint8_t s, int k, run *r) {
 	return log;
 }
 
-// ---- cbor, by hand
 
 static size_t ints(uint8_t *out, int n, ...) {
 	tp_buf b = {out, 0, 4096, 4096, NULL, 0};
@@ -144,7 +136,6 @@ typedef struct {
 	int keys; // map entries written (7; 6 drops value; 8 repeats paths)
 } pk;
 
-// [first, lamport, when, node, part, who, count, {from, move, path, size, paths, shape, value}]
 static size_t pack_of(uint8_t *out, size_t cap, const pk *k) {
 	static const char *names[] = {"from", "move", "path", "size", "paths", "shape", "value"};
 	tp_buf b = {out, 0, cap, cap, NULL, 0};
@@ -159,7 +150,6 @@ static size_t pack_of(uint8_t *out, size_t cap, const pk *k) {
 	return b.bad ? 0 : b.len;
 }
 
-// two steps after the first, one patch each: {path: [], value: 5 | 6}
 static void baseline(pk *k, tp_span first) {
 	memset(k, 0, sizeof *k);
 	k->first = first;
@@ -199,10 +189,8 @@ static void claims(void) {
 	size_t count;
 	baseline(&k, r.spans[0]);
 	CHECK(unpacks(&k, 1 << 20, &count) == 0 && count == 3);
-	// lamport says 4095 steps, the rest 2
 	k.len[LAM] = ints(k.col[LAM], 2, 1LL, 4095LL);
 	CHECK(unpacks(&k, 1 << 20, NULL) == TP_NOTSTEP);
-	// every column says 4095, no patches: 4096 real steps out of a pack of ~100 bytes
 	baseline(&k, r.spans[0]);
 	k.len[LAM] = ints(k.col[LAM], 2, 1LL, 4095LL);
 	k.len[WHEN] = ints(k.col[WHEN], 2, 0LL, 4095LL);
@@ -222,10 +210,8 @@ static void claims(void) {
 	printf("  a %zu-byte pack: %zu steps, %zu bytes of them; heap peak +%zu\n", n, why ? 0 : s.count,
 		why ? 0 : s.at[s.count], H.peak - base);
 	if (!why) tp_steps_free(&mem, &s);
-	// bounded by max: refused past it, nothing left
 	CHECK(tp_unpack(&mem, (tp_span){p, n}, 64 << 10, &s) == TP_BOUND);
 	CHECK(H.now == base);
-	// 4096 after the first: refused
 	k.len[LAM] = ints(k.col[LAM], 2, 1LL, 4096LL);
 	k.len[WHEN] = ints(k.col[WHEN], 2, 0LL, 4096LL);
 	k.len[NODE] = texts(k.col[NODE], "pig", 4096);
@@ -233,10 +219,8 @@ static void claims(void) {
 	k.len[WHO] = nulls(k.col[WHO], 4096);
 	k.len[COUNT] = ints(k.col[COUNT], 2, 0LL, 4096LL);
 	CHECK(unpacks(&k, 1 << 24, NULL) == TP_NOTSTEP);
-	// a count past 2^53
 	k.len[LAM] = ints(k.col[LAM], 2, 1LL, (long long)TP_WHOLE);
 	CHECK(unpacks(&k, 1 << 24, NULL) == TP_NOTSTEP);
-	// many paths, none used past the first: what unpack allocates for them, by the pack's size
 	baseline(&k, r.spans[0]);
 	size_t npaths = 1000000, big = npaths + 64;
 	uint8_t *q = malloc(big + 4096);
@@ -287,13 +271,11 @@ static void key33(void) {
 		int why = tp_step_decode(s, b.len, &t);
 		CHECK(size == 32 ? why == 0 : why == TP_NOTSTEP);
 		if (size == 33) {
-			// as a pack's first
 			pk k;
 			baseline(&k, (tp_span){s, b.len});
 			CHECK(unpacks(&k, 1 << 20, NULL) == TP_NOTSTEP);
 		}
 	}
-	// before 33 bytes
 	{
 		tp_buf b = {s, 0, sizeof s, sizeof s, NULL, 0};
 		tp_put_head(&b, 4, 8), tp_put_head(&b, 2, 32), tp_put(&b, k33, 32);
@@ -302,7 +284,6 @@ static void key33(void) {
 		tp_put(&b, ps, 15), tp_put_head(&b, 0, 1), tp_put_head(&b, 0, 0);
 		CHECK(tp_step_decode(s, b.len, &t) == TP_NOTSTEP);
 	}
-	// in messages: dropped, nothing sent, nothing kept
 	tp_log *log = writer(2, 1, NULL);
 	tp_sync_options so = {mem, log, 0, NULL, NULL, NULL, 0, 0};
 	tp_sync *sync = tp_sync_new(&so);
@@ -372,7 +353,6 @@ static void columns(void) {
 	baseline(&k, r.spans[0]);
 	k.keys = 8;
 	CHECK(unpacks(&k, 1 << 20, NULL) == TP_NOTSTEP);
-	// a value that makes the step not a step (a patch with another field, through value)
 	baseline(&k, r.spans[0]);
 	memcpy(k.col[NODE], "\x82\x63pig\x02", 6), k.len[NODE] = 6;
 	CHECK(unpacks(&k, 1 << 20, NULL) == 0);
@@ -413,11 +393,9 @@ static void cut(const char *dir) {
 	int fd = open(f, O_RDONLY);
 	CHECK(read(fd, all, size) == (ssize_t)size);
 	close(fd);
-	// the frames: where each ends, and how many steps by then
 	size_t ends[64], steps[64], nends = 0, held = 0;
 	for (size_t at = 0; at + 4 <= size;) {
 		size_t len = (size_t)all[at] << 24 | (size_t)all[at + 1] << 16 | (size_t)all[at + 2] << 8 | all[at + 3];
-		// a run: its steps (this log's are all runs, each step once)
 		tp_steps t = {0};
 		if (tp_is_run(all + at + 4, len) && !tp_record_unpack(&mem, all + at + 4, len, 1 << 20, &t))
 			held += t.count;
@@ -449,7 +427,6 @@ static void cut(const char *dir) {
 		tp_write w = put(99);
 		int wrote = tp_log_write(log, &w, &n, &l);
 		tp_log_free(log);
-		// again: what was written goes on from what was held
 		o.store = tp_file_store(&mem, d, 1 << 20);
 		log = tp_log_new(&o);
 		int again = tp_log_load(log);
@@ -504,7 +481,6 @@ static void devices(void) {
 
 // ---- 6. a take while a run is being closed
 
-// a told that takes the runs of new devices, then reads the device it was told of
 typedef struct {
 	tp_log *log;
 	run *runs;
@@ -521,7 +497,6 @@ static void told_take(void *ctx, const uint8_t device[32], uint64_t from, size_t
 	memcpy(e->seen, device, 32);
 }
 
-// links joined by hand that deliver at once, inside send
 typedef struct end {
 	tp_sync *sync;
 	tp_link *link;
@@ -530,7 +505,6 @@ typedef struct end {
 } end;
 static int deliver(void *ctx, const uint8_t *bytes, size_t n) {
 	end *e = ctx;
-	// failed: the link is gone, and nothing comes on it again
 	if (e->fail_refused && n > 9 && !memcmp(bytes + 2, "refused", 7)) return e->fail_refused = 0, e->link = NULL, -1;
 	if (e->other && e->other->link) tp_sync_receive(e->other->sync, e->other->link, bytes, n);
 	return 0;
@@ -538,7 +512,8 @@ static int deliver(void *ctx, const uint8_t *bytes, size_t n) {
 
 static void closing(void) {
 	printf("6. a take while a run is being closed\n");
-	// a. the told of a write takes 4 new devices' runs: the feeds grow under the device it was told
+	// a. The told of a write takes 4 new devices' runs, so the feeds grow under the device it was
+	// told of.
 	if (!getenv("NOA")) {
 		static run runs[4];
 		tp_log *ws[4];
@@ -557,7 +532,6 @@ static void closing(void) {
 		tp_log_free(log);
 		for (int i = 0; i < 4; i++) tp_log_free(ws[i]);
 	}
-	// b. an own run closed between another's take and a reload: the same have after it
 	{
 		run r;
 		tp_log *other = writer(20, 3, &r);
@@ -579,7 +553,6 @@ static void closing(void) {
 		tp_log_free(other);
 		tp_log_free(log);
 	}
-	// c. the run record doesn't fit: the write says it failed, but its step is held and told
 	{
 		uint8_t seed[32];
 		memset(seed, 22, 32);
@@ -603,7 +576,6 @@ static void closing(void) {
 		CHECK(!why || count == i - 2);
 		tp_log_free(log);
 	}
-	// d. a take whose steps don't all fit: what have says against what is held
 	{
 		run r;
 		tp_log *other = writer(23, 3, &r);
@@ -622,7 +594,6 @@ static void closing(void) {
 	}
 }
 
-// three devices in a ring, each a log and a sync; the told goes to the sync
 typedef struct {
 	tp_sync *sync;
 } box;
@@ -643,7 +614,6 @@ static void ring(int fail) {
 		tp_sync_options so = {mem, logs[i], 0, NULL, NULL, NULL, 0, 0};
 		boxes[i].sync = syncs[i] = tp_sync_new(&so);
 	}
-	// ends: a-b, b-c, c-a; each side's end holds its sync and link, other the far end
 	end e[6] = {{0}};
 	int pair[3][2] = {{0, 1}, {1, 2}, {2, 0}};
 	for (int k = 0; k < 3; k++) {
@@ -651,7 +621,6 @@ static void ring(int fail) {
 		x->sync = syncs[pair[k][0]], y->sync = syncs[pair[k][1]];
 		x->other = y, y->other = x;
 	}
-	// a's end of c-a: its refused fails
 	if (fail) e[5].fail_refused = 1;
 	for (int k = 0; k < 6; k++) e[k].link = tp_sync_link(e[k].sync, deliver, &e[k], 0);
 	uint64_t n, l;
@@ -696,7 +665,6 @@ static void links(void) {
 	uint8_t seed[32];
 	memset(seed, 41, 32);
 	log = memlog(seed, 8 << 20, NULL, NULL);
-	// steps of ~1 KB: a value of 1000 bytes
 	static uint8_t big[1100];
 	size_t k = 0;
 	memcpy(big, "\x81\xa2\x64path\x80\x65value\x59\x03\xe8", 17), k = 17;
@@ -712,12 +680,10 @@ static void links(void) {
 	tp_http h;
 	tp_http_open(&h, &mem, "link-1", 0);
 	l = tp_sync_link(sync, http_send, &h, 0);
-	// the far side says it has nothing
 	uint8_t m[] = {0x82, 0x64, 'h', 'a', 'v', 'e', 0x80};
 	if (l) tp_sync_receive(sync, l, m, sizeof m);
 	printf("  1500 steps of ~1 KB to a peer with none: links held %zu, http closed %d, %zu messages waiting\n",
 		tp_sync_links(sync), h.closed, h.waiting);
-	// each send answered: the link goes on once under half a body, until all is sent
 	while (l && h.waiting) {
 		const uint8_t *body;
 		size_t count;
@@ -734,14 +700,12 @@ static void links(void) {
 
 // ---- 8. where the C differed from the TypeScript
 
-// a store's sync, counted: the first answers 0, the rest fail
 static int syncs;
 static int count_sync(void *self) {
 	(void)self;
 	return syncs++ ? TP_STORE : 0;
 }
 
-// a link that is full after its first message (the have), counting the runs sent on it
 typedef struct {
 	int calls, runs;
 } counting;
@@ -751,8 +715,6 @@ static int full_send(void *ctx, const uint8_t *b, size_t n) {
 	return c->calls++ ? 0 : 1;
 }
 
-// live: a link that answers a live by being told a have, so the sync sends a run on it; and one
-// that keeps whether the live came whole
 typedef struct {
 	tp_sync *sync;
 	tp_link *link;
@@ -773,7 +735,6 @@ static void ids(void *ctx, uint8_t *out, size_t n) {
 	for (size_t i = 0; i < n; i++) out[i] = (uint8_t)i;
 }
 
-// a device with a graph, as catchup_bench.c makes one
 typedef struct {
 	pl *places;
 	sc_scheduler *s;
@@ -790,14 +751,12 @@ static void dev_told(void *ctx, const uint8_t key[32], uint64_t from, size_t cou
 	if (d->history) tp_history_told(d->history, key, from, count);
 	if (d->sync) tp_sync_told(d->sync, key, from, count);
 }
-// the next dev_make's history forgets (9)
 static int forgets;
 static void inside(void *ctx, void (*f)(void *data), void *data) { sc_run_with_scope(((dev *)ctx)->scope, f, data); }
 static void drop_value(void *value, void *data) {
 	(void)data;
 	op_free(value);
 }
-// made on store, from seed s: tp_history_load's answer
 static int dev_make(dev *d, tp_store *store, uint8_t s) {
 	memset(d, 0, sizeof *d);
 	d->places = pl_new();
@@ -823,7 +782,6 @@ static void dev_free(dev *d) {
 	sc_free(d->s), tb_free(d->table), pt_free(d->paths), pl_free(d->places);
 	op_free((op_value *)d->info.value);
 }
-// doc's field k, -1 when none
 static int64_t field(dev *d, const char *k) {
 	const nd_entry *e = tb_get(d->table, tb_string("value"), tb_string("doc"));
 	int64_t n = -1;
@@ -835,7 +793,6 @@ static size_t failures(dev *d) {
 	return tp_history_failed(d->history, 0, &f);
 }
 
-// doc's patches: {x: 0} whole; x 1; y 1
 static const uint8_t x0[] = {0x81, 0xa2, 0x64, 'p', 'a', 't', 'h', 0x80, 0x65, 'v', 'a', 'l', 'u', 'e', 0xa1, 0x61, 'x', 0};
 static const uint8_t x1[] = {0x81, 0xa2, 0x64, 'p', 'a', 't', 'h', 0x81, 0x61, 'x', 0x65, 'v', 'a', 'l', 'u', 'e', 1};
 static const uint8_t y1[] = {0x81, 0xa2, 0x64, 'p', 'a', 't', 'h', 0x81, 0x61, 'y', 0x65, 'v', 'a', 'l', 'u', 'e', 1};
@@ -845,8 +802,6 @@ static void edit(tp_log *log, const uint8_t *p, size_t n) {
 	tp_log_write(log, &w, &s, &l);
 }
 
-// a memory store whose steps up to forget are gone (a device's that keeps only the last), not let
-// go with its log
 static uint64_t forget;
 static long (*held)(void *self, const uint8_t device[32], uint64_t n, uint8_t *out, size_t cap);
 static long forgetful(void *self, const uint8_t device[32], uint64_t n, uint8_t *out, size_t cap) {
@@ -858,7 +813,6 @@ static void typescript(const char *dir) {
 	printf("8. where the C differed from the TypeScript\n");
 	uint64_t to;
 	uint8_t sig[64];
-	// a. this device's steps synced before a run of them leaves; a sync that fails, no run
 	{
 		uint8_t seed[32];
 		memset(seed, 50, 32);
@@ -874,7 +828,6 @@ static void typescript(const char *dir) {
 		printf("  syncs %d; a run after a failed sync: %s\n", syncs, second ? "none" : "sent");
 		CHECK(!first && syncs == 2 && second == 1);
 		tp_log_free(log);
-		// the file store's
 		char path[512];
 		snprintf(path, sizeof path, "%s/synced", dir);
 		log = tp_log_new(&(tp_log_options){mem, tp_file_store(&mem, path, 1 << 20), seed, 1, {0, 0, 0}, NULL, NULL});
@@ -884,7 +837,6 @@ static void typescript(const char *dir) {
 		tp_log_free(log);
 		snprintf(path, sizeof path, "%s/synced", dir), wipe(path);
 	}
-	// b. a run taken that this side held already: the sender holds that run, not all this side has
 	{
 		run r1, r2;
 		tp_log *d = writer(51, 3, &r1);
@@ -902,7 +854,6 @@ static void typescript(const char *dir) {
 		tp_sync *sync = tp_sync_new(&so);
 		counting c = {0, 0};
 		tp_link *link = tp_sync_link(sync, full_send, &c, 0);
-		// they have none, then send steps 1 to 3
 		tp_sync_receive(sync, link, (const uint8_t *)"\x82\x64have\x80", 7);
 		tp_span pack;
 		tp_pack(&mem, r1.spans, r1.n, 1 << 20, &pack);
@@ -919,7 +870,6 @@ static void typescript(const char *dir) {
 		tp_sync_free(sync);
 		tp_log_free(log), tp_log_free(d);
 	}
-	// c. a live, its send answered on the same sync: every link gets the live
 	{
 		tp_log *log = writer(53, 1, NULL);
 		tp_sync_options so = {mem, log, 0, NULL, ids, NULL, 0, 0};
@@ -933,12 +883,10 @@ static void typescript(const char *dir) {
 		tp_sync_free(sync);
 		tp_log_free(log);
 	}
-	// d. a step that failed, then applied in a redo: out of failed
 	{
 		run ra, rb;
 		tp_log *a = writer(54, 0, NULL), *b = writer(55, 0, NULL);
 		edit(a, x0, sizeof x0), run_of(a, 1, &ra);
-		// b's step after a's: lamport 2
 		tp_log_take(b, ra.device, ra.spans, ra.n, ra.sig, (tp_span){NULL, 0});
 		edit(b, y1, sizeof y1), run_of(b, 1, &rb);
 		dev r;
@@ -952,7 +900,6 @@ static void typescript(const char *dir) {
 		dev_free(&r);
 		tp_log_free(a), tp_log_free(b);
 	}
-	// e. a snapshot, then a restart with the steps before it gone: the snapshot and the steps after
 	{
 		run r1, r2;
 		tp_log *w = writer(57, 0, NULL);
@@ -981,7 +928,6 @@ static void typescript(const char *dir) {
 
 // ---- 9. forgetting (history.h, a try-out)
 
-// a and b's syncs joined by hand, a's end first: a is told b's have, and b not a's
 static void join(end e[2], tp_sync *a, tp_sync *b) {
 	e[0] = (end){a, NULL, &e[1], 0}, e[1] = (end){b, NULL, &e[0], 0};
 	e[0].link = tp_sync_link(a, deliver, &e[0], 0);
@@ -1001,7 +947,6 @@ static void forgetting(const char *dir) {
 	snprintf(d, sizeof d, "%s/forgets", dir);
 	uint64_t to, n, l;
 	uint8_t sig[64];
-	// a. a run in a snapshot that every link has: let go, never sent; a reload keeps it gone
 	{
 		box b = {NULL};
 		uint8_t seed[32];
@@ -1028,7 +973,6 @@ static void forgetting(const char *dir) {
 		dev_free(&r);
 		dev_make(&r, tp_file_store(&mem, d, 1 << 20), 61);
 		CHECK(tp_log_count(r.log, wd) == 40 && tp_log_run(r.log, wd, 1, &to, sig) && field(&r, "x") == 1);
-		// more go on from there
 		r.sync = sync_of(r.log);
 		join(e, r.sync, b.sync);
 		edit(w, y1, sizeof y1);
@@ -1040,7 +984,6 @@ static void forgetting(const char *dir) {
 		tp_sync_free(b.sync), tp_log_free(w);
 		wipe(d);
 	}
-	// b. this device's own go only once a link to a keeper has said it holds them
 	{
 		box b = {NULL};
 		uint8_t seed[32];
@@ -1072,7 +1015,6 @@ static void forgetting(const char *dir) {
 		dev_free(&r);
 		tp_sync_free(b.sync), tp_log_free(k);
 	}
-	// c. a late step older than the newest is passed over, not merged in
 	{
 		run r1, r2, r3;
 		tp_log *w1 = writer(64, 0, NULL), *w2 = writer(65, 0, NULL);
@@ -1083,7 +1025,6 @@ static void forgetting(const char *dir) {
 			tp_log_write(w2, &w, &n, &l);
 		}
 		edit(w2, y1, sizeof y1), run_of(w2, 1, &r2);
-		// w1, not knowing w2's: older by lamport
 		edit(w1, x1, sizeof x1), run_of(w1, 2, &r3);
 		dev v[2];
 		for (int i = 0; i < 2; i++) {
@@ -1105,7 +1046,6 @@ static void forgetting(const char *dir) {
 
 // ---- 10. a late step: each entry keeps its frontier, the rest walked back through the log
 
-// w's own steps that to lacks taken, a run at a time
 static void take_all(tp_log *to, tp_log *w) {
 	static run r;
 	const uint8_t *d = tp_log_device(w);
@@ -1114,13 +1054,11 @@ static void take_all(tp_log *to, tp_log *w) {
 		if (tp_log_take(to, r.device, r.spans, r.n, r.sig, (tp_span){NULL, 0}) <= 0) break;
 	}
 }
-// the i-th failed: device's, step n
 static int failed_is(dev *d, size_t i, tp_log *device, uint64_t n) {
 	tp_failed f;
 	return tp_history_failed(d->history, 0, &f) > i && (tp_history_failed(d->history, i, &f), 1) && f.device &&
 		!memcmp(f.device, tp_log_device(device), 32) && f.n == n;
 }
-// how many steps a snapshot lists for node's value
 static uint64_t listed(const uint8_t *b, size_t n, const char *node) {
 	tp_in in = {b, b + n};
 	tp_span t;
@@ -1141,8 +1079,6 @@ static uint64_t listed(const uint8_t *b, size_t n, const char *node) {
 static void late(void) {
 	printf("10. a late step, walked back through the log; an old snapshot\n");
 	uint64_t n, l;
-	// a. one between two of another's, with 20 steps to another node between them: walked back to
-	// the whole put before it, those after it applied again
 	{
 		tp_log *a = writer(80, 0, NULL), *b = writer(81, 0, NULL);
 		edit(a, x0, sizeof x0);
@@ -1162,7 +1098,6 @@ static void late(void) {
 		dev_free(&r);
 		tp_log_free(a), tp_log_free(b);
 	}
-	// b. one with no whole put before it: walked back to the first step, where it fails
 	{
 		tp_log *a = writer(83, 1, NULL), *b = writer(84, 0, NULL);
 		edit(a, x0, sizeof x0), edit(b, y1, sizeof y1);
@@ -1175,8 +1110,6 @@ static void late(void) {
 		dev_free(&r);
 		tp_log_free(a), tp_log_free(b);
 	}
-	// c. after a restart from a snapshot (and from an old one, every step listed): the first late
-	// step walks back to the first, so what failed before is listed again, as the whole list did
 	for (int old = 0; old < 2; old++) {
 		tp_log *a = writer((uint8_t)(86 + 3 * old), 0, NULL), *b = writer((uint8_t)(87 + 3 * old), 0, NULL);
 		edit(a, y1, sizeof y1), edit(a, x0, sizeof x0);
@@ -1195,7 +1128,6 @@ static void late(void) {
 		size_t length = 0;
 		if (!old) CHECK(!tp_history_snapshot(r.history));
 		else {
-			// {count, entries}: doc's every step, as a snapshot before frontiers listed them
 			char hex[64];
 			tp_hex(hex, tp_log_device(a), 32);
 			tp_buf o = {snap, 0, sizeof snap, sizeof snap, NULL, 0};
@@ -1224,7 +1156,6 @@ static void late(void) {
 			(long long)field(&r, "y"));
 		CHECK(!why && before == 1 && again == 0 && failures(&r) == 1 && failed_is(&r, 0, a, 1));
 		CHECK(field(&r, "x") == 1 && field(&r, "y") == 1);
-		// the snapshot now: doc's frontier, a's newest and b's
 		CHECK(!tp_history_snapshot(r.history));
 		long got = tp_log_snapped(r.log, NULL, 0);
 		uint8_t *bytes = got > 0 ? malloc((size_t)got) : NULL;
@@ -1241,7 +1172,6 @@ static void late(void) {
 
 // ---- h. heads, through a snapshot (history.h)
 
-// a whole doc {x: v}, on nothing
 static void apart(tp_log *log, uint8_t v) {
 	uint8_t p[sizeof x0];
 	memcpy(p, x0, sizeof p), p[sizeof p - 1] = v;
@@ -1250,7 +1180,6 @@ static void apart(tp_log *log, uint8_t v) {
 	uint64_t s, l;
 	tp_log_write(log, &w, &s, &l);
 }
-// doc's versions' x, -1 gone, in order: how many
 static size_t xs(dev *d, int64_t out[TP_VERSIONS]) {
 	tp_version v[TP_VERSIONS];
 	size_t n = tp_history_versions(d->history, "doc", "value", v);
@@ -1289,7 +1218,6 @@ static void heads(void) {
 	tp_log_free(a), tp_log_free(b);
 }
 
-// ---- a landed step's actor: its who, else its device
 
 static char actors[2][80];
 static int acted;
@@ -1304,7 +1232,6 @@ static void actor(void) {
 	tp_log *a = writer(70, 0, NULL);
 	uint8_t p[sizeof x0];
 	memcpy(p, x0, sizeof p);
-	// an on and no who; then an on and a who
 	tp_write w = {{(const uint8_t *)"doc", 3}, {(const uint8_t *)"value", 5}, {p, sizeof p}, {NULL, 0}, 1, {(const uint8_t *)"\x80", 1}};
 	uint64_t n, l;
 	tp_log_write(a, &w, &n, &l);
@@ -1326,7 +1253,6 @@ static void actor(void) {
 	tp_log_free(a);
 }
 
-// ---- a run longer than one step's limit comes back
 
 static void long_run(const char *dir) {
 	printf("a run longer than one step's limit comes back after a restart\n");

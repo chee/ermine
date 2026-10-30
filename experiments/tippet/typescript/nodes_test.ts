@@ -12,7 +12,6 @@ import { decodeStep } from "./step.ts"
 import { port } from "./carriers/messagechannel.ts"
 import { notKept, show, type Shown } from "./nodes.ts"
 
-// one device, as tippet_test makes one, with "sync" never kept
 async function device() {
 	const s = createScheduler()
 	const table = createTable((part, id) => places.onTableChange(part as Key, id))
@@ -59,11 +58,9 @@ Deno.test("sync shows itself at a node, and that node makes no step", async () =
 	await until(() => shown() !== undefined)
 	assertEquals(shown(), { device: a.log.device!, have: {}, links: 0, failed: [], unkept: 0 })
 
-	// a write here
 	a.put("pig", { x: 1 })
 	await until(() => shown()!.have[a.log.device!] === 1)
 
-	// a step from another device
 	const { port1, port2 } = new MessageChannel()
 	a.sync.link(port(port1)), b.sync.link(port(port2))
 	b.put("cow", { moo: 1 })
@@ -73,7 +70,6 @@ Deno.test("sync shows itself at a node, and that node makes no step", async () =
 	port1.close(), port2.close()
 	stop()
 
-	// "sync" was written each time, and never once made a step, here or there
 	assert(writes >= 3)
 	const nodes = [a, b].flatMap((d) =>
 		Object.keys(d.log.have()).flatMap((k) => d.log.steps(k).map((x) => decodeStep(x).node))

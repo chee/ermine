@@ -1,5 +1,4 @@
-// a step: one kept write, as it travels (../WIRE.md step). a step is its bytes: read in place,
-// never encoded twice
+// A step is one kept write as it travels (../WIRE.md), read in place and never encoded twice.
 #include <string.h>
 
 #include "../../../encoding/c/blake3/blake3.h"
@@ -25,7 +24,6 @@ const char *tp_why(int code) {
 	}
 }
 
-// a path: names and whole numbers
 static int path(tp_in *in, tp_span *out) {
 	const uint8_t *start = in->p;
 	uint64_t k;
@@ -39,13 +37,11 @@ static int path(tp_in *in, tp_span *out) {
 	return 0;
 }
 
-// a range: two whole numbers
 static int range(tp_in *in, uint64_t *from, uint64_t *to) {
 	uint64_t k;
 	return tp_array(in, &k) || k != 2 || tp_whole(in, from) || tp_whole(in, to) ? -1 : 0;
 }
 
-// a move: {path, range?}
 static int move(tp_in *in, tp_span *out) {
 	const uint8_t *start = in->p;
 	uint64_t k, from, to;
@@ -61,7 +57,6 @@ static int move(tp_in *in, tp_span *out) {
 	return pathed ? 0 : -1;
 }
 
-// a patch: {path, range?, value?, move?}
 static int patch(tp_in *in, tp_patch *p) {
 	uint64_t k;
 	memset(p, 0, sizeof *p);
@@ -89,8 +84,6 @@ int tp_patch_next(tp_span patches, size_t *at, tp_patch *p) {
 	return 0;
 }
 
-// one of on's: this device's step n - k (k from 1, n - k from 1), or another's [device, n from 1].
-// 0, or -1
 static int on_item(tp_in *in, const uint8_t *device, uint64_t n, const uint8_t **d, uint64_t *m) {
 	uint64_t k;
 	tp_span key;
@@ -127,13 +120,11 @@ int tp_step_decode(const uint8_t *bytes, size_t length, tp_step *s) {
 	if (tp_array(&in, &items) || items < 8 || items > 10) return TP_NOTSTEP;
 	if (tp_bytes(&in, 32, &device) || tp_whole(&in, &s->n) || s->n < 1) return TP_NOTSTEP;
 	if (!tp_null(&in) && tp_bytes(&in, 32, &before)) return TP_NOTSTEP;
-	// node: its id, or [the rest after the device's own id], "" or "/…"
 	if (in.p < in.end && *in.p == 0x81) {
 		in.p++, s->relative = 1;
 		if (tp_text(&in, &s->node) || (s->node.n && *s->node.p != '/')) return TP_NOTSTEP;
 	} else if (tp_text(&in, &s->node)) return TP_NOTSTEP;
 	if (tp_text(&in, &s->part)) return TP_NOTSTEP;
-	// node and part: no NUL
 	if (memchr(s->node.p, 0, s->node.n) || memchr(s->part.p, 0, s->part.n)) return TP_NOTSTEP;
 	const uint8_t *start = in.p;
 	if (tp_array(&in, &k)) return TP_NOTSTEP;
@@ -144,7 +135,6 @@ int tp_step_decode(const uint8_t *bytes, size_t length, tp_step *s) {
 	}
 	s->patches.p = start, s->patches.n = (size_t)(in.p - start);
 	if (tp_whole(&in, &s->lamport) || tp_whole(&in, &s->when)) return TP_NOTSTEP;
-	// on: an array, when the step says
 	if (items > 8 && in.p < in.end && *in.p >> 5 == 4) {
 		const uint8_t *d;
 		uint64_t m;
@@ -162,7 +152,6 @@ int tp_step_decode(const uint8_t *bytes, size_t length, tp_step *s) {
 	return 0;
 }
 
-// [device, n, before, node, part, patches, lamport, when, on?, who?]
 static void encode(tp_buf *b, const tp_step *s) {
 	tp_put_head(b, 4, 8 + (s->on.p != NULL) + (s->who.p != NULL));
 	tp_put_head(b, 2, 32);

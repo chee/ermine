@@ -1,4 +1,4 @@
-import { assertEquals } from "@std/assert"
+import { assert, assertEquals } from "@std/assert"
 import createEntry from "@ermine/graph/entry"
 import { createScheduler } from "@ermine/reactivity"
 import { createPaths } from "@ermine/reactivity/paths"
@@ -7,11 +7,11 @@ import { children, createPlaces } from "@ermine/places"
 import { createChangeHeader } from "@ermine/places/header"
 import { createHistory } from "./history.ts"
 import { createLog } from "./log.ts"
-import { createSync } from "./sync.ts"
+import { createSync, wire } from "./sync.ts"
 import { bus } from "./carriers/broadcastchannel.ts"
 import { connect, listen } from "./carriers/unix.ts"
+import { socket } from "./carriers/websocket.ts"
 
-// one device, as tippet_test makes one
 async function device() {
 	const s = createScheduler()
 	const table = createTable((part, id) => places.onTableChange(part as Key, id))
@@ -81,4 +81,53 @@ Deno.test("a unix socket: a write shared, and one who joins later catches up", a
 	await tick()
 	assertEquals(await Deno.stat(path).then(() => true, () => false), false)
 	await Deno.remove(dir, { recursive: true })
+})
+
+// a websocket whose peer never reads: what is sent stays unsent
+function stuck() {
+	const on: Record<string, ((e: unknown) => void)[]> = {}
+	return {
+		CONNECTING: 0,
+		CLOSING: 2,
+		readyState: 1,
+		bufferedAmount: 0,
+		binaryType: "",
+		closed: false,
+		send(b: Uint8Array) {
+			this.bufferedAmount += b.length
+		},
+		close() {
+			this.closed = true, this.readyState = 3
+			for (const f of on.close ?? []) f({})
+		},
+		addEventListener(t: string, f: (e: unknown) => void) {
+			;(on[t] ??= []).push(f)
+		},
+		hear(b: Uint8Array) {
+			for (const f of on.message ?? []) f({ data: b.slice().buffer })
+		},
+	}
+}
+
+Deno.test("a websocket whose peer never reads: runs wait, and past 8 MB unsent the link is closed", async () => {
+	const log = createLog({ writes: true })
+	await log.load()
+	const big = "x".repeat(512 * 1024)
+	for (let i = 0; i < 40; i++) {
+		log.write({ node: "pig", part: "value", patches: [{ path: [], value: big + i }], when: 0 })
+	}
+	const sync = createSync({ log, relay: true })
+	const ws = stuck()
+	sync.link(socket(ws as unknown as WebSocket))
+	// asked for everything, again and again: runs go only while under 1 MB is unsent
+	for (let i = 0; i < 20; i++) {
+		ws.hear(wire({ t: "have", have: {} }))
+		await new Promise((r) => setTimeout(r, 10))
+	}
+	assert(ws.bufferedAmount < 2 * 1024 * 1024, `${ws.bufferedAmount} unsent`)
+	assertEquals(sync.links, 1)
+	// what doesn't wait (live things) closes it past 8 MB
+	for (let i = 0; i < 10 && !ws.closed; i++) sync.live(new Uint8Array(1024 * 1024))
+	assert(ws.closed)
+	assertEquals(sync.links, 0)
 })

@@ -1,14 +1,8 @@
-// a device's key: ed25519, through webcrypto. a device is named by its public key, hex. it signs
-// the hash of a run's last step; verify checks that
-//
-//   const me = await createSigner(seed)   // seed: 32 bytes, the same device every run; none: new
-//   const sig = await me.sign(hash)
-//   await verify(me.device, hash, sig)
+// A device's key: ed25519 through webcrypto. A device is named by its public key in hex.
 import { hex, unhex } from "./step.ts"
 
 export type Signer = { device: string; sign: (m: Uint8Array) => Promise<Uint8Array> }
 
-// pkcs8's wrapping of a raw ed25519 seed
 const PKCS8 = unhex("302e020100300506032b657004220420")
 
 const b64url = (s: string) =>
@@ -30,7 +24,6 @@ export async function createSigner(
 
 const keys = new Map<string, CryptoKey>()
 
-// keys checked lately, at most 1024 (the oldest let go first); only good ones are kept
 export async function verify(device: string, m: Uint8Array, sig: Uint8Array): Promise<boolean> {
 	if (!/^[0-9a-f]{64}$/.test(device) || sig.length !== 64) return false
 	try {

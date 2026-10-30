@@ -1,5 +1,3 @@
-// one test per hardening of the flow: sync's pushes, refusals, backpressure, http and galaxy.
-// numbered as the reviews numbered them
 import { assert, assertEquals } from "@std/assert"
 import { decode, encode } from "@ermine/encoding/cbor"
 import { createLog, createMemoryStore, type Log } from "./log.ts"
@@ -27,7 +25,6 @@ async function writer(seed?: Uint8Array) {
 const put = (log: Log, value: unknown, node = "pig") =>
 	log.write({ node, part: "value", patches: [{ path: [], value }], when: 0 })
 
-// two links joined in memory, each message a macrotask later; sent: what each side sent
 function pair(o: { many?: boolean } = {}) {
 	const sent: Uint8Array[][] = [[], []]
 	const fns: ((b: Uint8Array) => void)[] = []
@@ -41,12 +38,10 @@ function pair(o: { many?: boolean } = {}) {
 	})
 	return { a: mk(0), b: mk(1), sent }
 }
-// a message's kind, and for a run its device and pack
 const read = (b: Uint8Array) => {
 	const [t, device, , pack] = decode(b) as [string, Uint8Array, Uint8Array, unknown]
 	return { t, device: t === "run" ? hex(device) : undefined, pack }
 }
-// the steps in a side's runs, and its other messages by kind
 function tally(list: Uint8Array[]) {
 	const out: Record<string, number> = { steps: 0 }
 	for (const m of list.map(read)) {
@@ -80,7 +75,6 @@ Deno.test("0. a chain refused for good is told back, and later writes send nothi
 	for (let i = 0; i < 10; i++) put(two, 100 + i), await tick(10)
 	await tick(100)
 	assertEquals(tally(p.sent[1]).refused, 1)
-	// the peer holds step 1 of that device already: 2 to 20, once
 	assertEquals(before, 19)
 	assertEquals(tally(p.sent[0]).steps, before)
 	assertEquals(peer.count(two.device!), 1)
@@ -205,7 +199,6 @@ Deno.test("10. a send tried again is taken once", async () => {
 	}
 	const one = new Uint8Array([1]), two = new Uint8Array([2])
 	assertEquals(await post(1, [one]), 204)
-	// its answer lost: sent again, with one more
 	assertEquals(await post(1, [one, two]), 204)
 	assertEquals(await post(4, [two]), 409)
 	http.close()
@@ -224,7 +217,6 @@ Deno.test("9. an http client that can't send closes past 1 MB held", async () =>
 	assert(shut)
 })
 
-// a galaxy on a port; open: a websocket to a room, and when it has closed
 function galaxy(dir: string, o: { idle: number; most: number }) {
 	const g = createGalaxy({ dir, ...o })
 	const srv = Deno.serve({ port: 0, onListen() {} }, g.handler)
@@ -236,7 +228,6 @@ function galaxy(dir: string, o: { idle: number; most: number }) {
 			const closed = new Promise((r) => ws.addEventListener("close", r))
 			return { link: socket(ws), close: () => (ws.close(), closed) }
 		},
-		// a send with nothing in it: the room opened, or why not
 		async poke(room: string) {
 			const res = await fetch(`http://${at}/${room}/send?link=${room}&ack=0`, { method: "POST" })
 			await res.body?.cancel()
@@ -267,7 +258,7 @@ Deno.test("9. galaxy lets a room with no links go, and loads it again on use", a
 	await Deno.remove(dir, { recursive: true })
 })
 
-Deno.test("9. galaxy keeps to its most rooms: the one least recently written let go, links or not", async () => {
+Deno.test("9. galaxy keeps to its most rooms: one with no links let go for another, one in use never", async () => {
 	const dir = await Deno.makeTempDir()
 	const s = galaxy(dir, { idle: 60_000, most: 2 })
 	const a = await writer()
@@ -276,11 +267,14 @@ Deno.test("9. galaxy keeps to its most rooms: the one least recently written let
 	createSync({ log: createLog() }).link(cows.link)
 	put(a, 1)
 	await tick(100)
-	// cows never written: let go for hens, though linked; pigs stays
+	// both in use: no third
+	const full = await s.poke("hens")
+	await cows.close()
+	await tick(100)
 	const hens = await s.poke("hens")
 	const open = s.g.open
-	await cows.close(), await pigs.close()
+	await pigs.close()
 	await s.close()
 	await Deno.remove(dir, { recursive: true })
-	assertEquals([hens, open], [204, 2])
+	assertEquals([full, hens, open], [503, 204, 2])
 })

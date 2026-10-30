@@ -1,5 +1,4 @@
-// one test per hardening: forks, packs, lamport, torn signatures, load, room, strict steps, the
-// store, throws, unkept entries. numbered as the reviews numbered them
+// One test per hardening.
 import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert"
 import { decode, encode, type Value } from "@ermine/encoding/cbor"
 import createEntry from "@ermine/graph/entry"
@@ -15,7 +14,7 @@ import { createHistory } from "./history.ts"
 import { createSync } from "./sync.ts"
 import { createSigner } from "./sign.ts"
 import { decodeStep, encodeStep, hashStep, type Step, unhex } from "./step.ts"
-import { pack, unpack } from "./pack.ts"
+import { pack, RUN, unpack } from "./pack.ts"
 import { fileStore } from "./store_file.ts"
 import { port } from "./carriers/messagechannel.ts"
 
@@ -28,11 +27,9 @@ async function until(f: () => boolean, ms = 2000) {
 	}
 }
 
-// a run as a store keeps it: its message. a load trusts the signature
 const kept = (device: string, steps: Uint8Array[], sig: Uint8Array = new Uint8Array(64)) =>
 	encode(["run", unhex(device), sig, pack(steps)] as Value)
 
-// a log that writes, loaded
 async function writer(o: { store?: Store; seed?: Uint8Array } = {}) {
 	const log = createLog({ ...o, writes: true })
 	await log.load()
@@ -42,7 +39,6 @@ const put = (log: Log, value: unknown, node = "pig") =>
 	log.write({ node, part: "value", patches: [{ path: [], value }], when: 0 })
 const size = (b: Run) => b.steps.reduce((n, s) => n + s.length, 0)
 
-// one device, as tippet_test makes one; run: how its history writes into the graph
 async function device(o: { store?: Store; run?: <T>(f: () => T) => T } = {}) {
 	const s = createScheduler()
 	const table = createTable((part, id) => places.onTableChange(part as Key, id))
@@ -133,7 +129,7 @@ Deno.test("1. a pack that says more than it holds is refused before anything is 
 		lamport: 1,
 		when: 0,
 	})
-	// many: nothing as long as k is made (an on column of nulls once was, 5 s at this k)
+	// Many steps: nothing as long as k is made (an on column of nulls once took 5 s at this k).
 	const k = 50_000_000, none = pack([first])[7]
 	const bomb = [first, [0, k], [0, k], ["x", k], ["value", k], [null, k], [0, k], none]
 	const t = performance.now()
@@ -142,7 +138,6 @@ Deno.test("1. a pack that says more than it holds is refused before anything is 
 	const three = [first, [0, 3], [0, 3], ["x", 3], ["value", 3]]
 	assertThrows(() => unpack([...three, [null, 3], [1, 3], none]), TypeError, "not a pack")
 	assertThrows(() => unpack([...three, [null, 2], [0, 3], none]), TypeError, "not a pack")
-	// an element more, or one fewer
 	assertThrows(() => unpack([...pack([first]), 0]), TypeError, "not a pack")
 	assertThrows(() => unpack(pack([first]).slice(0, 7)), TypeError, "not a pack")
 })
@@ -162,7 +157,6 @@ Deno.test("2. a step far past the highest lamport is refused, and write never pa
 	const h = await writer()
 	const sig = await far.sign(hashStep(bytes))
 	assertEquals(await h.take({ device: far.device, steps: [bytes], sig }), { refused: "lamport" })
-	// held anyway, from a store written before: a write throws, and nothing is sent
 	const store = createMemoryStore()
 	await store.append(kept(far.device, [bytes], sig))
 	const old = await writer({ store })
@@ -253,7 +247,6 @@ Deno.test("8. a step is only what tippet writes: others are refused, and write t
 	for (const b of bad) {
 		assertThrows(() => decodeStep(encodeStep({ ...base, ...b } as Step)), TypeError, "not a step")
 	}
-	// the array itself: its length, each element's kind, a key of 32 bytes
 	const good = decode(encodeStep(base)) as unknown[]
 	const arrays = [
 		[...good, "who", 1],
@@ -273,7 +266,6 @@ Deno.test("8. a step is only what tippet writes: others are refused, and write t
 	const a = await writer()
 	assertThrows(() => a.write({ node: "x", part: "value", patches: [], when: 0.5 }), TypeError)
 	assertEquals(a.count(a.device!), 0)
-	// what it does write packs back to the same bytes
 	const writes: Patch[][] = [
 		[{ path: ["t"], range: [0, 0], value: "héllo 🦊" }],
 		[{ path: ["l", 2], move: { path: ["l", 0] } }],
@@ -329,7 +321,6 @@ Deno.test("10. a listener that throws stops no other, nor does a landing that th
 		throw new Error("mine")
 	})
 	r.log.on(() => void told++)
-	// lo sorts before hi, so the entry is worked out again: a redo that throws
 	assertEquals(await r.log.take((await hi.run(hi.device!, 1))!), { added: 1 })
 	assertEquals(await r.log.take((await lo.run(lo.device!, 1))!), { added: 1 })
 	assertEquals(told, 2)
@@ -345,4 +336,14 @@ Deno.test("11. an entry whose write wasn't kept sends no patch until a whole wri
 	a.put("pig", { x: 3 })
 	a.edit("pig", [{ path: ["x"], value: 4 }])
 	assertEquals(a.log.count(a.log.device!), 2)
+})
+
+Deno.test("12. a run's steps make at most 16 MB: a big step closes the run before it, one past it isn't written", async () => {
+	const log = await writer()
+	// the two past RUN together, each under it and under a run's 2 KB alone
+	put(log, "y".repeat(1500))
+	put(log, "x".repeat(RUN - 1000))
+	assertEquals((await log.run(log.device!, 1))?.steps.length, 1)
+	assertThrows(() => put(log, "x".repeat(RUN)), RangeError)
+	assertEquals(log.count(log.device!), 2)
 })

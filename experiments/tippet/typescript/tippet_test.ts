@@ -13,7 +13,6 @@ import { createSync } from "./sync.ts"
 import { decodeStep, encodeStep, hashStep } from "./step.ts"
 import { port } from "./carriers/messagechannel.ts"
 
-// one device: a graph, a log, its history and sync
 async function device(o: { store?: Store } = {}) {
 	const s = createScheduler()
 	const table = createTable((part, id) => places.onTableChange(part as Key, id))
@@ -37,10 +36,8 @@ async function device(o: { store?: Store } = {}) {
 		sync,
 		table,
 		value: (id: string) => table.get("value", id)?.value,
-		// a new entry, as a host makes one
 		put: (id: string, v: unknown) =>
 			run(() => table.sub("value", id, createEntry(v, createChangeHeader(s)))),
-		// an edit in place, as places' writes are
 		edit: (id: string, patches: Patch[]) =>
 			run(() => {
 				const e = table.get("value", id)!
@@ -92,7 +89,6 @@ Deno.test("two writes made apart: both sides end the same, both writes kept as v
 	const values = (d: typeof a) => d.history.versions("pig", "value").map((v) => v.value)
 	assertEquals(values(a), values(b))
 	assertEquals(values(a).map((v) => JSON.stringify(v)).sort(), ['{"x":1}', '{"x":2}'])
-	// a write that saw both: one version again, on both
 	a.edit("pig", [{ path: ["y"], value: 0 }])
 	await until(() => b.history.versions("pig", "value").length === 1)
 	assertEquals(values(b), [{ ...a.value("pig") as object }])
@@ -127,7 +123,6 @@ Deno.test("writes to different keys both stand", async () => {
 	join(a, b)
 	await until(() => JSON.stringify(a.value("pig")) === JSON.stringify(b.value("pig")))
 	assertEquals(a.value("pig"), { x: 1, y: 1 })
-	// two heads, one version: the merge
 	assertEquals(a.history.versions("pig", "value").length, 1)
 	assertEquals(a.history.versions("pig", "value")[0].from.heads.length, 2)
 	closeAll()
@@ -158,7 +153,6 @@ Deno.test("a restart: the snapshot and the steps after it, and on it goes", asyn
 	await a.log.saved()
 	a.history.stop()
 
-	// the same store: the same device, its key the store's
 	const again = await device({ store })
 	assertEquals(again.log.device, a.log.device)
 	assertEquals(again.value("pig"), { x: 3 })

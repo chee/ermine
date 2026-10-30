@@ -1,20 +1,6 @@
-// tippet-catchup-bench: what a device in one room holds. first it catches up on 1000 typed
-// characters, a run at a time: a writer types them (a step each: one character spliced into a
-// string), and its runs are taken off a link as they would go; a fresh device, its graph made
-// (table, places, scheduler), takes them one message at a time: its log, history and sync, with one
-// of two stores, as a history keeper or forgetting (history.h)
-//
-//   memory: every record, as tp_memory_store keeps them
-//   file:   tp_file_store, in a directory made for it and taken away after: its index on disk
-//   forgets: tp_history_forget every second run taken, and every 8 turns in the room; the writer
-//            a keeper
-//
-// then it stays in the room, linked to the writer: each turn the writer types a character, and the
-// device types one of its own through its graph, and what each sends the other is taken. told:
-// the device's tippet heap (tp_mem, counted: peak and at the end), the whole process's in use
-// (malloc's zone: the graph's too) above what it was before the device was made, sampled after each
-// run; and in the room, the tippet heap grown per step (both sides', between turn 200 and 1200).
-// macOS (malloc_zone_statistics)
+// tippet-catchup-bench: a fresh device catches up on 1000 typed characters, then stays in a room
+// with
+// the writer; reports the tippet heap and the process's memory. macOS only.
 //   ./tippet-catchup-bench [memory | file | forgets]
 #include <malloc/malloc.h>
 #include <stdio.h>
@@ -29,7 +15,6 @@
 #define TURNS 1200
 #define WARM 200
 
-// one part's heap, and all of them together
 typedef struct heap {
 	size_t now, peak;
 	struct heap *all;
@@ -57,7 +42,6 @@ static void *plain(void *ctx, void *p, size_t old, size_t size) {
 	return realloc(p, size);
 }
 
-// ---- messages, queued
 
 typedef struct {
 	uint8_t **items;
@@ -80,9 +64,7 @@ static void let_go(messages *m) {
 	m->items = NULL, m->lengths = NULL, m->n = 0;
 }
 
-// ---- the writer
 
-// [{path: [], range: [i, i], value: "c"}], into p: its length
 static size_t typing(uint8_t p[32], unsigned i) {
 	memcpy(p, "\x81\xa3\x64path\x80\x65range\x82", 15);
 	size_t at = 15;
@@ -112,7 +94,6 @@ static tp_log *writer(void) {
 	tp_log *log = tp_log_new(&o);
 	uint64_t n, lamport;
 	tp_log_load(log);
-	// [{path: [], value: ""}]
 	uint8_t first[] = {0x81, 0xa2, 0x64, 'p', 'a', 't', 'h', 0x80, 0x65, 'v', 'a', 'l', 'u', 'e', 0x60};
 	tp_write w = {{(const uint8_t *)"text", 4}, {(const uint8_t *)"value", 5}, {first, sizeof first},
 		{NULL, 0}, 1760000000, {NULL, 0}};
@@ -121,20 +102,17 @@ static tp_log *writer(void) {
 	return log;
 }
 
-// the writer's 1000 characters, as the runs its sync sends one who has none
 static messages typed(tp_log *log) {
 	tp_mem mem = {plain, NULL};
 	messages m = {NULL, NULL, 0};
 	tp_sync_options so = {mem, log, 0, NULL, NULL, NULL, 0, 0};
 	tp_sync *sync = tp_sync_new(&so);
 	tp_link *l = tp_sync_link(sync, queued, &m, 0);
-	// ["have", []]: it has none, and is sent every run
 	tp_sync_receive(sync, l, (const uint8_t *)"\x82\x64have\x80", 7);
 	tp_sync_free(sync);
 	return m;
 }
 
-// ---- the device
 
 typedef struct {
 	tp_history *history;
@@ -157,8 +135,6 @@ static void drop_value(void *value, void *data) {
 	op_free(value);
 }
 
-// a character of the device's own, typed into its graph: the first turn makes "mine", each after a
-// splice at its end, held by the entry until its next write
 typedef struct {
 	device *d;
 	unsigned i;
@@ -197,7 +173,6 @@ static void own_f(void *data) {
 	pl_commit(d->places, &changed);
 }
 
-// what each side queued for the other, taken, until neither has more
 static void deliver(tp_sync *a, tp_link *at_a, messages *to_a, tp_sync *b, tp_link *at_b, messages *to_b) {
 	while (to_a->n || to_b->n) {
 		messages ma = *to_a, mb = *to_b;
@@ -210,14 +185,12 @@ static void deliver(tp_sync *a, tp_link *at_a, messages *to_a, tp_sync *b, tp_li
 
 static void bench(tp_log *w, const messages *m, int file, int forgets) {
 	size_t before = in_use(), most = 0;
-	// the parts' heaps: store, log, history, sync
 	heap h = {0, 0, NULL}, parts[4] = {{0, 0, &h}, {0, 0, &h}, {0, 0, &h}, {0, 0, &h}};
 	tp_mem mem[4];
 	for (int i = 0; i < 4; i++) mem[i] = (tp_mem){counted, &parts[i]};
 	uint8_t seed[32];
 	memset(seed, 9, 32);
 	device d = {0};
-	// the graph, as the Cardputer's host makes it
 	pl *places = pl_new();
 	sc_scheduler *s = sc_new((sc_options){.drop = drop_value});
 	sc_on_tracking_end(s, pl_forget, places);
@@ -266,7 +239,6 @@ static void bench(tp_log *w, const messages *m, int file, int forgets) {
 	printf("  process in use above before: empty graph %zu, most after a run %zu, at the end %zu\n",
 		graph, most, in_use() - before);
 
-	// in the room: the writer and the device, linked
 	tp_mem wmem = {plain, NULL};
 	tp_sync_options wo = {wmem, w, 0, NULL, NULL, NULL, 0, 0};
 	tp_sync *ws = tp_sync_new(&wo);
@@ -277,7 +249,6 @@ static void bench(tp_log *w, const messages *m, int file, int forgets) {
 	size_t warm[5] = {0}, end[5] = {0};
 	uint64_t steps = 0;
 	for (unsigned i = 0; i < TURNS; i++) {
-		// the writer's sync is told by hand: its log has no told
 		type(w, CHARS + i);
 		tp_sync_told(ws, tp_log_device(w), tp_log_count(w, tp_log_device(w)), 1);
 		own o = {&d, i};
@@ -323,8 +294,6 @@ int main(int argc, char **argv) {
 	for (size_t i = 0; i < m.n; i++) bytes += m.lengths[i];
 	printf("tippet-catchup-bench: %d characters typed, %zu run messages (and a have), %zu bytes on the wire\n", CHARS, m.n - 1, bytes);
 	tp_log_free(w);
-	// one store, or both forgetting, else all four; the writer made again for each, so each room
-	// starts the same
 	const char *only = argc > 1 ? argv[1] : "";
 	for (int k = 0; k < 4; k++) {
 		int file = k & 1, forgets = k >> 1;

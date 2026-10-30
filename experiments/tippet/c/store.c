@@ -1,5 +1,4 @@
-// a log's store in memory: its records as frames back to back, as the file store keeps them on
-// disk, where each record holding steps is, and the snapshot
+// A log's store in memory: its records as frames, where each record holding steps is, the snapshot.
 #include <string.h>
 
 #include "store.h"
@@ -59,7 +58,6 @@ int tp_index_hold(tp_index *x, const tp_at *at, uint64_t offset, uint64_t length
 		p->held = q, p->room = room;
 	}
 	tp_index_ran(x, at);
-	// those it covers, i up to j, out; it in their place
 	size_t i = p->count, j;
 	while (i > 0 && p->held[i - 1].first >= at->first) i--;
 	for (j = i; j < p->count && p->held[j].last <= at->last; j++) {}
@@ -163,7 +161,6 @@ long tp_index_drop(tp_index *x, const uint8_t device[32], uint64_t n) {
 	return 0;
 }
 
-// ---- in memory
 
 typedef struct {
 	tp_store store;
@@ -177,7 +174,6 @@ typedef struct {
 
 static int load(void *self, tp_read read, void *ctx) {
 	memory *m = self;
-	// the open steps, told again after the records
 	tp_buf open = m->index.open;
 	size_t count = m->index.ocount;
 	m->index.open = (tp_buf){NULL, 0, 0, m->max, &m->mem, 0};
@@ -214,7 +210,6 @@ static int append(void *self, const uint8_t *record, size_t length, const tp_at 
 	tp_put(&m->frames, record, length);
 	int why = tp_buf_why(&m->frames);
 	if (why) {
-		// what didn't fit is not there
 		m->frames.bad = 0, m->frames.len = offset - 4;
 		return why;
 	}
@@ -250,7 +245,6 @@ static long run(void *self, const uint8_t device[32], uint64_t n, uint8_t *out, 
 	return (long)r->length;
 }
 
-// one that doesn't fit: none
 static int snapshot(void *self, const uint8_t *bytes, size_t length) {
 	memory *m = self;
 	m->snap.len = 0, m->snap.bad = 0;
@@ -274,7 +268,6 @@ static int key(void *self, const uint8_t seed[32], uint8_t out[32]) {
 	return 0;
 }
 
-// forgetting: the bytes stay (this store's records are its memory)
 static long drop(void *self, const uint8_t device[32], uint64_t n) {
 	return tp_index_drop(&((memory *)self)->index, device, n);
 }

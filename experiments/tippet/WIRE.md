@@ -1,8 +1,7 @@
 # tippet wire
 
-What a C implementation sends and checks. cbor: canonical, as `encoding/typescript/cbor.ts`'s
-header says (vectors in `encoding/conformance/cbor`). Whole numbers below: integers, 0 to
-2^53 - 1.
+What a C implementation sends and checks. cbor: canonical, as `encoding/typescript/cbor.ts`'s header
+says (vectors in `encoding/conformance/cbor`). Whole numbers below: integers, 0 to 2^53 - 1.
 
 ## step
 
@@ -64,6 +63,9 @@ A device's steps travel in runs: from some n to a signed n.
   steps before it
 - never cut or joined: a run's end is fixed once signed. anyone passing it on sends it to that end
   with that sig; a peer holding its start is sent only the rest
+- at most 2^24 bytes (16 MB) of steps, all told, the first whole one too: the writer closes its
+  run before a step that would take it past, and writes no step past it alone. a peer may take
+  less (a small device), never more
 
 Taking a run, in order:
 
@@ -125,7 +127,8 @@ encoded canonically: the same bytes the writer made, so chain and sig check as e
 Refused before anything is made: not 8 or 9 elements, first neither bstr nor whole from 2, 4096 or
 more steps in the columns (none, when first is n), more than 65536 patches, a column of another
 length, counts not summing to the patches, an on neither null nor an array. A step it makes that
-isn't one (an n added back to below 1, say): refused.
+isn't one (an n added back to below 1, say): refused. Steps that make more than a run's 2^24 bytes:
+refused once they do, nothing more made.
 
 Step n - 1 not held: past what is held, a gap (answered with have); all steps held, passed over;
 else held but not to be read (forgotten), refused, never guessed.

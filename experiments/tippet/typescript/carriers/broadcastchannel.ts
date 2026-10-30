@@ -1,7 +1,5 @@
-// a link over a BroadcastChannel: every tab (or worker) on one origin that opens the same name. one
-// link reaches all of them, so it is many
-//
-//   a.link(bus("pigs")); b.link(bus("pigs"))
+// A link over a BroadcastChannel: one link reaches every tab on the origin with the same name, so
+// it is many.
 import type { Link } from "../sync.ts"
 
 export function bus(name: string): Link {
