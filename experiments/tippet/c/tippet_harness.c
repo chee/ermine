@@ -480,7 +480,7 @@ static void drop_value(void *value, void *data) {
 	op_free(value);
 }
 
-static device *made(const char *name, const uint8_t *seed, FILE *out) {
+static device *made(const char *name, const uint8_t *seed, long rebase, FILE *out) {
 	if (named(name)) return hh_error(out, "%s is made", name), NULL;
 	device *d = calloc(1, sizeof *d);
 	device **grown = realloc(w.devices, (w.count + 1) * sizeof *grown);
@@ -509,7 +509,7 @@ static device *made(const char *name, const uint8_t *seed, FILE *out) {
 			.paths = d->paths, .scheduler = d->scheduler});
 		d->info = (sc_pair){"actor", op_str("harness")};
 		d->scope = sc_create_root_scope(d->scheduler, &d->info, 1);
-		tp_history_options ho = {w.mem, log, d->table, d->places, NULL, inside, d, 0};
+		tp_history_options ho = {w.mem, log, d->table, d->places, NULL, inside, d, 0, rebase};
 		if (!(d->history = tp_history_new(&ho))) hh_fail("out of memory");
 		tp_history_load(d->history);
 	}
@@ -1083,7 +1083,9 @@ void hh_answer(const op_value *r, FILE *out) {
 	} else if (!strcmp(op, "device")) {
 		uint8_t *seed;
 		if (unhex(hh_str(r, "seed"), &seed) != 32) { hh_error(out, "a seed is 32 bytes"); return; }
-		device *d = made(hh_str(r, "name") ? hh_str(r, "name") : "", seed, out);
+		int64_t rebase = 0;
+		if (op_get(r, "rebase")) op_as_int64(op_get(r, "rebase"), &rebase);
+		device *d = made(hh_str(r, "name") ? hh_str(r, "name") : "", seed, (long)rebase, out);
 		if (d) fputs("{\"key\":", out), hex(out, tp_log_device(d->log), 32), fputc('}', out);
 	} else if (!strcmp(op, "disk")) {
 		disk(r, out);
@@ -1099,7 +1101,7 @@ void hh_answer(const op_value *r, FILE *out) {
 	} else if (!strcmp(op, "files")) {
 		files(r, out);
 	} else if (!strcmp(op, "relay")) {
-		if (made(hh_str(r, "name") ? hh_str(r, "name") : "", NULL, out)) fputs("{}", out);
+		if (made(hh_str(r, "name") ? hh_str(r, "name") : "", NULL, 0, out)) fputs("{}", out);
 	} else if (!strcmp(op, "write")) {
 		written(r, out);
 	} else if (!strcmp(op, "value")) {
