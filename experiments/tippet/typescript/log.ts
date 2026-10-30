@@ -181,6 +181,8 @@ export type Log = {
 	prior: (device: string, n: number) => Prior | undefined
 	steps: (device: string) => Uint8Array[]
 	on(t: Told): () => void
+	// told when a take is done and no other waits, whatever it did
+	onQuiet(f: () => void): () => void
 	write(s: Omit<Step, "device" | "n" | "before" | "lamport" | "relative">): Step
 	run(device: string, from: number): Promise<Run | undefined>
 	take(b: Run, from?: unknown): Promise<Taken>
@@ -201,6 +203,9 @@ export function createLog(o: { store?: Store; writes?: boolean; seed?: Uint8Arra
 	let me: Signer | undefined
 	const feeds = new Map<string, Feed>()
 	const told: Told[] = []
+	const quiets: (() => void)[] = []
+	// takes asked for and not yet done
+	let waiting = 0
 	let lamport = 0
 	let saving: Promise<unknown> = Promise.resolve()
 	let taking: Promise<unknown> = Promise.resolve()
@@ -298,8 +303,20 @@ export function createLog(o: { store?: Store; writes?: boolean; seed?: Uint8Arra
 		return { added: c.steps.length }
 	}
 	function serial(f: () => Taken | Promise<Taken>): Promise<Taken> {
+		waiting++
 		const p = taking.then(f, f)
 		taking = p
+		const done = () => {
+			if (--waiting) return
+			for (const q of quiets) {
+				try {
+					q()
+				} catch {
+					// its own
+				}
+			}
+		}
+		p.then(done, done)
 		return p
 	}
 
@@ -341,6 +358,10 @@ export function createLog(o: { store?: Store; writes?: boolean; seed?: Uint8Arra
 		on(t: Told) {
 			told.push(t)
 			return () => void told.splice(told.indexOf(t), 1)
+		},
+		onQuiet(f: () => void) {
+			quiets.push(f)
+			return () => void quiets.splice(quiets.indexOf(f), 1)
 		},
 
 		// A step decodeStep rejects throws and is never sent; nothing is sent that isn't on disk.
