@@ -5,14 +5,7 @@
 //    { error: message }, or null
 // a program form: {"status":id}               statusOf: "pending" | { error } | null, tracked
 import type { Computer } from "@ermine/reactivity"
-import {
-	answered,
-	id,
-	places,
-	s,
-	scope,
-	table,
-} from "../../places/typescript/world_harness.ts"
+import { answered, id, places, s, scope, table } from "../../places/typescript/world_harness.ts"
 import { answer as placesAnswer, forms } from "../../places/typescript/places_harness.ts"
 import { type Request, serve } from "../../conformance/typescript/harness.ts"
 import { createStatus, PENDING, status } from "./status.ts"
