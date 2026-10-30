@@ -1,6 +1,4 @@
-// places' contributors (places.ts): children given as the one contributor reads as places given
-// none; a second contributor going by path (a map of rows in a value entry, a stand-in for
-// processes) answers first, and its names merge with children's
+// Places' contributors: a second one going by path answers first and its names merge with children's.
 import { assertEquals } from "@std/assert"
 import createEntry from "@ermine/graph/entry"
 import { createScheduler } from "@ermine/reactivity"
@@ -10,7 +8,6 @@ import { asId, children, type Contributor, createPlaces, none } from "./places.t
 import { get, gets, list, lookup, members } from "./lib.ts"
 import { createChangeHeader } from "./header.ts"
 
-// rows by path: the value entry "rows", a level a map, a leaf an id
 const rows: Contributor = {
 	from: "rows",
 	step: ({ path }, name, r) =>
@@ -32,7 +29,6 @@ function world(contributors?: Contributor[]) {
 	put("children", "W", { clock: "C0", notes: "N", junk: 1 })
 	put("children", "C0", { on: "ON0" })
 	put("children", "P", { on: "PON" })
-	// what each read of a run tracked, as places names it
 	const reads: unknown[] = []
 	s.onRunEnd((_c, _n, _e, keys) => reads.push(keys.map((k) => places.describe(k))))
 	const notes = s.createRootScope({ actor: "notes" })
@@ -83,7 +79,6 @@ Deno.test("contributors: the first answer wins, entries has them all, names merg
 		{ name: "timer", id: "T", from: "rows" },
 	])
 	assertEquals(lookup(w.places, ["timer"], ["work", "notes"]), ["work", "timer"])
-	// children first: the saved one wins
 	const c = world([children, rows])
 	c.put("value", "rows", { work: { clock: "P" } })
 	assertEquals(get(c.places, ["work", "clock"]), "C0")
@@ -102,7 +97,6 @@ Deno.test("contributors: a walk from an id alone knows no path; one from a here 
 	])
 })
 
-// rows that prune: nothing on the path (no level there): none; no names: none
 const pruning: Contributor = {
 	from: "rows",
 	step: ({ path }, name, r) => {
@@ -125,16 +119,13 @@ Deno.test("contributors: pruning, the walk's return is the here it got to, with 
 	const steps = []
 	while (!r.done) steps.push(r.value), r = walk.next()
 	assertEquals(steps.map((m) => m.id), ["W", "C0", "ON0"])
-	// rows said none at /work/clock: gone (its bit, the first) under it
 	assertEquals(r.value, { id: "ON0", path: ["work", "clock", "on"], gone: 1 })
 	assertEquals([...w.places.walk(["nope"])], [])
 	assertEquals(w.places.walk(["nope"]).next(), { done: true, value: undefined })
-	// gone given: not asked, its answers not given; names under it: children's alone
 	const here = { id: "W", path: ["work"], gone: 1 }
 	assertEquals([...w.places.walk(["timer"], here)], [])
 	assertEquals([...w.places.answers(here, "clock")], [{ id: "C0", from: "children" }])
 	assertEquals(w.places.names(here).map((n) => n.name), ["junk", "clock", "notes"])
-	// names saying none: gone in what names gives back
 	assertEquals(w.places.names({ id: "C0", path: ["work", "clock"] }).gone, 1)
 	assertEquals(w.places.names({ id: "W", path: ["work"] }).gone, 0)
 })

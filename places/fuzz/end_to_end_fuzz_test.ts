@@ -1,14 +1,4 @@
-// end to end, small: the scheduler, tracked paths and places together. computers read the graph
-// through places (get, lookup, list, members, readValue), each read places tells going to the
-// scheduler's track as a paths spot; more computers read those computers' values, and effects act
-// on them. writes go through places (or the table), and places' commit and table hook say what
-// they changed to the scheduler's mark. after each pulse:
-//   - every live compute's value is the graph read again from scratch (places with nothing told)
-//   - at every act, every compute already has that value; an effect acts once at most, exactly
-//     when its value differs from the one it acted on last
-//   - spots no computer tracks any more are released, as the scheduler's onTrackingEnd says; what
-//     paths keeps is what the live computers track
-// a few dozen seeds (fuzz runs small)
+// End to end, small: every live compute equals the graph read again, effects act at most once.
 import { assert, assertEquals } from "@std/assert"
 import { createPlaces, type Path, type Places, PlacesError } from "@ermine/places"
 import { get, list, lookup, members } from "@ermine/places/lib"
@@ -27,26 +17,21 @@ type Made = {
 	what: string
 	o: Scope
 	c: Computer
-	// from scratch: the graph read again, the other computes' values as the model has them
 	scratch: (value: (name: string) => string | undefined) => string
 	acted?: { value: string }
 }
 
-// what the seeds reached, counted
 type Reach = { acts: number; runs: number; released: number }
 
-// one seed's run
 function seeded(seed: number, reach: Reach) {
 	const { pick, one } = rand(seed)
 	const s = createScheduler()
 	s.onRunStart(() => void reach.runs++)
 	const w = createWorld(pick, (spot) => s.track(spot), (spots) => void s.mark(spots))
-	// a spot nobody tracks any more is let go, as the scheduler tells
 	s.onTrackingEnd((key) => {
 		if (typeof key === "object") reach.released++
 		w.p.release(key)
 	})
-	// places over the same table, nothing told: the graph read from scratch
 	const plain = createPlaces({
 		root: "R",
 		table: w.table,
@@ -58,7 +43,6 @@ function seeded(seed: number, reach: Reach) {
 	const alive = (m: Made) => m.c.state === "alive"
 	const problems: string[] = []
 
-	// the model: every live compute from scratch, a disposed one's value as it was left
 	function model() {
 		const out = new Map<string, string | undefined>()
 		const value = (name: string): string | undefined => {
@@ -72,7 +56,6 @@ function seeded(seed: number, reach: Reach) {
 	}
 	let expected = model()
 
-	// a walk of the graph, on the places given
 	function walk(): { what: string; f: (q: Places) => string } {
 		const k = pick(6), where = w.path(), names = w.path(2), all = pick(2) === 0
 		const what = `${k} ${show(names)} at ${show(where)}`
@@ -118,7 +101,6 @@ function seeded(seed: number, reach: Reach) {
 			m.scratch = () => f(plain)
 			compute(m, () => f(w.p))
 		} else {
-			// over one or two computes' values
 			const over = Array.from({ length: 1 + pick(2) }, () => one(computes).name)
 			m.what = `over ${over}`
 			const of = (vs: (string | undefined)[]) =>
@@ -134,7 +116,6 @@ function seeded(seed: number, reach: Reach) {
 							const at = `${name} acts on ${v}`
 							if (previous !== m.acted?.value) problems.push(`${at}: previous ${previous}`)
 							if (v !== expected.get(name)) problems.push(`${at}, not ${expected.get(name)}`)
-							// every compute already as from scratch
 							for (const x of made) {
 								if (x.kind === "effect" || !alive(x)) continue
 								if (store.get(x.name) !== expected.get(x.name)) {
@@ -167,7 +148,6 @@ function seeded(seed: number, reach: Reach) {
 			assertEquals(now !== was, due, `${at}: ${m.name} acted`)
 			if (now !== was) reach.acts++
 		}
-		// spots no computer tracks: let go. what is held is what the live computers track
 		const read = new Set<unknown>()
 		for (const m of made) {
 			if (!alive(m)) continue

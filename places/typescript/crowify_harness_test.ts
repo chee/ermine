@@ -1,6 +1,4 @@
-// what the crowify suite checks besides its scenarios (conformance/run.ts runs those): the harness
-// asked against the TypeScript one (crowify_harness.ts) run here. the harness asked is HARNESS, else
-// the TypeScript adapter
+// Checks the crowify harness (HARNESS, else the TypeScript adapter) besides conformance/run.ts.
 import { fuzz, SEEDS, STEPS } from "../../crow/typescript/fuzz_harness.ts"
 import { createHarness } from "./crowify_harness.ts"
 

@@ -1,42 +1,31 @@
-// world harness: the world the places and guard harnesses share, made as a composer makes it: one
-// scheduler, table and paths, and places (root "R"). the harnesses add their own requests
-// (places_harness.ts, guard_harness.ts) and speak the line protocol through serve
-// (conformance/typescript/harness.ts).
-//
-// id: a string. part: any string ("children" is the filesystem's). path: a list of names. value:
-// plain JSON. patch: { path, range?, value?, move?: { path, range? } }. info: an object.
-// every write below is the host's, from outside, info {"actor":"test"}.
+// The world the places and guard harnesses share: scheduler, table, paths and places (root "R").
+// Every write is the host's, with info {"actor":"test"}. patch: { path, range?, value?, move? }.
 //
 // { op: "kids", id, value }                  → {}   the children entry replaced (a table event)
 // { op: "value", id, value }                 → {}   the value entry replaced
 // { op: "share", value, keys: [[part, id]..] } → {}   one entry under all those keys (table.add)
-// { op: "del", part, id }                    → {} | { error: "nothing-there" }   table.del
+// { op: "del", part, id }                    → {} | { error: "nothing-there" }
 // { op: "node", part, id }                   → { value? }   the table's, told to no one
-// { op: "namesOf", id }                      → { names }   places' namesOf: each { folder, name }
+// { op: "namesOf", id }                      → { names }   each { folder, name }
 // { op: "held" }                             → { keys, spots, steps }   what paths holds
-// writes; a PlacesError or ApplyError → { error: code }, an ApplyError also { patch: index }:
+// Errors answer { error: code }, an ApplyError also { patch: index }:
 // { op: "edit", part, id, patches }          → {}   none there: an entry made with them
 // { op: "place", at, name, id }              → {}   at: the parent's id
 // { op: "unplace", at, name }                → {}
 // { op: "rename", at, name, to }             → {}
 // { op: "move", at, name, to: { at, name } } → {}
-// { op: "peep", request }                    → request's answer, made under places.peep: its reads tell no one
-// the scheduler:
+// { op: "peep", request }                    → the request's answer, made under places.peep
 // { op: "root", name, info? }                → {}   a scope with no parent
-// { op: "scope", name, parent, info? }        → {}
-//    a "node" key in info: a lookup up a header's frames stops after that frame
+// { op: "scope", name, parent, info? }       → {}   a "node" key in info stops a frame lookup there
 // { op: "dispose", name }                    → {}
 // { op: "pulse" }                            → {}
 // { op: "state", name }                      → { runs, value }   a watch's run count, last result
 // { op: "moments" }                          → { moments }   since last asked, computes by name
 // { op: "header", scope?, extra? }           → { actor, reader?, frame, timely }
-//    the header places makes with scope open, extra its own info (one more frame on top); timely:
-//    time is now (whole seconds); frame: its frames' infos, innermost first (frames.ts), a
-//    locations key shown as one string in a list (["program"]: from outside the graph, with the
-//    stack there). nothing open: { error: "unscoped" }
-// { op: "watchAll", name, id?, part?, frame? } → {}   watched: each fact { part, id, patches, actor? }
-//    of the id and part given (none: every fact); frame: true adds the frame of its change, as the
-//    header's (none: no change)
+//    timely: time is now in whole seconds; frame: infos innermost first, locations shown as
+//    ["program"]. No scope open: { error: "unscoped" }
+// { op: "watchAll", name, id?, part?, frame? } → {}   watched facts { part, id, patches, actor? }
+//    none: every fact; frame: true adds the frame of the fact's change
 // anything not understood: { error: text }
 import createEntry, { type ChangeHeader } from "@ermine/graph/entry"
 import update from "@ermine/changeable/update"
@@ -59,8 +48,7 @@ const watches = new Map<string, { told: Json[]; stop: () => void }>()
 export const names = new Map<Scope, string>()
 const nameOf = (c: Scope) => names.get(c)!
 
-// each computation's latest ended run's reads, in order, as places' spot named each as the run
-// ended: where it reads, null: not one of places' spots
+// each computation's latest ended run's reads, as places' spots (null: not a spot)
 export const spotted = new Map<Scope, Json[]>()
 export const where = (w: Where | undefined): Json =>
 	w === undefined ? null : { part: w.part, id: w.id, path: w.path }
@@ -75,10 +63,8 @@ export const table = createTable((part, id) => places.onTableChange(part as Key,
 export const paths = createPaths<unknown>()
 export const places = createPlaces({ root: "R", table, paths, scheduler: s })
 export const host = s.createRootScope({ actor: "test" })
-// a write's header, made now
 export const header = (extra?: Info) => createChangeHeader(s, { extra })
 
-// the moments, computations by name
 function moment(m: Told): Json {
 	if ("due" in m) {
 		return m.by
@@ -106,9 +92,7 @@ const errorOf = (e: unknown): string =>
 		? e.message
 		: String(e)
 
-// the computes made by a harness's watch, by name
 export const watched = new Map<string, { runs: number; value: Json }>()
-// a compute made by a harness's watch: named, and its state kept
 export function enroll(name: string, c: Computer, w: { runs: number; value: Json }) {
 	watched.set(name, w)
 	scopes.set(name, c)
@@ -125,7 +109,6 @@ export const id = (x: unknown): Id => {
 	return x
 }
 
-// a change, summed up
 export function summary(change: ChangeHeader): Json {
 	const { actor, reader, frame, time } = change
 	return {
@@ -136,8 +119,7 @@ export function summary(change: ChangeHeader): Json {
 	}
 }
 
-// a value write: the patches to the entry there, then said written; none there: an entry made
-// with them, then added (a table event)
+// a value write: the patches to the entry there, or an entry made with them and added
 export function edit(part: Key, id: Id, patches: Patch[]) {
 	const h = header()
 	const there = table.get(part, id)
@@ -152,9 +134,8 @@ export function edit(part: Key, id: Id, patches: Patch[]) {
 	return there
 }
 
-// a write request, with the scope open as it is
 export function write(r: Request): void {
-	// a parent's children entry; none: nothing-there, the world's answer
+	// a parent's children entry; none: nothing-there
 	const at = (x: unknown) => {
 		const n = table.get("children", id(x))
 		if (n === undefined) throw new PlacesError("nothing-there")
@@ -181,7 +162,6 @@ export function write(r: Request): void {
 	throw new Error(`unknown write ${r.op}`)
 }
 
-// a request with {"eval": e} anywhere in it replaced by e evaluated
 export function fill(x: Json, ev: (e: Json) => Json): Json {
 	if (Array.isArray(x)) return x.map((y) => fill(y, ev))
 	if (x === null || typeof x !== "object") return x
@@ -192,11 +172,10 @@ export function fill(x: Json, ev: (e: Json) => Json): Json {
 
 export const json = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 
-// the programs' plain forms, shared by the harnesses; undefined: not one of them
-//   {"cat":[e..]} the strings joined   {"join":e} a list joined with ","   {"count":e} its length
-//   {"add":[a,b]} {"lt":[a,b]} {"if":[t,a,b]} {"do":[e..]} (the last)   {"quote":x}
-//   {"within":[info,e]}  e with a scope of that info open, made under the one open
-//   {"header":null}       the header of a write made now, summed up (as the header request)
+// the programs' plain forms, shared by the harnesses (undefined: not one of them):
+//   {"cat":[e..]} {"join":e} {"count":e} {"add":[a,b]} {"lt":[a,b]} {"if":[t,a,b]}
+//   {"do":[e..]} {"quote":x} {"within":[info,e]} (e with a scope of that info open)
+//   {"header":null}       the header of a write made now, summed up
 export function basic(m: Request, ev: (e: Json) => Json): Json | undefined {
 	if ("cat" in m) return (ev(m.cat) as unknown[]).join("")
 	if ("join" in m) return (ev(m.join) as unknown[]).join(",")
@@ -212,7 +191,6 @@ export function basic(m: Request, ev: (e: Json) => Json): Json | undefined {
 	if ("header" in m) return summary(header())
 }
 
-// the world's requests; undefined: not one of them
 export function worldAnswer(r: Request): Json | undefined {
 	const hosted = <T>(f: () => T) => s.runWithScope(host, f)
 	switch (r.op) {
@@ -301,7 +279,6 @@ export function worldAnswer(r: Request): Json | undefined {
 	}
 }
 
-// a harness's answer to a request, else the world's. the errors that are codes answer as such
 export function answered(own: (r: Request) => Json | undefined, r: Request): Answer {
 	try {
 		if (r.op === "peep") return places.peep(() => answered(own, r.request))

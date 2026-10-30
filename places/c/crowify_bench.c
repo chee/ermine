@@ -1,9 +1,5 @@
-// crow (crow.h) through crowify (crowify.h) on what crow/typescript/crow_bench.ts measures, at the
-// entry (its places row is places/typescript/crowify_bench.ts'): fastest of 31 rounds, µs per write. copy: nd_update on a copying entry; in
-// place: op_apply with in_place on the entry's value; crow. a burst: no read between;
-// read between: crow is told of a read before each write. then a first write to each of many
-// entries, kept, and the scheduler's chain (what the TypeScript bench has, but its places row)
-// make places/c/crowify-bench
+// Benchmarks crow through crowify (as crow_bench.ts): µs per write, fastest of 31 rounds.
+// Build: make places/c/crowify-bench
 #define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,11 +19,9 @@ static double now(void) {
 static op_key str(const char *s) { return (op_key){.type = OP_STR_KEY, .s = s}; }
 static op_key num(long n) { return (op_key){.type = OP_NUM_KEY, .n = n}; }
 
-// the world of a row: what it starts with, and its i-th patch
 enum { COPY, IN_PLACE, CROW };
 typedef struct {
 	op_value *(*start)(void);
-	// the i-th write's patches (n of them)
 	void (*patch)(long i, op_patch *out);
 	int n;
 } row;
@@ -109,7 +103,6 @@ static op_value *floats(void) {
 	return m;
 }
 
-// the patches: keys and values made once, cycled through
 static op_key names[1000];
 static op_key *item_paths[1000];
 static op_value *ids[1000], *yes, *no;
@@ -149,7 +142,6 @@ static void sample(long i, op_patch *out) {
 		.value = one_sample[i % 1000]};
 }
 
-// in place, as op_apply's in_place does: the value changed where it is, the change made as nd_update makes it
 static void in_place(nd_entry *e, const op_patch *p, size_t n, ch_header header) {
 	op_undo undo = {0};
 	op_apply_options ao = {.undo = &undo, .in_place = 1};
@@ -169,7 +161,6 @@ static void in_place(nd_entry *e, const op_patch *p, size_t n, ch_header header)
 	e->change.undo_length = undo.n;
 }
 
-// µs per write of a way, fastest of 31 rounds of calls writes after calls to warm up
 static double fastest(const row *r, int way, int reading, int calls) {
 	cr_crow *u = cr_new();
 	nd_entry *e = nd_make_entry(r->start(), &header);
@@ -199,12 +190,11 @@ static double fastest(const row *r, int way, int reading, int calls) {
 
 static void measure(const char *name, const row *r, int reading, int calls) {
 	printf("%s\tcopy %.2f", name, fastest(r, COPY, reading, calls));
-	// in place changes what a reader holds: not a way when there are readers
+	// in place changes what a reader holds, so it is not a way when there are readers
 	if (!reading) printf("\tin place %.2f", fastest(r, IN_PLACE, reading, calls));
 	printf("\tcrow %.2f µs\n", fastest(r, CROW, reading, calls));
 }
 
-// a first write to each of 10k entries: µs per entry, fastest of 11
 enum { ENTRIES = 10000 };
 static void first_writes(void) {
 	printf("a first write to each of 10k entries");
@@ -231,8 +221,6 @@ static void first_writes(void) {
 	printf(" µs\n");
 }
 
-// kept: what a computation's result costs to let go, by its size: walked whole, or handed (the
-// value itself: the walk stops there)
 static void kept_rows(void) {
 	cr_crow *u = cr_new();
 	struct {
@@ -262,12 +250,10 @@ static void kept_rows(void) {
 	cr_free(u);
 }
 
-// the scheduler: a chain of 100 computes, one write at its head, µs per pulse
 enum { CHAIN = 100 };
 typedef struct node_ node_;
 struct node_ {
 	sc_scheduler *s;
-	// where its result is kept (the scheduler's: borrowed here), what it reads
 	op_value *value;
 	node_ *from;
 };

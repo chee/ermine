@@ -1,15 +1,5 @@
-// crow wired to a scheduler with crowify (handed: the value at a key's path, as places gives it),
-// a few dozen seeds: computations read paths of one entry (nested maps, lists, typed arrays) and
-// keep what they read (alone, wrapped, in a map they make that holds it twice, a number from it),
-// hand it on (a computation whose result another reads), or throw; effects keep it too. the host
-// writes, unwrites and reads between pulses. checked after every step: what a run kept, a set was
-// given, an effect acted on, a read gave, an undo holds, never changes; the value is what
-// copy-on-write apply gives.
-// off by default, each a way a value held changes (crowify_scheduler_fuzz_test.ts --set, --async,
-// --run, run as a program, says what it finds): a set that writes the entry (it is given the
-// result before the run's end lets go of it), an async computation (what it read before its
-// await, written while it waits), a run that writes the entry after it read (its own write, in
-// place: what it returns is taken as it is at its return, so that write shows in it)
+// Checks that nothing a run kept, a set was given, an effect acted on, a read gave, or an undo
+// holds ever changes. Off by default: --set, --async, --run.
 import { assert } from "@std/assert"
 import createEntry, { type Entry } from "@ermine/graph/entry"
 import apply, { ApplyError, type Key, type Patch } from "@ermine/changeable/apply"
@@ -31,7 +21,6 @@ export async function world(seed: number, ways: Ways = {}): Promise<string | und
 	const start = { a: made(p, 3), b: [made(p, 2), { c: made(p, 2) }], t: new Int16Array([1, 2]) }
 	const e: Entry<unknown> = createEntry<unknown>(structuredClone(start), h())
 	let oracle: unknown = structuredClone(start)
-	// a key per path read; handed: the value there now
 	const keys = new Map<string, { path: Key[] }>()
 	const keyOf = (path: Key[]) => {
 		const id = JSON.stringify(path)
@@ -62,7 +51,6 @@ export async function world(seed: number, ways: Ways = {}): Promise<string | und
 		oracle = next
 		hold(ps, "a write's patches")
 		hold(e.change.op!.undo, "an undo")
-		// the keys whose paths a patch touches (one above or under the other) said changed
 		const near = (a: readonly Key[], b: readonly Key[]) =>
 			a.slice(0, Math.min(a.length, b.length)).every((k, i) => k === b[i])
 		s.mark(
@@ -73,8 +61,8 @@ export async function world(seed: number, ways: Ways = {}): Promise<string | und
 		return true
 	}
 	const read = (path: Key[]) => (s.track(keyOf(path)), at(e.value, path))
-	// a run's result as it was made, right after the read (again at its return, after its own
-	// writes): what its set or effect is given must be that (one while it awaits must not show)
+	// a run's result as it was made right after the read; what its set or effect is given must be
+	// that (one that awaits must not show later writes)
 	const results = new WeakMap<object, string>()
 	let resulted: object[] = []
 	const result = <T>(r: T): T => (container(r) && (results.set(r, show(r)), resulted.push(r)), r)
@@ -88,7 +76,6 @@ export async function world(seed: number, ways: Ways = {}): Promise<string | und
 	const scope = s.createRootScope({ actor: "reader" })
 	const gates: (() => void)[] = []
 	const all = paths(e.value)
-	// a computation handing on what it read: another reads its result
 	let middle: { value?: unknown; key: object } = { key: {} }
 	for (let i = 0; i < 3 + p(6); i++) {
 		const path = all[p(all.length)]
@@ -114,7 +101,6 @@ export async function world(seed: number, ways: Ways = {}): Promise<string | und
 				case 4:
 					throw new Error("a run that throws")
 				case 5:
-					// handed on: another computation reads what this one gave its set
 					s.track(middle.key)
 					r = result({ from: middle.value, v })
 					break
@@ -165,7 +151,6 @@ export async function world(seed: number, ways: Ways = {}): Promise<string | und
 			u.letGo(e)
 			hold(e.value, "a host's read")
 		} else if (k === 8) {
-			// what waits lands
 			for (const g of gates.splice(0)) g()
 			await new Promise((r) => setTimeout(r, 0))
 		}

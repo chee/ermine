@@ -1,9 +1,8 @@
-// crowify (crowify.h), in C.
+// crowify.h in C.
 #include "crowify.h"
 
 #include <stdlib.h>
 
-// a run going on: what its reads gave it (subtree_of), each held (op_ref)
 typedef struct {
 	sc_computer *c;
 	op_value **given;
@@ -23,7 +22,6 @@ static int container(const op_value *v) {
 	return v != NULL && (v->type == OP_LIST || v->type == OP_MAP || v->type == OP_TYPED);
 }
 
-// what a run's reads gave it let go of (each hold released)
 static void forget_run(going *g) {
 	for (size_t i = 0; i < g->n; i++) op_free(g->given[i]);
 	free(g->given);
@@ -35,7 +33,6 @@ static going *find(pl_crowified *w, sc_computer *c) {
 	return NULL;
 }
 
-// a run starts: going on, with nothing read
 static void run_start(sc_computer *c, unsigned n, int rank, ch_frame *frame, void *data) {
 	(void)n, (void)rank, (void)frame;
 	pl_crowified *w = data;
@@ -47,7 +44,6 @@ static void run_start(sc_computer *c, unsigned n, int rank, ch_frame *frame, voi
 	w->runs[w->nruns++] = (going){c, NULL, 0, 0};
 }
 
-// a key a run tracked: what it gave the run, held
 static void run_track(const void *key, sc_run *run, void *data) {
 	pl_crowified *w = data;
 	going *g = find(w, sc_run_computer(run));
@@ -62,7 +58,7 @@ static void run_track(const void *key, sc_run *run, void *data) {
 	g->given[g->n++] = op_ref((op_value *)x);
 }
 
-// a run's body returned: its result let go of, stopping at what the run was given
+// A run's body returned: let go of its result, stopping at what the run was given.
 static void run_return(sc_computer *c, unsigned n, const void *value, void *data) {
 	(void)n;
 	pl_crowified *w = data;
@@ -72,8 +68,6 @@ static void run_return(sc_computer *c, unsigned n, const void *value, void *data
 		g != NULL ? g->n : 0);
 }
 
-// the run goes on no more. one that stopped to wait keeps what it read so far across the wait: let go
-// of, each as a subtree of itself
 static void run_end(sc_computer *c, unsigned n, sc_ended ended, const void *const *reads, size_t nreads,
 	const sc_more *more, void *data) {
 	(void)n, (void)reads, (void)nreads, (void)more;

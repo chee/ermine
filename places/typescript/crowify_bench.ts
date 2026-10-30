@@ -1,6 +1,4 @@
-// deno run places/typescript/crowify_bench.ts [name…]
-// µs per call, fastest of 31 rounds: through places, writing a folder under a reader ("copy": update,
-// "in place": op's apply with cow: false, crow), and crowify's cost to the scheduler
+// deno run places/typescript/crowify_bench.ts [name…]: µs per call, fastest of 31 rounds.
 import update from "@ermine/changeable/update"
 import type { Patch } from "@ermine/changeable/apply"
 import createEntry, { type Entry } from "@ermine/graph/entry"
@@ -18,8 +16,6 @@ const folder = (n: number) => () => ({
 })
 const rename = (i: number): Patch[] => [{ path: [`name${i % 1000}`], value: `id${i}` }]
 
-// through places: a place into a folder of 1000 names, a reader of one name, a pulse after each
-// write. crow's world gives places the table through reading: places' reads are reads
 function world(way: "copy" | "in place" | "crow") {
 	const u = createCrow()
 	const s = createScheduler()
@@ -57,8 +53,7 @@ row("places: a name in a folder of 1000 + pulse, a reader of name0", {
 }, 1000)
 
 // crowify's cost to the scheduler: a chain of 100 computes, one write at its head, µs per pulse.
-// any run-end listener has every run keep its reads (onRunEnd's reads), so a plain listener is
-// measured too
+// Any run-end listener makes every run keep its reads, so a plain listener is measured too.
 {
 	const name = "scheduler: a chain of 100 computes, a pulse"
 	if (!only.length || only.some((o) => name.includes(o))) {

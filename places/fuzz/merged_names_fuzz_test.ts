@@ -1,10 +1,4 @@
-// differential, small: places' names from several contributors (tries on value entries, then
-// children) are merged in one order, so the TypeScript and C places harnesses must answer alike.
-// a world of 2-4 tries and a children entry, names from a nasty alphabet (U+0000, U+FFFF, astral,
-// lone surrogates), random rewrites and takings away; after each, the root's names and each name's
-// answer asked of both, and the names checked against keyorder (changeable) too. a few dozen seeds
-// (fuzz runs small); SEEDS=n for another count, SEED=n for one seed. a C harness not built
-// (make places/c/places-harness) skips the test
+// Differential: the TypeScript and C places harnesses must merge contributors' names alike. SEEDS=n, SEED=n; skipped without make places/c/places-harness.
 import { assert, assertEquals } from "@std/assert"
 import { ask, command } from "../../conformance/typescript/ask.ts"
 import { line } from "../../conformance/typescript/form.ts"
@@ -29,9 +23,7 @@ function build(seed: number): { requests: Request[]; names: number[] } {
 	const ids = Array.from({ length: tries }, (_, i) => `t${i}`)
 	const requests: Request[] = []
 	const names: number[] = []
-	// every name seen, to ask each: top, then one level down
 	const seen = new Set<string>()
-	// a trie's map: names to a leaf id or a level of names to ids
 	const trie = (id: string) => {
 		const m: Record<string, unknown> = {}
 		for (let i = pick(6); i > 0; i--) {

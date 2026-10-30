@@ -1,12 +1,5 @@
-// places' writes over entries and a table, where places' own tests and suites do not reach: names
-// that are not names, names holding what is no id, children entries put, replaced and taken out
-// between writes. after every write:
-//   - each entry it gave back is the one there now, at a new change, and that change's undo takes
-//     its value back to what it was; every other entry is as it was (same entry, change, value)
-//   - a refused write changes nothing at all
-//   - every path lookup finds has something at it, and the nearest is the first of all; list is
-//     the names holding ids
-// a few dozen seeds (fuzz runs small)
+// Fuzzes places' writes: after every write the returned entries are the ones there with an undo
+// that restores the old value, others are untouched, and a refused write changes nothing.
 import { assert, assertEquals, assertStrictEquals } from "@std/assert"
 import apply from "@ermine/changeable/apply"
 import createEntry, { type Entry } from "@ermine/graph/entry"
@@ -50,7 +43,6 @@ Deno.test(`places + update fuzz: ${SEEDS} seeds × ${STEPS} writes, undo, nothin
 				if (evented.has(b.id)) continue
 				const i = b.node && changed.get(b.node)
 				if (i === undefined) {
-					// untouched: the same entry, at the same change, its value as it was
 					assertStrictEquals(now, b.node, `${at}: ${key}`)
 					assertStrictEquals(now?.change, b.change, `${at}: ${key}'s change`)
 					assertStrictEquals(now?.value, b.value, `${at}: ${key}'s value`)
@@ -62,22 +54,19 @@ Deno.test(`places + update fuzz: ${SEEDS} seeds × ${STEPS} writes, undo, nothin
 				assert(c.change !== b.change, `${at}: ${key} at a new change`)
 				const back = apply(c.value, c.change.op!.undo)
 				assertEquals(differ(back, b.was), "", `${at}: ${key}'s undo ${show(c.change.op)}`)
-				// children are written through places' crow: in place where it owns, else a copy,
-				// which leaves the old value as it was
+				// children are written through places' crow: in place where it owns, else a copy
 				if (c.value !== b.value) {
 					assertEquals(differ(b.value, b.was, true), "", `${at}: ${key}'s old value changed`)
 				}
 				undone++
 			}
-			// what lookup finds is there; the nearest is the first of all
 			for (let k = 0; k < 4; k++) {
 				const from = w.path(), names = w.path(2)
 				const all = lookup(w.p, names, from, true)
 				for (const found of all) assert(get(w.p, found) !== undefined, `${at}: ${show(found)}`)
 				assertEquals(lookup(w.p, names, from), all[0], `${at}: nearest`)
 			}
-			// list: every name there, in its order, what it holds or not (a name holding no id is
-			// shown: chee, "Show it")
+			// list: every name there, in its order, including a name holding no id
 			for (let k = 0; k < 4; k++) {
 				const where = w.path()
 				const id = get(w.p, where)
@@ -93,8 +82,8 @@ Deno.test(`places + update fuzz: ${SEEDS} seeds × ${STEPS} writes, undo, nothin
 	)
 })
 
-// the table holds one entry under any number of ids, and places' writes tell entries apart by the
-// entry, not the id: a move between two ids whose children are one entry is one change on it
+// The table holds one entry under any number of ids, and places' writes tell entries apart by
+// the entry, not the id: a move between two ids whose children are one entry is one change.
 Deno.test("places + table: a move between two ids holding one children entry", () => {
 	const t = createTable()
 	const n = createEntry<Record<string, unknown>>({ t: "0" }, {

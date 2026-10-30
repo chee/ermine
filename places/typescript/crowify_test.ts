@@ -77,7 +77,6 @@ Deno.test("crowify: crowify: what a computation keeps past its run is held; what
 	updateEntry(u, e, [{ path: ["a", "x"], value: 1 }, { path: ["b", "y"], value: 1 }], h())
 	const o = s.createRootScope({ actor: "r" })
 	let held: unknown
-	// keeps a; reads b and keeps only a number
 	s.runWithScope(o, () => s.createComputer(() => (s.track("e"), doc(e).a), (v) => void (held = v)))
 	s.runWithScope(o, () => s.createComputer(() => (s.track("e"), (doc(e).b as Doc).y), () => {}))
 	s.pulse()
@@ -110,7 +109,6 @@ Deno.test("crowify: crowify through places stops at what a run was handed; a run
 	updateEntry(u, e, [{ path: ["folder", "b"], value: "B" }], header())
 	places.commit([e])
 	const folder = doc(e).folder
-	// a count: holds nothing, so the folder goes on changing in place
 	let count: unknown
 	s.runWithScope(s.createRootScope({ actor: "r" }), () =>
 		s.createComputer(
@@ -123,7 +121,6 @@ Deno.test("crowify: crowify through places stops at what a run was handed; a run
 	s.pulse()
 	assert(doc(e).folder === folder)
 	assertEquals(count, { count: 3 })
-	// the folder itself, kept: the next write copies it
 	let held: unknown
 	s.runWithScope(
 		s.createRootScope({ actor: "r" }),

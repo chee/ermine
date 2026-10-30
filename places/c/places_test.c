@@ -1,6 +1,6 @@
-// the C places when a pl_watch_all function writes (places.h: "One that writes commits in turn, in
-// the same run"): the functions after it are still told what landed first, whole, though the write
-// let go of it. exits 1 at the first thing that is not so. run under the sanitizers for the frees
+// Tests that the C places still tells the functions after a pl_watch_all function that writes
+// what landed, whole, though the write let go of it. Exits 1 at the first failure. Run under the
+// sanitizers to check the frees.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,7 +19,6 @@ static pl *p;
 static tb_table *table;
 static nd_entry *kids, *thing;
 
-// what the first watch's write of 2 refers to: kept by the entry till its next update
 typedef struct {
 	op_patch patch;
 	op_value *two;
@@ -30,7 +29,6 @@ static void rewrite_free(void *b) {
 	free(r);
 }
 
-// the first watch: told the first fact, it writes the same entry again, and commits
 static int writes;
 static void writer(const pl_fact *fact, void *ctx) {
 	(void)fact;
@@ -52,8 +50,6 @@ static void writer(const pl_fact *fact, void *ctx) {
 	pl_commit(p, &changed);
 }
 
-// the second watch: how many facts it is told, and the last one's last patch (the writer's commit
-// is told it first, then the fact the writer was told)
 static int told;
 static char name[8];
 static double number;
@@ -96,8 +92,7 @@ int main(void) {
 	sc_scheduler *s;
 	pt_paths *paths;
 
-	// a commit: the reader is told the place of "a", though the writer's place of "b" let go of
-	// the patches that made it
+	// a commit: the reader is told the place of "a" though the writer's place of "b" let go of its patches
 	setup(NULL, &s, &paths);
 	pl_changed changed;
 	CHECK(pl_place(p, kids, "a", tb_string("A"), (ch_header){0}, &changed) == 0);
@@ -106,8 +101,7 @@ int main(void) {
 	CHECK(strcmp(name, "a") == 0);
 	teardown(s, paths);
 
-	// a table event: the reader is told the value added, 1, though the writer's write of 2
-	// replaced it
+	// a table event: the reader is told the value added, 1, though the writer's write of 2 replaced it
 	setup((void *)1, &s, &paths);
 	op_value *one = op_num(1);
 	thing = nd_make_entry(one, NULL);

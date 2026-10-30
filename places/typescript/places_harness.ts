@@ -1,32 +1,25 @@
-// places harness: the reference places (places.ts) on the line protocol, one JSON request per line
-// in, one answer per line out. state lasts for the process: the world (world_harness.ts: table,
-// writes, scheduler) and computes by name. a path: names from the root "R".
-//
-// reads, outside any run (told to no one):
+// The reference places on the line protocol (world: world_harness.ts). A path is names from "R".
+// Reads outside any run are told to no one.
 // { op: "read", part, id, path? }           → { value? }
 // { op: "change", part, id }                → { patches? }   of its latest edit
 // { op: "get", path }                       → { id? }
 // { op: "list", at }                        → { names }
 // { op: "lookup", names, from, all? }       → { path? } | { paths }
-// { op: "at", value, path }                 → { value? }   places' at
-// { op: "watch", name, scope, f }           → {}   a compute running program f (world: state)
-// { op: "watchAll", name, id?, part? }     → {}   places' watchAll, the facts of that id and part
-// { op: "watched", name }                   → { facts }   since last asked:
-//    { part, id, patches, actor? }
+// { op: "at", value, path }                 → { value? }
+// { op: "watch", name, scope, f }           → {}   a compute running program f
+// { op: "watchAll", name, id?, part? }     → {}   places' watchAll, for that id and part
+// { op: "watched", name }                   → { facts }   since last asked: { part, id, patches, actor? }
 // { op: "unwatch", name }                   → {}
-// { op: "reads", name }                     → { reads }   the latest ended run's, as spots then:
-//    { part, id, path } (path null: change spot), null not a spot; no run ended: []
-// { op: "spot", key }                       → { spot? }   places' spot of a string key
+// { op: "reads", name }                     → { reads }   the latest ended run's, as { part, id, path }
+//                                                         (path null: change spot), null: not a spot
+// { op: "spot", key }                       → { spot? }
 // { op: "mark", keys }                      → {}   keys (as track's) marked from outside
-// pruning (places.ts):
-// { op: "rows", of? }                       → {}   from now on reads go through a view of "R" given
-//    [rows, children]; rows: a trie on value entry "rows" (leaf an id, level a map of names). of: a
-//    list of value entries' ids, each a trie called by its id, asked in that order, then children
+// { op: "rows", of? }                       → {}   reads go through a view of "R" with [rows, children]
+//    rows: a trie on value entry "rows"; of: ids of value entries, each a trie, asked in order
 // { op: "asked" }                           → { steps, names }   rows' asks since last asked
 //
-// program e: a number, string, boolean or null is itself; a list, its members evaluated; a map,
-// a world plain form or one of:
-//   {"read":[part,id,path?]}    the value or null (path steps evaluated)
+// program e: a scalar is itself; a list, its members evaluated; a map, a plain form or one of:
+//   {"read":[part,id,path?]}    the value or null
 //   {"change":[part,id]}        its latest edit's patches or null
 //   {"get":path}                the id there or null
 //   {"values":path}             the value part of the id there or null
@@ -36,7 +29,8 @@
 //   {"wait":null}               the scheduler's PENDING
 //   {"track":name}              a key of its own per name, tracked; null
 //   {"throw":message}           throws
-//   {"write":request}           the request, made with the run's scope open; null. {"eval":e}: e
+//   {"write":request}           the request, made with the run's scope open; null
+
 import type { Key as Step } from "@ermine/changeable/apply"
 import { type Computer, PENDING } from "@ermine/reactivity"
 import type { Key } from "@ermine/graph/table"
@@ -65,7 +59,6 @@ const patchesOf = (part: Key, id: string) => places.readChange(part, id)?.op?.pa
 
 const ids = (ms: { id: unknown }[]) => ms.map((m) => String(m.id))
 
-// the keys of track and mark, one per name
 const keys = new Map<string, { name: string }>()
 const keyOf = (name: string) => {
 	let k = keys.get(name)
@@ -73,11 +66,9 @@ const keyOf = (name: string) => {
 	return k
 }
 
-// more program forms, a harness built on this one's (processes' runs): the first that
-// answers ({ value }) is the value
+// more program forms from a harness built on this one: the first that answers is the value
 export const forms: ((m: Request) => { value: Json } | undefined)[] = []
 
-// rows, each ask counted, and the places the filesystem's reads go through (rows: a view with it)
 const asked = { steps: 0, names: 0 }
 const filled = (v: unknown) =>
 	v !== null && typeof v === "object" && !Array.isArray(v) && Object.keys(v).length > 0
