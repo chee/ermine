@@ -58,7 +58,7 @@ static uint8_t ps[64];
 static tp_write put(int x) {
 	uint8_t p[] = {0x81, 0xa2, 0x64, 'p', 'a', 't', 'h', 0x80, 0x65, 'v', 'a', 'l', 'u', 'e', (uint8_t)(x % 24)};
 	memcpy(ps, p, sizeof p);
-	tp_write w = {{(const uint8_t *)"pig", 3}, {(const uint8_t *)"value", 5}, {ps, sizeof p}, {NULL, 0}, 1760000000, {NULL, 0}};
+	tp_write w = {{(const uint8_t *)"pig", 3}, {(const uint8_t *)"value", 5}, {ps, sizeof p}, {NULL, 0}, 1760000000, {NULL, 0}, {NULL, 0}};
 	return w;
 }
 
@@ -672,7 +672,7 @@ static void links(void) {
 	uint64_t n, lam;
 	for (int i = 0; i < 1500; i++) {
 		big[17] = (uint8_t)('a' + i % 26);
-		tp_write w = {{(const uint8_t *)"pig", 3}, {(const uint8_t *)"value", 5}, {big, k}, {NULL, 0}, 1, {NULL, 0}};
+		tp_write w = {{(const uint8_t *)"pig", 3}, {(const uint8_t *)"value", 5}, {big, k}, {NULL, 0}, 1, {NULL, 0}, {NULL, 0}};
 		CHECK(!tp_log_write(log, &w, &n, &lam));
 	}
 	so.log = log;
@@ -797,7 +797,7 @@ static const uint8_t x0[] = {0x81, 0xa2, 0x64, 'p', 'a', 't', 'h', 0x80, 0x65, '
 static const uint8_t x1[] = {0x81, 0xa2, 0x64, 'p', 'a', 't', 'h', 0x81, 0x61, 'x', 0x65, 'v', 'a', 'l', 'u', 'e', 1};
 static const uint8_t y1[] = {0x81, 0xa2, 0x64, 'p', 'a', 't', 'h', 0x81, 0x61, 'y', 0x65, 'v', 'a', 'l', 'u', 'e', 1};
 static void edit(tp_log *log, const uint8_t *p, size_t n) {
-	tp_write w = {{(const uint8_t *)"doc", 3}, {(const uint8_t *)"value", 5}, {p, n}, {NULL, 0}, 1, {NULL, 0}};
+	tp_write w = {{(const uint8_t *)"doc", 3}, {(const uint8_t *)"value", 5}, {p, n}, {NULL, 0}, 1, {NULL, 0}, {NULL, 0}};
 	uint64_t s, l;
 	tp_log_write(log, &w, &s, &l);
 }
@@ -1176,7 +1176,7 @@ static void apart(tp_log *log, uint8_t v) {
 	uint8_t p[sizeof x0];
 	memcpy(p, x0, sizeof p), p[sizeof p - 1] = v;
 	tp_write w = {{(const uint8_t *)"doc", 3}, {(const uint8_t *)"value", 5}, {p, sizeof p}, {NULL, 0}, 1,
-		{(const uint8_t *)"\x80", 1}};
+		{(const uint8_t *)"\x80", 1}, {NULL, 0}};
 	uint64_t s, l;
 	tp_log_write(log, &w, &s, &l);
 }
@@ -1232,7 +1232,7 @@ static void actor(void) {
 	tp_log *a = writer(70, 0, NULL);
 	uint8_t p[sizeof x0];
 	memcpy(p, x0, sizeof p);
-	tp_write w = {{(const uint8_t *)"doc", 3}, {(const uint8_t *)"value", 5}, {p, sizeof p}, {NULL, 0}, 1, {(const uint8_t *)"\x80", 1}};
+	tp_write w = {{(const uint8_t *)"doc", 3}, {(const uint8_t *)"value", 5}, {p, sizeof p}, {NULL, 0}, 1, {(const uint8_t *)"\x80", 1}, {NULL, 0}};
 	uint64_t n, l;
 	tp_log_write(a, &w, &n, &l);
 	w.who = (tp_span){(const uint8_t *)"juno", 4};

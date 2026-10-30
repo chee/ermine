@@ -10,12 +10,15 @@ import {
 	encodeStep,
 	hashStep,
 	hex,
+	idsOf,
 	onOf,
 	own,
+	readIds,
 	readOn,
 	type Step,
 	unhex,
 	written,
+	writtenIds,
 	writtenOn,
 } from "./step.ts"
 
@@ -29,6 +32,7 @@ export type Packed = [
 	count: number[],
 	columns: Columns,
 	on?: Value[],
+	ids?: Value[],
 ]
 
 const alike = (a: unknown, b: unknown) =>
@@ -137,19 +141,22 @@ export function pack(bytes: readonly Uint8Array[], prior?: Prior): Packed {
 				: null
 		)))
 	}
+	// ids as written: typing (each after the one before, its own) is one run
+	if (rest.some((s) => s.ids)) p.push(runs(rest.map((s) => s.ids ? writtenIds(s) : null)))
 	return p
 }
 
 export function unpack(p: unknown, prior?: Prior): Uint8Array[] {
-	if (!Array.isArray(p) || (p.length !== 8 && p.length !== 9)) throw new TypeError("not a pack")
+	if (!Array.isArray(p) || p.length < 8 || p.length > 10) throw new TypeError("not a pack")
 	const [first, lamports, whens, nodes, parts, whos, counts, cols] = p as Packed
 	const steps = length(lamports), patches = patchCount(cols)
-	const ons = p.length === 9 ? (p as Packed)[8]! : steps > 0 ? [null, steps] : []
+	const nulls = steps > 0 ? [null, steps] : []
+	const ons = p.length >= 9 ? (p as Packed)[8]! : nulls, idss = p.length === 10 ? p[9] : nulls
 	const against = typeof first === "number"
 	const ok = steps >= 0 && steps < STEPS && patches >= 0 &&
 		(first instanceof Uint8Array ||
 			(Number.isSafeInteger(first) && (first as number) >= 2 && steps >= 1)) &&
-		[whens, nodes, parts, whos, counts, ons].every((c) => length(c) === steps) &&
+		[whens, nodes, parts, whos, counts, ons, idss].every((c) => length(c) === steps) &&
 		sum(counts) === patches
 	if (!ok) throw new TypeError("not a pack")
 	if (against && prior?.n !== (first as number) - 1) {
@@ -169,7 +176,8 @@ export function unpack(p: unknown, prior?: Prior): Uint8Array[] {
 		part = unruns(parts),
 		who = unruns(whos),
 		count = unruns(counts),
-		on = unruns(ons)
+		on = unruns(ons),
+		ids = unruns(idss as unknown[])
 	const all = patchesOf(cols)
 	if (
 		!node.every((x) =>
@@ -202,6 +210,12 @@ export function unpack(p: unknown, prior?: Prior): Uint8Array[] {
 			})
 			if (!written.every(onOf(device, prev.n + 1))) throw new TypeError("not a pack")
 			s.on = readOn(prev.device, prev.n + 1, written)
+		}
+		if (ids[i] !== null) {
+			if (!s.on || !idsOf(device, prev.n + 1, s.patches as unknown[])(ids[i])) {
+				throw new TypeError("not a pack")
+			}
+			s.ids = readIds(prev.device, prev.n + 1, ids[i] as unknown[])
 		}
 		const b = encodeStep(s)
 		if ((bytes += b.length) > RUN) throw new RangeError("a run past its most bytes")

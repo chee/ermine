@@ -60,9 +60,27 @@ def run(seed, specs):
     for n in names[:3]:
         all_({"op": "write", "device": n, "node": "doc", "patches": [{"path": [], "value": {"t": ""}}]})
         all_({"op": "write", "device": n, "node": "map", "patches": [{"path": [], "value": {}}]})
+        all_({"op": "write", "device": n, "node": "list", "patches": [{"path": [], "value": {"arr": [{"t": ""}]}}]})
     for step in range(70):
         pick = r(12)
-        if pick < 7:
+        if pick == 11:
+            # a text in an array, or an element into the array (positions under it name others then)
+            w = names[r(3)]
+            v = all_({"op": "value", "device": w, "node": "list"}).get("value") or {}
+            arr = v.get("arr") if isinstance(v, dict) else None
+            if not isinstance(arr, list):
+                continue
+            if r(2) and arr and isinstance(arr[0], dict):
+                i = r(len(arr))
+                t = arr[i].get("t", "") if isinstance(arr[i], dict) else None
+                if not isinstance(t, str):
+                    continue
+                at = r(len(t) + 1)
+                all_({"op": "write", "device": w, "node": "list", "patches": [{"path": ["arr", i, "t"], "range": [at, at], "value": "mn"[r(2)]}]}, compare=False)
+            else:
+                at = r(len(arr) + 1)
+                all_({"op": "write", "device": w, "node": "list", "patches": [{"path": ["arr"], "range": [at, at], "value": [{"t": "q"}]}]}, compare=False)
+        elif pick < 7:
             # a write on one of the three writers' own view (its value, asked)
             w = names[r(3)]
             v = all_({"op": "value", "device": w, "node": "doc"}).get("value") or {"t": ""}
@@ -86,7 +104,7 @@ def run(seed, specs):
             if held > have:
                 all_({"op": "pass", "from": src, "to": dst, "of": of, "at": have + 1})
         for n in names:
-            for node in ("doc", "map"):
+            for node in ("doc", "map", "list"):
                 all_({"op": "value", "device": n, "node": node})
                 all_({"op": "versions", "device": n, "node": node})
     for h in hs:

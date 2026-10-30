@@ -109,6 +109,38 @@ int tp_on_next(const tp_step *s, size_t *at, const uint8_t **device, uint64_t *n
 	return 0;
 }
 
+// an element id as written: this device's [back, k], back below n, or another's [device, n, k]
+static int id_item(tp_in *in, const uint8_t *device, uint64_t n) {
+	uint64_t k, a, b;
+	tp_span key;
+	if (tp_array(in, &k)) return -1;
+	if (k == 2) return tp_whole(in, &a) || a >= n || tp_whole(in, &b) ? -1 : 0;
+	if (k != 3 || tp_bytes(in, 32, &key) || !memcmp(key.p, device, 32)) return -1;
+	return tp_whole(in, &a) || a < 1 || tp_whole(in, &b) ? -1 : 0;
+}
+
+// the ids: one per patch, null or [after, gone], only on a patch with a range
+static int ids_item(tp_in *in, const tp_step *s, const uint8_t *device) {
+	uint64_t k, two, g;
+	size_t at = 0;
+	tp_patch p;
+	if (tp_array(in, &k) || k != s->count) return -1;
+	for (uint64_t i = 0; i < k; i++) {
+		if (tp_patch_next(s->patches, &at, &p)) return -1;
+		if (tp_null(in)) continue;
+		if (!p.ranged || tp_array(in, &two) || two != 2) return -1;
+		if (!tp_null(in) && id_item(in, device, s->n)) return -1;
+		if (tp_array(in, &g)) return -1;
+		for (uint64_t j = 0; j < g; j++) {
+			uint64_t pair, count;
+			if (tp_array(in, &pair) || pair != 2 || id_item(in, device, s->n) || tp_whole(in, &count) ||
+				count < 1)
+				return -1;
+		}
+	}
+	return 0;
+}
+
 int tp_step_decode(const uint8_t *bytes, size_t length, tp_step *s) {
 	tp_in in = {bytes, bytes + length};
 	tp_span device, before = {0};
@@ -117,7 +149,7 @@ int tp_step_decode(const uint8_t *bytes, size_t length, tp_step *s) {
 	if (!tp_canonical(bytes, length)) return TP_NOTSTEP;
 	int deeper = tp_deeper(bytes, length, TP_DEPTH);
 	if (deeper) return deeper < 0 ? TP_NOMEM : TP_NOTSTEP;
-	if (tp_array(&in, &items) || items < 8 || items > 10) return TP_NOTSTEP;
+	if (tp_array(&in, &items) || items < 8 || items > 11) return TP_NOTSTEP;
 	if (tp_bytes(&in, 32, &device) || tp_whole(&in, &s->n) || s->n < 1) return TP_NOTSTEP;
 	if (!tp_null(&in) && tp_bytes(&in, 32, &before)) return TP_NOTSTEP;
 	if (in.p < in.end && *in.p == 0x81) {
@@ -144,16 +176,22 @@ int tp_step_decode(const uint8_t *bytes, size_t length, tp_step *s) {
 			if (on_item(&in, device.p, s->n, &d, &m)) return TP_NOTSTEP;
 		}
 		s->on.p = start, s->on.n = (size_t)(in.p - start);
+		if (items > 9 && in.p < in.end && *in.p >> 5 == 4) {
+			start = in.p;
+			if (ids_item(&in, s, device.p)) return TP_NOTSTEP;
+			s->ids.p = start, s->ids.n = (size_t)(in.p - start);
+		}
 	}
-	if (items == 9 + !!s->on.p && tp_text(&in, &s->who)) return TP_NOTSTEP;
-	if (items > 9 + !!s->on.p || in.p != in.end) return TP_NOTSTEP;
+	size_t at = 8 + !!s->on.p + !!s->ids.p;
+	if (items == at + 1 && tp_text(&in, &s->who)) return TP_NOTSTEP;
+	if (items > at + 1 || items < at || in.p != in.end) return TP_NOTSTEP;
 	s->bytes.p = bytes, s->bytes.n = length;
 	s->device = device.p, s->before = before.p;
 	return 0;
 }
 
 static void encode(tp_buf *b, const tp_step *s) {
-	tp_put_head(b, 4, 8 + (s->on.p != NULL) + (s->who.p != NULL));
+	tp_put_head(b, 4, 8 + (s->on.p != NULL) + (s->ids.p != NULL) + (s->who.p != NULL));
 	tp_put_head(b, 2, 32);
 	tp_put(b, s->device, 32);
 	tp_put_head(b, 0, s->n);
@@ -168,6 +206,7 @@ static void encode(tp_buf *b, const tp_step *s) {
 	tp_put_head(b, 0, s->lamport);
 	tp_put_head(b, 0, s->when);
 	if (s->on.p) tp_put(b, s->on.p, s->on.n);
+	if (s->ids.p) tp_put(b, s->ids.p, s->ids.n);
 	if (s->who.p) tp_put_head(b, 3, s->who.n), tp_put(b, s->who.p, s->who.n);
 }
 
