@@ -278,8 +278,10 @@ $(foreach l,$(LIBS),$(eval $(call run,$(l))))
 changeable-invert = $(changeable-apply)
 $(eval $(call run,changeable-invert))
 
+# an --ignore takes the place of deno.json's exclude, so it carries that too
+EXCLUDE = $(shell deno eval 'console.log(JSON.parse(Deno.readTextFileSync("deno.json")).exclude.join(","))')
 test:
-	$(DENO) --ignore=experiments/tippet,bundling
+	$(DENO) --ignore=$(EXCLUDE),experiments/tippet,bundling
 # tippet's stores write under the temp dir; its net is a free port, localhost, and a unix socket in a
 # temp dir (deno takes a socket's whole path only, so net can't be held to that dir)
 	$(DENO) --allow-write="$${TMPDIR:-/tmp}" --allow-net experiments/tippet
