@@ -20,7 +20,6 @@ static void *xalloc(size_t n) {
 }
 static char *xdup(const char *s) { return strcpy(xalloc(strlen(s) + 1), s); }
 
-// a pair: a part, a string copied; and the next of the pairs made (to free them)
 typedef struct {
 	tb_key part;
 } pl_pair;
@@ -30,13 +29,11 @@ struct pair {
 	pair *next;
 };
 
-// a block kept for a node's change
 typedef struct hold hold;
 struct hold {
 	void *block;
 	void (*release)(void *block);
 	hold *prev, *next;
-	// the next hold of the same node
 	hold *chain;
 };
 
@@ -48,102 +45,71 @@ struct pl_watch {
 	pl_watch *prev, *next;
 };
 
-// an entry the places owns, and the table it is let go of out of (NULL: at pl_free only)
+// An entry the places owns, freed when it leaves its table (NULL table: only at pl_free).
 typedef struct {
 	nd_entry *node;
 	tb_table *in;
 } owned_t;
 
-// what every view of a places shares: the table, paths and scheduler, the spots, the holds and keeps,
-// the record, the pl_watch_all functions and what it owns. let go with the last of the places and
-// views over it
+// What every view of a places shares. Freed with the last of them.
 typedef struct {
 	tb_table *table;
 	pt_paths *paths;
 	sc_scheduler *scheduler;
-	// the pairs by (the one part, the part), and in a list
 	tb_table *pairs;
 	pair *all;
-	// the spots this places made, by the spot. forget finds its own in it
 	pm mine;
-	// tracking told (setup.tracking): the spots read outside any run that no run has tracked since,
-	// let go of as a write reaches them
 	int loosening;
 	pm loose;
-	// the clock for a change's time (setup.now), ms since 1970; NULL: time(NULL)
 	int64_t (*now)(void *ctx);
 	void *now_ctx;
-	// a typed array's element read by pl_read: the one number, remade by each
 	op_value scratch;
-	// the first answer that was not SC_OK to the reads told
 	sc_track_status status;
-	// what writes asked to be kept, by node, and in a list; the ones let go of while a telling is
-	// on, till it ends (a fact being told may point into them)
+	// keeps of writes; ones let go during a telling wait until it ends, as a fact may point into them
 	pm holds;
 	hold *held, *dropped;
-	// pl_watch_all's, in the order made; the ones stopped while being told, till the telling ends
+	// pl_watch_all's functions; ones stopped during a telling wait until it ends
 	pl_watch *alls, *alls_end, *dead;
 	int telling;
-	// the one crow children's writes go through (pl_crow)
 	cr_crow *crow;
-	// the entries pl_own was given: the places', let go of at pl_free;
-	// one pl_own_in was given (in its table) as pl_sweep finds it out of that table. swept: how
-	// many were left by the last sweep
 	owned_t *owned;
 	size_t nowned, capowned, swept;
-	// where reads go while pl_record runs; none: the scheduler
 	pl_set *into;
-	// the spots it made (none of this places' before); none: not asked
 	pl_set *made;
-	// while pl_peep runs: reads make no spot and tell no one
 	int peeping;
-	// the keeps on spots, by (the one part, the spot): a count
 	tb_table *kept;
-	// the places and views over it not let go
 	size_t refs;
-	// the header blocks alive, by their frame, and in a list: pl_change_value finds a header's
-	// block by its frame, which the block holds while it lives
 	pm made_by;
 	struct pl_made *mades;
-	// the reverse of children (namesOf): what was indexed of each folder, by (folder, name) and
-	// by folder; each node's slots, by (the one part, the id)
 	tb_table *indexed, *folders, *named;
 	struct fold *folds;
 } shared;
 
 
-// the one part the keeps are under
 static const char spots;
 
 struct pl_made {
 	size_t refs;
-	// the frame its header holds (held): found by it in made_by
 	ch_frame *frame;
-	// the header as a value, made the first time pl_change_value asks (NULL: not yet)
 	op_value *change;
-	// the places it is found in (NULL: gone first), and its neighbours in their list
 	shared *s;
 	struct pl_made *before, *next;
 };
 
 struct pl {
 	tb_key root;
-	// what answers each step: the setup's, or children alone. given: whether any were given
 	const pl_contributor *const *asked;
 	size_t nasked;
 	int given;
 	shared *s;
 };
 
-// the part of the key every spot of this places is under in `mine`
 static const char *children_part = "children";
 
 static pt_key paths_key(tb_key k) { return (pt_key){.string = k.string, .symbol = k.symbol}; }
 
-// the part of the key every pair is under in `pairs`
 static const char pairing;
 
-// the one pair of the part: its address is the key paths gets as a spot's source
 static const pl_pair *pair_of(pl *l, tb_key part) {
 	pair *p = tb_get(l->s->pairs, tb_symbol(&pairing), part);
 	if (p != NULL) return &p->pair;
@@ -156,7 +122,6 @@ static const pl_pair *pair_of(pl *l, tb_key part) {
 }
 static pt_key pair_key(pl *l, tb_key part) { return pt_symbol(pair_of(l, part)); }
 
-// new, connected, and free ----------------------------------------------------------------------
 
 pl *pl_new(void) {
 	pl *l = xalloc(sizeof *l);
@@ -174,7 +139,6 @@ pl *pl_new(void) {
 
 static const pl_contributor *const alone[] = {&pl_children};
 
-// the contributors a places asks: the ones given, or children alone
 static void ask(pl *l, const pl_contributor *const *contributors, size_t n) {
 	l->given = n > 0;
 	l->asked = l->given ? contributors : alone;
@@ -228,7 +192,6 @@ static void names_free(shared *s);
 
 void pl_free(pl *l) {
 	if (l == NULL) return;
-	// its own pl_watch_all functions stopped
 	for (pl_watch *w = l->s->alls, *next; w != NULL; w = next) {
 		next = w->next;
 		if (w->l == l) pl_stop(w);
@@ -264,7 +227,6 @@ void pl_free(pl *l) {
 }
 
 
-// lets go of the holds of a node, from the first
 static void unhold_chain(pl *l, hold *h) {
 	while (h != NULL) {
 		hold *next = h->chain;
@@ -294,7 +256,6 @@ void pl_hold_also(pl *l, const nd_entry *node, void *block, void (*release)(void
 	hold_node(l, node, block, release, 1);
 }
 
-// reads -----------------------------------------------------------------------------------------
 
 sc_track_status pl_status(pl *l) {
 	sc_track_status status = l->s->status;
@@ -302,11 +263,9 @@ sc_track_status pl_status(pl *l) {
 	return status;
 }
 
-// a spot of this places's, told to the scheduler (a read outside a run counts for nothing)
 static void tell(pl *l, pt_spot *s) {
 	int known = pm_get(&l->s->mine, s) != NULL;
 	if (!known) pm_set(&l->s->mine, s, s);
-	// new, and no record going: loose till a run tracks it (pl_tracking, told in sc_track)
 	if (!known && l->s->loosening && l->s->into == NULL) pm_set(&l->s->loose, s, s);
 	if (l->s->into != NULL) {
 		pl_set_add(l->s->into, s);
@@ -341,7 +300,6 @@ void pl_tracking(const void *key, sc_run *run, void *ctx) {
 	pm_delete(&l->s->loose, key);
 }
 
-// sets, records and keeps ----------------------------------------------------------------------
 
 #define SET_SMALL 8
 #define EMPTY ((size_t)0)
@@ -353,7 +311,6 @@ static size_t hash_of(const void *p) {
 	return (size_t)x;
 }
 
-// the slot holding item (its position + 1), or the slot to put it in (EMPTY there)
 static size_t slot_of(const pl_set *s, const void *item, int *found) {
 	size_t mask = s->nindex - 1, i = hash_of(item) & mask, first = TOMB;
 	for (;; i = (i + 1) & mask) {
@@ -492,7 +449,6 @@ size_t pl_keep(pl *l, const void *key, int n) {
 	return (size_t)now;
 }
 
-// element i of a typed array, as a number
 static double element(const op_value *t, size_t i) {
 	size_t z = op_size(t->kind);
 	uint64_t u = 0;
@@ -558,9 +514,7 @@ const ch_header *pl_change(pl *l, tb_key part, tb_key id) {
 	return node != NULL ? &node->change : NULL;
 }
 
-// writes ----------------------------------------------------------------------------------------
 
-// spots, to be said changed
 typedef struct {
 	const void **v;
 	size_t n, capacity;
@@ -575,9 +529,8 @@ static void add_spots(spots_vec *out, pt_spot *const *spots, size_t n) {
 	for (size_t i = 0; i < n; i++) out->v[out->n++] = spots[i];
 }
 
-// spots said changed, in one call, by the run open; none: nothing said
-// the spots marked; a loose one (read outside any run, tracked by none) let go of after, as paths.ts
-// says: no reader holds it, so nothing would run from it
+// Says the spots changed in one call. Loose spots (read outside any run, tracked by none) are
+// let go afterwards, as in paths.ts, since no reader holds them.
 static void say(pl *l, const spots_vec *marked) {
 	if (marked->n > 0) sc_mark(l->s->scheduler, marked->v, marked->n, sc_get_run(l->s->scheduler));
 	if (l->s->loose.count == 0) return;
@@ -600,33 +553,28 @@ static int same_key(tb_key a, tb_key b) {
 
 static int child_of(const nd_entry *children, const char *name, tb_key *out);
 
-// namesOf: the reverse of every children entry ----------------------------------------------------
 
 static tb_key key_own(tb_key k) { return k.symbol ? k : tb_string(xdup(k.string)); }
 static void key_disown(tb_key k) {
 	if (k.symbol == NULL) free((char *)k.string);
 }
 
-// a name indexed: what it held, and its neighbours in its folder's list
 typedef struct rec rec;
 struct rec {
 	char *name, *id;
 	rec *prev, *next;
 };
-// a folder with names indexed: its list of them, and its neighbours in the places' list
 typedef struct fold fold;
 struct fold {
 	tb_key folder;
 	rec *recs;
 	fold *prev, *next;
 };
-// a node's names, the latest placed last
 typedef struct {
 	pl_slot *items;
 	size_t n, cap;
 } slots;
 
-// the one part each of the tables is under
 static const char folding, naming;
 
 static void slot_free(pl_slot *slot) {
@@ -634,7 +582,6 @@ static void slot_free(pl_slot *slot) {
 	free((char *)slot->name);
 }
 
-// a name no longer indexed: out of its folder, and off the node it held
 static void name_out(pl *l, tb_key folder, const char *name) {
 	shared *s = l->s;
 	rec *r = tb_get(s->indexed, folder, tb_string(name));
@@ -667,8 +614,8 @@ static void name_out(pl *l, tb_key folder, const char *name) {
 	free(r);
 }
 
-// a name indexed as the entry has it now: the id it holds, none taken out; put over, taken out and
-// put in again, so it is the latest placed
+// Indexes a name as the entry has it now. A name put over counts as taken out and put in again,
+// so it becomes the latest placed.
 static void name_in(pl *l, tb_key folder, const char *name, const nd_entry *entry) {
 	shared *s = l->s;
 	tb_key now;
@@ -706,13 +653,12 @@ static void name_in(pl *l, tb_key folder, const char *name, const nd_entry *entr
 	list->items[list->n++] = (pl_slot){key_own(folder), xdup(name)};
 }
 
-// every name of a folder indexed again: those it had, then those it has
 static void names_again(pl *l, tb_key folder) {
 	const nd_entry *entry = tb_get(l->s->table, tb_string(children_part), folder);
 	fold *f = tb_get(l->s->folders, tb_symbol(&folding), folder);
 	size_t n = 0;
 	for (rec *r = f != NULL ? f->recs : NULL; r != NULL; r = r->next) n++;
-	// the list changes as the names are indexed: its names are copied first, in its order
+	// the list changes as names are indexed, so copy its names first
 	char **had = xalloc(n * sizeof *had);
 	size_t i = n;
 	for (rec *r = f != NULL ? f->recs : NULL; r != NULL; r = r->next) had[--i] = xdup(r->name);
@@ -726,8 +672,6 @@ static void names_again(pl *l, tb_key folder) {
 	for (i = 0; i < v->count; i++) name_in(l, folder, v->keys[i], entry);
 }
 
-// a write's patches on a children entry indexed: the names they touched, or the whole entry when
-// one is at its root
 static void names_touched(pl *l, tb_key folder, const op_patch *patches, size_t n) {
 	for (size_t i = 0; i < n; i++) {
 		if (patches[i].place.length == 0 ||
@@ -753,7 +697,6 @@ const pl_slot *pl_names_of(const pl *l, tb_key id, size_t *n) {
 	return list != NULL ? list->items : NULL;
 }
 
-// all of it let go, with the places
 static void names_free(shared *s) {
 	while (s->folds != NULL) {
 		fold *f = s->folds;
@@ -798,9 +741,9 @@ void pl_event(void *ctx, tb_key part, tb_key id) {
 		patch.has_value = 1;
 		patch.value = op_ref(entry->value);
 	}
-	// the value and change as they are now: a function that writes the entry changes them. taken out:
-	// a change made now from the scope open (none open: none), as a write's is; its site is here,
-	// pl_event: the table's hook gives no caller of tb_del (places.ts has table.del's)
+	// Take the value and change as they are now, since a function that writes the entry changes
+	// them. For a take-out, make a change from the open scope (if any) with the site here, because
+	// the table's hook gives no caller of tb_del.
 	ch_header change = entry != NULL ? entry->change : (ch_header){0};
 	pl_made *made = NULL;
 	int changed = entry != NULL;
@@ -815,9 +758,6 @@ void pl_event(void *ctx, tb_key part, tb_key id) {
 	op_free((op_value *)patch.value);
 }
 
-// what a write landed: a fact for each entry with a latest op, at every key it is under (tb_who).
-// The caller's, pl_facts_free; the patches are the entries', the change a copy of each entry's
-// (a function that writes an entry changes its change)
 typedef struct {
 	size_t n;
 	pl_fact *items;
@@ -875,9 +815,7 @@ void pl_commit(pl *l, const pl_changed *changed) {
 	pl_facts_free(&facts);
 }
 
-// watches ---------------------------------------------------------------------------------------
 
-// the pl_watch_all functions stopped and the holds let go of while a telling was on
 static void free_dead(pl *l) {
 	while (l->s->dead != NULL) {
 		pl_watch *w = l->s->dead;
@@ -904,8 +842,6 @@ pl_watch *pl_watch_all(pl *l, pl_watch_fn fn, void *ctx) {
 	return w;
 }
 
-// each of pl_watch_all's (the ones there as the telling starts) told every fact, in the order
-// made; one stopped on the way is not told
 static void tell_alls(pl *l, const pl_fact *facts, size_t n) {
 	if (l->s->alls == NULL || n == 0) return;
 	size_t m = 0;
@@ -932,18 +868,15 @@ void pl_stop(pl_watch *w) {
 	else l->s->alls = w->next;
 	if (w->next != NULL) w->next->prev = w->prev;
 	else l->s->alls_end = w->prev;
-	// a telling in progress may hold it: freed when the telling ends
 	w->prev = NULL;
 	w->next = l->s->dead;
 	l->s->dead = w;
 	if (l->s->telling == 0) free_dead(l);
 }
 
-// the filesystem, every read told ---------------------------------------------------------------
 
 static int is_map(const op_value *v) { return v != NULL && v->type == OP_MAP; }
 
-// the id under name in a children entry; 1 and *out, or 0: none, or not an id
 static int child_of(const nd_entry *children, const char *name, tb_key *out) {
 	const op_value *v = children != NULL ? children->value : NULL;
 	if (!is_map(v)) return 0;
@@ -953,7 +886,6 @@ static int child_of(const nd_entry *children, const char *name, tb_key *out) {
 	return 1;
 }
 
-// the id under name in the children of id, the read told
 static int step(pl *l, tb_key id, const char *name, tb_key *out) {
 	op_key key = {.type = OP_STR_KEY, .s = name};
 	if (!l->s->peeping) tell(l, pt_spot_of(l->s->paths, pair_key(l, tb_string(children_part)), paths_key(id), &key, 1, 0));
@@ -985,7 +917,6 @@ void pl_keys(pl *l, tb_key part, tb_key id, const op_key *path, size_t n, int id
 	}
 }
 
-// a level has no id: nothing, nothing read
 static int children_step(void *ctx, const pl_here *here, const char *name, pl *l, tb_key *out) {
 	(void)ctx;
 	if (same_key(here->id, pl_level())) return 0;
@@ -1007,11 +938,8 @@ const pl_contributor pl_children = {"children", children_step, children_names, N
 static const char level_tag;
 tb_key pl_level(void) { return tb_symbol(&level_tag); }
 
-// a contributor's bit in gone; past the 32nd: none
 static uint32_t bit(size_t i) { return i < 32 ? (uint32_t)1 << i : 0; }
 
-// the first answer at here + name, each contributor asked in order (but here's gone); 1 and *out,
-// *by. *under: here's gone, and the contributors that said none
 static int go(pl *l, const pl_here *here, const char *name, tb_key *out, const char **by,
 	uint32_t *under) {
 	uint32_t gone = here->gone, said = gone;
@@ -1028,8 +956,8 @@ static int go(pl *l, const pl_here *here, const char *name, tb_key *out, const c
 	}
 	*under = said;
 	// might be fishy. TODO is this fishy?
-	// no id anywhere, but a contributor has a level there (processes at /dev/clock, with no /dev
-	// saved): the walk goes on through it as if it were a folder
+	// No id anywhere, but a contributor has a level there (processes at /dev/clock with no /dev
+	// saved): the walk goes on through it as through a folder.
 	for (size_t i = 0; i < l->nasked; i++) {
 		if (said & bit(i)) continue;
 		const pl_contributor *c = l->asked[i];
@@ -1042,8 +970,6 @@ static int go(pl *l, const pl_here *here, const char *name, tb_key *out, const c
 	return 0;
 }
 
-// the walk from a here: out has room for n, gones (NULL: not asked) too, the gone under each step
-// taken; the steps taken
 static size_t walk_from(pl *l, const pl_here *from, const char *const *path, size_t n,
 	pl_member *out, uint32_t *gones) {
 	size_t i = 0;
@@ -1089,8 +1015,6 @@ size_t pl_walk(pl *l, tb_key from, const char *const *path, size_t n, pl_member 
 	return pl_walk_at(l, &here, path, n, out);
 }
 
-// where a path's walk from the root ends: an id, or pl_level(), and the gone under it; 1, *out and
-// *gone, or 0: the walk stopped short
 static int reach(pl *l, const char *const *path, size_t n, tb_key *out, uint32_t *gone) {
 	tb_key at = l->root;
 	*gone = 0;
@@ -1120,7 +1044,6 @@ int pl_get(pl *l, const char *const *path, size_t n, tb_key *out) {
 	return 1;
 }
 
-// the walk to where you are, made once; each place's own walk goes on from it with the gone there
 size_t pl_lookup(pl *l, const char *const *names, size_t nnames, const char *const *from,
 	size_t nfrom, int all, size_t *depths) {
 	tb_key *ids = xalloc((nfrom + 1) * sizeof *ids);
@@ -1160,7 +1083,6 @@ pl_answers pl_answers_at(pl *l, const pl_here *here, const char *name) {
 		if (got == PL_NONE) out.gone |= bit(i);
 		else if (got) out.items[out.n++] = (pl_answer){id, c->from};
 	}
-	// none: a level there, if a contributor has one (as the walk takes it)
 	if (out.n == 0) {
 		for (size_t i = 0; i < l->nasked; i++) {
 			if (out.gone & bit(i)) continue;
@@ -1181,13 +1103,11 @@ pl_answers pl_gets(pl *l, const char *const *path, size_t n) {
 		out.items[out.n++] = (pl_answer){l->root, "root"};
 		return out;
 	}
-	// the folder it is in: an id, or a level
 	tb_key id;
 	uint32_t gone;
 	if (!reach(l, path, n - 1, &id, &gone)) return (pl_answers){0};
 	pl_here here = {.id = id, .has_path = 1, .path = path, .length = n - 1, .gone = gone};
 	pl_answers all = pl_answers_at(l, &here, path[n - 1]);
-	// a level is no answer
 	size_t kept = 0;
 	for (size_t i = 0; i < all.n; i++) {
 		if (!same_key(all.items[i].id, pl_level())) all.items[kept++] = all.items[i];
@@ -1203,7 +1123,6 @@ void pl_nameds_free(pl_nameds *list) {
 
 static const char seen_tag;
 
-// a name's length in UTF-8 bytes: U+0000 is stored as C0 80, and counts one byte
 static size_t utf8_length(const char *s) {
 	size_t n = 0;
 	for (; *s != '\0'; s++, n++) {
@@ -1263,7 +1182,6 @@ void pl_members_free(pl_members *list) {
 	*list = (pl_members){0};
 }
 
-// the names in a children entry that hold an id, and their ids, in their order there
 static pl_members members_of(const nd_entry *children) {
 	pl_members out = {0};
 	const op_value *v = children != NULL ? children->value : NULL;
@@ -1277,9 +1195,6 @@ static pl_members members_of(const nd_entry *children) {
 	return out;
 }
 
-// the members at a path: one read of the children map whole (any change to it reruns the reader),
-// each name holding an id with its id. contributors given: every contributor's names, each name's
-// step as pl_get takes it (a level: the id pl_level(), no id of its own); at a level too
 pl_members pl_members_at(pl *l, const char *const *path, size_t n) {
 	tb_key id;
 	uint32_t gone;
@@ -1287,7 +1202,6 @@ pl_members pl_members_at(pl *l, const char *const *path, size_t n) {
 	if (l->given) {
 		pl_here here = {.id = id, .has_path = 1, .path = path, .length = n, .gone = gone};
 		pl_nameds names = pl_names(l, &here);
-		// those whose names said none: gone for each name's walk too
 		here.gone = names.gone;
 		pl_members out = {0};
 		out.items = xalloc((names.n + 1) * sizeof *out.items);
@@ -1302,9 +1216,6 @@ pl_members pl_members_at(pl *l, const char *const *path, size_t n) {
 	return members_of(tb_get(l->s->table, tb_string(children_part), id));
 }
 
-// the names at a path, every one the map holds, in their order there: one read of which names
-// there are (a name added or taken out reruns the reader); ids not told (left empty). contributors
-// given: every contributor's, each name once; at a level too
 pl_members pl_list(pl *l, const char *const *path, size_t n) {
 	tb_key id;
 	uint32_t gone;
@@ -1329,7 +1240,6 @@ pl_members pl_list(pl *l, const char *const *path, size_t n) {
 	return out;
 }
 
-// writing ---------------------------------------------------------------------------------------
 
 const char *pl_code_name(int code) {
 	switch (code) {
@@ -1345,12 +1255,10 @@ int pl_is_name(const char *name) {
 		strcmp(name, "..") != 0 && strcmp(name, "/") != 0;
 }
 
-// a name holding anything, an id or not
 static int taken(const nd_entry *children, const char *name) {
 	return is_map(children->value) && op_get(children->value, name) != NULL;
 }
 
-// what a write's patches refer to: kept by the node till its next update
 typedef struct {
 	op_patch patches[2];
 	op_key keys[3];
@@ -1368,7 +1276,6 @@ static void block_free(void *b) {
 	free(k);
 }
 
-// the patches of a block, applied to the entry and held by it
 static void write(pl *l, nd_entry *entry, block *b, ch_header header, pl_changed *changed) {
 	size_t failed;
 	int code = pl_update_entry(l->s->crow, entry, b->patches, b->n, header, &failed);
@@ -1380,7 +1287,6 @@ static void write(pl *l, nd_entry *entry, block *b, ch_header header, pl_changed
 	changed->entries[changed->n++] = entry;
 }
 
-// the patches that make sure the value is a map, first
 static block *start(const nd_entry *children) {
 	block *b = xalloc(sizeof *b);
 	if (!is_map(children->value)) {
@@ -1415,7 +1321,6 @@ static int do_unplace(pl *l, nd_entry *children, const char *name, ch_header hea
 	return 0;
 }
 
-// the id under name moved to the name to, in the one entry
 static void do_move(pl *l, nd_entry *children, const char *name, const char *to, ch_header header,
 	pl_changed *changed) {
 	block *b = xalloc(sizeof *b);
@@ -1467,7 +1372,6 @@ int pl_move(pl *l, nd_entry *from, const char *name, nd_entry *into, const char 
 	return do_unplace(l, from, name, header, changed);
 }
 
-// owned entries ---------------------------------------------------------------------------------
 
 void pl_own_in(pl *l, nd_entry *node, tb_table *in) {
 	if (l->s->nowned == l->s->capowned) {
@@ -1504,10 +1408,7 @@ void pl_sweep(pl *l) {
 	s->nowned = s->swept = k;
 }
 
-// who ------------------------------------------------------------------------------------------
 
-// the actor and reader of a write made as the frames up from f are (header.ts): the first "actor"
-// over all of them; the first "reader" holding a string. borrowed from the frames
 static void who_of(const ch_frame *f, const op_value **actor, const op_value **reader) {
 	*actor = *reader = NULL;
 	for (; f != NULL; f = f->parent) {
@@ -1520,8 +1421,6 @@ static void who_of(const ch_frame *f, const op_value **actor, const op_value **r
 	}
 }
 
-// the frame a write made now is made in: the frame open, extra (n pairs; NULL: none) a frame of its
-// own on top of it. NULL: none open. refs 1: the caller's
 static ch_frame *base_of(pl *l, const sc_pair *extra, size_t n) {
 	ch_frame *open = sc_get_current_frame(l->s->scheduler);
 	if (open == NULL) return NULL;
@@ -1546,14 +1445,13 @@ char *pl_header(pl *l, const sc_pair *extra, size_t n, const ch_location *site, 
 	pl_made **made) {
 	ch_frame *frame = base_of(l, extra, n);
 	if (frame == NULL) return xdup(SC_UNSCOPED);
-	// from outside the graph (no run open, no frame up the chain holding locations): the location
-	// of the call, in a frame more on top
+	// from outside the graph (no run open, no frame holding locations), add the call's location as
+	// a frame on top
 	if (site != NULL && sc_get_run(l->s->scheduler) == NULL && !ch_frame_located(frame)) {
 		ch_frame *top = ch_frame_at(site, frame);
 		ch_frame_free(frame);
 		frame = top;
 	}
-	// the same frame as a block alive has: that block again
 	pl_made *m = pm_get(&l->s->made_by, frame);
 	if (m != NULL) {
 		m->refs++;
@@ -1598,7 +1496,6 @@ void pl_made_free(void *block) {
 	free(m);
 }
 
-// a header's pieces as a map: time, actor, reader, frame (a list of infos, innermost first)
 static op_value *change_of(const ch_header *h) {
 	op_value *c = op_map();
 	if (h->has_time) op_set(c, "time", op_num((double)h->time));
@@ -1613,7 +1510,6 @@ const op_value *pl_change_value(pl *l, const ch_header *h) {
 	pl_made *m = pm_get(&l->s->made_by, h->frame);
 	if (m == NULL) return NULL;
 	if (m->change == NULL) m->change = change_of(h);
-	// another time, or another actor than the one made: not this one
 	const op_value *t = op_get(m->change, "time");
 	if (h->has_time != (t != NULL) || (t != NULL && t->num != (double)h->time)) return NULL;
 	if (op_get(m->change, "actor") != h->actor) return NULL;

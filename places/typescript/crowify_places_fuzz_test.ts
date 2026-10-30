@@ -1,11 +1,4 @@
-// crow driven as places would drive it for folders: each a flat map of names to ids, written
-// one patch at a time (place, unplace, rename, a rename onto a name there, one refused), read by
-// computations under a scheduler wired with crowify (handed: a folder's map, as places' spots give
-// it) between some writes and not others. the computations keep the map whole, in a map they
-// make, as a list of its names, one id, or nothing (they throw); an effect keeps it too. checked
-// after every step: what any run kept, set or acted on never changes; each folder is what
-// copy-on-write apply gives; a folder's map is copied at most once per burst of writes, and only
-// when a run kept it since the last write. 1 to 10k names, a few dozen seeds each
+// Crow driven as places drives folders: nothing a run kept changes; a folder map copies at most once per burst.
 import { assert, assertEquals } from "@std/assert"
 import createEntry, { type Entry } from "@ermine/graph/entry"
 import apply, { ApplyError, type Patch } from "@ermine/changeable/apply"
@@ -32,13 +25,10 @@ export function places(seed: number, n: number, steps: number) {
 	})
 	const byKey = new Map(folders.map((f) => [f.key as unknown, f]))
 	crowify(s, u, (key) => byKey.get(key)?.e.value)
-	// what runs kept, sets were given and effects acted on, as it was then
 	const held: { thing: unknown; was: string; what: string }[] = []
 	const hold = (thing: unknown, what: string) => {
 		if (thing !== null && typeof thing === "object") held.push({ thing, was: show(thing), what })
 	}
-	// a folder kept whole (or in what a run made) since its last write: its next write copies. at
-	// first every one: its value is the caller's
 	const keptSince = new Set<Folder>(folders)
 	s.onRunEnd((_c, _n, _ended, _reads, more) => {
 		if ("kept" in more) hold(more.kept, "a run's kept")
@@ -100,8 +90,6 @@ export function places(seed: number, n: number, steps: number) {
 				copies++
 				assert(keptSince.has(f), `${where}: copied with nothing kept since the last write`)
 			}
-			// a write that touches nothing (a name not there taken out, a rename onto itself) takes
-			// nothing: the map is no more its own than before
 			const none = patch.move
 				? patch.move.path[0] === patch.path[0]
 				: !("value" in patch) && !Object.hasOwn(before, patch.path[0])
@@ -109,7 +97,6 @@ export function places(seed: number, n: number, steps: number) {
 			s.mark([f.key])
 		} else assert(f.e.value === root, `${where}: refused, the same root`)
 		assertEquals(sorted(f.e.value), sorted(f.oracle), `${where}: as copy-on-write apply`)
-		// reads between some writes
 		if (!p(3)) s.pulse()
 		for (const x of held) assertEquals(show(x.thing), x.was, `${where}: ${x.what} changed`)
 	}

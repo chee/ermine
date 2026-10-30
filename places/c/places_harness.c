@@ -1,6 +1,5 @@
-// The C places (places.h) on the line protocol of typescript/places_harness.ts, which documents it and
-// the programs (conformance/c/harness.h has the loop). The world (the table, the writes, the
-// scheduler) is world_harness.h's; programs are data, evaluated here as the reference does.
+// The C places on the line protocol of typescript/places_harness.ts. The world is
+// world_harness.h's; programs are data, evaluated here as the reference does.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -17,7 +16,6 @@
 		(v)[(n)++] = (x); \
 	} while (0)
 
-// the keys of track and mark, one per name: the name's copy is the key
 static char **keys;
 static size_t nkeys, capkeys;
 static const void *key_of(const char *name) {
@@ -28,16 +26,11 @@ static const void *key_of(const char *name) {
 	return keys[nkeys - 1];
 }
 
-// pruning (places.h): rows, a trie on the value entry "rows" (a leaf an id, a level a map with
-// names; nothing on the path: PL_NONE), a stand-in for processes', each ask counted; the
-// places the filesystem's reads go through: the world's, or after the rows request a view of "R"
-// given [rows, children] (or the tries the request's "of" names, each on its own value entry, then
-// children)
+// Test stand-in for processes: a trie on the value entry "rows", with each ask counted.
 static size_t steps_asked, names_asked;
 static pl *view;
 static pl *reader(void) { return view != NULL ? view : world_places; }
 
-// the keys of here's path and one name more (extra NULL: none)
 static op_key *rows_keys(const pl_here *here, const char *extra, size_t *n) {
 	op_key *keys = world_alloc((here->length + 2) * sizeof *keys);
 	for (size_t i = 0; i < here->length; i++) keys[i] = (op_key){.type = OP_STR_KEY, .s = here->path[i]};
@@ -45,7 +38,6 @@ static op_key *rows_keys(const pl_here *here, const char *extra, size_t *n) {
 	if (extra != NULL) keys[(*n)++] = (op_key){.type = OP_STR_KEY, .s = extra};
 	return keys;
 }
-// the value in the trie's entry (ctx, its id) at here's path + name, the read told
 static const op_value *rows_at(void *ctx, const pl_here *here, const char *name, pl *l) {
 	size_t n;
 	op_key *keys = rows_keys(here, name, &n);
@@ -80,15 +72,11 @@ static int rows_level(void *ctx, const pl_here *here, const char *name, pl *l) {
 	return here->has_path && filled(rows_at(ctx, here, name, l));
 }
 static const pl_contributor rows = {"rows", rows_step, rows_names, rows_level, "rows"};
-// the tries a request's "of" names (their from and value entry the one string), then children
 #define MAX_TRIES 8
 static pl_contributor tries[MAX_TRIES];
 static const pl_contributor *tries_walk[MAX_TRIES + 1];
 
-// programs --------------------------------------------------------------------------------------
 
-// what a program is evaluated in: how it ended early, if it did: stopped (a read said the run must
-// end), or an error
 typedef ph_eval ctx;
 
 static ph_form *forms;
@@ -108,14 +96,12 @@ static op_value *thrown(ctx *c, char *error) {
 	else free(error);
 	return NULL;
 }
-// whether the reads told since the last check let the program go on
 static bool alive(ctx *c) {
 	sc_track_status status = pl_status(world_places);
 	if (status == SC_STOP) c->stopped = true;
 	return status == SC_OK;
 }
 
-// a path found: the first depth names of from, then names, as JSON
 static op_value *path_json(const char *const *from, size_t depth, const char *const *names,
 	size_t n) {
 	op_value *a = op_list();
@@ -124,7 +110,6 @@ static op_value *path_json(const char *const *from, size_t depth, const char *co
 	return a;
 }
 
-// the lookup of names from a path, as JSON: the nearest path or null; all: the list of them
 static op_value *lookup_json(const char *const *names, size_t n, const char *const *from, size_t nfrom,
 	bool all) {
 	size_t *depths = world_alloc((nfrom + 1) * sizeof *depths);
@@ -140,7 +125,6 @@ static op_value *lookup_json(const char *const *names, size_t n, const char *con
 	return out;
 }
 
-// the value read at (part, id) at path, as JSON
 static op_value *evaluate_read(const op_value *x, ctx *c) {
 	const op_value *path = x->count > 2 ? x->items[2] : NULL;
 	op_value *steps = path ? eval(path, c) : NULL;
@@ -154,7 +138,6 @@ static op_value *evaluate_read(const op_value *x, ctx *c) {
 	return alive(c) ? world_snap(v) : NULL;
 }
 
-// the patches of the node's latest edit, as JSON, or null
 static op_value *patches_of(const ch_header *h) {
 	return h != NULL && h->has_op ? world_patches(h->patches, h->patches_length) : op_null();
 }
@@ -237,7 +220,6 @@ static op_value *eval(const op_value *e, ctx *c) {
 		if (r == NULL) return NULL;
 		const char *why;
 		size_t failed;
-		// the request is kept: the node's change refers into it
 		world_keep(r);
 		if (world_write(r, &why, &failed)) return thrown(c, world_copy(why));
 		return op_null();
@@ -255,7 +237,6 @@ static op_value *eval(const op_value *e, ctx *c) {
 	return thrown(c, world_copy("unknown program"));
 }
 
-// a watch's code: counts its run, evaluates its program
 typedef struct {
 	world_watch watch;
 	const op_value *f;
@@ -284,7 +265,6 @@ static sc_out program_f(void *previous, void *data) {
 	return (sc_out){.kind = SC_VALUE, .value = v};
 }
 
-// requests --------------------------------------------------------------------------------------
 
 static op_value *with_value(const op_value *v) {
 	op_value *o = op_map();
@@ -292,7 +272,6 @@ static op_value *with_value(const op_value *v) {
 	return o;
 }
 
-// places' requests; NULL: not one of them
 op_value *ph_answer(const op_value *r) {
 	const char *op = world_text(op_get(r, "op"));
 	if (op == NULL) return world_error("no op");
@@ -302,7 +281,7 @@ op_value *ph_answer(const op_value *r) {
 		op_key *keys = world_path(op_get(r, "path"), &n);
 		op_value scratch = {0};
 		const op_value *v = pl_at(value, keys, n, &scratch);
-		// the scratch is on the stack: a number made from it, not held
+		// the scratch is on the stack, so a number is made from it, not held
 		op_value *o = with_value(v == &scratch ? NULL : v);
 		if (v == &scratch) op_set(o, "value", op_num(scratch.num));
 		free(keys);
@@ -436,7 +415,6 @@ void ph_finish(void) {
 	nforms = capforms = 0;
 }
 
-// a harness built on this one (PH_LIB) has its own loop
 #ifndef PH_LIB
 void hh_answer(const op_value *request, FILE *out) { world_line(request, out, ph_answer); }
 void hh_finish(void) { ph_finish(); }

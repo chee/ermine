@@ -1,7 +1,4 @@
-// the slice fuzzed: random places writes, value edits, children edits and table events, the
-// host's, a pulse after each. then every compute's value is the graph read again from scratch:
-// paths walked straight through the table, values straight from it. at the end, every compute disposed:
-// no spot is held (the scheduler's onTrackingEnd). a few dozen seeds (fuzz runs small)
+// Random places writes and pulses; every compute must equal the graph read again from scratch.
 import { assert, assertEquals } from "@std/assert"
 import createEntry from "@ermine/graph/entry"
 import update from "@ermine/changeable/update"
@@ -18,13 +15,10 @@ const SEEDS = 40
 const STEPS = 60
 const COMPUTES = 8
 const IDS = ["R", "A", "B", "C", "D"]
-// names: ASCII, an astral one, a lone high
 const NAMES = ["a", "😀", "\uD83D"]
 const PATHS: Step[][] = [[], ["t"], ["u"], ["l"], ["l", 0], ["l", 1]]
-// string parts: ASCII, BMP, pairs, a pair and a modifier, lone halves (a high then a low: a pair), U+0000
 const PARTS = ["a", "b", "xy", "é", "中", "😀", "👍🏽", "\uD83D", "\uDE00", "\u0000"]
 
-// xorshift: a seed is a run
 function rand(seed: number) {
 	let x = seed * 2654435761 >>> 0 || 1
 	const pick = (n: number) => {
@@ -37,7 +31,6 @@ function rand(seed: number) {
 	return { pick, one }
 }
 
-// how a compute reads: through places (tracked), or from scratch
 type Ways = {
 	get: (path: Path) => Id | undefined
 	list: (path: Path) => string[]
@@ -56,10 +49,8 @@ function seeded(seed: number, reach: Reach) {
 	const l = createPlaces({ root: "R", table, paths, scheduler: s })
 	const places = l
 	const o = s.createRootScope({ actor: "fuzz" })
-	// the host's writes, in its scope
 	const host = s.createRootScope({ actor: "fuzz" })
 	const h = () => createChangeHeader(s)
-	// the patches to the entry there, reported; none there: one made with them, added
 	function edit(part: Key, id: Id, patches: Patch[]) {
 		const there = table.get(part, id)
 		if (there === undefined) {
@@ -76,7 +67,6 @@ function seeded(seed: number, reach: Reach) {
 	function kids(): Record<string, unknown> {
 		const v: Record<string, unknown> = {}
 		for (const name of NAMES) {
-			// now and then something that is no id: taken, no item
 			if (pick(3)) v[name] = pick(8) === 0 ? [entry()] : entry()
 		}
 		return v
@@ -84,7 +74,6 @@ function seeded(seed: number, reach: Reach) {
 	const text = (most = 4) => Array.from({ length: pick(most + 1) }, () => one(PARTS)).join("")
 	const value = (): unknown =>
 		pick(5) ? { t: pick(10), u: text(), l: [pick(9), pick(9)].slice(pick(3)) } : text()
-	// a span of u, in code points: mostly in it, now and then past its end
 	const span = (): [number, number] => {
 		const a = pick(6)
 		return [a, a + pick(3)]
@@ -101,7 +90,6 @@ function seeded(seed: number, reach: Reach) {
 		list: (p) => [...list(places, p)],
 		read: (id, path) => l.readValue("value", id, path),
 	}
-	// from scratch: each name in the children value of the id before, nothing told
 	const isId = (x: unknown): x is Id => typeof x === "string" || typeof x === "symbol"
 	function scratch(p: Path): Id | undefined {
 		let id: Id | undefined = "R"
@@ -126,7 +114,6 @@ function seeded(seed: number, reach: Reach) {
 		read: (id, path) => at(table.get("value", id)?.value, path),
 	}
 
-	// computes: a path walked, then the value there at a path, or the names there
 	const computes = Array.from({ length: COMPUTES }, () => {
 		const where = Array.from({ length: 1 + pick(3) }, () => one(NAMES))
 		const path = one(PATHS)
@@ -150,7 +137,6 @@ function seeded(seed: number, reach: Reach) {
 		return c
 	})
 
-	// a parent's children entry; none: nothing-there
 	const kid = (id: Id) => {
 		const n = table.get("children", id)
 		if (n === undefined) throw new PlacesError("nothing-there")
@@ -170,7 +156,6 @@ function seeded(seed: number, reach: Reach) {
 					case 0:
 						return { path: ["u"], range: r }
 					case 1: {
-						// within u: a span moved to a gap
 						const g = pick(5)
 						return { path: ["u"], range: [g, g], move: { path: ["u"], range: r } }
 					}
@@ -195,7 +180,6 @@ function seeded(seed: number, reach: Reach) {
 		}
 	}
 
-	// one random write; refused: it throws, and nothing changed
 	function write(): string {
 		const k = pick(16)
 		const id = one(IDS)
@@ -243,7 +227,6 @@ function seeded(seed: number, reach: Reach) {
 			table.del(part, id)
 			return `del ${part} ${id}`
 		}
-		// one children entry under another key too: a write through either reaches both
 		const from = one(IDS), shared = table.get("children", from)
 		if (shared) table.sub("children", id, shared)
 		return `share children ${from} at ${id}`
@@ -273,16 +256,14 @@ function seeded(seed: number, reach: Reach) {
 Deno.test("link fuzz: every compute is the graph read from scratch after each pulse", () => {
 	const reach: Reach = { landed: 0, refused: 0, runs: 0, events: 0 }
 	for (let seed = 1; seed <= SEEDS; seed++) seeded(seed, reach)
-	// not vacuous: writes landed, table events happened, computes ran again
 	assert(reach.landed > SEEDS * STEPS / 3, `landed ${reach.landed}`)
 	assert(reach.events > SEEDS, `events ${reach.events}`)
 	assert(reach.runs > SEEDS * COMPUTES * 2, `runs ${reach.runs}`)
 })
 
-// plan against a model: the names a walk of steps leaves, as a plain stack: "." changes nothing, a
-// name goes on, ".." takes back the last name (one name left: the root, none: above it), "/"
-// starts again. the root is not above itself, so ".." after one name is [], and one more is
-// refused (undefined), whatever came before
+// A model of plan: the names a walk of steps leaves, as a plain stack. "." changes nothing, a name
+// goes on, ".." takes back the last name, "/" starts again. The root is not above itself, so ".."
+// after one name is [] and one more is refused (undefined).
 Deno.test("path: plan is the stack walk, .. at one name is the root, at the root undefined, at random", () => {
 	let refused = 0, rooted = 0
 	for (let seed = 1; seed <= SEEDS; seed++) {
@@ -303,11 +284,9 @@ Deno.test("path: plan is the stack walk, .. at one name is the root, at the root
 			const at = `seed ${seed}: ${JSON.stringify(steps)}`
 			assertEquals(plan(steps), want, at)
 			if (want === undefined) refused++
-			// one name then ..: the root
 			const name = one(NAMES), root = plan(["/", name, ".."])
 			assertEquals(root, [], `${at}: /, name, ..`)
 			rooted++
-			// and one more ..: refused
 			assertEquals(plan([name, "..", ".."]), undefined, `${at}: name, .., ..`)
 		}
 	}

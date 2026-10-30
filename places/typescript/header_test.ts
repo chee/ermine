@@ -1,5 +1,4 @@
-// header.ts' frame: the frame open, shared; from outside the graph (no run open, no frame up the
-// chain holding locations) a frame more on top with the stack there, or the location given
+// header.ts' frame: from outside the graph a frame more on top holds the stack, or the location given.
 import { assert, assertEquals, assertStrictEquals } from "@std/assert"
 import type { Location } from "@ermine/changeable/stacktrace"
 import type { ChangeHeader } from "@ermine/graph/entry"
@@ -21,7 +20,6 @@ Deno.test("header: from outside, a frame of locations on top of the frame open, 
 	const at = own.frame.info.locations!
 	assert(at.every((l) => l.external))
 	assert(at.some((l) => l.file === import.meta.url && l.line === line))
-	// ermine's own lines too: nothing skipped
 	assertEquals(at[0].file.endsWith("stacktrace.ts"), true)
 	assertEquals(told.frame.info, { locations: [given] })
 	assertStrictEquals(told.frame.parent, host.frame)
@@ -42,7 +40,6 @@ Deno.test("header: inside, the frame open itself: in a run, or under a frame hol
 	assertEquals(inRun, true)
 	assertEquals(made.map((h) => h.frame.info.locations), [undefined, undefined])
 	assertEquals(made.map((h) => h.frame.parent !== undefined), [true, true])
-	// under a scope started from outside: its locations are what the change came from
 	const began = s.createScope({ locations: [given] }, host)
 	const h = s.runWithScope(began, () => createChangeHeader(s))
 	assertStrictEquals(h.frame, began.frame)

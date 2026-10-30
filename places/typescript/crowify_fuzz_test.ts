@@ -1,7 +1,4 @@
-// crow wired to a scheduler with crowify and places, a few dozen seeds, on random values and patches
-// (crow/typescript/random_harness.ts): computations read paths and keep what they read (alone, in a
-// list, or only a number from it); results walked whole, or stopped at what each run was handed;
-// after every pulse each holds what a read now gives, and nothing one kept has changed since
+// Crow wired to a scheduler with crowify and places, on random values and patches.
 import { assertEquals } from "@std/assert"
 import createEntry, { type Entry } from "@ermine/graph/entry"
 import apply from "@ermine/changeable/apply"
@@ -15,7 +12,6 @@ import { at as read, createPlaces, type Places } from "./places.ts"
 import { createChangeHeader } from "./header.ts"
 import { crowify, updateEntry } from "./crowify.ts"
 
-// a root with names, so most paths are into something
 const start = (p: (n: number) => number) => {
 	const v = made(p, 3)
 	return isMap(v) ? v : { a: v, b: made(p, 2), c: made(p, 2) }
@@ -26,7 +22,6 @@ Deno.test("crowify: through places and a scheduler with crowify, what a computat
 		const p = rand(seed)
 		const u = createCrow()
 		const s = createScheduler()
-		// odd seeds walk results whole; even ones stop at what the run was handed, as a host wires it
 		crowify(
 			s,
 			u,
@@ -49,7 +44,6 @@ Deno.test("crowify: through places and a scheduler with crowify, what a computat
 		const header = () => s.runWithScope(host, () => createChangeHeader(s))
 		table.sub("value", "N", createEntry(start(p), header()) as never)
 		const e = table.get("value", "N")! as Entry<unknown>
-		// a computation: reads a path, keeps it alone, in a list, or only a number from it
 		type Watch = { path: (string | number)[]; how: number; kept?: unknown; was?: unknown }
 		const watches: Watch[] = []
 		const shape = (w: Watch, x: unknown) =>

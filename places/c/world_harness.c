@@ -10,35 +10,22 @@
 #include <string.h>
 #include <time.h>
 
-// the recorder: the scheduler's on... listeners as one list, in order, what happened (as
-// typescript/world_harness.ts's, the scheduler harness's trace)
 typedef enum { SC_T_DUE, SC_T_STARTS, SC_T_ENDS, SC_T_ACTS } sc_told_kind;
 
-// one thing that happened, good for the call
 typedef struct sc_told {
 	sc_told_kind kind;
 	sc_computer *c;
-	// SC_T_DUE; by: the computer of the run that made the change, NULL when not told
 	uint64_t tick;
 	sc_computer *by;
-	// SC_T_STARTS, SC_T_ENDS, SC_T_ACTS
 	unsigned run;
-	// SC_T_STARTS
 	int rank;
-	// SC_T_ENDS
 	sc_ended ended;
-	// -1: none, else 0 or 1
 	int equal;
-	// SC_T_ENDS, SC_T_ACTS: NULL for none
 	const char *error;
-	// SC_T_ACTS: an early effect's act
 	bool early;
-	// SC_T_ENDS stopped: the computer it waits after
 	sc_computer *waits;
-	// SC_T_ENDS looping: the computers on the loop, in the order made
 	sc_computer *const *through;
 	size_t nthrough;
-	// SC_T_ENDS: every key the run tracked, in order
 	const void *const *reads;
 	size_t nreads;
 } sc_told;
@@ -84,7 +71,6 @@ static inline void sc_trace_effect(sc_computer *c, unsigned n, const char *error
 		t->data);
 }
 
-// f told each, in order
 static inline void sc_trace_start(sc_scheduler *s, sc_trace *t, void (*f)(const sc_told *, void *),
 	void *data) {
 	t->f = f;
@@ -130,7 +116,6 @@ void world_event(tb_event event, void *ctx) {
 		(v)[(n)++] = (x); \
 	} while (0)
 
-// what is kept until the end: the lines, the values made, the nodes
 static hh_line **lines;
 static size_t nlines, caplines;
 static op_value **values;
@@ -186,7 +171,6 @@ op_value *world_patches(const op_patch *patches, size_t n) {
 	return list;
 }
 
-// scopes ----------------------------------------------------------------------------------------
 
 static sc_scope **named;
 static size_t nnamed, capnamed;
@@ -216,7 +200,7 @@ const sc_pair *world_info(const op_value *map, size_t *n) {
 	return out;
 }
 
-// moments, as told (named when asked: a new computer is due before it has a name)
+// moments, as told (named when asked, since a new computer is due before it has a name)
 typedef struct {
 	sc_told m;
 	char *error;
@@ -225,7 +209,6 @@ typedef struct {
 static moment *moments;
 static size_t nmoments, capmoments;
 
-// each computation's latest ended run's reads, in order, as pl_spot named each as the run ended
 typedef struct {
 	sc_computer *c;
 	op_value *reads;
@@ -337,7 +320,6 @@ static op_value *moment_json(const moment *x) {
 	return o;
 }
 
-// watches ---------------------------------------------------------------------------------------
 
 static world_watch **watches;
 static size_t nwatches, capwatches;
@@ -362,7 +344,6 @@ void world_drop(void *value, void *data) {
 	op_free(value);
 }
 
-// a compute made, with the scope open
 typedef struct {
 	sc_def def;
 	bool effect;
@@ -430,9 +411,7 @@ op_value *world_ids(const pl_members *list) {
 	return a;
 }
 
-// writes ----------------------------------------------------------------------------------------
 
-// the header of a write made now, with the scope open. 0, or -1 with *why
 static int header_now(ch_header *h, pl_made **made, const char **why) {
 	char *bad = pl_header(world_places, NULL, 0, CH_HERE, h, made);
 	if (bad == NULL) return 0;
@@ -441,7 +420,6 @@ static int header_now(ch_header *h, pl_made **made, const char **why) {
 	return -1;
 }
 
-// a write made: the nodes it changed hold the header's block too
 static void hold_header(const pl_changed *changed, pl_made *made) {
 	for (size_t i = 0; i < changed->n; i++) {
 		pl_hold_also(world_places, changed->entries[i], pl_made_ref(made), pl_made_free);
@@ -456,7 +434,6 @@ op_value *world_show_infos(const op_value *infos) {
 		for (size_t i = 0; i < from->count; i++) {
 			const char *key = from->keys[i];
 			if (strcmp(key, CH_LOCATIONS) == 0) {
-				// what began outside the graph, as a harness shows it: one name
 				op_value *shown = op_list();
 				op_push(shown, op_str("program"));
 				op_set(info, key, shown);
@@ -488,7 +465,7 @@ op_value *world_summary(const ch_header *h) {
 
 int world_edit(const char *part, tb_key id, const op_value *patches, nd_entry **out,
 	const char **why, size_t *failed) {
-	// the patches refer into the list, and are the line's: the node's change refers to them
+	// the patches refer into the list and are the line's: the node's change refers to them
 	size_t count = world_is(patches, OP_LIST) ? patches->count : 0;
 	op_patch *list = hh_take((count + 1) * sizeof *list);
 	for (size_t i = 0; i < count; i++) hh_patch(patches->items[i], &list[i]);
@@ -544,7 +521,6 @@ int world_write(const op_value *r, const char **why, size_t *failed) {
 	ch_header h;
 	pl_made *made;
 	if (header_now(&h, &made, why)) return -1;
-	// a parent's children entry; none: nothing-there
 	nd_entry *parent = tb_get(world_table, tb_string("children"), world_key(at));
 	nd_entry *into = toat ? tb_get(world_table, tb_string("children"), world_key(toat)) : NULL;
 	pl_changed changed = {0};
@@ -588,7 +564,6 @@ op_value *world_fill(const op_value *x, op_value *(*eval)(const op_value *e, voi
 	return o;
 }
 
-// programs --------------------------------------------------------------------------------------
 
 static bool truthy(const op_value *j) {
 	if (j == NULL || j->type == OP_NULL) return false;
@@ -599,7 +574,6 @@ static bool truthy(const op_value *j) {
 }
 static double number(const op_value *j) { return j && j->type == OP_NUM ? j->num : 0; }
 
-// a list of strings joined, with a separator between
 static op_value *joined(const op_value *list, const char *separator) {
 	char *s = world_copy("");
 	for (size_t i = 0; i < list->count; i++) {
@@ -614,7 +588,6 @@ static op_value *joined(const op_value *list, const char *separator) {
 	return out;
 }
 
-// a program run in a scope of its own, made under the one open
 typedef struct {
 	op_value *(*eval)(const op_value *e, void *ctx);
 	void *ctx;
@@ -696,7 +669,6 @@ op_value *world_basic(const op_value *e, op_value *(*eval)(const op_value *e, vo
 	return NULL;
 }
 
-// requests --------------------------------------------------------------------------------------
 
 static op_value *with_value(const op_value *v) {
 	op_value *o = op_map();
@@ -704,7 +676,6 @@ static op_value *with_value(const op_value *v) {
 	return o;
 }
 
-// a node of the value given, its header made now, held by the node. NULL: an error, in *out
 static nd_entry *made_node(const op_value *value, op_value **out) {
 	ch_header h;
 	pl_made *made;
@@ -716,7 +687,6 @@ static nd_entry *made_node(const op_value *value, op_value **out) {
 	return node;
 }
 
-// the world's requests that write or change the table, made in the host's scope
 typedef struct {
 	const op_value *r;
 	op_value *out;
@@ -765,7 +735,6 @@ static void in_host(void *data) {
 	}
 }
 
-// the header request's call: the header of a write made now, summed up
 typedef struct {
 	const sc_pair *extra;
 	size_t n;
@@ -784,16 +753,12 @@ static void in_header(void *data) {
 	pl_made_free(made);
 }
 
-// the requests' watchAll watches: what each is told, kept by name -------------------------------
 
 typedef struct {
 	char *name;
 	pl_watch *watch;
-	// the facts told since last asked: a list of {part, id, patches, actor?, frame?}
 	op_value *told;
-	// a fact says its change's frame, shown
 	int frame;
-	// only the facts of this id and this part, when given (copied)
 	char *id, *part;
 } told_watch;
 static told_watch **told_watches;
@@ -843,7 +808,6 @@ static op_value *watch_all(const op_value *r) {
 	return op_map();
 }
 
-// the world's request; NULL: not one of them
 static op_value *world_answer(const op_value *r) {
 	const char *op = world_text(op_get(r, "op"));
 	if (op == NULL) return world_error("no op");
@@ -989,7 +953,6 @@ static void world_start(void) {
 	world_host = sc_create_root_scope(world_scheduler, &host_info, 1);
 }
 
-// a request answered by the harness's, else the world's
 typedef struct {
 	const op_value *r;
 	op_value *(*answer)(const op_value *request);

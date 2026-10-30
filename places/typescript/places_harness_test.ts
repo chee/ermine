@@ -1,6 +1,4 @@
-// what the places suite checks besides its scenarios (conformance/run.ts runs those): the harness
-// answers an unknown op as an error and goes on, and the fuzzer. the harness asked is HARNESS, else
-// the TypeScript adapter (places_harness.ts)
+// Checks the places harness (HARNESS, else the TypeScript adapter) besides conformance/run.ts.
 import { assert, assertEquals } from "@std/assert"
 import { ask, command, reference } from "../../conformance/typescript/ask.ts"
 import type { Request } from "../../conformance/typescript/harness.ts"
@@ -19,15 +17,10 @@ Deno.test("an unknown op, or a malformed request, is an error, and the harness g
 	assertEquals(answers[3], { value: 1 })
 })
 
-// the fuzzer: random worlds, programs and writes, a pulse and every compute's state after each
-// step. an implementation is held to the reference, step by step (the same answers, errors too);
-// the reference alone is only run, a check that it does not throw. a few dozen seeds
 const SEEDS = 24
 const STEPS = 50
 const IDS = ["R", "A", "B", "C"]
-// names: ASCII, an astral one, a lone high
 const NAMES = ["a", "😀", "\uD83D"]
-// string parts: ASCII, BMP, pairs, a pair and a modifier, lone halves (a high then a low: a pair), U+0000
 const PARTS = ["a", "b", "xy", "é", "中", "😀", "👍🏽", "\uD83D", "\uDE00", "\u0000"]
 const WATCHES = 6
 
@@ -42,13 +35,11 @@ function sequence(seed: number): Request[] {
 	const out: Request[] = [{ op: "root", name: "o", info: { actor: "o" } }]
 	const kids = () => {
 		const v: Record<string, unknown> = {}
-		// now and then something that is no id: taken, no item
 		for (const n of NAMES) if (pick(3)) v[n] = pick(8) === 0 ? [entry()] : entry()
 		return v
 	}
 	const text = (most = 4) => Array.from({ length: pick(most + 1) }, () => one(PARTS)).join("")
 	const value = () => pick(4) ? { t: pick(10), u: text(), l: [pick(9), pick(9)] } : text()
-	// a span of u, in code points: mostly in it, now and then past its end
 	const span = () => {
 		const a = pick(6)
 		return [a, a + pick(3)]
@@ -105,7 +96,6 @@ function sequence(seed: number): Request[] {
 			])
 			out.push({ op: "edit", part: "value", id: one(IDS), patches: [patch] })
 		} else if (k === 11) {
-			// one children entry under two keys: a write through either reaches both
 			const keys = [["children", one(IDS)], ["children", one(IDS)]]
 			out.push({ op: "share", value: kids(), keys })
 		} else if (k === 12) {

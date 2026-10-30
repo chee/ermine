@@ -1,11 +1,4 @@
-// places' reads as tracked paths' spots: walkers (get, lookup, list, members) over a
-// small graph, each read places tells a spot. after each random write, said written, or table
-// event, the spots places says changed:
-//   - include a spot of every walker whose result changed
-//   - include every spot whose children entry, or whose value at the spot's path, is not the same
-//     reference as before (the oracle: values are copy-on-write)
-// spots no walker holds any more are released, as the scheduler's forget would; what is held is
-// what is held. a few dozen seeds (fuzz runs small)
+// Places' reads as spots: every walker whose result changed has a spot places says changed.
 import { assert, assertEquals } from "@std/assert"
 import { PlacesError } from "@ermine/places"
 import { get, list, lookup, members } from "@ermine/places/lib"
@@ -19,10 +12,8 @@ const MISSING = Symbol("missing")
 
 type Walker = { what: string; walk: () => string; spots: Spot<unknown>[]; result: string }
 
-// what the seeds reached, counted
 type Reach = { changed: number; marked: number }
 
-// one seed's run
 function seeded(seed: number, reach: Reach) {
 	const { pick } = rand(seed)
 	let current: Spot<unknown>[] | undefined
@@ -58,7 +49,6 @@ function seeded(seed: number, reach: Reach) {
 	const walkers = Array.from({ length: 10 }, walker)
 	walkers.forEach(run)
 
-	// what a spot rests on: its key's entry, and the value at its path in it
 	const rest = (s: Spot<unknown>) => {
 		const node = w.children(s.id as never)
 		const v = node?.value
@@ -77,14 +67,12 @@ function seeded(seed: number, reach: Reach) {
 			if (!(e instanceof PlacesError)) throw e
 		}
 		const at = `seed ${seed}, step ${step}: ${wrote?.what ?? "refused"}`
-		// every spot whose entry or value there is another reference
 		for (const [s, [node, v]] of rests) {
 			const [nodeNow, vNow] = rest(s)
 			if (node === nodeNow && v === vNow) continue
 			reach.changed++
 			assert(marks.has(s), `${at}: ${show([s.id, s.path])} changed, not marked`)
 		}
-		// every walker whose result changed
 		for (const x of walkers) {
 			const was = x.result, spots = x.spots
 			run(x)
@@ -95,7 +83,6 @@ function seeded(seed: number, reach: Reach) {
 				`${at}: ${x.what} changed, none of its spots marked\n${was}\n${x.result}`,
 			)
 		}
-		// spots no walker holds: let go
 		const held = new Set(walkers.flatMap((x) => x.spots))
 		for (const s of made) {
 			if (held.has(s)) continue

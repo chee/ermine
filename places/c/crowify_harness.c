@@ -1,6 +1,4 @@
-// the C crow through crowify (crowify.h) on the line protocol of typescript/crowify_harness.ts,
-// which documents it (conformance/c/harness.h has the loop). one entry and its crow last for the process, and
-// what was held and marked: each kept alive (op_ref) and compared by pointer
+// The C crow through crowify, on the line protocol of typescript/crowify_harness.ts.
 #define _POSIX_C_SOURCE 200809L // strdup
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,7 +10,6 @@
 
 static cr_crow *crow;
 static nd_entry *entry;
-// a name and what it stands for (NULL: nothing)
 typedef struct {
 	char *name;
 	op_value *value;
@@ -22,8 +19,7 @@ typedef struct {
 	size_t count, capacity;
 } names;
 static names held, marked;
-// the undo the entry's last change refers to as its patches, when an unwrite wrote it: kept
-// alive while the entry refers to it
+// The undo of the entry's last change, kept alive while the entry refers to it.
 static op_undo spare;
 
 static void drop(void *value, void *data) {
@@ -33,12 +29,10 @@ static void drop(void *value, void *data) {
 static struct {
 	sc_scheduler *s;
 	op_value *k;
-	// keep's writes (NULL: none), and whether the run writes them (else its set)
 	const op_value *writes;
 	int by_run;
 } run;
 static ch_header change(void);
-// keep's writes written to the entry, by the set or the run; refused: nothing written
 static void writes(void) {
 	if (run.writes == NULL || run.writes->type != OP_LIST) return;
 	size_t n = run.writes->count;
@@ -46,10 +40,8 @@ static void writes(void) {
 	for (size_t i = 0; i < n; i++) hh_patch(run.writes->items[i], &patches[i]);
 	pl_update_entry(crow, entry, patches, n, change(), NULL);
 }
-// the key a computation tracks; handed (keeping's) names what is at path by it
 static char tracked;
 static const op_value *handed_by(const void *key, void *ctx) { return key == &tracked ? ctx : NULL; }
-// what a computer returns, one reference given to the scheduler
 static sc_out compute(void *previous, void *data) {
 	(void)previous;
 	sc_track(run.s, &tracked);
@@ -77,8 +69,8 @@ static void make_computer(void *data) {
 	else if (strcmp(mode, "fails") == 0) sc_create_computer(run.s, (sc_def){.f = compute, .set = set_fails, .data = run.k}, NULL, 0);
 	else sc_create_computer(run.s, (sc_def){.f = compute, .set = set_nothing, .data = run.k}, NULL, 0);
 }
-// k kept as a computation's result at its run's end: a scheduler wired by pl_crowify, a computer
-// returning k (mode: "compute", "fails": its set fails, "effect": an effect), a pulse
+// Keeps k as a computation's result: a scheduler wired by pl_crowify, a computer returning k
+// (how: "compute", "fails" when its set fails, or "effect"), then a pulse.
 static void keep_through_scheduler(op_value *k, const char *how, const op_value *handed) {
 	mode = how;
 	sc_scheduler *s = sc_new((sc_options){.drop = drop});
@@ -141,7 +133,6 @@ void hh_finish(void) {
 	crow = NULL;
 }
 
-// what is at a path of keys, NULL when nothing
 static const op_value *at(const op_value *v, const op_value *path) {
 	for (size_t i = 0; path != NULL && i < path->count; i++) {
 		const op_value *k = path->items[i];
@@ -157,7 +148,6 @@ static const op_value *at(const op_value *v, const op_value *path) {
 	return v;
 }
 
-// as === has it: a number, string, boolean or null by content, any other value by identity
 static int same(const op_value *a, const op_value *b) {
 	if (a == b) return 1;
 	if (a == NULL || b == NULL || a->type != b->type) return 0;
@@ -180,7 +170,6 @@ static void put_value(FILE *out, const op_value *v) {
 	putc('}', out);
 }
 
-// crow's update of the patches: the undo, or the error and the patch
 static void write(FILE *out, const op_patch *patches, size_t n, const char *hold) {
 	if (hold != NULL) {
 		op_value *list = op_list();
@@ -221,7 +210,6 @@ void hh_answer(const op_value *r, FILE *out) {
 		size_t n = list->count;
 		op_patch *patches = hh_take((n + 1) * sizeof *patches);
 		for (size_t i = 0; i < n; i++) hh_patch(list->items[i], &patches[i]);
-		// marked: patch i given what was marked under marked[i] (nothing: a removal)
 		const op_value *names = op_get(r, "marked");
 		for (size_t i = 0; names != NULL && names->type == OP_LIST && i < n && i < names->count; i++) {
 			if (names->items[i]->type != OP_STR) continue;
@@ -235,7 +223,7 @@ void hh_answer(const op_value *r, FILE *out) {
 			fputs("{\"error\":\"nothing-written\"}", out);
 			return;
 		}
-		// the undo is the next change's patches: the entry lets go of it, this keeps it alive
+		// The undo is the next change's patches: the entry lets go of it, this keeps it alive.
 		op_undo undo = entry->undo;
 		entry->undo = (op_undo){0};
 		write(out, undo.patches, undo.n, hold);
@@ -258,7 +246,6 @@ void hh_answer(const op_value *r, FILE *out) {
 		const char *by = hh_str(r, "by");
 		run.writes = op_get(r, "writes"), run.by_run = by != NULL && strcmp(by, "run") == 0;
 		if (wrap != NULL && wrap->type == OP_BOOL && wrap->bool_) {
-			// nothing there, in a list: null, as the line has it
 			op_value *list = op_list();
 			op_push(list, k != NULL ? k : op_null());
 			k = list;
