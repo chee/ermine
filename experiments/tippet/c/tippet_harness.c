@@ -454,6 +454,31 @@ static size_t message(const op_value *m, uint8_t **out) {
 			memcpy(tail, pack.p, pack.n);
 			tp_span_free(&w.mem, &pack);
 		}
+	} else if (!strcmp(t, "fork") && m->count == 6 && x && y && z && x->type == OP_STR &&
+		y->type == OP_STR && (key = keyof(x->str)) && (n = unhex(y->str, &b)) >= 0 &&
+		m->items[4]->type == OP_STR) {
+		tp_span *s, pack, other;
+		uint8_t *b2;
+		long k = spans(z, &s), k2, n2 = unhex(m->items[4]->str, &b2), n1 = n;
+		uint8_t *sigA = b;
+		tp_span *s2;
+		k2 = spans(m->items[5], &s2);
+		ok = k > 0 && k2 > 0 && n2 >= 0 && !tp_pack(&w.mem, s, (size_t)k, MAX, &pack);
+		if (ok && tp_pack(&w.mem, s2, (size_t)k2, MAX, &other)) tp_span_free(&w.mem, &pack), ok = 0;
+		if (ok) {
+			cborPutHead(&o, 4, 6), cborPutText(&o, t, 4), cborPutBytes(&o, key, 32);
+			cborPutBytes(&o, sigA, (size_t)n1);
+			tail = hh_take(pack.n + 3 + (size_t)n2 + other.n), tailn = 0;
+			memcpy(tail + tailn, pack.p, pack.n), tailn += pack.n;
+			{
+				CborOut q = {NULL, 0, 0, true};
+				cborPutBytes(&q, b2, (size_t)n2);
+				memcpy(tail + tailn, q.data, q.length), tailn += q.length;
+				free(q.data);
+			}
+			memcpy(tail + tailn, other.p, other.n), tailn += other.n;
+			tp_span_free(&w.mem, &pack), tp_span_free(&w.mem, &other);
+		}
 	} else if (!strcmp(t, "live") && x && y && x->type == OP_STR && y->type == OP_STR &&
 		(n = unhex(x->str, &b)) >= 0) {
 		cborPutHead(&o, 4, 3), cborPutText(&o, t, 4), cborPutBytes(&o, b, (size_t)n);
@@ -527,6 +552,28 @@ static int readout(FILE *out, const uint8_t *b, size_t n) {
 		fputs("]}", out);
 		return 1;
 	}
+	if (is(t, "fork") && m->count == 6 && sized(x, 32) && sized(y, 64) && z->type == OP_LIST &&
+		sized(m->items[4], 64) && m->items[5]->type == OP_LIST) {
+		tp_in in = {b, b + n};
+		uint64_t k;
+		tp_span pa, pb;
+		tp_array(&in, &k), tp_skip(&in, NULL), tp_skip(&in, NULL), tp_skip(&in, NULL), tp_skip(&in, &pa);
+		tp_skip(&in, NULL), tp_skip(&in, &pb);
+		tp_steps sa, sb;
+		int a = !tp_unpack(&w.mem, pa, TP_RUN, &sa), b2 = !tp_unpack(&w.mem, pb, TP_RUN, &sb);
+		fputs("{\"message\":[\"fork\",", out);
+		hex(out, x->data, 32), fputc(',', out);
+		if (a && b2) {
+			hex(out, y->data, 64), fputc(',', out), steps(out, &sa), fputc(',', out);
+			hex(out, m->items[4]->data, 64), fputc(',', out), steps(out, &sb);
+		} else {
+			fputs("\"not a pack\"", out);
+		}
+		if (a) tp_steps_free(&w.mem, &sa);
+		if (b2) tp_steps_free(&w.mem, &sb);
+		fputs("]}", out);
+		return 1;
+	}
 	if (is(t, "refused") && m->count == 3 && sized(x, 32) && counted_whole(y)) {
 		fputs("{\"message\":[\"refused\",", out);
 		hex(out, x->data, 32), fputc(',', out), op_json_write(out, y), fputs("]}", out);
@@ -555,6 +602,11 @@ static void told(void *ctx, const uint8_t key[32], uint64_t from, size_t count) 
 	if (d->sync) tp_sync_told(d->sync, key, from, count);
 }
 
+static void forked(void *ctx, size_t i) {
+	device *d = ctx;
+	if (d->sync) tp_sync_forked(d->sync, i);
+}
+
 static void random_(void *ctx, uint8_t *out, size_t n) {
 	(void)ctx;
 	uint64_t k = ++w.calls;
@@ -580,14 +632,14 @@ static void drop_value(void *value, void *data) {
 	op_free(value);
 }
 
-static device *made(const char *name, const uint8_t *seed, long rebase, int forgets, FILE *out) {
+static device *made(const char *name, const uint8_t *seed, long rebase, int forgets, size_t forks, FILE *out) {
 	if (named(name)) return hh_error(out, "%s is made", name), NULL;
 	device *d = calloc(1, sizeof *d);
 	device **grown = realloc(w.devices, (w.count + 1) * sizeof *grown);
 	if (!d || !grown) hh_fail("out of memory");
 	w.devices = grown;
 	tp_store *store = tp_memory_store(&w.mem, MAX);
-	tp_log_options o = {w.mem, store, seed, 1, {0, 0, 0}, told, d};
+	tp_log_options o = {w.mem, store, seed, 1, {0, 0, 0, forks}, told, d, forked};
 	tp_log *log = store ? tp_log_new(&o) : NULL;
 	int why = log ? tp_log_load(log) : TP_NOMEM;
 	if (why) {
@@ -870,6 +922,13 @@ static void view(FILE *out, const uint8_t *b, size_t n) {
 		if (tp_pack_first(pack, &first, &after) || !tp_pack_count(pack)) goto none;
 		fputs("[\"run\",", out), nameof(out, x.p);
 		fprintf(out, ",%llu,%llu]", (unsigned long long)first, (unsigned long long)(first + tp_pack_count(pack) - 1));
+	} else if (tp_is(t, "fork")) {
+		uint64_t first;
+		int after;
+		tp_span pack;
+		tp_bytes(&in, 32, &x), tp_bytes(&in, 64, &y), tp_skip(&in, &pack);
+		if (tp_pack_first(pack, &first, &after)) goto none;
+		fputs("[\"fork\",", out), nameof(out, x.p), fprintf(out, ",%llu]", (unsigned long long)first);
 	} else if (tp_is(t, "live")) {
 		tp_bytes(&in, 8, &x), tp_bytes(&in, 0, &y);
 		fputs("[\"live\",", out), hex(out, x.p, 8), fputc(',', out), hex(out, y.p, y.n), fputc(']', out);
@@ -927,7 +986,7 @@ static void inject(const op_value *r, FILE *out) {
 
 static int on_disk(device *d) {
 	tp_store *store = tp_file_store(&w.mem, d->dir, MAX);
-	tp_log_options o = {w.mem, store, d->seed, 1, {0, 0, 0}, told, d};
+	tp_log_options o = {w.mem, store, d->seed, 1, {0, 0, 0, 0}, told, d, forked};
 	tp_log *log = store ? tp_log_new(&o) : NULL;
 	int why = log ? tp_log_load(log) : TP_NOMEM;
 	if (why) {
@@ -1193,9 +1252,11 @@ void hh_answer(const op_value *r, FILE *out) {
 		if (unhex(hh_str(r, "seed"), &seed) != 32) { hh_error(out, "a seed is 32 bytes"); return; }
 		int64_t rebase = 0;
 		if (op_get(r, "rebase")) op_as_int64(op_get(r, "rebase"), &rebase);
-		const op_value *fg = op_get(r, "forgets");
+		const op_value *fg = op_get(r, "forgets"), *fk = op_get(r, "forks");
+		int64_t fkn = 0;
+		if (fk && !op_as_int64(fk, &fkn)) fkn = 0;
 		device *d = made(hh_str(r, "name") ? hh_str(r, "name") : "", seed, (long)rebase,
-			fg && fg->type == OP_BOOL && fg->bool_, out);
+			fg && fg->type == OP_BOOL && fg->bool_, fkn > 0 ? (size_t)fkn : 0, out);
 		if (d) fputs("{\"key\":", out), hex(out, tp_log_device(d->log), 32), fputc('}', out);
 	} else if (!strcmp(op, "disk")) {
 		disk(r, out);
@@ -1211,7 +1272,7 @@ void hh_answer(const op_value *r, FILE *out) {
 	} else if (!strcmp(op, "files")) {
 		files(r, out);
 	} else if (!strcmp(op, "relay")) {
-		if (made(hh_str(r, "name") ? hh_str(r, "name") : "", NULL, 0, 0, out)) fputs("{}", out);
+		if (made(hh_str(r, "name") ? hh_str(r, "name") : "", NULL, 0, 0, 0, out)) fputs("{}", out);
 	} else if (!strcmp(op, "write")) {
 		written(r, out);
 	} else if (!strcmp(op, "value")) {
@@ -1233,6 +1294,19 @@ void hh_answer(const op_value *r, FILE *out) {
 		int why = tp_sync_live(d->sync, b, (size_t)n);
 		if (why) { hh_error(out, "%s", tp_why(why)); return; }
 		fputs("{}", out);
+	} else if (!strcmp(op, "forks")) {
+		device *d = which(r, "device", out);
+		if (!d) return;
+		fputs("{\"forks\":[", out);
+		for (size_t i = 0; i < tp_log_forks(d->log); i++) {
+			tp_fork f;
+			tp_log_fork_at(d->log, i, &f);
+			if (i) fputc(',', out);
+			fputs("{\"device\":", out), nameof(out, f.device);
+			fprintf(out, ",\"n\":%llu,\"hashes\":[", (unsigned long long)f.n);
+			hex(out, f.hashes, 32), fputc(',', out), hex(out, f.hashes + 32, 32), fputs("]}", out);
+		}
+		fputs("]}", out);
 	} else if (!strcmp(op, "heard")) {
 		device *d = which(r, "device", out);
 		if (!d) return;

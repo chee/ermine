@@ -23,6 +23,14 @@ typedef struct {
 	size_t nseqs, roomseqs;
 } feed;
 
+typedef struct {
+	uint8_t device[32];
+	uint64_t n;
+	uint8_t hashes[64];
+	uint8_t *message;
+	size_t length;
+} fork;
+
 struct tp_log {
 	tp_mem mem;
 	tp_store *store;
@@ -36,6 +44,9 @@ struct tp_log {
 	uint64_t asked, closed, loose;
 	tp_told told;
 	void *ctx;
+	void (*forked)(void *ctx, size_t i);
+	fork *forks;
+	size_t nforks, forkroom, proved;
 	tp_buf scratch;
 };
 
@@ -47,8 +58,9 @@ tp_log *tp_log_new(const tp_log_options *o) {
 	if (!log->limits.devices) log->limits.devices = 4096;
 	if (!log->limits.steps) log->limits.steps = 1 << 24;
 	if (!log->limits.step) log->limits.step = TP_RUN;
+	if (!log->limits.forks) log->limits.forks = (size_t)1 << 25;
 	if (o->seed) memcpy(log->seed, o->seed, 32), log->seeded = 1;
-	log->strict = o->strict, log->told = o->told, log->ctx = o->ctx;
+	log->strict = o->strict, log->told = o->told, log->ctx = o->ctx, log->forked = o->forked;
 	log->scratch.mem = &log->mem, log->scratch.max = log->limits.step;
 	return log;
 }
@@ -60,6 +72,8 @@ void tp_log_free(tp_log *log) {
 		tp_free(&mem, log->feeds[i].seqs, log->feeds[i].roomseqs * sizeof *log->feeds[i].seqs);
 	}
 	tp_free(&mem, log->feeds, log->feedroom * sizeof *log->feeds);
+	for (size_t i = 0; i < log->nforks; i++) tp_free(&mem, log->forks[i].message, log->forks[i].length);
+	tp_free(&mem, log->forks, log->forkroom * sizeof *log->forks);
 	tp_buf_free(&log->scratch);
 	tp_store *st = log->store;
 	if (st && st->sync) st->sync(st->self);
@@ -363,10 +377,172 @@ long tp_log_message(tp_log *log, const uint8_t device[32], uint64_t from, uint8_
 	return n;
 }
 
+size_t tp_log_forks(const tp_log *log) { return log->nforks; }
+
+int tp_log_fork_at(const tp_log *log, size_t i, tp_fork *f) {
+	if (i >= log->nforks) return 1;
+	const fork *k = &log->forks[i];
+	*f = (tp_fork){k->device, k->n, k->hashes, {k->message, k->length}};
+	return 0;
+}
+
+int tp_log_forked(const tp_log *log, const uint8_t device[32]) {
+	for (size_t i = 0; i < log->nforks; i++) {
+		if (!memcmp(log->forks[i].device, device, 32)) return 1;
+	}
+	return 0;
+}
+
+// a tail: steps of device, one after another from n, chained, the last signed. first: the hash of
+// the first; bytes: all told
+static int tail(const uint8_t device[32], const tp_span *steps, size_t k, const uint8_t sig[64],
+	uint64_t *n, uint8_t first[32], size_t *bytes) {
+	uint8_t hash[32];
+	tp_step s;
+	*bytes = 0;
+	for (size_t i = 0; i < k; i++) {
+		*bytes += steps[i].n;
+		if (*bytes > TP_RUN || tp_step_decode(steps[i].p, steps[i].n, &s) || memcmp(s.device, device, 32)) return 0;
+		if (!i) *n = s.n;
+		else if (s.n != *n + i || !s.before || memcmp(s.before, hash, 32)) return 0;
+		tp_step_hash(steps[i].p, steps[i].n, hash);
+		if (!i) memcpy(first, hash, 32);
+	}
+	return k && tp_verify(device, hash, 32, sig);
+}
+
+static int proof(tp_log *log, const uint8_t device[32], const tp_span *a, size_t ka, const uint8_t siga[64],
+	const tp_span *b, size_t kb, const uint8_t sigb[64], tp_buf *m) {
+	tp_span pa, pb;
+	if (tp_pack(&log->mem, a, ka, TP_RUN, &pa)) return 0;
+	if (tp_pack(&log->mem, b, kb, TP_RUN, &pb)) return tp_span_free(&log->mem, &pa), 0;
+	tp_put_head(m, 4, 6), tp_put_text(m, "fork");
+	tp_put_head(m, 2, 32), tp_put(m, device, 32);
+	tp_put_head(m, 2, 64), tp_put(m, siga, 64), tp_put(m, pa.p, pa.n);
+	tp_put_head(m, 2, 64), tp_put(m, sigb, 64), tp_put(m, pb.p, pb.n);
+	tp_span_free(&log->mem, &pa), tp_span_free(&log->mem, &pb);
+	return !tp_buf_why(m);
+}
+
+// two tails of device: a fork if they check and differ at the same n. came: the proof as it came,
+// or p NULL to make it. 1 if learned.
+static int learn(tp_log *log, const uint8_t device[32], const tp_span *a, size_t ka, const uint8_t siga[64],
+	const tp_span *b, size_t kb, const uint8_t sigb[64], tp_span came) {
+	uint64_t na, nb;
+	uint8_t ha[32], hb[32];
+	size_t ba, bb;
+	if (tp_log_forked(log, device) || log->nforks >= log->limits.devices || !tp_log_count(log, device)) return 0;
+	if (!tail(device, a, ka, siga, &na, ha, &ba) || !tail(device, b, kb, sigb, &nb, hb, &bb)) return 0;
+	if (na != nb || !memcmp(ha, hb, 32) || ba + bb > TP_RUN || log->proved + ba + bb > log->limits.forks) return 0;
+	int low = memcmp(ha, hb, 32) < 0;
+	tp_buf m = {NULL, 0, 0, 2 * TP_RUN + 1024, &log->mem, 0};
+	if (!came.p) {
+		int ok = low ? proof(log, device, a, ka, siga, b, kb, sigb, &m)
+			     : proof(log, device, b, kb, sigb, a, ka, siga, &m);
+		if (!ok) return tp_buf_free(&m), 0;
+	}
+	if (log->nforks == log->forkroom) {
+		size_t room = log->forkroom ? 2 * log->forkroom : 4;
+		fork *q = tp_grow(&log->mem, log->forks, log->forkroom * sizeof *q, room * sizeof *q);
+		if (!q) return tp_buf_free(&m), 0;
+		log->forks = q, log->forkroom = room;
+	}
+	size_t length = came.p ? came.n : m.len;
+	uint8_t *copy = tp_alloc(&log->mem, length);
+	if (!copy) return tp_buf_free(&m), 0;
+	memcpy(copy, came.p ? came.p : m.p, length);
+	tp_buf_free(&m);
+	fork *f = &log->forks[log->nforks];
+	memcpy(f->device, device, 32), f->n = na, f->message = copy, f->length = length;
+	memcpy(f->hashes, low ? ha : hb, 32), memcpy(f->hashes + 32, low ? hb : ha, 32);
+	log->nforks++, log->proved += ba + bb;
+	if (log->forked) log->forked(log->ctx, log->nforks - 1);
+	return 1;
+}
+
+int tp_log_fork(tp_log *log, tp_span message) {
+	tp_in in = {message.p, message.p + message.n};
+	uint64_t k;
+	tp_span t, device, siga, sigb, pa, pb;
+	tp_steps sa, sb;
+	if (!tp_canonical(message.p, message.n) || tp_array(&in, &k) || k != 6 || tp_text(&in, &t) ||
+		!tp_is(t, "fork") || tp_bytes(&in, 32, &device) || tp_bytes(&in, 64, &siga) ||
+		tp_skip(&in, &pa) || tp_bytes(&in, 64, &sigb) || tp_skip(&in, &pb) || in.p != in.end) {
+		return 0;
+	}
+	if (tp_unpack(&log->mem, pa, TP_RUN, &sa)) return 0;
+	int ok = 0;
+	if (!tp_unpack(&log->mem, pb, TP_RUN, &sb)) {
+		tp_span *sp = tp_alloc(&log->mem, (sa.count + sb.count) * sizeof *sp);
+		if (sp) {
+			for (size_t i = 0; i < sa.count; i++) sp[i] = (tp_span){sa.bytes + sa.at[i], sa.at[i + 1] - sa.at[i]};
+			for (size_t i = 0; i < sb.count; i++) {
+				sp[sa.count + i] = (tp_span){sb.bytes + sb.at[i], sb.at[i + 1] - sb.at[i]};
+			}
+			ok = learn(log, device.p, sp, sa.count, siga.p, sp + sa.count, sb.count, sigb.p, message);
+			tp_free(&log->mem, sp, (sa.count + sb.count) * sizeof *sp);
+		}
+		tp_steps_free(&log->mem, &sb);
+	}
+	tp_steps_free(&log->mem, &sa);
+	return ok;
+}
+
+// A run meeting what is held, with another hash where they meet: two signed chains, a proof from
+// that step. 1: a fork. 2: not one, the run is not signed as it is. 0: the same chain.
+static int clash(tp_log *log, const uint8_t device[32], const tp_span *steps, size_t k, const uint8_t sig[64]) {
+	const feed *f = find(log, device);
+	tp_step s;
+	if (!f || tp_step_decode(steps[0].p, steps[0].n, &s) || s.n > f->count) return 0;
+	uint64_t first = s.n, m = first + k - 1 < f->count ? first + k - 1 : f->count;
+	uint8_t held[32], mine[32], head[32];
+	uint64_t n;
+	size_t bytes;
+	int signed_ = -1;
+	tp_step_hash(steps[m - first].p, steps[m - first].n, mine);
+	// what costs reads of held steps, or closing the open run, needs the run's own chain and
+	// signature good first
+	if (m == f->count) {
+		if (!memcmp(mine, f->last, 32)) return 0;
+	} else {
+		if (!(signed_ = tail(device, steps, k, sig, &n, head, &bytes))) return 0;
+		long length = tp_log_step(log, device, m, NULL, 0);
+		uint8_t *b = length > 0 ? tp_alloc(&log->mem, (size_t)length) : NULL;
+		if (!b) return 0;
+		int got = tp_log_step(log, device, m, b, (size_t)length) == length;
+		if (got) tp_step_hash(b, (size_t)length, held);
+		tp_free(&log->mem, b, (size_t)length);
+		if (!got || !memcmp(held, mine, 32)) return 0;
+	}
+	if (signed_ < 0) signed_ = tail(device, steps, k, sig, &n, head, &bytes);
+	if (!signed_) return m == f->count ? 2 : 0;
+	if (tp_log_forked(log, device)) return 1;
+	uint64_t to;
+	uint8_t hsig[64];
+	if (tp_log_run(log, device, m, &to, hsig)) return 2;
+	size_t count = (size_t)(to - m + 1);
+	tp_buf bytes_ = {NULL, 0, 0, TP_RUN, &log->mem, 0};
+	tp_span *spans = tp_alloc(&log->mem, count * sizeof *spans);
+	int ok = spans != NULL;
+	for (size_t i = 0; ok && i < count; i++) {
+		long length = tp_log_step(log, device, m + i, NULL, 0);
+		uint8_t *p = length < 0 ? NULL : tp_reserve(&bytes_, (size_t)length);
+		ok = p && tp_log_step(log, device, m + i, p, (size_t)length) == length;
+		spans[i] = (tp_span){NULL, (size_t)length};
+	}
+	for (size_t i = 0, at = 0; ok && i < count; at += spans[i++].n) spans[i].p = bytes_.p + at;
+	if (ok) ok = learn(log, device, spans, count, hsig, steps + (m - first), k - (size_t)(m - first), sig, (tp_span){NULL, 0});
+	if (spans) tp_free(&log->mem, spans, count * sizeof *spans);
+	tp_buf_free(&bytes_);
+	return ok ? 1 : 2;
+}
+
 long tp_log_take(tp_log *log, const uint8_t device[32], const tp_span *steps, size_t n,
 	const uint8_t sig[64], tp_span came) {
+	if (!n) return own(log, device) ? TP_OWN : 0;
+	int split = clash(log, device, steps, n, sig);
 	if (own(log, device)) return TP_OWN;
-	if (!n) return 0;
+	if (split) return split == 1 ? TP_FORK : TP_SIGNATURE;
 	uint64_t held = tp_log_count(log, device), high;
 	uint8_t last[32];
 	long fresh = chain(log, device, steps, n, last, &high);

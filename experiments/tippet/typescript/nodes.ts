@@ -10,6 +10,7 @@ export type Shown = {
 	have: Record<string, number>
 	links: number
 	failed: Failed[]
+	forks: { device: string; n: number }[]
 	unkept: number
 }
 
@@ -39,6 +40,7 @@ export function show(o: {
 			have: log.have(),
 			links: sync.links,
 			failed: history.failed.slice(-20),
+			forks: log.forks().map((f) => ({ device: f.device, n: f.n })),
 			unkept: history.unkept.length,
 		}
 		const now = JSON.stringify(value)
@@ -57,7 +59,7 @@ export function show(o: {
 		queueMicrotask(flush)
 	}
 
-	const offs = [log.on(poke), history.onChange(poke), sync.onLinks(poke)]
+	const offs = [log.on(poke), log.onFork(poke), history.onChange(poke), sync.onLinks(poke)]
 	poke()
 	return () => {
 		stopped = true

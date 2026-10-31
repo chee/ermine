@@ -35,6 +35,7 @@ enum {
 	TP_CHAIN = -12,
 	TP_SIGNATURE = -14,
 	TP_BEFORE = -15,
+	TP_FORK = -16,
 };
 const char *tp_why(int code);
 
@@ -151,6 +152,7 @@ typedef struct {
 	size_t devices; // devices held (4096)
 	uint64_t steps; // steps of one device's (1 << 24)
 	size_t step; // bytes of one step (a run's most, 1 << 24)
+	size_t forks; // bytes of steps all the fork proofs hold (1 << 25)
 } tp_limits;
 
 typedef struct tp_log tp_log;
@@ -167,6 +169,8 @@ typedef struct {
 	tp_limits limits; // 0s: the defaults
 	tp_told told;
 	void *ctx;
+	// told when a fork is learned: its index in tp_log_fork_at
+	void (*forked)(void *ctx, size_t i);
 } tp_log_options;
 
 tp_log *tp_log_new(const tp_log_options *o);
@@ -203,6 +207,20 @@ long tp_log_take(tp_log *log, const uint8_t device[32], const tp_span *steps, si
 	const uint8_t sig[64], tp_span came);
 int tp_log_snapshot(tp_log *log, const uint8_t *bytes, size_t length);
 long tp_log_snapped(const tp_log *log, uint8_t *out, size_t cap);
+// A fork (WIRE.md, forks): two signed runs of one device whose chains differ at step n (they may
+// differ before it), one a device.
+// Nothing is decided: the first chain held stays, a run of the other is refused (TP_FORK).
+typedef struct {
+	const uint8_t *device;
+	uint64_t n;
+	const uint8_t *hashes; // 64: the two first steps' hashes, the lower first
+	tp_span message; // the proof, a fork message
+} tp_fork;
+size_t tp_log_forks(const tp_log *log);
+int tp_log_fork_at(const tp_log *log, size_t i, tp_fork *f);
+int tp_log_forked(const tp_log *log, const uint8_t device[32]);
+// A proof from elsewhere, a whole fork message: 1 if it checks and the device had none, else 0.
+int tp_log_fork(tp_log *log, tp_span message);
 // Forget: stop reading device's steps through n, so they are never sent. Survives a reload.
 int tp_log_drop(tp_log *log, const uint8_t device[32], uint64_t n);
 
@@ -233,6 +251,8 @@ void tp_sync_unlink(tp_sync *s, tp_link *l);
 size_t tp_sync_links(const tp_sync *s);
 void tp_sync_receive(tp_sync *s, tp_link *l, const uint8_t *bytes, size_t length);
 void tp_sync_told(void *ctx, const uint8_t device[32], uint64_t from, size_t count);
+// A log's forked goes here: the proof is sent to every link.
+void tp_sync_forked(void *ctx, size_t i);
 int tp_sync_live(tp_sync *s, const uint8_t *data, size_t length);
 void tp_sync_keeper(tp_sync *s, tp_link *l);
 // How many of device's steps have passed to every link (its own: to a keeper), for forgetting.

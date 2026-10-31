@@ -64,7 +64,7 @@ static tp_write put(int x) {
 }
 
 static tp_log *memlog(const uint8_t *seed, size_t max, tp_told told, void *ctx) {
-	tp_log_options o = {mem, tp_memory_store(&mem, max), seed, 1, {0, 0, 0}, told, ctx};
+	tp_log_options o = {mem, tp_memory_store(&mem, max), seed, 1, {0, 0, 0, 0}, told, ctx, NULL};
 	tp_log *log = tp_log_new(&o);
 	if (tp_log_load(log)) return tp_log_free(log), NULL;
 	return log;
@@ -376,7 +376,7 @@ static void cut(const char *dir) {
 	uint8_t seed[32];
 	memset(seed, 4, 32);
 	snprintf(d, sizeof d, "%s/whole", dir);
-	tp_log_options o = {mem, tp_file_store(&mem, d, 1 << 20), seed, 1, {0, 0, 0}, NULL, NULL};
+	tp_log_options o = {mem, tp_file_store(&mem, d, 1 << 20), seed, 1, {0, 0, 0, 0}, NULL, NULL, NULL};
 	tp_log *log = tp_log_new(&o);
 	CHECK(!tp_log_load(log));
 	uint64_t n, l, to;
@@ -770,7 +770,7 @@ static int dev_make(dev *d, tp_store *store, uint8_t s) {
 	d->scope = sc_create_root_scope(d->s, &d->info, 1);
 	uint8_t seed[32];
 	memset(seed, s, 32);
-	tp_log_options o = {mem, store, seed, 1, {0, 0, 0}, dev_told, d};
+	tp_log_options o = {mem, store, seed, 1, {0, 0, 0, 0}, dev_told, d, NULL};
 	d->log = tp_log_new(&o);
 	tp_log_load(d->log);
 	tp_history_options ho = {mem, d->log, d->table, d->places, NULL, inside, d, forgets, 0};
@@ -819,7 +819,7 @@ static void typescript(const char *dir) {
 		memset(seed, 50, 32);
 		tp_store *st = tp_memory_store(&mem, 1 << 20);
 		st->sync = count_sync;
-		tp_log_options o = {mem, st, seed, 1, {0, 0, 0}, NULL, NULL};
+		tp_log_options o = {mem, st, seed, 1, {0, 0, 0, 0}, NULL, NULL, NULL};
 		tp_log *log = tp_log_new(&o);
 		tp_log_load(log);
 		edit(log, x0, sizeof x0);
@@ -831,7 +831,7 @@ static void typescript(const char *dir) {
 		tp_log_free(log);
 		char path[512];
 		snprintf(path, sizeof path, "%s/synced", dir);
-		log = tp_log_new(&(tp_log_options){mem, tp_file_store(&mem, path, 1 << 20), seed, 1, {0, 0, 0}, NULL, NULL});
+		log = tp_log_new(&(tp_log_options){mem, tp_file_store(&mem, path, 1 << 20), seed, 1, {0, 0, 0, 0}, NULL, NULL, NULL});
 		CHECK(!tp_log_load(log));
 		edit(log, x0, sizeof x0);
 		CHECK(!tp_log_run(log, tp_log_device(log), 1, &to, sig));
@@ -1261,7 +1261,7 @@ static void long_run(const char *dir) {
 	uint8_t seed[32];
 	memset(seed, 7, 32);
 	snprintf(d, sizeof d, "%s/long", dir);
-	tp_log_options o = {mem, tp_file_store(&mem, d, 1 << 20), seed, 1, {0, 0, 1000}, NULL, NULL};
+	tp_log_options o = {mem, tp_file_store(&mem, d, 1 << 20), seed, 1, {0, 0, 1000, 0}, NULL, NULL, NULL};
 	tp_log *log = tp_log_new(&o);
 	CHECK(!tp_log_load(log));
 	uint64_t n, l, to;

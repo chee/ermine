@@ -56,7 +56,14 @@ Deno.test("sync shows itself at a node, and that node makes no step", async () =
 	})
 	const shown = () => a.value("sync") as Shown | undefined
 	await until(() => shown() !== undefined)
-	assertEquals(shown(), { device: a.log.device!, have: {}, links: 0, failed: [], unkept: 0 })
+	assertEquals(shown(), {
+		device: a.log.device!,
+		have: {},
+		links: 0,
+		failed: [],
+		forks: [],
+		unkept: 0,
+	})
 
 	a.put("pig", { x: 1 })
 	await until(() => shown()!.have[a.log.device!] === 1)
@@ -77,4 +84,25 @@ Deno.test("sync shows itself at a node, and that node makes no step", async () =
 	assert(nodes.length > 0 && !nodes.includes("sync"), nodes.join())
 	assertEquals(b.value("sync"), undefined)
 	assertEquals(a.history.unkept.length, 0)
+})
+
+Deno.test("a fork shows at the sync node, and the chain held stays", async () => {
+	const a = await device()
+	const seed = new Uint8Array(32).fill(7)
+	const one = createLog({ seed }), two = createLog({ seed })
+	await one.load(), await two.load()
+	const write = (l: typeof one, v: number) =>
+		l.write({ node: "n", part: "value", patches: [{ path: [], value: v }], when: 0, on: [] })
+	write(one, 1), write(one, 2), write(two, 3), write(two, 4)
+	const device_ = one.device!
+	const stop = show({ ...a, write: (v) => a.put("sync", v) })
+	const shown = () => a.value("sync") as Shown | undefined
+	await until(() => shown() !== undefined)
+	assertEquals(shown()!.forks, [])
+	assertEquals(await a.log.take((await one.run(device_, 1))!), { added: 2 })
+	assertEquals(await a.log.take((await two.run(device_, 1))!), { refused: "fork" })
+	await until(() => shown()!.forks.length === 1)
+	assertEquals(shown()!.forks, [{ device: device_, n: 2 }])
+	assertEquals(a.log.count(device_), 2)
+	stop()
 })

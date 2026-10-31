@@ -7,7 +7,7 @@
 typedef struct {
 	uint8_t device[32];
 	uint64_t theirs;
-	uint8_t refused, pushing, again;
+	uint8_t refused, pushing, again, tailed, proved;
 } peer;
 
 struct tp_link {
@@ -34,7 +34,7 @@ struct tp_sync {
 	size_t max, devices;
 	tp_link *links;
 	int depth;
-	tp_link *from;
+	tp_link *from, *skip;
 	uint8_t (*seen)[8];
 	size_t nseen, most, at;
 	tp_buf steps, out;
@@ -140,7 +140,8 @@ static void say_refused(tp_sync *s, tp_link *l, const uint8_t device[32]) {
 }
 
 
-static int packed(tp_sync *s, const uint8_t device[32], uint64_t from, uint64_t to, const uint8_t sig[64]) {
+static int packed(tp_sync *s, const uint8_t device[32], uint64_t from, uint64_t to, const uint8_t sig[64],
+	int whole) {
 	size_t count = (size_t)(to - from + 1);
 	if (count > s->nspans) {
 		tp_span *p = tp_grow(&s->mem, s->spans, s->nspans * sizeof *p, count * sizeof *p);
@@ -158,7 +159,7 @@ static int packed(tp_sync *s, const uint8_t device[32], uint64_t from, uint64_t 
 	for (size_t k = 0, at = 0; k < count; at += s->spans[k++].n) s->spans[k].p = s->steps.p + at;
 	tp_span pack;
 	tp_prior prior;
-	int against = from > 1 && !tp_log_prior(s->log, device, from - 1, &prior);
+	int against = !whole && from > 1 && !tp_log_prior(s->log, device, from - 1, &prior);
 	if (tp_pack_after(&s->mem, against ? &prior : NULL, s->spans, count, s->max, &pack)) return -1;
 	tp_buf *b = &s->out;
 	tp_put_head(b, 4, 4), tp_put_text(b, "run");
@@ -179,7 +180,7 @@ static int one(tp_sync *s, tp_link *l, size_t i) {
 	long held = tp_log_message(s->log, device, from, NULL, 0);
 	uint8_t *p = held > 0 ? tp_reserve(b, (size_t)held) : NULL;
 	if (p) tp_log_message(s->log, device, from, p, (size_t)held);
-	else if (held > 0 || packed(s, device, from, to, sig)) return 0;
+	else if (held > 0 || packed(s, device, from, to, sig, 0)) return 0;
 	if (b->bad) return 0;
 	send(s, l, b->p, b->len);
 	if (!l->gone) l->peers[i].theirs = to;
@@ -244,6 +245,21 @@ void tp_sync_told(void *ctx, const uint8_t device[32], uint64_t from, size_t cou
 	sweep(s);
 }
 
+void tp_sync_forked(void *ctx, size_t i) {
+	tp_sync *s = ctx;
+	tp_fork f;
+	if (tp_log_fork_at(s->log, i, &f)) return;
+	s->depth++;
+	for (tp_link *l = s->links; l; l = l->next) {
+		if (l->gone || l == s->skip) continue;
+		long p = peer_of(s, l, f.device);
+		if (p >= 0) l->peers[p].proved = 1;
+		send(s, l, f.message.p, f.message.n);
+	}
+	s->depth--;
+	sweep(s);
+}
+
 tp_link *tp_sync_link(tp_sync *s, tp_send send_, void *ctx, int many) {
 	tp_link *l = tp_alloc(&s->mem, sizeof *l);
 	if (!l) return NULL;
@@ -293,6 +309,7 @@ static void have(tp_sync *s, tp_link *l, tp_in in, uint64_t k) {
 		push(s, l, me), pump(s, l);
 		return;
 	}
+	tp_in start = in;
 	for (size_t i = 0; i < l->npeers; i++) l->peers[i].theirs = 0;
 	l->said = 0;
 	for (uint64_t i = 0; i < k; i++) {
@@ -303,6 +320,21 @@ static void have(tp_sync *s, tp_link *l, tp_in in, uint64_t k) {
 		if (p >= 0) l->peers[p].theirs = n;
 		if (me && !memcmp(device.p, me, 32)) l->said = n;
 	}
+	// proofs of devices they hold steps of, once
+	for (size_t i = 0; i < tp_log_forks(s->log); i++) {
+		tp_fork f;
+		tp_log_fork_at(s->log, i, &f);
+		long p = peer_of(s, l, f.device);
+		int theirs = 0;
+		tp_in at = start;
+		for (uint64_t j = 0; j < k && !theirs; j++) {
+			uint64_t two, w;
+			tp_span d;
+			tp_array(&at, &two), tp_bytes(&at, 32, &d), tp_whole(&at, &w);
+			theirs = !memcmp(d.p, f.device, 32);
+		}
+		if (p >= 0 && theirs && !l->peers[p].proved) l->peers[p].proved = 1, send(s, l, f.message.p, f.message.n);
+	}
 	for (size_t i = 0; i < tp_log_devices(s->log); i++) {
 		uint64_t mine;
 		const uint8_t *device = tp_log_have(s->log, i, &mine);
@@ -312,6 +344,22 @@ static void have(tp_sync *s, tp_link *l, tp_in in, uint64_t k) {
 	pump(s, l);
 }
 
+// A run refused that the taker may hold another chain of: its own run from the step before the
+// refused one, whole, so the other side can see where the two differ (once a device a link).
+static void tail(tp_sync *s, tp_link *l, const uint8_t device[32], tp_span pack) {
+	uint64_t n0, to;
+	int after;
+	uint8_t sig[64];
+	if (tp_pack_first(pack, &n0, &after) || n0 < 2 || n0 - 1 > tp_log_count(s->log, device)) return;
+	long i = peer_of(s, l, device);
+	if (i < 0 || l->peers[i].tailed || tp_log_forked(s->log, device)) return;
+	if (tp_log_run(s->log, device, n0 - 1, &to, sig)) return;
+	s->out.len = 0, s->out.bad = 0;
+	if (packed(s, device, n0 - 1, to, sig, 1) || s->out.bad) return;
+	l->peers[i].tailed = 1;
+	send(s, l, s->out.p, s->out.len);
+}
+
 static void run(tp_sync *s, tp_link *l, const uint8_t *device, const uint8_t *sig, tp_span pack,
 	tp_span message) {
 	tp_steps steps;
@@ -319,15 +367,20 @@ static void run(tp_sync *s, tp_link *l, const uint8_t *device, const uint8_t *si
 	uint64_t last = 0, n0;
 	// Packed against the step before: a gap if past what is held, TP_BEFORE if let go. Never
 	// guessed.
-	int after = 0;
+	int after = 0, packbad = 0;
 	tp_prior prior;
 	uint64_t held = tp_log_count(s->log, device);
 	long r = tp_pack_first(pack, &n0, &after);
-	int passed = !r && after && tp_pack_count(pack) && n0 + tp_pack_count(pack) - 1 <= held;
-	if (passed) last = held;
-	else if (!r && after && n0 - 1 > held) r = TP_GAP;
-	else if (!r && after && tp_log_prior(s->log, device, n0 - 1, &prior)) r = TP_BEFORE;
-	else if (!r) r = tp_unpack_after(&s->mem, pack, s->max, after ? &prior : NULL, &steps);
+	// all held: unpacked still, to see whether it is the same chain
+	int passed = 0, all = !r && after && tp_pack_count(pack) && n0 + tp_pack_count(pack) - 1 <= held;
+	if (!r && after && n0 - 1 > held) r = TP_GAP;
+	else if (!r && after && tp_log_prior(s->log, device, n0 - 1, &prior)) {
+		if (all) passed = 1, last = held;
+		else r = TP_BEFORE;
+	} else if (!r) {
+		r = tp_unpack_after(&s->mem, pack, s->max, after ? &prior : NULL, &steps);
+		if (r && all) passed = 1, last = held, r = 0;
+	}
 	if (!r && !passed) {
 		if (!tp_step_decode(steps.bytes, steps.at[1], &first)) last = first.n + steps.count - 1;
 		tp_span *spans = tp_alloc(&s->mem, steps.count * sizeof *spans);
@@ -346,7 +399,7 @@ static void run(tp_sync *s, tp_link *l, const uint8_t *device, const uint8_t *si
 		tp_steps_free(&s->mem, &steps);
 	} else if (r == TP_NOTSTEP || r == TP_BOUND) {
 		// not a pack, or past what a run may make: refused
-		r = TP_CHAIN;
+		r = TP_CHAIN, packbad = 1;
 	}
 	if (r >= 0) {
 		long p = peer_of(s, l, device);
@@ -355,6 +408,7 @@ static void run(tp_sync *s, tp_link *l, const uint8_t *device, const uint8_t *si
 		say_have(s, l);
 	} else if (r <= TP_OWN && !l->many) {
 		say_refused(s, l, device);
+		if ((r == TP_CHAIN && !packbad) || r == TP_SIGNATURE) tail(s, l, device, pack);
 	}
 }
 
@@ -373,6 +427,15 @@ static void receive(tp_sync *s, tp_link *l, const uint8_t *bytes, size_t length)
 	} else if (tp_is(t, "run") && k == 4 && !tp_bytes(&in, 32, &x) && !tp_bytes(&in, 64, &y) &&
 		in.p < in.end && *in.p >> 5 == 4) {
 		run(s, l, x.p, y.p, (tp_span){in.p, (size_t)(in.end - in.p)}, (tp_span){bytes, length});
+	} else if (tp_is(t, "fork") && k == 6) {
+		tp_link *was = s->skip;
+		s->skip = l;
+		if (k == 6 && !tp_bytes(&in, 32, &x)) {
+			long p = peer_of(s, l, x.p);
+			if (p >= 0) l->peers[p].proved = 1;
+		}
+		tp_log_fork(s->log, (tp_span){bytes, length});
+		s->skip = was;
 	} else if (tp_is(t, "refused") && k == 3 && !tp_bytes(&in, 32, &x) && !tp_whole(&in, &n)) {
 		long p = !l->many && tp_log_count(s->log, x.p) ? peer_of(s, l, x.p) : -1;
 		if (p >= 0) l->peers[p].refused = 1;

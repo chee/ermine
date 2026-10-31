@@ -198,6 +198,14 @@ const seqAt = (f: Feed | undefined, n: number) => {
 }
 type Chained = { steps: Step[]; last: Uint8Array | null }
 export type Taken = { added: number } | { refused: string }
+// proof: two signed runs of one device whose first steps (the same n) differ (WIRE.md, forks)
+// n: a step where the two chains differ; they may differ before it
+export type Fork = {
+	device: string
+	n: number
+	hashes: [string, string]
+	runs: [Pick<Run, "steps" | "sig">, Pick<Run, "steps" | "sig">]
+}
 type Told = (device: string, steps: Step[], from?: unknown) => void
 
 export type Log = {
@@ -216,6 +224,16 @@ export type Log = {
 	write(s: Omit<Step, "device" | "n" | "before" | "lamport" | "relative">): Step
 	run(device: string, from: number): Promise<Run | undefined>
 	take(b: Run, from?: unknown): Promise<Taken>
+	// the forks known, one a device
+	forks(): readonly Fork[]
+	onFork(f: (fork: Fork, from?: unknown) => void): () => void
+	// a proof from elsewhere: true if it checks and the device had none
+	fork(
+		device: string,
+		a: Pick<Run, "steps" | "sig">,
+		b: Pick<Run, "steps" | "sig">,
+		from?: unknown,
+	): Promise<boolean>
 	takePack(
 		m: { device: string; sig: Uint8Array; pack: Packed; message?: Uint8Array },
 		from?: unknown,
@@ -228,12 +246,19 @@ export type Log = {
 }
 
 // writes: this log writes steps of its own, under its store's key. Without it the log is a relay.
-export function createLog(o: { store?: Store; writes?: boolean; seed?: Uint8Array } = {}): Log {
+export function createLog(
+	o: { store?: Store; writes?: boolean; seed?: Uint8Array; forks?: number } = {},
+): Log {
 	const store = o.store ?? createMemoryStore()
 	let me: Signer | undefined
 	const feeds = new Map<string, Feed>()
 	const told: Told[] = []
 	const quiets: (() => void)[] = []
+	const found = new Map<string, Fork>()
+	// the bytes of steps the proofs hold, at most o.forks
+	let proved = 0
+	const most = o.forks ?? 2 ** 25
+	const forked: ((fork: Fork, from?: unknown) => void)[] = []
 	// takes asked for and not yet done
 	let waiting = 0
 	let lamport = 0
@@ -319,8 +344,10 @@ export function createLog(o: { store?: Store; writes?: boolean; seed?: Uint8Arra
 	// Never this device's own. Stored as it came when every step is new, else what is new is
 	// repacked.
 	async function taken(b: Run, from?: unknown): Promise<Taken> {
+		if (!b.steps.length) return b.device === me?.device ? { refused: "own" } : { added: 0 }
+		const split = await clash(b)
 		if (b.device === me?.device) return { refused: "own" }
-		if (!b.steps.length) return { added: 0 }
+		if (split) return { refused: split === 1 ? "fork" : "signature" }
 		let c
 		try {
 			c = chain(b.device, b.steps)
@@ -338,6 +365,108 @@ export function createLog(o: { store?: Store; writes?: boolean; seed?: Uint8Arra
 		add(b.device, r, c, from)
 		return { added: c.steps.length }
 	}
+	// A run overlapping what is held, with another hash where they meet: two signed chains, a proof
+	// from that step (1: a fork). One that doesn't check is not (2: the run is not signed as it is).
+	// What costs reads of held steps, or closing the open run, needs the run's own chain and
+	// signature good first.
+	async function clash(b: Run): Promise<0 | 1 | 2> {
+		const f = feeds.get(b.device)
+		let first
+		try {
+			first = decodeStep(b.steps[0]).n
+		} catch {
+			return 0
+		}
+		if (!f || first > f.count) return 0
+		const m = Math.min(first + b.steps.length - 1, f.count)
+		const mine = hashStep(b.steps[m - first])
+		let signed: boolean | undefined
+		if (m === f.count) {
+			if (same(mine, f.last!)) return 0
+		} else {
+			if (!(signed = !!await tail(b.device, b))) return 0
+			let held
+			try {
+				held = hashStep(store.get(b.device, m))
+			} catch {
+				return 0
+			}
+			if (same(mine, held)) return 0
+		}
+		if (!(signed ??= !!await tail(b.device, b))) return m === f.count ? 2 : 0
+		if (found.has(b.device)) return 1
+		const own = await runOf(b.device, m)
+		return own && await learn(b.device, own, { steps: b.steps.slice(m - first), sig: b.sig })
+			? 1
+			: 2
+	}
+	async function tail(device: string, r: Pick<Run, "steps" | "sig">) {
+		let n = 0, before: Uint8Array | null = null, bytes = 0
+		for (const [i, b] of r.steps.entries()) {
+			bytes += b.length
+			if (bytes > RUN) return
+			let s
+			try {
+				s = decodeStep(b)
+			} catch {
+				return
+			}
+			if (i === 0) n = s.n
+			else if (s.n !== n + i || !same(s.before, before)) return
+			if (s.device !== device) return
+			before = hashStep(b)
+		}
+		if (!before || !await verify(device, before, r.sig)) return
+		return { n, hash: hex(hashStep(r.steps[0])), bytes }
+	}
+	const slim = (r: Pick<Run, "steps" | "sig">) => ({ steps: r.steps, sig: r.sig })
+	async function learn(
+		device: string,
+		a: Pick<Run, "steps" | "sig">,
+		b: Pick<Run, "steps" | "sig">,
+		from?: unknown,
+	): Promise<boolean> {
+		if (found.has(device) || !count(device) || !/^[0-9a-f]{64}$/.test(device)) return false
+		const x = await tail(device, a), y = x && await tail(device, b)
+		if (!x || !y || x.n !== y.n || x.hash === y.hash || x.bytes + y.bytes > RUN) return false
+		if (found.has(device) || proved + x.bytes + y.bytes > most) return false
+		proved += x.bytes + y.bytes
+		const low = x.hash < y.hash
+		const fork: Fork = {
+			device,
+			n: x.n,
+			hashes: low ? [x.hash, y.hash] : [y.hash, x.hash],
+			runs: low ? [slim(a), slim(b)] : [slim(b), slim(a)],
+		}
+		found.set(device, fork)
+		for (const t of forked) {
+			try {
+				t(fork, from)
+			} catch {
+				// its own
+			}
+		}
+		return true
+	}
+	async function runOf(device: string, from: number): Promise<Run | undefined> {
+		if (from < 1 || from > count(device)) return undefined
+		// A run's steps are on disk before any of it leaves, so a power cut can't reuse an n.
+		if (device === me?.device) {
+			await signing
+			if (from > closed && !await close(count(device)).then(() => true, () => false)) {
+				return undefined
+			}
+			if (!await saving.then(() => store.sync?.()).then(() => true, () => false)) {
+				return undefined
+			}
+		}
+		const r = store.run(device, from)
+		if (!r || !isRun(r.record)) return undefined
+		const sig = opened(r.record)[2]
+		const steps = stepsOf(r.record).slice(from - r.first)
+		return { device, steps, sig, ...(from === r.first && { message: messageOf(r.record) }) }
+	}
+
 	function serial(f: () => Taken | Promise<Taken>): Promise<Taken> {
 		waiting++
 		const p = taking.then(f, f)
@@ -432,28 +561,17 @@ export function createLog(o: { store?: Store; writes?: boolean; seed?: Uint8Arra
 			return step
 		},
 
-		async run(device: string, from: number): Promise<Run | undefined> {
-			if (from < 1 || from > count(device)) return undefined
-			// A run's steps are on disk before any of it leaves, so a power cut can't reuse an n.
-			if (device === me?.device) {
-				await signing
-				if (from > closed && !await close(count(device)).then(() => true, () => false)) {
-					return undefined
-				}
-				if (!await saving.then(() => store.sync?.()).then(() => true, () => false)) {
-					return undefined
-				}
-			}
-			const r = store.run(device, from)
-			if (!r || !isRun(r.record)) return undefined
-			const sig = opened(r.record)[2]
-			const steps = stepsOf(r.record).slice(from - r.first)
-			return { device, steps, sig, ...(from === r.first && { message: messageOf(r.record) }) }
-		},
+		run: runOf,
 
 		take(b: Run, from?: unknown): Promise<Taken> {
 			return serial(() => taken(b, from))
 		},
+		forks: () => [...found.values()],
+		onFork(t) {
+			forked.push(t)
+			return () => void forked.splice(forked.indexOf(t), 1)
+		},
+		fork: (device, a, b, from) => learn(device, a, b, from),
 		// A pack against the step before needs that step held; if it was let go it is refused as
 		// "before".
 		takePack(
@@ -464,13 +582,17 @@ export function createLog(o: { store?: Store; writes?: boolean; seed?: Uint8Arra
 				let steps
 				try {
 					const first = firstOf(m.pack)
-					if (first.prior && first.n + stepsIn(m.pack) - 1 <= count(m.device)) {
-						return { added: 0 }
-					}
+					// all held: unpacked still, to see whether it is the same chain
+					const held = first.prior && first.n + stepsIn(m.pack) - 1 <= count(m.device)
 					if (first.prior && first.n - 1 > count(m.device)) return { refused: "gap" }
 					const prior = first.prior ? prior_(m.device, first.n - 1) : undefined
-					if (first.prior && !prior) return { refused: "before" }
-					steps = unpack(m.pack, prior)
+					if (first.prior && !prior) return held ? { added: 0 } : { refused: "before" }
+					try {
+						steps = unpack(m.pack, prior)
+					} catch (e) {
+						if (held) return { added: 0 }
+						throw e
+					}
 				} catch {
 					return { refused: "pack" }
 				}

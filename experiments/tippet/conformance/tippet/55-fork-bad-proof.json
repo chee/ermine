@@ -1,0 +1,384 @@
+{
+	"title": "a proof that doesn't check is ignored, and not passed on: a signature not the device's over the last step, two tails of one chain, tails that start at different steps, steps that don't follow one another, signatures swapped between the tails; one that does is taken, passed on to the other links, and a second for the device is not",
+	"steps": [
+		{
+			"op": "device",
+			"name": "w",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "device",
+			"name": "w2",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "device",
+			"name": "r",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"expect": {
+				"key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
+		},
+		{
+			"op": "device",
+			"name": "s",
+			"seed": "0303030303030303030303030303030303030303030303030303030303030303",
+			"expect": {
+				"key": "ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1"
+			}
+		},
+		{
+			"op": "device",
+			"name": "t",
+			"seed": "0404040404040404040404040404040404040404040404040404040404040404",
+			"expect": {
+				"key": "ca93ac1705187071d67b83c7ff0efe8108e8ec4530575d7726879333dbdabe7c"
+			}
+		},
+		{
+			"op": "take",
+			"device": "r",
+			"run": {
+				"device": "w",
+				"steps": [
+					{
+						"n": 1,
+						"node": "t",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"value": "x1"
+							}
+						],
+						"lamport": 1,
+						"when": 0,
+						"on": []
+					},
+					{
+						"n": 2,
+						"node": "t",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"value": "x2"
+							}
+						],
+						"lamport": 2,
+						"when": 0,
+						"on": []
+					},
+					{
+						"n": 3,
+						"node": "t",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"value": "x3"
+							}
+						],
+						"lamport": 3,
+						"when": 0,
+						"on": []
+					}
+				]
+			},
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "link",
+			"a": "s",
+			"b": "r",
+			"expect": {}
+		},
+		{
+			"op": "link",
+			"a": "r",
+			"b": "t",
+			"expect": {}
+		},
+		{
+			"op": "inject",
+			"from": "s",
+			"to": "r",
+			"message": [
+				"fork",
+				"w",
+				"e77841108a161237037631da71aa12aeb32923e0aeed2046615afc1535c9539684462090b46931a7d7188e4969df59ef53441b72e16cf6a9a1240fe03fee4300",
+				[
+					"8958208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c03582018aa02f71afc0e2ac49683aef37318886f81be5ec9556c09c43c03cc4ee23f3461746576616c756581a26470617468806576616c7565627833030080"
+				],
+				"af828a679c213973f6766d283bcb417e5c2f299ebfb57e2af4c902097c942edd7b375215c16a415c7e64662c5eee0ce0e325682ba0e0263138ea1c2af329b90a",
+				[
+					"8958208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c035820a36bceafded32738d778845dda330347262122989d14127dbc6875a0f133733761746576616c756581a26470617468806576616c7565627933030080"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "forks",
+			"device": "r",
+			"expect": {
+				"forks": []
+			}
+		},
+		{
+			"op": "inject",
+			"from": "s",
+			"to": "r",
+			"message": [
+				"fork",
+				"w",
+				"e77841108a161237037631da71aa12aeb32923e0aeed2046615afc1535c9539684462090b46931a7d7188e4969df59ef53441b72e16cf6a9a1240fe03fee430a",
+				[
+					"8958208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c03582018aa02f71afc0e2ac49683aef37318886f81be5ec9556c09c43c03cc4ee23f3461746576616c756581a26470617468806576616c7565627833030080"
+				],
+				"e77841108a161237037631da71aa12aeb32923e0aeed2046615afc1535c9539684462090b46931a7d7188e4969df59ef53441b72e16cf6a9a1240fe03fee430a",
+				[
+					"8958208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c03582018aa02f71afc0e2ac49683aef37318886f81be5ec9556c09c43c03cc4ee23f3461746576616c756581a26470617468806576616c7565627833030080"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "forks",
+			"device": "r",
+			"expect": {
+				"forks": []
+			}
+		},
+		{
+			"op": "inject",
+			"from": "s",
+			"to": "r",
+			"message": [
+				"fork",
+				"w",
+				"e77841108a161237037631da71aa12aeb32923e0aeed2046615afc1535c9539684462090b46931a7d7188e4969df59ef53441b72e16cf6a9a1240fe03fee430a",
+				[
+					"8958208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c03582018aa02f71afc0e2ac49683aef37318886f81be5ec9556c09c43c03cc4ee23f3461746576616c756581a26470617468806576616c7565627833030080"
+				],
+				"e1bbf1989d4649f6607dab926e44f136a253bdd33e06f42d6d5edb48813fe285a50977e5c8505494c846506566d06e8906a6f3d6befe42000d43efd16109440a",
+				[
+					"8958208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c02582041b4ee97699a679a84c549b1a365aa81f5978a4fd58a6fc65415f6a1cbfe305b61746576616c756581a26470617468806576616c7565627932020080"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "forks",
+			"device": "r",
+			"expect": {
+				"forks": []
+			}
+		},
+		{
+			"op": "inject",
+			"from": "s",
+			"to": "r",
+			"message": [
+				"fork",
+				"w",
+				"e77841108a161237037631da71aa12aeb32923e0aeed2046615afc1535c9539684462090b46931a7d7188e4969df59ef53441b72e16cf6a9a1240fe03fee430a",
+				[
+					"8958208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c02582081e29d3c4d317fe364eef306fcc25989bc2113f8da2ba1323afde5d99fad0c1b61746576616c756581a26470617468806576616c7565627832020080",
+					"8958208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c035820a36bceafded32738d778845dda330347262122989d14127dbc6875a0f133733761746576616c756581a26470617468806576616c7565627933030080"
+				],
+				"af828a679c213973f6766d283bcb417e5c2f299ebfb57e2af4c902097c942edd7b375215c16a415c7e64662c5eee0ce0e325682ba0e0263138ea1c2af329b90a",
+				[
+					"8958208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c035820a36bceafded32738d778845dda330347262122989d14127dbc6875a0f133733761746576616c756581a26470617468806576616c7565627933030080"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "forks",
+			"device": "r",
+			"expect": {
+				"forks": []
+			}
+		},
+		{
+			"op": "inject",
+			"from": "s",
+			"to": "r",
+			"message": [
+				"fork",
+				"w",
+				"af828a679c213973f6766d283bcb417e5c2f299ebfb57e2af4c902097c942edd7b375215c16a415c7e64662c5eee0ce0e325682ba0e0263138ea1c2af329b90a",
+				[
+					"8958208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c03582018aa02f71afc0e2ac49683aef37318886f81be5ec9556c09c43c03cc4ee23f3461746576616c756581a26470617468806576616c7565627833030080"
+				],
+				"e77841108a161237037631da71aa12aeb32923e0aeed2046615afc1535c9539684462090b46931a7d7188e4969df59ef53441b72e16cf6a9a1240fe03fee430a",
+				[
+					"8958208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c035820a36bceafded32738d778845dda330347262122989d14127dbc6875a0f133733761746576616c756581a26470617468806576616c7565627933030080"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "forks",
+			"device": "r",
+			"expect": {
+				"forks": []
+			}
+		},
+		{
+			"op": "inject",
+			"from": "s",
+			"to": "r",
+			"message": [
+				"fork",
+				"w",
+				"913b2cf8f17ac80f94437c21311efa6b571327988c8a45230ba91081bae5a96b61d1940f855dcfcbcd40d6db3f2a0e78c45b74dce39551bfeb958988fc5b0103",
+				[
+					"8958208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c02582081e29d3c4d317fe364eef306fcc25989bc2113f8da2ba1323afde5d99fad0c1b61746576616c756581a26470617468806576616c7565627832020080"
+				],
+				"af828a679c213973f6766d283bcb417e5c2f299ebfb57e2af4c902097c942edd7b375215c16a415c7e64662c5eee0ce0e325682ba0e0263138ea1c2af329b90a",
+				[
+					"8958208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c035820a36bceafded32738d778845dda330347262122989d14127dbc6875a0f133733761746576616c756581a26470617468806576616c7565627933030080"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "forks",
+			"device": "r",
+			"expect": {
+				"forks": []
+			}
+		},
+		{
+			"op": "queued",
+			"from": "r",
+			"to": "t",
+			"expect": {
+				"queued": [
+					[
+						"have",
+						{
+							"w": 3
+						}
+					]
+				]
+			}
+		},
+		{
+			"op": "inject",
+			"from": "s",
+			"to": "r",
+			"message": [
+				"fork",
+				"w",
+				"e77841108a161237037631da71aa12aeb32923e0aeed2046615afc1535c9539684462090b46931a7d7188e4969df59ef53441b72e16cf6a9a1240fe03fee430a",
+				[
+					"8958208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c03582018aa02f71afc0e2ac49683aef37318886f81be5ec9556c09c43c03cc4ee23f3461746576616c756581a26470617468806576616c7565627833030080"
+				],
+				"af828a679c213973f6766d283bcb417e5c2f299ebfb57e2af4c902097c942edd7b375215c16a415c7e64662c5eee0ce0e325682ba0e0263138ea1c2af329b90a",
+				[
+					"8958208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c035820a36bceafded32738d778845dda330347262122989d14127dbc6875a0f133733761746576616c756581a26470617468806576616c7565627933030080"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "forks",
+			"device": "r",
+			"expect": {
+				"forks": [
+					{
+						"device": "w",
+						"n": 3,
+						"hashes": [
+							"b3bf9981e767a713ba95697fb5cb56ca6af78a82331db32ad94972bf7b2ecff6",
+							"f75ab839c23c09e132f145c138257c926e323a77dd2a5fae6acb4dc8719fcf21"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "queued",
+			"from": "r",
+			"to": "t",
+			"expect": {
+				"queued": [
+					[
+						"have",
+						{
+							"w": 3
+						}
+					],
+					[
+						"fork",
+						"w",
+						3
+					]
+				]
+			}
+		},
+		{
+			"op": "queued",
+			"from": "r",
+			"to": "s",
+			"expect": {
+				"queued": [
+					[
+						"have",
+						{
+							"w": 3
+						}
+					]
+				]
+			}
+		},
+		{
+			"op": "inject",
+			"from": "s",
+			"to": "r",
+			"message": [
+				"fork",
+				"w",
+				"e77841108a161237037631da71aa12aeb32923e0aeed2046615afc1535c9539684462090b46931a7d7188e4969df59ef53441b72e16cf6a9a1240fe03fee430a",
+				[
+					"8958208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c03582018aa02f71afc0e2ac49683aef37318886f81be5ec9556c09c43c03cc4ee23f3461746576616c756581a26470617468806576616c7565627833030080"
+				],
+				"af828a679c213973f6766d283bcb417e5c2f299ebfb57e2af4c902097c942edd7b375215c16a415c7e64662c5eee0ce0e325682ba0e0263138ea1c2af329b90a",
+				[
+					"8958208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c035820a36bceafded32738d778845dda330347262122989d14127dbc6875a0f133733761746576616c756581a26470617468806576616c7565627933030080"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "queued",
+			"from": "r",
+			"to": "t",
+			"expect": {
+				"queued": [
+					[
+						"have",
+						{
+							"w": 3
+						}
+					],
+					[
+						"fork",
+						"w",
+						3
+					]
+				]
+			}
+		}
+	]
+}

@@ -90,7 +90,7 @@ static tp_log *writer(void) {
 	tp_mem mem = {plain, NULL};
 	uint8_t seed[32];
 	memset(seed, 7, 32);
-	tp_log_options o = {mem, tp_memory_store(&mem, 1 << 24), seed, 1, {0, 0, 0}, NULL, NULL};
+	tp_log_options o = {mem, tp_memory_store(&mem, 1 << 24), seed, 1, {0, 0, 0, 0}, NULL, NULL, NULL};
 	tp_log *log = tp_log_new(&o);
 	uint64_t n, lamport;
 	tp_log_load(log);
@@ -204,7 +204,7 @@ static void bench(tp_log *w, const messages *m, int file, int forgets) {
 	char dir[] = "/tmp/tippet-bench-XXXXXX";
 	if (file && !mkdtemp(dir)) abort();
 	tp_store *store = file ? tp_file_store(&mem[0], dir, 1 << 20) : tp_memory_store(&mem[0], 1 << 24);
-	tp_log_options o = {mem[1], store, seed, 1, {0, 0, 0}, told, &d};
+	tp_log_options o = {mem[1], store, seed, 1, {0, 0, 0, 0}, told, &d, NULL};
 	tp_log *log = tp_log_new(&o);
 	tp_log_load(log);
 	tp_history_options ho = {mem[2], log, table, places, NULL, inside, &d, forgets, 0};
