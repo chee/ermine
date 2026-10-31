@@ -248,22 +248,30 @@ Deno.test("a base that is no container: the recipe can only return", () => {
 	assertEquals(run("abc", (s) => s + "d"), [{ path: [], value: "abcd" }])
 	assertEquals(run("abc", () => {}), [])
 	assertEquals(run(1, (n) => n), [])
-	const bytes = new Uint8Array([1, 2])
-	assertEquals(run(bytes, (b) => assertStrictEquals(b, bytes)), [])
 })
 
-Deno.test("bytes, maps, sets, class instances, symbols are leaves", () => {
+Deno.test("maps, sets, class instances, symbols are leaves", () => {
 	class Live {}
-	const bytes = new Uint8Array([1]), map = new Map(), live = new Live(), sym = Symbol("s")
-	const base = { bytes, map, live, sym }
+	const map = new Map(), live = new Live(), sym = Symbol("s")
+	const base = { map, live, sym }
 	run(base, (d) => {
-		assertStrictEquals(d.bytes, bytes)
 		assertStrictEquals(d.map, map)
 		assertStrictEquals(d.live, live)
 		assertStrictEquals(d.sym, sym)
 	})
+	const next = new Map()
+	assertEquals(run(base, (d) => void (d.map = next)), [{ path: ["map"], value: next }])
+})
+
+Deno.test("bytes are a typed array: elements are ranges, a new one is a put", () => {
+	const base = { b: new Uint8Array([5, 4, 3]) }
+	assertEquals(run(base, (d) => void (d.b[1] = 9)), [
+		{ path: ["b"], range: [1, 2], value: new Uint8Array([9]) },
+	])
+	assertEquals(after(base, (d) => void d.b.set([7, 8], 1)), { b: new Uint8Array([5, 7, 8]) })
 	const next = new Uint8Array([2])
-	assertEquals(run(base, (d) => void (d.bytes = next)), [{ path: ["bytes"], value: next }])
+	assertEquals(run(base, (d) => void (d.b = next)), [{ path: ["b"], value: next }])
+	assertEquals(base.b, new Uint8Array([5, 4, 3]))
 })
 
 Deno.test("typed arrays: elements and the in place methods are ranges", () => {

@@ -6,18 +6,13 @@
 //   op      any string (read, edit, place, ...)
 //   target  a node or a field: { part?, id, field?, path?, route? }; route[i] is the id at each
 //           path step, route[0] the start
-//   from    where the asker stands: path, route, and box (the id of its box's folder, where its
-//           path and route start). Absent for the host.
+//   from    where the asker stands: path and route. Absent for the host.
 //   node    for a placement, the node being given the name, beside the target (the folder's slot)
 //   at      the version, passed to the policy and every read. Absent means now.
 //
 // A policy reads through the asker's own read, so a change to what it read asks again. Answers are
 // always immediate: yes, no with a reason, or pending with what it waits for. A grants answer
 // also says which grant decided; all, any and only pass that answer through whole.
-//
-// from.box is the box's folder id rather than its path, because paths are box-relative: two
-// processes at code/q in two boxes ask with the same from.path. Paths in an ask are as the asker
-// sees them, from its own "/"; no from.box means the ermine's own.
 import type { Key as Step } from "@ermine/changeable/apply"
 
 export type Key = string | symbol
@@ -29,7 +24,7 @@ export type Target = {
 	route?: readonly Key[]
 }
 
-export type Place = { path?: readonly string[]; route?: readonly Key[]; box?: Key }
+export type Place = { path?: readonly string[]; route?: readonly Key[] }
 
 export type Ask = {
 	who: unknown
@@ -110,7 +105,6 @@ export type Where = { part: string; id: Key }
 //   op, id         the ask's op, the target's id
 //   path, field    a start of the target's path / field
 //   from           a start of the asker's path
-//   box            the asker's box (from.box)
 //   deny           if true, a match is a no and beats any yes
 // A grant with an unknown field or a field of the wrong kind makes the whole node answer no, so
 // a misspelt field can never widen access. Entries that are not maps are skipped.
@@ -146,7 +140,6 @@ function malformed(g: Record<string, unknown>): string | undefined {
 				break
 			case "op":
 			case "id":
-			case "box":
 				if (typeof v !== "string") return k
 				break
 			case "path":
@@ -172,7 +165,6 @@ function matches(g: Record<string, unknown>, ask: Ask): boolean {
 	if (Object.hasOwn(g, "id") && g.id !== target.id) return false
 	if (Object.hasOwn(g, "path") && !starts(g.path, target.path)) return false
 	if (Object.hasOwn(g, "from") && !starts(g.from, ask.from?.path)) return false
-	if (Object.hasOwn(g, "box") && g.box !== ask.from?.box) return false
 	if (Object.hasOwn(g, "field") && !starts(g.field, target.field)) return false
 	return true
 }

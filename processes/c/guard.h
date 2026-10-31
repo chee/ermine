@@ -41,10 +41,9 @@ typedef struct {
 	const pr_policy *may;
 	const char *const *from;
 	size_t nfrom;
-	// Returns 0 when no call is open, else 1 with *from, *nfrom and *box set (borrowed until the next ask).
-	int (*caller)(void *ctx, const char *const **from, size_t *nfrom, tb_key *box);
+	// Returns 0 when no call is open, else 1 with *from and *nfrom set (borrowed until the next ask).
+	int (*caller)(void *ctx, const char *const **from, size_t *nfrom);
 	void *caller_ctx;
-	tb_key box;
 } gd_setup;
 
 typedef struct gd gd;

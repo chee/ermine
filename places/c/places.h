@@ -73,7 +73,6 @@ typedef struct {
 void pl_connect(pl *p, const pl_setup *setup);
 tb_key pl_root(const pl *p);
 const pl_contributor *const *pl_contributors(const pl *p, size_t *n);
-pl *pl_view(pl *p, tb_key root, const pl_contributor *const *contributors, size_t n);
 
 void pl_event(void *ctx, tb_key part, tb_key id);
 // A spot held by pl_keep is not released until its last keep is given back.

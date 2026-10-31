@@ -19,7 +19,8 @@ struct pl_crowified {
 };
 
 static int container(const op_value *v) {
-	return v != NULL && (v->type == OP_LIST || v->type == OP_MAP || v->type == OP_TYPED);
+	return v != NULL && (v->type == OP_LIST || v->type == OP_MAP || v->type == OP_TYPED ||
+		v->type == OP_BYTES);
 }
 
 static void forget_run(going *g) {

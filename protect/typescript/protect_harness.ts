@@ -9,7 +9,7 @@
 // { op: "ask", policy, who?, what, target, node?, from?, at? }
 //     → { answer, reason?, need?, grant?: { part, id, index }, reads: [[part, id, path?], ...] }
 //   who: a header map (actor, reader, ...); target and node: {part?, id?, field?, path?, route?};
-//   from: {path?, route?, box?}; reads: each read the policy made, in order
+//   from: {path?, route?}; reads: each read the policy made, in order
 import {
 	all,
 	type Answer,

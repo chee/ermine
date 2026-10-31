@@ -602,34 +602,6 @@ Deno.test("places: a watchAll that writes lands in the writer's run: a pipe's re
 	assertEquals("pipe" in (l.readChange("value", "B")?.frame.info ?? {}), true)
 })
 
-Deno.test("places: a view reads from its own root, nothing above it, and shares the spots, commit and watchAll", () => {
-	const w = world()
-	w.kids("R", { work: "W", tools: "T" })
-	w.kids("W", { notes: "N" })
-	const inside = w.l.view("W")
-	assertEquals([inside.root, get(inside, []), get(inside, ["notes"])], ["W", "W", "N"])
-	assertEquals([get(inside, ["work"]), get(inside, ["tools"])], [undefined, undefined])
-	assertEquals(lookup(inside, ["tools"], ["notes"]), undefined)
-	assertEquals(lookup(w.places, ["tools"], ["work", "notes"]), ["tools"])
-	const seen = w.watch(() => [...list(inside, [])])
-	const host = w.watch(() => [...list(w.places, ["work"])])
-	w.s.pulse()
-	w.hosted(() => w.l.commit(place(w.kid("W"), "a", "A", createChangeHeader(w.s))))
-	w.s.pulse()
-	assertEquals([seen.runs, seen.value], [2, ["notes", "a"]])
-	w.hosted(() => inside.commit(place(w.kid("W"), "b", "B", createChangeHeader(w.s))))
-	w.s.pulse()
-	assertEquals([host.runs, host.value], [3, ["notes", "a", "b"]])
-	w.kids("W", { c: "C" })
-	w.s.pulse()
-	assertEquals([seen.runs, seen.value], [4, ["c"]])
-	let told = 0
-	inside.watchAll((f) => void (f.part === "value" && f.id === "C" && told++))
-	w.value("C", 1)
-	w.hosted(() => w.edit("value", "C", [{ path: [], value: 2 }]))
-	assertEquals(told, 2)
-})
-
 Deno.test("places: an entry taken out is told with a change made then, from the scope open, its locations the stack of del's caller; none open, none", () => {
 	const { s, table, places, value, host } = world()
 	const facts: { id: Id; change?: ChangeHeader }[] = []

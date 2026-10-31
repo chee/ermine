@@ -51,7 +51,7 @@ typedef struct {
 	tb_table *in;
 } owned_t;
 
-// What every view of a places shares. Freed with the last of them.
+// A places' state.
 typedef struct {
 	tb_table *table;
 	pt_paths *paths;
@@ -154,15 +154,6 @@ void pl_connect(pl *l, const pl_setup *setup) {
 	l->s->now = setup->now;
 	l->s->now_ctx = setup->now_ctx;
 	ask(l, setup->contributors, setup->ncontributors);
-}
-
-pl *pl_view(pl *l, tb_key root, const pl_contributor *const *contributors, size_t n) {
-	pl *v = xalloc(sizeof *v);
-	v->root = root;
-	v->s = l->s;
-	v->s->refs++;
-	ask(v, contributors, n);
-	return v;
 }
 
 tb_key pl_root(const pl *l) { return l->root; }
@@ -450,6 +441,7 @@ size_t pl_keep(pl *l, const void *key, int n) {
 }
 
 static double element(const op_value *t, size_t i) {
+	if (t->type == OP_BYTES) return t->data[i];
 	size_t z = op_size(t->kind);
 	uint64_t u = 0;
 	for (size_t j = 0; j < z; j++) u |= (uint64_t)t->data[i * z + j] << (8 * j);
@@ -480,7 +472,7 @@ const op_value *pl_at(const op_value *v, const op_key *path, size_t n, op_value 
 			v = v->type == OP_MAP ? op_get(v, path[i].s) : NULL;
 		} else if (v->type == OP_LIST) {
 			v = path[i].n >= 0 && (size_t)path[i].n < v->count ? v->items[path[i].n] : NULL;
-		} else if (v->type == OP_TYPED && scratch != NULL && path[i].n >= 0 &&
+		} else if ((v->type == OP_TYPED || v->type == OP_BYTES) && scratch != NULL && path[i].n >= 0 &&
 			(size_t)path[i].n < op_length(v)) {
 			scratch->type = OP_NUM;
 			scratch->num = element(v, (size_t)path[i].n);

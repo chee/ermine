@@ -154,11 +154,6 @@ static int matches(const op_value *g, const pr_ask *ask) {
 	}
 	if ((x = op_get(g, "path")) && !starts_names(x, t->path, t->npath, t->path != NULL)) return 0;
 	if ((x = op_get(g, "from")) && !starts_names(x, ask->from.path, ask->from.npath, ask->from.path != NULL)) return 0;
-	if ((x = op_get(g, "box"))) {
-		const tb_key *b = &ask->from.box;
-		if (x->type != OP_STR || b->symbol != NULL || b->string == NULL) return 0;
-		if (strcmp(x->str, b->string) != 0) return 0;
-	}
 	if ((x = op_get(g, "field")) && !starts_field(x, t->field)) return 0;
 	return 1;
 }
@@ -168,7 +163,7 @@ static const char *malformed(const op_value *g) {
 		const char *k = g->keys[i];
 		int t = g->items[i]->type;
 		if (!strcmp(k, "actor") || !strcmp(k, "reader")) continue;
-		if (!strcmp(k, "op") || !strcmp(k, "id") || !strcmp(k, "box")) { if (t != OP_STR) return k; }
+		if (!strcmp(k, "op") || !strcmp(k, "id")) { if (t != OP_STR) return k; }
 		else if (!strcmp(k, "path") || !strcmp(k, "from") || !strcmp(k, "field")) { if (t != OP_LIST) return k; }
 		else if (!strcmp(k, "deny")) { if (t != OP_BOOL) return k; }
 		else return k;

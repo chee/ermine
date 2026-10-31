@@ -17,8 +17,8 @@
 // { op: "host", call, as? } -> { value? }    a function of the ermine object, as the host
 // { op: "code", at, program, back?, throws?, promise? } -> {}   run program's steps as a setup;
 //     its value is back's expr, or it throws text, or (promise) a promise settled at "settle"
-// { op: "start", name, at, program?, args?, in? } -> { id } | { refused, held? }
-//     program: the node holding a code step's program (default at); in: a name in "placed"
+// { op: "start", name, at, program?, args? } -> { id } | { refused, held? }
+//     program: the node holding a code step's program (default at)
 // { op: "stop", name, why? } -> {}
 // { op: "status", name } -> { status }
 // { op: "close" } -> {}
@@ -91,7 +91,6 @@ import type { System } from "./system/shapes.ts"
 import { isHandle } from "./handles.ts"
 import type { Run } from "@ermine/processes/runs"
 import type { Status } from "./system/shapes.ts"
-import type { Places } from "@ermine/places"
 import { testFeature } from "./features_fixture.ts"
 import { type Classify, show } from "../../conformance/typescript/frames.ts"
 
@@ -141,7 +140,6 @@ function make(o: Request = {}): Made {
 		path?: string
 		id?: string
 		from?: string
-		box?: string
 		pending?: boolean
 	}[]
 	const may: Policy | undefined = o.deny
@@ -150,8 +148,7 @@ function make(o: Request = {}): Made {
 				d.op === ask.op &&
 				(d.id === undefined || d.id === ask.target.id) &&
 				(d.path === undefined || d.path === ask.target.path?.join("/")) &&
-				(d.from === undefined || d.from === ask.from?.path?.join("/")) &&
-				(d.box === undefined || d.box === ask.from?.box)
+				(d.from === undefined || d.from === ask.from?.path?.join("/"))
 			)
 			return d === undefined ? yes : d.pending ? pending(["denied"]) : no("denied")
 		}
@@ -206,9 +203,13 @@ function make(o: Request = {}): Made {
 
 const world = () => w ?? make()
 
-// The features and library functions a program may use. Another harness adds its own.
-export const named = new Map<string, Feature>()
-export type Library = (
+// The features a program may use, by name.
+const named = new Map<string, Feature>()
+
+// What a library's own harness adds, given to serveErmine: features asked for by name; functions
+// a program may call, given their arguments evaluated, as the system's own are; forms, given their
+// raw arguments and the harness's own evaluation, for one that takes program steps; and ops.
+export type Form = (
 	env: Env,
 	raw: unknown[],
 	h: {
@@ -217,20 +218,13 @@ export type Library = (
 		run: (env: Env, steps: readonly Step[]) => void
 	},
 ) => unknown
-export const libraries = new Map<string, Library>()
-
-// What another harness adds: extra ops and places a start may live in.
-export const ops = new Map<
-	string,
-	(r: Request, ermine: Ermine) => Record<string, unknown>
->()
-export const placed = new Map<string, Places>()
-const placesOf = (name: unknown): { places?: Places } => {
-	if (name === undefined) return {}
-	const places = placed.get(name as string)
-	if (places === undefined) throw new Error(`no places ${name}`)
-	return { places }
+export type Additions = {
+	features?: readonly Feature[]
+	functions?: Record<string, (...args: never[]) => unknown>
+	forms?: Record<string, Form>
+	ops?: Record<string, (r: Request, ermine: Ermine) => Record<string, unknown>>
 }
+let added: Additions = {}
 
 const inline: Feature = {
 	name: "inline",
@@ -454,15 +448,20 @@ function call(api: Sys, env: Env, [fn, ...raw]: [string, ...unknown[]]): unknown
 			return { args: mark(w.call.args), returned: mark(w.call.returned ?? null) }
 		}
 		default: {
-			const library = libraries.get(fn)
-			if (library !== undefined) {
+			const form = added.forms?.[fn]
+			if (form !== undefined) {
 				return api.within(() =>
-					library(env, raw, {
+					form(env, raw, {
 						arg,
 						expr: (e, x) => expr(imported, e, x),
 						run: (e, steps) => run(imported, e, steps),
 					})
 				)
+			}
+			const mine = added.functions?.[fn] as ((...a: unknown[]) => unknown) | undefined
+			if (mine !== undefined) {
+				const args = raw.map((a) => arg(env, a))
+				return api.within(() => mine(...args))
 			}
 			const f = (api as unknown as Record<string, unknown>)[fn]
 			if (typeof f !== "function") throw new Error(`no api function ${fn}`)
@@ -676,7 +675,6 @@ function start(r: Request): Record<string, unknown> {
 		if (program === undefined) throw new Error(`no program made at ${rooted(where)}`)
 		const s = m.ermine.start(program, r.at, {
 			...r.args !== undefined && { args: r.args },
-			...placesOf(r.in),
 		})
 		if ("refused" in s) {
 			m.running.delete(r.name)
@@ -870,9 +868,9 @@ async function answer(r: Request): Promise<Record<string, unknown>> {
 		case "callframe":
 			return { frame: show(e.records.call(r.id)?.frame, classify) }
 		default: {
-			const extra = ops.get(r.op)
-			if (extra === undefined) throw new Error(`no op ${r.op}`)
-			return extra(r, e)
+			const op = added.ops?.[r.op]
+			if (op === undefined) throw new Error(`no op ${r.op}`)
+			return op(r, e)
 		}
 	}
 }
@@ -885,8 +883,10 @@ const noCalls: Feature = {
 
 named.set("inline", inline)
 
-export const serveErmine = () =>
-	serve(async (r) => {
+export const serveErmine = (additions: Additions = {}) => {
+	added = additions
+	for (const f of additions.features ?? []) named.set(f.name, f)
+	return serve(async (r) => {
 		try {
 			const out = await answer(r)
 			drain()
@@ -909,4 +909,5 @@ export const serveErmine = () =>
 			return { error: String(e) }
 		}
 	})
+}
 if (import.meta.main) serveErmine()

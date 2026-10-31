@@ -1,6 +1,7 @@
 // Squishes patches: fewer patches that give the same end result. It reads patches (apply.ts's)
 // and never needs the content they hold. Also encodes patches as run-length columns.
 import type { Key, Patch, Span } from "./apply.ts"
+import { isTyped, type Typed } from "@ermine/changeable/kinds"
 import { count, near } from "@ermine/changeable/walk-string"
 
 type Ranged = Patch & { range: Span }
@@ -8,7 +9,7 @@ type Ranged = Patch & { range: Span }
 const isList = Array.isArray
 const ranged = (p: Patch): p is Ranged => p.range !== undefined
 const plain = (p: Patch) => p.move === undefined && !("value" in p)
-const sequence = (v: unknown) => typeof v === "string" || isList(v) || typed(v)
+const sequence = (v: unknown) => typeof v === "string" || isList(v) || isTyped(v)
 
 // Range ends past 2^53 - 1 are bigints; sums stay exact.
 type Pos = number | bigint
@@ -32,12 +33,9 @@ function sub(x: Pos, y: Pos): Pos {
 
 function len(v: unknown): number {
 	if (typeof v === "string") return count(v)
-	if (isList(v) || typed(v)) return v.length
+	if (isList(v) || isTyped(v)) return v.length
 	return NaN
 }
-type Typed = Int8Array | Uint16Array | Int16Array | Uint32Array | Int32Array
-const typed = (v: unknown): v is Typed =>
-	ArrayBuffer.isView(v) && !(v instanceof DataView) && !(v instanceof Uint8Array)
 
 const same = (a: readonly Key[], b: readonly Key[]) =>
 	a.length === b.length && a.every((k, i) => k === b[i])
@@ -90,8 +88,8 @@ function splice(t: Tail, v: unknown, x: number, y: number, w: unknown): unknown 
 		t.n = out.length
 		return out
 	}
-	if (!typed(v)) return undefined
-	if (w !== undefined && (!typed(w) || w.constructor !== v.constructor)) return undefined
+	if (!isTyped(v)) return undefined
+	if (w !== undefined && (!isTyped(w) || w.constructor !== v.constructor)) return undefined
 	const wn = w ? w.length : 0, size = n - (y - x) + wn
 	t.n = size
 	if (t.own && t.back && x === n && size <= t.back.length) {

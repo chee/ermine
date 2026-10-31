@@ -26,19 +26,6 @@
 					{ "path": ["t"], "range": [1, 1], "value": [1] }
 				]
 			}
-		},
-		{
-			"op": "squish",
-			"patches": [
-				{ "path": ["t"], "range": [0, 0], "value": { "/": { "bytes": "AQ" } } },
-				{ "path": ["t"], "range": [0, 1] }
-			],
-			"expect": {
-				"patches": [
-					{ "path": ["t"], "range": [0, 0], "value": { "/": { "bytes": "AQ" } } },
-					{ "path": ["t"], "range": [0, 1] }
-				]
-			}
 		}
 	]
 }

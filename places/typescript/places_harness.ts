@@ -14,7 +14,7 @@
 //                                                         (path null: change spot), null: not a spot
 // { op: "spot", key }                       → { spot? }
 // { op: "mark", keys }                      → {}   keys (as track's) marked from outside
-// { op: "rows", of? }                       → {}   reads go through a view of "R" with [rows, children]
+// { op: "rows", of? }                       → {}   from here on, reads walk [rows, children]
 //    rows: a trie on value entry "rows"; of: ids of value entries, each a trie, asked in order
 // { op: "asked" }                           → { steps, names }   rows' asks since last asked
 //
@@ -38,6 +38,7 @@ import { asId, at, children, type Contributor, none, type Places } from "./place
 import {
 	answered,
 	basic,
+	contribute,
 	enroll,
 	fill,
 	json,
@@ -178,7 +179,8 @@ export function answer(r: Request): Json | undefined {
 			s.mark((r.keys as string[]).map(keyOf))
 			return {}
 		case "rows":
-			reader = places.view("R", [...((r.of as string[]) ?? ["rows"]).map(trie), children])
+			contribute([...((r.of as string[]) ?? ["rows"]).map(trie), children])
+			reader = places
 			return {}
 		case "asked": {
 			const was = { ...asked }

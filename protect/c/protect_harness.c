@@ -144,9 +144,6 @@ static void ask(const op_value *r, FILE *out) {
 		ask.from.npath = list_of(f)->count;
 		ask.from.path = strings(f);
 	}
-	if ((t = op_get(r, "from")) && (f = op_get(t, "box")) && f->type == OP_STR) {
-		ask.from.box = tb_string(f->str);
-	}
 	nlog = 0;
 	pr_answer a = pr_ask_of(policy, &ask, reader, NULL);
 	static const char *const names[] = {"yes", "no", "pending"};

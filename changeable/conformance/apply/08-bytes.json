@@ -1,5 +1,5 @@
 {
-	"title": "bytes: one whole value, never spliced, no keys",
+	"title": "bytes: a typed array of bytes, spliced by range with bytes only; no keys",
 	"steps": [
 		{
 			"op": "apply",
@@ -27,9 +27,12 @@
 				}
 			],
 			"expect": {
-				"error": {
-					"code": "wrong-kind",
-					"patch": 0
+				"value": {
+					"b": {
+						"/": {
+							"bytes": "AQIDBA"
+						}
+					}
 				}
 			}
 		},
@@ -54,9 +57,12 @@
 				}
 			],
 			"expect": {
-				"error": {
-					"code": "wrong-kind",
-					"patch": 0
+				"value": {
+					"b": {
+						"/": {
+							"bytes": "AgM"
+						}
+					}
 				}
 			}
 		},
@@ -81,8 +87,38 @@
 				}
 			],
 			"expect": {
+				"value": {
+					"b": {
+						"/": {
+							"bytes": "AQID"
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"b": {
+					"/": {
+						"bytes": "AQID"
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"b"
+					],
+					"range": [
+						0,
+						4
+					]
+				}
+			],
+			"expect": {
 				"error": {
-					"code": "wrong-kind",
+					"code": "range",
 					"patch": 0
 				}
 			}
@@ -153,9 +189,10 @@
 				}
 			],
 			"expect": {
-				"error": {
-					"code": "wrong-kind",
-					"patch": 0
+				"value": {
+					"/": {
+						"bytes": "AgM"
+					}
 				}
 			}
 		},
@@ -454,9 +491,17 @@
 				}
 			],
 			"expect": {
-				"error": {
-					"code": "wrong-kind",
-					"patch": 0
+				"value": {
+					"b": {
+						"/": {
+							"bytes": "AgM"
+						}
+					},
+					"c": {
+						"/": {
+							"bytes": "AQ"
+						}
+					}
 				}
 			}
 		},
@@ -512,6 +557,55 @@
 				"value": {
 					"/": {
 						"bytes": "AA"
+					}
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"bytes": "AQID"
+					}
+				},
+				"u": {
+					"/": {
+						"bytes": "CQ"
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"u"
+					],
+					"range": [
+						1,
+						1
+					],
+					"move": {
+						"path": [
+							"t"
+						],
+						"range": [
+							0,
+							2
+						]
+					}
+				}
+			],
+			"expect": {
+				"value": {
+					"t": {
+						"/": {
+							"bytes": "Aw"
+						}
+					},
+					"u": {
+						"/": {
+							"bytes": "CQEC"
+						}
 					}
 				}
 			}

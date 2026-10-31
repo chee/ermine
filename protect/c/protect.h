@@ -38,14 +38,12 @@ typedef struct {
 	pr_grant grant;
 } pr_answer;
 
-// Where something stands. A NULL path and route mean it was not reached by names. box is the id of
-// the box's folder, where path and route start; NULL means not said.
+// Where something stands. A NULL path and route mean it was not reached by names.
 typedef struct {
 	const char *const *path;
 	size_t npath;
 	const tb_key *route;
 	size_t nroute;
-	tb_key box;
 } pr_place;
 
 typedef struct {

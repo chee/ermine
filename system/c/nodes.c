@@ -295,15 +295,10 @@ es_context *es_context_new(es_ermine *e, const es_context_options *o) {
 	c->process = o->process;
 	c->places = o->places;
 	c->node = es_dup(o->node);
-	{
-		const char *top = pl_root(c->places).string;
-		c->box = top != NULL && e->root != NULL && strcmp(top, e->root) != 0 ? es_dup(top) : NULL;
-	}
 	c->guarded = e->may != NULL;
 	if (c->guarded) {
 		c->guard = gd_new(&(gd_setup){.places = c->places, .table = e->table, .may = e->may,
-			.from = CP(c->at), .nfrom = c->nat, .caller = es_caller_place, .caller_ctx = c,
-			.box = c->box != NULL ? tb_string(c->box) : (tb_key){0}});
+			.from = CP(c->at), .nfrom = c->nat, .caller = es_caller_place, .caller_ctx = c});
 	}
 	struct es_nodes *x = state(e);
 	ES_PUSH(x->contexts, x->ncontexts, x->capcontexts, c);
@@ -327,7 +322,6 @@ void es_context_free(es_context *c) {
 	pr_names_free(c->at, c->nat);
 	pr_names_free(c->args, c->nargs);
 	free(c->node);
-	free(c->box);
 	free(c);
 }
 
@@ -1519,8 +1513,8 @@ int es_place_at(es_context *c, es_at p, es_target x, const ch_location *site) {
 	return in_pulse(c, place_in, &s, site);
 }
 
-// a saved child of a folder that something else shadows at its path (a box's binding) is not the
-// process's to move or take out: nothing-there
+// a saved child of a folder that something else shadows at its path is not the process's to move
+// or take out: nothing-there
 static int not_shadowed(es_context *c, const es_names *path, const nd_entry *children, const char *name) {
 	const char *saved = child_of(children, name), *there;
 	if (saved == NULL) return 0;

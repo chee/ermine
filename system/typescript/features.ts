@@ -4,11 +4,13 @@
 // needs first and the first feature outermost. Hooks can only be added during setup.
 //
 //   export default {
-//     name: "patchy",
+//     name: "log",
 //     needs: [],
 //     setup(feature) {
-//       feature.onTable((table, next) => overlay(next(table), table.ahead))
-//       feature.onRead((x, items, next) => next(x, [...items, ...layersAt(x)]))
+//       feature.onWrite((context, write, next) => {
+//         console.log(write.part, write.id)
+//         next(context, write)
+//       })
 //     },
 //   }
 //
@@ -75,6 +77,7 @@ export class ErmineError extends Error {
 }
 
 export class FeatureError extends Error {
+	readonly code = "feature"
 	constructor(readonly feature: string, readonly hook: Hook, cause: unknown) {
 		super(
 			`${feature}'s ${hook} threw: ${cause instanceof Error ? cause.message : String(cause)}`,

@@ -30,7 +30,7 @@ Deno.test("squish: delete then type is a replace", () => {
 	assertEquals(squish([del(2, 5), ins(2, "xy")]), [{ path: ["t"], range: [2, 5], value: "xy" }])
 })
 
-Deno.test("squish: lists and typed arrays join; bytes and kinds that differ do not", () => {
+Deno.test("squish: lists, typed arrays and bytes join; kinds that differ do not", () => {
 	assertEquals(squish([ins(0, [1], ["l"]), ins(1, [2, 3], ["l"])]), [ins(0, [1, 2, 3], ["l"])])
 	assertEquals(
 		squish([ins(0, new Int16Array([1]), ["t"]), ins(1, new Int16Array([2]), ["t"])]),
@@ -38,7 +38,11 @@ Deno.test("squish: lists and typed arrays join; bytes and kinds that differ do n
 	)
 	assertEquals(
 		squish([ins(0, new Uint8Array([1]), ["b"]), ins(1, new Uint8Array([2]), ["b"])]),
-		[ins(0, new Uint8Array([1]), ["b"]), ins(1, new Uint8Array([2]), ["b"])],
+		[ins(0, new Uint8Array([1, 2]), ["b"])],
+	)
+	assertEquals(
+		squish([ins(0, new Int8Array([1]), ["b"]), ins(1, new Uint8Array([2]), ["b"])]).length,
+		2,
 	)
 	assertEquals(squish([ins(0, "a"), ins(1, [1])]).length, 2)
 })

@@ -34,7 +34,16 @@ import { type Computer, createScheduler, type Info, type Scope } from "@ermine/r
 import { type Told, trace } from "../../reactivity/typescript/scheduler_harness.ts"
 import { createPaths } from "@ermine/reactivity/paths"
 import { createTable, type Id, type Key } from "@ermine/graph/table"
-import { createPlaces, move, place, PlacesError, rename, unplace, type Where } from "./places.ts"
+import {
+	type Contributor,
+	createPlaces,
+	move,
+	place,
+	PlacesError,
+	rename,
+	unplace,
+	type Where,
+} from "./places.ts"
 
 import type { Answer, Request } from "../../conformance/typescript/harness.ts"
 import { toJson } from "../../conformance/typescript/form.ts"
@@ -61,7 +70,11 @@ trace(s, (m) => {
 s.onTrackingEnd((key) => places.release(key))
 export const table = createTable((part, id) => places.onTableChange(part as Key, id))
 export const paths = createPaths<unknown>()
-export const places = createPlaces({ root: "R", table, paths, scheduler: s })
+export let places = createPlaces({ root: "R", table, paths, scheduler: s })
+// From here on, places walks with these contributors (the same table, paths and scheduler).
+export function contribute(contributors: readonly Contributor[]) {
+	places = createPlaces({ root: "R", table, paths, scheduler: s, contributors })
+}
 export const host = s.createRootScope({ actor: "test" })
 export const header = (extra?: Info) => createChangeHeader(s, { extra })
 

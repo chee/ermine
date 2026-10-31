@@ -1,5 +1,5 @@
 {
-	"title": "typed arrays: spans of their elements, the taken put back as their own kind; bytes put back whole",
+	"title": "typed arrays and bytes: spans of their elements, the taken put back as their own kind",
 	"steps": [
 		{
 			"op": "invert",
@@ -326,6 +326,50 @@
 					}
 				}
 			]
+		},
+		{
+			"op": "invert",
+			"value": {
+				"b": {
+					"/": {
+						"bytes": "AQID"
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"b"
+					],
+					"range": [
+						1,
+						2
+					],
+					"value": {
+						"/": {
+							"bytes": "CAk"
+						}
+					}
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"b"
+						],
+						"range": [
+							1,
+							3
+						],
+						"value": {
+							"/": {
+								"bytes": "Ag"
+							}
+						}
+					}
+				]
+			}
 		}
 	]
 }

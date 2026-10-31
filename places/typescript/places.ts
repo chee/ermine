@@ -334,136 +334,133 @@ export function createPlaces(setup: Setup): Places {
 			peeping ? undefined : into === undefined ? scheduler.track(key) : void into.add(key),
 	}
 
-	function view(root: Id, given?: readonly Contributor[]): Places {
-		const asked = given ?? [children]
+	const root = setup.root
+	const given = setup.contributors
+	const asked = given ?? [children]
 
-		let said = 0
+	let said = 0
 
-		function go(here: Here, name: string): Member | undefined {
-			const gone = here.gone ?? 0
-			let under = gone
-			for (let i = 0; i < asked.length; i++) {
-				const b = bit(i)
-				if (gone & b) continue
-				const id = asked[i].step(here, name, reads)
-				if (id === none) under |= b
-				else if (id !== undefined) {
-					said = under
-					return { name, id, from: asked[i].from }
-				}
+	function go(here: Here, name: string): Member | undefined {
+		const gone = here.gone ?? 0
+		let under = gone
+		for (let i = 0; i < asked.length; i++) {
+			const b = bit(i)
+			if (gone & b) continue
+			const id = asked[i].step(here, name, reads)
+			if (id === none) under |= b
+			else if (id !== undefined) {
+				said = under
+				return { name, id, from: asked[i].from }
 			}
-			// No id anywhere, but a contributor has a level there: walk on through it as a folder.
+		}
+		// No id anywhere, but a contributor has a level there: walk on through it as a folder.
+		for (let i = 0; i < asked.length; i++) {
+			if (under & bit(i)) continue
+			const c = asked[i]
+			if (c.level?.(here, name, reads)) {
+				said = under
+				return { name, id: level, from: c.from }
+			}
+		}
+		said = under
+	}
+
+	function* walk(path: Path, from: Id | Here = root): Generator<Member, Here | undefined> {
+		if (given === undefined) {
+			let at = typeof from === "object" ? from.id : from
+			for (const name of path) {
+				if (!peeping) tell(paths.spot(first("children"), at, [name]))
+				const id = child(table.get("children", at), name)
+				if (id === undefined) return undefined
+				yield { name, id }
+				at = id
+			}
+			const base = typeof from === "object" ? from.path : from === root ? [] : undefined
+			return { id: at, path: base && (path.length ? [...base, ...path] : base) }
+		}
+		let here: Here = typeof from === "object"
+			? from
+			: from === root
+			? { id: root, path: [] }
+			: { id: from }
+		for (const name of path) {
+			const m = go(here, name)
+			if (m === undefined) return undefined
+			const gone = said
+			yield m
+			here = { id: m.id, path: here.path && [...here.path, name], gone }
+		}
+		return here
+	}
+
+	function answers(here: Here, name: string): Answers {
+		const gone = here.gone ?? 0
+		let out: Answer[] = [], under = gone
+		for (let i = 0; i < asked.length; i++) {
+			const b = bit(i)
+			if (gone & b) continue
+			const id = asked[i].step(here, name, reads)
+			if (id === none) under |= b
+			else if (id !== undefined) out.push({ id, from: asked[i].from })
+		}
+		if (out.length === 0) {
 			for (let i = 0; i < asked.length; i++) {
 				if (under & bit(i)) continue
 				const c = asked[i]
 				if (c.level?.(here, name, reads)) {
-					said = under
-					return { name, id: level, from: c.from }
+					out = [{ id: level, from: c.from }]
+					break
 				}
 			}
-			said = under
 		}
-
-		function* walk(path: Path, from: Id | Here = root): Generator<Member, Here | undefined> {
-			if (given === undefined) {
-				let at = typeof from === "object" ? from.id : from
-				for (const name of path) {
-					if (!peeping) tell(paths.spot(first("children"), at, [name]))
-					const id = child(table.get("children", at), name)
-					if (id === undefined) return undefined
-					yield { name, id }
-					at = id
-				}
-				const base = typeof from === "object" ? from.path : from === root ? [] : undefined
-				return { id: at, path: base && (path.length ? [...base, ...path] : base) }
-			}
-			let here: Here = typeof from === "object"
-				? from
-				: from === root
-				? { id: root, path: [] }
-				: { id: from }
-			for (const name of path) {
-				const m = go(here, name)
-				if (m === undefined) return undefined
-				const gone = said
-				yield m
-				here = { id: m.id, path: here.path && [...here.path, name], gone }
-			}
-			return here
-		}
-
-		function answers(here: Here, name: string): Answers {
-			const gone = here.gone ?? 0
-			let out: Answer[] = [], under = gone
-			for (let i = 0; i < asked.length; i++) {
-				const b = bit(i)
-				if (gone & b) continue
-				const id = asked[i].step(here, name, reads)
-				if (id === none) under |= b
-				else if (id !== undefined) out.push({ id, from: asked[i].from })
-			}
-			if (out.length === 0) {
-				for (let i = 0; i < asked.length; i++) {
-					if (under & bit(i)) continue
-					const c = asked[i]
-					if (c.level?.(here, name, reads)) {
-						out = [{ id: level, from: c.from }]
-						break
-					}
-				}
-			}
-			return Object.assign(out, { gone: under })
-		}
-
-		// With several contributors, in canonical CBOR key order.
-		function names(here: Here): Names {
-			const gone = here.gone ?? 0
-			let under = gone
-			const out: Named[] = []
-			const seen = new Set<string>()
-			for (let i = 0; i < asked.length; i++) {
-				const b = bit(i)
-				if (gone & b) continue
-				const c = asked[i]
-				const got = c.names(here, reads)
-				if (got === none) {
-					under |= b
-					continue
-				}
-				for (const name of got) {
-					if (seen.has(name)) continue
-					seen.add(name)
-					out.push({ name, from: c.from })
-				}
-			}
-			if (asked.length > 1) out.sort((a, b) => keyorder(a.name, b.name))
-			return Object.assign(out, { gone: under })
-		}
-
-		return {
-			root,
-			contributors: given,
-			view,
-			onTableChange,
-			release,
-			describe,
-			commit,
-			eachEntryChange,
-			watchAll,
-			readValue,
-			readKeys,
-			readChange,
-			namesOf,
-			walk,
-			answers,
-			names,
-			record,
-			peep,
-			hold,
-		}
+		return Object.assign(out, { gone: under })
 	}
 
-	return view(setup.root, setup.contributors)
+	// With several contributors, in canonical CBOR key order.
+	function names(here: Here): Names {
+		const gone = here.gone ?? 0
+		let under = gone
+		const out: Named[] = []
+		const seen = new Set<string>()
+		for (let i = 0; i < asked.length; i++) {
+			const b = bit(i)
+			if (gone & b) continue
+			const c = asked[i]
+			const got = c.names(here, reads)
+			if (got === none) {
+				under |= b
+				continue
+			}
+			for (const name of got) {
+				if (seen.has(name)) continue
+				seen.add(name)
+				out.push({ name, from: c.from })
+			}
+		}
+		if (asked.length > 1) out.sort((a, b) => keyorder(a.name, b.name))
+		return Object.assign(out, { gone: under })
+	}
+
+	return {
+		root,
+		contributors: given,
+		onTableChange,
+		release,
+		describe,
+		commit,
+		eachEntryChange,
+		watchAll,
+		readValue,
+		readKeys,
+		readChange,
+		namesOf,
+		walk,
+		answers,
+		names,
+		record,
+		peep,
+		hold,
+	}
 }
 
 export type Places = {
@@ -478,7 +475,6 @@ export type Places = {
 	watchAll: (fn: (fact: Fact) => void) => () => void
 
 	readonly contributors: readonly Contributor[] | undefined
-	view: (root: Id, contributors?: readonly Contributor[]) => Places
 
 	readValue: (part: Key, id: Id, path?: readonly Step[]) => unknown
 	readKeys: (part: Key, id: Id, path?: readonly Step[], ids?: boolean) => string[]

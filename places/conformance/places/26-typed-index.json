@@ -1,5 +1,5 @@
 {
-	"title": "at steps into a typed array by index, in range or nothing; bytes are one whole value, never stepped into",
+	"title": "at steps into a typed array by index, in range or nothing; bytes too",
 	"steps": [
 		{
 			"op": "at",
@@ -153,6 +153,33 @@
 			"path": [
 				"B",
 				1
+			],
+			"expect": {
+				"value": 2
+			}
+		},
+		{
+			"op": "at",
+			"value": {
+				"W": {
+					"/": {
+						"float32": [
+							0.5,
+							1.5,
+							2.5,
+							-4
+						]
+					}
+				},
+				"B": {
+					"/": {
+						"bytes": "AQID"
+					}
+				}
+			},
+			"path": [
+				"B",
+				3
 			],
 			"expect": {}
 		}
