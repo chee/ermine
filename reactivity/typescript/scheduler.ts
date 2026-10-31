@@ -408,12 +408,17 @@ export function createScheduler(options?: SchedulerOptions): Scheduler {
 
 	// Children first, newest first, then o's teardowns, newest first. Every one runs; the first
 	// error is given back.
-	function down(o: Scope, kids: Scope[], fs: (() => unknown)[]): { error: unknown } | undefined {
+	function down(
+		o: Scope,
+		kids: Scope[],
+		fs: (() => unknown)[],
+		opening = opens(o),
+	): { error: unknown } | undefined {
 		if (kids.length === 0 && fs.length === 0) return
-		if (later?.get()) return later.run(undefined, () => down(o, kids, fs))
+		if (later?.get()) return later.run(undefined, () => down(o, kids, fs, opening))
 		let failed: { error: unknown } | undefined
 		const was = open
-		open = opens(o)
+		open = opening
 		try {
 			for (const kid of kids) {
 				const e = dispose(kid)
@@ -1157,7 +1162,11 @@ export function createScheduler(options?: SchedulerOptions): Scheduler {
 
 	function land(r: Ran, out: Out) {
 		r.waiting = false
-		if (r.c.state !== "alive" || r.c.runs !== r.n || order.has(r.c)) return
+		if (r.c.state !== "alive" || r.c.runs !== r.n || order.has(r.c)) {
+			const v = "value" in out ? out.value : undefined
+			if (isStream(v)) outside(() => close(v[Symbol.asyncIterator]()))
+			return
+		}
 		const outer = thrown
 		thrown = undefined
 		try {
