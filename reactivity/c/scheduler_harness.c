@@ -1055,6 +1055,8 @@ static size_t nclosing, capclosing;
 static void stream_close(void *data) {
 	streamer *t = data;
 	t->closed = true;
+	// A body never pulled never started, so has no finally to run.
+	if (t->pull == NULL) t->finned = true;
 	if (!t->held) PUSH(closing, nclosing, capclosing, t);
 }
 
