@@ -108,25 +108,27 @@ int op_same_num(const op_value *a, const op_value *b) {
 	}
 	return a->num == b->num || (a->num != a->num && b->num != b->num);
 }
+static size_t count(const char *s, size_t n) {
+	size_t c = 0;
+	for (size_t i = 0; i < n; i++) c += ((unsigned char)s[i] & 0xC0) != 0x80;
+	return c;
+}
 op_value *op_str_n(const char *s, size_t n) {
 	op_value *v = make(OP_STR);
 	v->str = xrealloc(NULL, n + 1);
 	memcpy(v->str, s, n);
 	v->str[n] = 0;
 	v->bytes = n;
-	v->ascii = 1;
-	for (size_t i = 0; i < n; i++)
-		if ((unsigned char)s[i] >= 0x80) v->ascii = 0;
+	v->chars = count(s, n);
 	return v;
 }
 op_value *op_str(const char *s) { return op_str_n(s, strlen(s)); }
-op_value *op_str_take(char *s, size_t n) {
+op_value *op_str_take(char *s, size_t n) { return op_str_counted(s, n, count(s, n)); }
+op_value *op_str_counted(char *s, size_t n, size_t chars) {
 	op_value *v = make(OP_STR);
 	v->str = s;
 	v->bytes = n;
-	v->ascii = 1;
-	for (size_t i = 0; i < n; i++)
-		if ((unsigned char)s[i] >= 0x80) v->ascii = 0;
+	v->chars = chars;
 	return v;
 }
 op_value *op_list(void) { return make(OP_LIST); }

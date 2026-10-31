@@ -282,41 +282,43 @@ static size_t next(const unsigned char *t, size_t i, size_t end) {
 	while (i < end && (t[i] & 0xC0) == 0x80) i++;
 	return i;
 }
-typedef struct {
-	size_t i;
-	int64_t k;
-} finger;
-static int walk_to(const op_value *s, finger *f, int64_t t, size_t *at) {
-	const unsigned char *u = (const unsigned char *)s->str;
-	while (f->k < t) {
-		if (f->i >= s->bytes) return 0;
-		f->k++, f->i = next(u, f->i, s->bytes);
-	}
-	*at = f->i;
-	return 1;
+static size_t prev(const unsigned char *t, size_t i) {
+	i--;
+	while ((t[i] & 0xC0) == 0x80) i--;
+	return i;
 }
-static int span_bytes(const op_value *s, int64_t a, int64_t b, size_t *x, size_t *y,
-	int64_t *total) {
-	if (s->ascii) {
-		if ((uint64_t)a > s->bytes || (uint64_t)b > s->bytes) return 0;
+// The byte offset of code point t (0 <= t <= chars), walking from the nearest of the start, the end,
+// the string's finger and the point k at byte i.
+static size_t seek(const op_value *s, int64_t t, int64_t k, size_t i) {
+	const unsigned char *u = (const unsigned char *)s->str;
+	int64_t from[3] = {(int64_t)s->chars, s->finger.code, k};
+	size_t at[3] = {s->bytes, s->finger.byte, i};
+	int64_t best = t;
+	size_t j = 0;
+	for (int c = 0; c < 3; c++) {
+		int64_t d = from[c] > t ? from[c] - t : t - from[c];
+		if (d < best) best = d, k = from[c], j = at[c];
+	}
+	if (best == t) k = 0, j = 0;
+	for (; k < t; k++) j = next(u, j, s->bytes);
+	for (; k > t; k--) j = prev(u, j);
+	return j;
+}
+static int span_bytes(const op_value *s, int64_t a, int64_t b, size_t *x, size_t *y) {
+	if ((uint64_t)a > s->chars || (uint64_t)b > s->chars) return 0;
+	if (s->chars == s->bytes) {
 		*x = (size_t)a, *y = (size_t)b;
-		if (total) *total = (int64_t)s->bytes;
 		return 1;
 	}
-	finger f = {0, 0};
-	if (!walk_to(s, &f, a, x) || !walk_to(s, &f, b, y)) return 0;
-	if (total) {
-		const unsigned char *u = (const unsigned char *)s->str;
-		for (; f.i < s->bytes; f.i = next(u, f.i, s->bytes)) f.k++;
-		*total = f.k;
-	}
+	*x = seek(s, a, 0, 0);
+	*y = seek(s, b, a, *x);
 	return 1;
 }
-static int64_t str_len(const op_value *s) {
-	size_t x, y;
-	int64_t n = 0;
-	span_bytes(s, 0, 0, &x, &y, &n);
-	return n;
+// Rests the finger just after a splice's text, or at the start when a join moved what is before it.
+static void point(op_value *s, size_t joins, int64_t code, size_t byte) {
+	int fits = joins == 0 && s->bytes <= UINT32_MAX;
+	s->finger.code = fits ? (uint32_t)code : 0;
+	s->finger.byte = fits ? (uint32_t)byte : 0;
 }
 static int high_before(const unsigned char *p, size_t j) {
 	return j >= 3 && p[j - 3] == 0xED && (p[j - 2] & 0xF0) == 0xA0;
@@ -324,9 +326,9 @@ static int high_before(const unsigned char *p, size_t j) {
 static int low_at(const unsigned char *p, size_t j, size_t end) {
 	return j + 3 <= end && p[j] == 0xED && (p[j + 1] & 0xF0) == 0xB0;
 }
-static void join(char *p, size_t *size, size_t j) {
+static int join(char *p, size_t *size, size_t j) {
 	unsigned char *u = (unsigned char *)p;
-	if (!high_before(u, j) || !low_at(u, j, *size)) return;
+	if (!high_before(u, j) || !low_at(u, j, *size)) return 0;
 	unsigned long hi = ((u[j - 2] & 0x0Ful) << 6) | (u[j - 1] & 63ul);
 	unsigned long lo = ((u[j + 1] & 0x0Ful) << 6) | (u[j + 2] & 63ul);
 	unsigned long cp = 0x10000 + (hi << 10) + lo;
@@ -336,6 +338,7 @@ static void join(char *p, size_t *size, size_t j) {
 	u[j] = (unsigned char)(0x80 | (cp & 63));
 	memmove(p + j + 1, p + j + 3, *size - j - 3);
 	*size -= 2;
+	return 1;
 }
 
 
@@ -577,10 +580,10 @@ static int splice(work *w, const op_key *path, size_t n, int64_t a, int64_t b, o
 	w->joined = 0;
 	if (s->type == OP_STR) {
 		size_t x, y;
-		if (!span_bytes(s, a, b, &x, &y, NULL)) fail(w, OP_RANGE);
+		if (!span_bytes(s, a, b, &x, &y)) fail(w, OP_RANGE);
 		if (v != NULL && v->type != OP_STR) fail(w, OP_WRONG_KIND);
 		const unsigned char *u = (const unsigned char *)s->str;
-		size_t nv = v ? v->bytes : 0, post = s->bytes - y;
+		size_t nv = v ? v->bytes : 0, post = s->bytes - y, was = s->chars, vc = v ? v->chars : 0;
 		int l = 0, r = 0;
 		if (nv) {
 			const unsigned char *vu = (const unsigned char *)v->str;
@@ -590,7 +593,7 @@ static int splice(work *w, const op_key *path, size_t n, int64_t a, int64_t b, o
 		w->joined = l + r > 0;
 		if (taken) w->taken = made_str(w, "", 0, s->str + x, y - x, "", 0);
 		if (w->undo) {
-			w->size = v ? (size_t)str_len(v) : 0;
+			w->size = vc;
 			start = a - l;
 			end = start + (int64_t)w->size + (nv ? 0 : l);
 			back = w->joined
@@ -613,25 +616,22 @@ static int splice(work *w, const op_key *path, size_t n, int64_t a, int64_t b, o
 			}
 			if (post && nv != y - x) memmove(buf + x + nv, buf + y, post);
 			if (nv) memcpy(buf + x, v->str, nv);
-			join(buf, &size, x + nv);
-			if (nv) join(buf, &size, x);
+			size_t joins = (size_t)join(buf, &size, x + nv);
+			if (nv) joins += (size_t)join(buf, &size, x);
 			buf[size] = 0;
-			int was_ascii = s->ascii && (nv == 0 || v->ascii);
 			s->str = buf, s->bytes = size, s->capacity = room;
-			if (!was_ascii) {
-				s->ascii = 1;
-				for (size_t i = 0; i < size; i++)
-					if ((unsigned char)buf[i] >= 0x80) s->ascii = 0;
-			}
+			s->chars = was - (size_t)(b - a) + vc - joins;
+			point(s, joins, a + (int64_t)vc, x + nv);
 		} else {
 			char *buf = grab(NULL, x + nv + post + 1);
 			memcpy(buf, s->str, x);
 			if (nv) memcpy(buf + x, v->str, nv);
 			memcpy(buf + x + nv, s->str + y, post);
-			join(buf, &size, x + nv);
-			if (nv) join(buf, &size, x);
+			size_t joins = (size_t)join(buf, &size, x + nv);
+			if (nv) joins += (size_t)join(buf, &size, x);
 			buf[size] = 0;
-			out = made(w, op_str_take(buf, size));
+			out = made(w, op_str_counted(buf, size, was - (size_t)(b - a) + vc - joins));
+			point(out, joins, a + (int64_t)vc, x + nv);
 			set(w, path, n, out, 1);
 		}
 		if (v && !w->undo) drop(w, v);
