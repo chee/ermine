@@ -4,8 +4,8 @@
 // seeds,
 // a write's when is the request's or 1760000000, and the k-th random call gives k big-endian.
 //   encode  { step: { device, n, before, node, relative?, part, patches, lamport, when, on?, ids?, who? } } -> { bytes }
-//           ids: per patch null or { after: id | null, gone: [[id, count], …] }, an id [device, c]
-//           (made) or [device, lamport, k] (there since that step made its sequence new)
+//           ids: per patch null or { after: id | null, gone: [[id, count], …] }, an id as written
+//           (WIRE.md): this device's x or [x, k], another's [device, c] or [device, n, k]
 //   decode  { bytes } -> { step } | { refused: true }
 //   hash    { bytes } -> { hash }        blake3
 //   sign    { seed, bytes } -> { sig }   ed25519
@@ -55,7 +55,7 @@ import { fileStore } from "./store_file.ts"
 import { createHistory } from "./history.ts"
 import { createSync, type Link, type Message, read, type Sync, wire } from "./sync.ts"
 import { createSigner, type Signer } from "./sign.ts"
-import { decodeStep, encodeStep, hashStep, hex, type Id, type Step, unhex } from "./step.ts"
+import { decodeStep, encodeStep, hashStep, hex, type Step, unhex } from "./step.ts"
 import { firstOf, pack, type Packed, priorOf, stepsIn, unpack } from "./pack.ts"
 
 const WHEN = 1_760_000_000
@@ -224,24 +224,19 @@ function stepIn(s: Request, device?: string, before?: Uint8Array | null): Step {
 		out.on = (s.on as [string, number][]).map(([d, n]) => ({ device: keyOf(d), n }))
 	}
 	if (s.ids !== undefined) {
-		const id = ([d, c, k]: [string, number, number?]): Id =>
-			k === undefined ? { device: keyOf(d), c } : { device: keyOf(d), c, k }
-		out.ids = (s.ids as ({
-			after: [string, number, number?] | null
-			gone: [[string, number, number?], number][]
-		} | null)[])
+		type Written = number | (string | number)[]
+		const id = (i: Written): Value =>
+			Array.isArray(i) && typeof i[0] === "string" ? [unhex(keyOf(i[0])), ...i.slice(1)] : i
+		out.ids = (s.ids as ({ after: Written | null; gone: [Written, number][] } | null)[])
 			.map((x) =>
-				x &&
-				{
-					after: x.after && id(x.after),
-					gone: x.gone.map(([i, c]) => [id(i), c] as [Id, number]),
-				}
+				x && [x.after === null ? null : id(x.after), x.gone.map(([i, c]) => [id(i), c])]
 			)
 	}
 	if (s.who !== undefined) out.who = s.who
 	return out
 }
-const idOut = (i: Id) => i.k === undefined ? [i.device, i.c] : [i.device, i.c, i.k]
+const idOut = (i: Value) =>
+	Array.isArray(i) && i[0] instanceof Uint8Array ? [hex(i[0]), ...i.slice(1)] : i
 function stepOut(s: Step) {
 	return {
 		device: s.device,
@@ -255,9 +250,11 @@ function stepOut(s: Step) {
 		when: s.when,
 		...(s.on !== undefined && { on: s.on.map((o) => [o.device, o.n]) }),
 		...(s.ids !== undefined && {
-			ids: s.ids.map((x) =>
-				x && { after: x.after && idOut(x.after), gone: x.gone.map(([i, c]) => [idOut(i), c]) }
-			),
+			ids: s.ids.map((x) => {
+				if (x === null) return null
+				const [after, gone] = x as [Value, [Value, number][]]
+				return { after: idOut(after), gone: gone.map(([i, c]) => [idOut(i), c]) }
+			}),
 		}),
 		...(s.who !== undefined && { who: s.who }),
 	}

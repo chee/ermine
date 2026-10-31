@@ -252,23 +252,20 @@ static op_value *decode(const uint8_t *b, size_t n) {
 	return v ? hh_hold(v) : NULL;
 }
 
-// ids as written (WIRE.md): an id [device, c] (made) or [device, lamport, k] (born) is x or [x, k] on
-// the step's own device, x lamport less c
-static op_value *id_in(const op_value *x, const uint8_t *key, int64_t lamport) {
-	int64_t c, k = 0;
-	const uint8_t *d = x->type == OP_LIST && (x->count == 2 || x->count == 3) && x->items[0]->type == OP_STR
-		? keyof(x->items[0]->str) : NULL;
-	int born = d && x->count == 3;
-	if (!d || !whole(x->items[1], &c) || (born && !whole(x->items[2], &k))) return NULL;
-	if (!memcmp(d, key, 32) && !born) return op_int(lamport - c);
+// an id as written (WIRE.md): this device's x or [x, k], another's [device, c] or [device, n, k]
+static op_value *id_in(const op_value *x) {
+	if (x->type == OP_NUM) return op_ref((op_value *)x);
+	if (x->type != OP_LIST || x->count < 2 || x->count > 3) return NULL;
+	if (x->items[0]->type != OP_STR) return op_ref((op_value *)x);
+	const uint8_t *d = keyof(x->items[0]->str);
+	if (!d) return NULL;
 	op_value *a = op_list();
-	if (!memcmp(d, key, 32)) op_push(a, op_int(lamport - c));
-	else op_push(a, op_bytes(d, 32)), op_push(a, op_int(c));
-	if (born) op_push(a, op_int(k));
+	op_push(a, op_bytes(d, 32));
+	for (size_t i = 1; i < x->count; i++) op_push(a, op_ref(x->items[i]));
 	return a;
 }
 
-static op_value *ids_in(const op_value *v, const uint8_t *key, int64_t lamport) {
+static op_value *ids_in(const op_value *v) {
 	if (v->type != OP_LIST) return NULL;
 	op_value *out = op_list();
 	for (size_t i = 0; i < v->count; i++) {
@@ -276,13 +273,13 @@ static op_value *ids_in(const op_value *v, const uint8_t *key, int64_t lamport) 
 			       *gone = x->type == OP_MAP ? op_get(x, "gone") : NULL;
 		if (x->type == OP_NULL) { op_push(out, op_null()); continue; }
 		op_value *a = op_list(), *g = op_list(), *id = NULL;
-		if (!after || !gone || gone->type != OP_LIST || (after->type != OP_NULL && !(id = id_in(after, key, lamport))))
+		if (!after || !gone || gone->type != OP_LIST || (after->type != OP_NULL && !(id = id_in(after))))
 			return op_free(a), op_free(g), op_free(out), NULL;
 		op_push(a, id ? id : op_null()), op_push(a, g);
 		for (size_t j = 0; j < gone->count; j++) {
 			const op_value *pair = gone->items[j];
 			int64_t c;
-			op_value *i2 = pair->type == OP_LIST && pair->count == 2 ? id_in(pair->items[0], key, lamport) : NULL;
+			op_value *i2 = pair->type == OP_LIST && pair->count == 2 ? id_in(pair->items[0]) : NULL;
 			if (!i2 || !whole(pair->items[1], &c)) return op_free(a), op_free(out), NULL;
 			op_value *p = op_list();
 			op_push(p, i2), op_push(p, op_int(c)), op_push(g, p);
@@ -327,9 +324,8 @@ static size_t stepin(const op_value *s, const uint8_t *device, const uint8_t *be
 			continue;
 		}
 		if (i == 6) {
-			int64_t n;
 			if (!v) continue;
-			op_value *ids = whole(op_get(s, "lamport"), &n) ? ids_in(v, key, n) : NULL;
+			op_value *ids = ids_in(v);
 			if (!ids) return op_free(a), 0;
 			op_push(a, ids);
 			continue;
@@ -348,20 +344,20 @@ static size_t stepin(const op_value *s, const uint8_t *device, const uint8_t *be
 	return n;
 }
 
-static void id_out(FILE *out, tp_in *in, const tp_step *s) {
+// an id as written, the device as hex
+static void id_out(FILE *out, tp_in *in) {
 	uint64_t k, a, b;
 	int64_t x;
 	tp_span key;
-	fputc('[', out);
 	if (*in->p >> 5 <= 1) {
-		tp_int(in, &x), hex(out, s->device, 32);
-		fprintf(out, ",%llu]", (unsigned long long)((int64_t)s->lamport - x));
+		tp_int(in, &x), fprintf(out, "%lld", (long long)x);
 		return;
 	}
+	fputc('[', out);
 	tp_array(in, &k);
 	if (*in->p >> 5 == 0) {
-		tp_whole(in, &a), tp_whole(in, &b), hex(out, s->device, 32);
-		fprintf(out, ",%llu,%llu]", (unsigned long long)(s->lamport - a), (unsigned long long)b);
+		tp_whole(in, &a), tp_whole(in, &b);
+		fprintf(out, "%llu,%llu]", (unsigned long long)a, (unsigned long long)b);
 		return;
 	}
 	tp_bytes(in, 32, &key), tp_whole(in, &a), hex(out, key.p, 32), fprintf(out, ",%llu", (unsigned long long)a);
@@ -380,13 +376,13 @@ static void ids_out(FILE *out, const tp_step *s) {
 		tp_array(&in, &g);
 		fputs("{\"after\":", out);
 		if (tp_null(&in)) fputs("null", out);
-		else id_out(out, &in, s);
+		else id_out(out, &in);
 		fputs(",\"gone\":[", out);
 		tp_array(&in, &g);
 		for (uint64_t j = 0; j < g; j++) {
 			uint64_t two, count;
 			tp_array(&in, &two);
-			fputs(j ? ",[" : "[", out), id_out(out, &in, s);
+			fputs(j ? ",[" : "[", out), id_out(out, &in);
 			tp_whole(&in, &count), fprintf(out, ",%llu]", (unsigned long long)count);
 		}
 		fputs("]}", out);

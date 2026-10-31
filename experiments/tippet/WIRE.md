@@ -22,9 +22,8 @@ One kept write. Bytes: a cbor array.
   its own id or under it so; read back to the same id. an old step's tstr stays as it was
 - part: tstr without NUL. `value`, `attributes`, `children`, …
 - patches: array of patch maps
-- lamport: whole. a step takes lamport to lamport + made - 1 (lamport alone when made is 0), made: the
-  elements its patches insert (each with a range: its tstr value's code points, its array value's
-  items). one past the highest any step the writer had seen took
+- lamport: whole. one past the highest any step the writer had seen has. it orders, and names
+  nothing
 - when: whole. seconds since 1970, the writer's clock
 - on: array. what it was written on: its entry's (node and part) heads at the writer, each a step:
   - k, whole from 1, k < n: this device's own step n - k
@@ -38,12 +37,15 @@ One kept write. Bytes: a cbor array.
   anything else). each [after, gone]:
   - after: the element it goes after, or null: the start
   - gone: array of [id, count], count whole from 1: the elements it takes away, count of them from
-    id on (its counter or k on). one named more than once is taken away once
-  - an element id: made by a step, its device and counter: the step's lamport + i, the i-th element
-    the step inserts (from 0, in patch order); or there since a step made its sequence new: that
-    step's device and lamport, and k, its place then. written: this device's x, whole or negative,
-    counter lamport - x; or [x, k], x whole to lamport, that step's lamport lamport - x. another's
-    [device, counter] or [device, lamport, k] (device bstr 32, not this step's)
+    id on (its seq or k on). one named more than once is taken away once
+  - an element id: made by a step, its device and seq: the step's seq + i, the i-th element the step
+    inserts (from 0, in patch order); or there since a step made its sequence new: that step's
+    device and n, and k, its place then. written: this device's x, whole or negative, seq the step's
+    seq - x; or [x, k], x whole below n, that step n - x. another's [device, seq] or [device, n, k]
+    (device bstr 32, not this step's; n from 1)
+  - a step's seq: how many elements its device's steps before it insert (old steps too; a patch with
+    a range inserts its tstr value's code points, its array value's items). not written: a reader
+    holds a device's steps from n = 1 on, so counts it
 
   a sequence's elements are counted from its first splice: those there since the step that made it
   new are that step's, k their place. made new: by a put, a removal or a move at its path or above;
@@ -53,30 +55,33 @@ One kept write. Bytes: a cbor array.
   no range) is a splice of that one element, by its place as written
 
   applied in the entry's order (history): a splice by ids takes its gone elements away wherever they
-  are now, and goes after its after element, past any elements there whose ids sort after its own
-  first (counter, or for one there since a step that step's lamport; then device), so two at one
-  place land the same whatever came first. an element it names not there, or an insert at counters
-  its device made in that sequence already (an old step's, not refused): the step doesn't apply
-  (passed over, as any). by range: as written, its inserted ones right after the element before
-  from. what is made of it: `typescript/elements.ts`
+  are now, and goes after its after element, past any elements there that sort after its own first:
+  by the lamport of the step that made each, then device, then seq (one there since a step: that
+  step's lamport and device, before what the step inserts), so two at one place land the same
+  whatever came first. an element it names not there (this device's x past the step's seq too): the
+  step doesn't apply (passed over, as any). by range: as written, its inserted ones right after the
+  element before from. what is made of it: `typescript/elements.ts`
 - who: tstr, only when there is one
 
 Anything else is not a step: another length, another kind in a place, a key or hash not 32 bytes, n
 of 0, a number not whole, a patch with another field, a node array not one rest, an on item not as
 above (k of 0 or of n or more, a pair naming the step's own device, of another length or kind), ids
 not as above (not one per patch, on a patch without a range, an id of another shape or naming the
-step's own device, a counter below 0 or past 2^53 - 1, x past lamport, a count of 0), a NUL in node
-(its rest too) or part, or containers nested 1024 deep (cbor's most; the step's own array counts): a
-run message holds a step's patches one deeper.
+step's own device, another's seq below 0, a number past 2^53 - 1 either way, an [x, k] with x of n
+or more, a [device, n, k] with n of 0, a count of 0), a NUL in node (its rest too) or part, or
+containers nested 1024 deep (cbor's most; the step's own array counts): a run message holds a step's
+patches one deeper.
 
 A peer from before on refuses a step that carries it (not a step): a run with one doesn't pass it.
 So does a peer from before ids, a step with ids.
 
 ids' shape is mine (10-30), not decided: per patch beside it, so a patch stays a changeable patch
-(squish packs it); an element's counter its step's lamport on (Automerge's: one number names it and
-sorts it, and typing's elements count on, so a reader holds them as one run); this device's own as
-how far back from the step's lamport, so typing alone (each after the one before) is one run in a
-pack.
+(squish packs it); an element its device and seq (diamond-types' agent and per-agent sequence
+number; Automerge's actor and counter is not this, its counter being lamport's, max + 1): unique by
+its device's chain alone, whatever the lamports, and a big paste moves no lamport; seq counted, not
+written, so a step says no more than it did; one there since a step by that step's n, which no other
+step of its device has; lamport only sorts; this device's own as how far back from the step's seq,
+so typing alone (each after the one before) is one run in a pack.
 
 on's shape is mink's pick (10-26), not decided: after when, so an old step reads as it did; heads by
 device and n, as the log finds a step (its chain binds n to its bytes), not by hash; this device's
@@ -112,11 +117,15 @@ Taking a run, in order:
 2. first n past held + 1: a gap, answered with have
 3. steps already held: passed over
 4. each step: its device the run's, n one more, before the hash of the one before
-5. lamport at most the highest held + 2^20 and the lamports the run's steps before it take; for a
-   step that says on, past the last its device's step before took (so no two elements share an id)
-6. sig good for the last step's hash
+5. sig good for the last step's hash
 
-Fail 1, 4, 5 or 6, or a pack that does not unpack: refused.
+Fail 1, 4 or 5, or a pack that does not unpack: refused.
+
+That nothing else is checked is mine (10-30), not decided: whether a run is taken hangs on the run
+and its device's chain alone, never on what else the taker holds, so a run good once is good
+anywhere, any time. no lamport check: one far past what is held is taken, and the taker's writes go
+past it. a lamport near 2^53 - 1 could end everyone's writes, but holding an id is the permission
+for now, and one who can write can do worse.
 
 ## messages
 

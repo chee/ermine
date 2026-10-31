@@ -142,7 +142,7 @@ Deno.test("1. a pack that says more than it holds is refused before anything is 
 	assertThrows(() => unpack(pack([first]).slice(0, 7)), TypeError, "not a pack")
 })
 
-Deno.test("2. a step far past the highest lamport is refused, and write never passes 2^53 - 1", async () => {
+Deno.test("2. a step far past the highest lamport is taken (what is held decides nothing), and write never passes 2^53 - 1", async () => {
 	const far = await createSigner()
 	const bytes = encodeStep({
 		device: far.device,
@@ -156,7 +156,8 @@ Deno.test("2. a step far past the highest lamport is refused, and write never pa
 	})
 	const h = await writer()
 	const sig = await far.sign(hashStep(bytes))
-	assertEquals(await h.take({ device: far.device, steps: [bytes], sig }), { refused: "lamport" })
+	assertEquals(await h.take({ device: far.device, steps: [bytes], sig }), { added: 1 })
+	assertThrows(() => put(h, 1), RangeError)
 	const store = createMemoryStore()
 	await store.append(kept(far.device, [bytes], sig))
 	const old = await writer({ store })
@@ -346,4 +347,49 @@ Deno.test("12. a run's steps make at most 16 MB: a big step closes the run befor
 	assertEquals((await log.run(log.device!, 1))?.steps.length, 1)
 	assertThrows(() => put(log, "x".repeat(RUN)), RangeError)
 	assertEquals(log.count(log.device!), 2)
+})
+
+Deno.test("13. a step the store can't read back takes nothing else with it: each step's seq is the log's, never read", async () => {
+	const a = await device()
+	a.put("doc", { t: "" })
+	a.edit("doc", [{ path: ["t"], range: [0, 0], value: "x" }])
+	a.edit("doc", [{ path: ["t"], range: [1, 1], value: "y" }])
+	const inner = createMemoryStore()
+	let bad: string | undefined
+	const store: Store = {
+		...inner,
+		get(d, n) {
+			if (d === bad && n === 2) throw new Error("disk")
+			return inner.get(d, n)
+		},
+	}
+	const b = await device({ store })
+	bad = a.log.device
+	assertEquals(await b.log.take((await a.log.run(a.log.device!, 1))!), { added: 3 })
+	assertEquals(b.value("doc"), { t: "xy" })
+	a.edit("doc", [{ path: ["t"], range: [2, 2], value: "z" }])
+	assertEquals(await b.log.take((await a.log.run(a.log.device!, 4))!), { added: 1 })
+	assertEquals([b.value("doc"), b.history.failed], [{ t: "xyz" }, []])
+	assertEquals(b.log.seq(a.log.device!, 5), 3)
+	assertThrows(() => b.log.seq(a.log.device!, 6), RangeError)
+})
+
+Deno.test("14. a snapshot from before seq loads without reading its steps back", async () => {
+	const inner = createMemoryStore()
+	const store: Store = {
+		...inner,
+		snapshot(bytes) {
+			const snap = decode(bytes) as { entries: [string, string, Value, Value[][], Value][] }
+			for (const e of snap.entries) e[3] = e[3].map((r) => r.slice(0, 3))
+			return inner.snapshot(encode(snap as unknown as Value))
+		},
+	}
+	const w = await device({ store })
+	for (let i = 0; i < 300; i++) w.put(`pig${i}`, { n: i })
+	await w.history.snapshot()
+	await w.log.close()
+	let gets = 0
+	const counted: Store = { ...inner, get: (d, n) => (gets++, inner.get(d, n)) }
+	const r = await device({ store: counted })
+	assertEquals([r.value("pig299"), r.log.count(w.log.device!), gets], [{ n: 299 }, 300, 0])
 })

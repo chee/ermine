@@ -6,7 +6,7 @@ import {
 	encodeStep,
 	hashStep,
 	hex,
-	last,
+	made,
 	rest,
 	same,
 	type Step,
@@ -175,10 +175,27 @@ export function createMemoryStore(): Store {
 }
 
 const EVERY = 32, BYTES = 2048
-const JUMP = 2 ** 20
 
-// end: the last lamport its newest step takes
-type Feed = { count: number; last: Uint8Array | null; lamport: number; when: number; end: number }
+// seqs: where its steps' seqs go on evenly, each [n, seq, made]: steps n on each insert made, step n
+// at seq, up to the next
+type Feed = {
+	count: number
+	last: Uint8Array | null
+	lamport: number
+	when: number
+	seqs: [n: number, seq: number, made: number][]
+}
+const seqAt = (f: Feed | undefined, n: number) => {
+	const s = f?.seqs ?? []
+	let lo = 0, hi = s.length
+	while (lo < hi) {
+		const mid = (lo + hi) >> 1
+		if (s[mid][0] <= n) lo = mid + 1
+		else hi = mid
+	}
+	const g = s[lo - 1]
+	return g ? g[1] + g[2] * (n - g[0]) : 0
+}
 type Chained = { steps: Step[]; last: Uint8Array | null }
 export type Taken = { added: number } | { refused: string }
 type Told = (device: string, steps: Step[], from?: unknown) => void
@@ -188,6 +205,8 @@ export type Log = {
 	readonly lamport: number
 	have(): Record<string, number>
 	count: (device: string) => number
+	// how many elements the device's steps before step n insert (WIRE.md, ids); n past count + 1 throws
+	seq: (device: string, n: number) => number
 	step: (device: string, n: number) => Uint8Array
 	prior: (device: string, n: number) => Prior | undefined
 	steps: (device: string) => Uint8Array[]
@@ -247,15 +266,21 @@ export function createLog(o: { store?: Store; writes?: boolean; seed?: Uint8Arra
 	}
 	function keep(device: string, c: Chained) {
 		if (!c.steps.length) return
-		const end = c.steps[c.steps.length - 1]
-		feeds.set(device, {
-			count: count(device) + c.steps.length,
+		const end = c.steps[c.steps.length - 1], was = feeds.get(device)
+		const f: Feed = {
+			count: count(device),
 			last: c.last,
 			lamport: end.lamport,
 			when: end.when,
-			end: last(end),
-		})
-		for (const s of c.steps) lamport = Math.max(lamport, last(s))
+			seqs: was?.seqs ?? [],
+		}
+		for (const s of c.steps) {
+			const k = made(s)
+			if (f.seqs.at(-1)?.[2] !== k) f.seqs.push([s.n, seqAt(f, s.n), k])
+			f.count++
+		}
+		feeds.set(device, f)
+		for (const s of c.steps) lamport = Math.max(lamport, s.lamport)
 	}
 	function add(device: string, record: Uint8Array, c: Chained, from?: unknown, open?: boolean) {
 		const n = count(device), at: At = [device, n + 1, n + c.steps.length]
@@ -303,13 +328,6 @@ export function createLog(o: { store?: Store; writes?: boolean; seed?: Uint8Arra
 			return { refused: "chain" }
 		}
 		if (typeof c === "string") return { refused: c }
-		// none a jump past what was seen and the lamports the run's steps before it take; and one that
-		// says on past the lamports its device's step before took (its counters never used twice)
-		let most = lamport + JUMP, end = feeds.get(b.device)?.end ?? -1
-		for (const s of c.steps) {
-			if (s.lamport > most || (s.on && s.lamport <= end)) return { refused: "lamport" }
-			most += last(s) - s.lamport + 1, end = Math.max(end, last(s))
-		}
 		if (!c.steps.length) return { added: 0 }
 		if (!(await verify(b.device, c.last!, b.sig))) return { refused: "signature" }
 		const fresh = b.steps.slice(b.steps.length - c.steps.length), held = count(b.device)
@@ -369,6 +387,12 @@ export function createLog(o: { store?: Store; writes?: boolean; seed?: Uint8Arra
 			return h
 		},
 		count,
+		seq(device: string, n: number) {
+			if (!Number.isSafeInteger(n) || n < 1 || n > count(device) + 1) {
+				throw new RangeError(`no step ${n} of that device`)
+			}
+			return seqAt(feeds.get(device), n)
+		},
 		step: (device: string, n: number) => store.get(device, n),
 		prior: (device: string, n: number) => prior_(device, n),
 		steps: (device: string): Uint8Array[] =>

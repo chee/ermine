@@ -1,38 +1,46 @@
 // The elements of an entry's strings and arrays (WIRE.md, ids), held as runs: elements one after
-// another of one device, their counters one on, all gone or none. A sequence gets its elements at
-// the first splice that touches it: those there since the step that made it new are that step's, k
-// their place. A splice by ids goes after its element, past any whose ids sort after its own (so two
-// inserts at one place land the same in any order), and takes its gone elements away wherever they
-// are now; a splice by range goes as written. A put makes the sequences under it new; a move does
-// too, and the sequences it moves out of and into. A removal at an index of an array is a splice of
-// that one, by its place as written.
+// another of one device, numbered one on, the lamports of the steps that made them going on evenly,
+// all gone or none. A sequence gets its elements at the first splice that touches it: those there
+// since the step that made it new are that step's, k their place. A splice by ids goes after its
+// element, past any that sort after its own (lamport, device, number: so two inserts at one place
+// land the same in any order), and takes its gone elements away wherever they are now; a splice by
+// range goes as written. A put makes the sequences under it new; a move does too, and the sequences
+// it moves out of and into. A removal at an index of an array is a splice of that one, by its place
+// as written.
 import apply, { type Patch, type Target } from "@ermine/changeable/apply"
-import { type Anchor, type Id, inserts, type Step } from "./step.ts"
+import { type Anchor, type At, type Id, inserts, readIds, type Step } from "./step.ts"
 
-// a step's place: lamport, device
-export type Ref = [lamport: number, device: string]
-// elements in order: made, counters c on; born (there since the list's step), places c on
-type Run = { device: string; c: number; len: number; gone: boolean; born: boolean }
-// a sequence's runs, the step its born ones are since, how many are not gone, a cursor (live: how
-// many before runs[j] are not gone); top: by device, past its newest counter here
-type List = {
-	runs: Run[]
-	by: Ref
-	count: number
-	j: number
-	live: number
-	top: Map<string, number>
+// a step's place: lamport, device, n
+export type Ref = [lamport: number, device: string, n: number]
+// elements in order: made, numbered c on, lamports l on by d each; born (there since the list's
+// step), places c on
+type Run = {
+	device: string
+	c: number
+	len: number
+	gone: boolean
+	born: boolean
+	l: number
+	d: number
 }
+// a sequence's runs, the step its born ones are since, how many are not gone, a cursor (live: how
+// many before runs[j] are not gone)
+type List = { runs: Run[]; by: Ref; count: number; j: number; live: number }
 // an entry's value and its sequences' elements, by path; born: by path, the step that made what is
 // there new (a sequence under it is that step's until a splice touches it)
 export type State = { value: unknown; lists: Map<string, List>; born: Map<string, Ref> }
 
 export const fresh = (): State => ({ value: undefined, lists: new Map(), born: new Map() })
-const after = (a: Ref, b: Ref) => a[0] > b[0] || (a[0] === b[0] && a[1] > b[1])
+// sort keys: lamport, device, number (a born one's -1)
+type Key = [lamport: number, device: string, c: number]
+const after = (a: Key, b: Key) =>
+	a[0] > b[0] || (a[0] === b[0] && (a[1] > b[1] || (a[1] === b[1] && a[2] > b[2])))
 const keyOf = (path: readonly unknown[]) => JSON.stringify(path)
 // key's path is prefix's, or under it
 const under = (key: string, prefix: string) =>
 	prefix === "[]" || key === prefix || key.startsWith(prefix.slice(0, -1) + ",")
+const isSeq = (v: unknown) => typeof v === "string" || Array.isArray(v)
+// a sequence's length: counted once, when its elements are made, and for what a splice inserts
 const units = (v: unknown) =>
 	typeof v === "string" ? [...v].length : Array.isArray(v) ? v.length : -1
 function at(value: unknown, path: readonly unknown[]): unknown {
@@ -45,14 +53,15 @@ function at(value: unknown, path: readonly unknown[]): unknown {
 }
 
 const idAt = (l: List, r: Run, o: number): Id =>
-	r.born ? { device: r.device, c: l.by[0], k: r.c + o } : { device: r.device, c: r.c + o }
+	r.born ? { device: r.device, c: l.by[2], k: r.c + o } : { device: r.device, c: r.c + o }
 const plus = (i: Id, n: number): Id =>
 	i.k === undefined ? { ...i, c: i.c + n } : { ...i, k: i.k + n }
-const sortOf = (l: List, r: Run, o: number): Ref => r.born ? l.by : [r.c + o, r.device]
+const sortOf = (l: List, r: Run, o: number): Key =>
+	r.born ? [l.by[0], l.by[1], -1] : [r.l + r.d * o, r.device, r.c + o]
 // where id is in r, or -1
 function place(l: List, r: Run, id: Id) {
 	if (r.device !== id.device || r.born !== (id.k !== undefined)) return -1
-	const x = id.k === undefined ? id.c : id.c === l.by[0] ? id.k : -1
+	const x = id.k === undefined ? id.c : id.c === l.by[2] ? id.k : -1
 	return x >= r.c && x < r.c + r.len ? x - r.c : -1
 }
 // an element's run and place in it: near the cursor first
@@ -90,19 +99,25 @@ function edit(l: List, j: number, del: number, ...ins: Run[]) {
 	liveBefore(l, j)
 	l.runs.splice(j, del, ...ins)
 }
-// runs[j - 1] and runs[j] as one, if they go on from each other
+// runs[j - 1] and runs[j] as one, if they go on from each other: numbers one on, lamports evenly
 function join(l: List, j: number) {
 	const a = l.runs[j - 1], b = l.runs[j]
 	if (
-		a && b && a.device === b.device && a.born === b.born && a.gone === b.gone &&
-		a.c + a.len === b.c
-	) edit(l, j - 1, 2, { ...a, len: a.len + b.len })
+		!a || !b || a.device !== b.device || a.born !== b.born || a.gone !== b.gone ||
+		a.c + a.len !== b.c
+	) return
+	const d = a.len > 1 ? a.d : b.len > 1 ? b.d : b.l - a.l
+	if (d >= 0 && b.l === a.l + d * a.len && (b.len === 1 || b.d === d)) {
+		edit(l, j - 1, 2, { ...a, len: a.len + b.len, d })
+	}
 }
 // run j's elements [o, o + n) a run of their own: its index
 function cut(l: List, j: number, o: number, n: number) {
-	const r = l.runs[j], parts = [{ ...r, c: r.c + o, len: n }]
+	const r = l.runs[j], parts = [{ ...r, c: r.c + o, l: r.l + r.d * o, len: n }]
 	if (o > 0) parts.unshift({ ...r, len: o })
-	if (o + n < r.len) parts.push({ ...r, c: r.c + o + n, len: r.len - o - n })
+	if (o + n < r.len) {
+		parts.push({ ...r, c: r.c + o + n, l: r.l + r.d * (o + n), len: r.len - o - n })
+	}
 	edit(l, j, 1, ...parts)
 	return j + (o > 0 ? 1 : 0)
 }
@@ -137,30 +152,31 @@ const there = (l: List, id: Id, n: number) => {
 // returned for the graph
 export function step(
 	state: State,
-	s: Pick<Step, "device" | "lamport" | "patches" | "ids">,
+	s: Pick<Step, "device" | "n" | "lamport" | "patches" | "ids"> & At,
 	o: { undo?: Patch[]; back?: (() => void)[]; name?: boolean; keep?: readonly boolean[] } = {},
 ): { applied: Patch[]; ids: (Anchor | null)[] } {
 	const { undo = [], back = [], name = false, keep } = o
-	const ref: Ref = [s.lamport, s.device]
+	const ref: Ref = [s.lamport, s.device, s.n]
 	const applied: Patch[] = [], ids: (Anchor | null)[] = []
 	const mine: Patch[][] = [], marks = back.length
 	const was = state.value
+	const named = name || !s.ids ? undefined : readIds(s, s.ids)
 	let made = 0
 	try {
 		for (let i = 0; i < s.patches.length; i++) {
-			const p = s.patches[i], c = s.lamport + made
+			const p = s.patches[i], c = s.seq + made
 			made += inserts(p)
 			if (keep && !keep[i]) {
 				ids.push(null)
 				continue
 			}
-			const anchor = name ? null : s.ids?.[i] ?? null
+			const anchor = named?.[i] ?? null
 			const listed = inArray(state.value, p)
 			const out = p.move
 				? (renew(state, ref, end(state.value, p), back),
 					renew(state, ref, end(state.value, p.move), back),
 					{ patches: [p], anchor: null })
-				: p.range && units(at(state.value, p.path)) >= 0
+				: p.range && isSeq(at(state.value, p.path))
 				? splice(state, ref, c, p, anchor, back, name)
 				: listed && p.value === undefined
 				? { ...splice(state, ref, c, listed, null, back, false), anchor: null }
@@ -221,16 +237,18 @@ function elements(state: State, path: readonly unknown[], back: (() => void)[]):
 	if (had) return had
 	let by: Ref | undefined
 	for (let n = path.length; n >= 0 && !by; n--) by = state.born.get(keyOf(path.slice(0, n)))
-	by ??= [0, ""]
+	by ??= [0, "", 0]
 	const count = units(at(state.value, path))
-	const runs = count ? [{ device: by[1], c: 0, len: count, gone: false, born: true }] : []
-	const l: List = { runs, by, count, j: 0, live: 0, top: new Map() }
+	const runs = count
+		? [{ device: by[1], c: 0, len: count, gone: false, born: true, l: 0, d: 0 }]
+		: []
+	const l: List = { runs, by, count, j: 0, live: 0 }
 	state.lists.set(key, l)
 	back.push(() => state.lists.delete(key))
 	return l
 }
 
-// a splice, its inserted ones counted from c: by ids (anchor) or by its range; name: its ids found
+// a splice, its inserted ones numbered from c: by ids (anchor) or by its range; name: its ids found
 // from its range
 function splice(
 	state: State,
@@ -249,9 +267,6 @@ function splice(
 	const l = elements(state, p.path, back)
 	const [a, b] = p.range!
 	const value = p.value, m = value === undefined ? 0 : units(value)
-	// its counters past those its device made here: an element is never named twice
-	const top = l.top.get(ref[1])
-	if (m > 0 && top !== undefined && c < top) throw new RangeError("a counter its device used")
 	// what it names: the element it goes after, and those it takes away, as runs
 	let first: Id | null
 	let gone: readonly (readonly [Id, number])[]
@@ -292,16 +307,17 @@ function splice(
 	// where the inserted go: after its element, past those that sort after it (by ids)
 	let [j, o] = first ? find(l, first)! : [0, -1]
 	if (++o === l.runs[j]?.len) j++, o = 0
+	// (a run's sort keys only go up, so one that sorts after is passed whole)
 	if (anchor) {
-		while (j < l.runs.length && after(sortOf(l, l.runs[j], o), [c, ref[1]])) j++, o = 0
+		const mine: Key = [ref[0], ref[1], c]
+		while (j < l.runs.length && after(sortOf(l, l.runs[j], o), mine)) j++, o = 0
 	}
 	const to = liveBefore(l, j) + (l.runs[j] && !l.runs[j].gone ? o : 0)
 	if (m > 0) {
 		if (o > 0) j = cut(l, j, o, l.runs[j].len - o)
-		edit(l, j, 0, { device: ref[1], c, len: m, gone: false, born: false })
+		edit(l, j, 0, { device: ref[1], c, len: m, gone: false, born: false, l: ref[0], d: 0 })
 		l.count += m
 		join(l, j + 1), join(l, j)
-		l.top.set(ref[1], c + m)
 		patches.push({ path: p.path, range: [to, to], value })
 	}
 	if (!patches.length) patches.push(cleared(p, to, to))
@@ -313,8 +329,6 @@ function splice(
 				l.count -= n
 				join(l, i)
 			})
-			if (top === undefined) l.top.delete(ref[1])
-			else l.top.set(ref[1], top)
 		}
 		for (const [id, n] of taken.reverse()) each(l, id, n, (j, o, m) => mark(l, j, o, m, false))
 	})

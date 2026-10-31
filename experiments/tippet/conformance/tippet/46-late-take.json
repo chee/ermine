@@ -1,0 +1,212 @@
+{
+	"title": "a peer that could not take a device's run takes it once more steps come: a run past what it holds is a gap, then taken when the steps before it come; one whose steps name elements of a device it doesn't hold is taken (nothing about the taker decides that), applies once that device's steps come, and its lamport, far past the taker's, is no bar",
+	"steps": [
+		{
+			"op": "device",
+			"name": "w",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "device",
+			"name": "x",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"expect": {
+				"key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
+		},
+		{
+			"op": "device",
+			"name": "c",
+			"seed": "0303030303030303030303030303030303030303030303030303030303030303",
+			"expect": {
+				"key": "ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1"
+			}
+		},
+		{
+			"op": "take",
+			"device": "x",
+			"run": {
+				"device": "w",
+				"steps": [
+					{
+						"n": 1,
+						"node": "t",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"value": "ab"
+							}
+						],
+						"lamport": 2097152,
+						"when": 0,
+						"on": []
+					},
+					{
+						"n": 2,
+						"node": "t",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"range": [
+									2,
+									2
+								],
+								"value": "c"
+							}
+						],
+						"lamport": 2097153,
+						"when": 0,
+						"on": [
+							[
+								"w",
+								1
+							]
+						],
+						"ids": [
+							{
+								"after": [
+									1,
+									1
+								],
+								"gone": []
+							}
+						]
+					}
+				]
+			},
+			"expect": {
+				"added": 2
+			}
+		},
+		{
+			"op": "write",
+			"device": "x",
+			"node": "t",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						3,
+						3
+					],
+					"value": "!"
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 2097154
+			}
+		},
+		{
+			"op": "write",
+			"device": "x",
+			"node": "t",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						4,
+						4
+					],
+					"value": "?"
+				}
+			],
+			"expect": {
+				"n": 2,
+				"lamport": 2097155
+			}
+		},
+		{
+			"op": "pass",
+			"from": "x",
+			"to": "c",
+			"of": "x",
+			"at": 2,
+			"expect": {
+				"refused": "gap"
+			}
+		},
+		{
+			"op": "count",
+			"device": "c",
+			"of": "x",
+			"expect": {
+				"count": 0
+			}
+		},
+		{
+			"op": "pass",
+			"from": "x",
+			"to": "c",
+			"of": "x",
+			"at": 1,
+			"expect": {
+				"added": 2
+			}
+		},
+		{
+			"op": "count",
+			"device": "c",
+			"of": "x",
+			"expect": {
+				"count": 2
+			}
+		},
+		{
+			"op": "value",
+			"device": "c",
+			"node": "t",
+			"expect": {}
+		},
+		{
+			"op": "pass",
+			"from": "x",
+			"to": "c",
+			"of": "w",
+			"at": 1,
+			"expect": {
+				"added": 2
+			}
+		},
+		{
+			"op": "value",
+			"device": "c",
+			"node": "t",
+			"expect": {
+				"value": "abc!?"
+			}
+		},
+		{
+			"op": "value",
+			"device": "x",
+			"node": "t",
+			"expect": {
+				"value": "abc!?"
+			}
+		},
+		{
+			"op": "write",
+			"device": "c",
+			"node": "t",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						5,
+						5
+					],
+					"value": "."
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 2097156
+			}
+		}
+	]
+}

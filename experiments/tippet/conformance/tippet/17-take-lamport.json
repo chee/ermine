@@ -1,5 +1,5 @@
 {
-	"title": "a step's lamport at most 2^20 past the highest held",
+	"title": "a step's lamport is not held against what the taker holds: one far past the highest held is taken, and a write after goes one past it",
 	"steps": [
 		{
 			"op": "device",
@@ -39,31 +39,6 @@
 				]
 			},
 			"expect": {
-				"refused": "lamport"
-			}
-		},
-		{
-			"op": "take",
-			"device": "b",
-			"run": {
-				"device": "a",
-				"steps": [
-					{
-						"n": 1,
-						"node": "pig",
-						"part": "value",
-						"patches": [
-							{
-								"path": [],
-								"value": 1
-							}
-						],
-						"lamport": 1048576,
-						"when": 0
-					}
-				]
-			},
-			"expect": {
 				"added": 1
 			}
 		},
@@ -83,7 +58,7 @@
 								"value": 1
 							}
 						],
-						"lamport": 1048576,
+						"lamport": 1048577,
 						"when": 0
 					},
 					{
@@ -96,45 +71,7 @@
 								"value": 2
 							}
 						],
-						"lamport": 2097153,
-						"when": 0
-					}
-				]
-			},
-			"expect": {
-				"refused": "lamport"
-			}
-		},
-		{
-			"op": "take",
-			"device": "b",
-			"run": {
-				"device": "a",
-				"steps": [
-					{
-						"n": 1,
-						"node": "pig",
-						"part": "value",
-						"patches": [
-							{
-								"path": [],
-								"value": 1
-							}
-						],
-						"lamport": 1048576,
-						"when": 0
-					},
-					{
-						"n": 2,
-						"node": "pig",
-						"part": "value",
-						"patches": [
-							{
-								"path": [],
-								"value": 2
-							}
-						],
-						"lamport": 2097152,
+						"lamport": 1099511627776,
 						"when": 0
 					}
 				]
@@ -155,7 +92,15 @@
 			],
 			"expect": {
 				"n": 1,
-				"lamport": 2097153
+				"lamport": 1099511627777
+			}
+		},
+		{
+			"op": "value",
+			"device": "b",
+			"node": "pig",
+			"expect": {
+				"value": 5
 			}
 		}
 	]
