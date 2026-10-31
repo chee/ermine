@@ -286,13 +286,15 @@ test-check: $(addprefix test-check-,$(TESTED))
 test-leaks: $(addprefix test-leaks-,$(TESTED))
 
 # benches, -O2, not part of all
-BENCHES = reactivity/c/paths-bench changeable/c/squish-bench changeable/c/apply-bench places/c/crowify-bench
+BENCHES = reactivity/c/paths-bench changeable/c/squish-bench changeable/c/apply-bench changeable/c/strings-bench places/c/crowify-bench
 bench: $(BENCHES)
 reactivity/c/paths-bench: reactivity/c/paths.c changeable/c/value.c reactivity/c/paths_bench.c
 	$(CC) $(CFLAGS) -o $@ $^ -lm
 changeable/c/squish-bench: changeable/c/squish.c changeable/c/squish_bench.c
 	$(CC) $(CFLAGS) -o $@ $^ -lm
 changeable/c/apply-bench: changeable/c/apply.c changeable/c/value.c changeable/c/apply_bench.c
+	$(CC) $(CFLAGS) -o $@ $^ -lm
+changeable/c/strings-bench: changeable/c/apply.c changeable/c/value.c changeable/c/strings_bench.c
 	$(CC) $(CFLAGS) -o $@ $^ -lm
 places/c/crowify-bench: changeable/c/frame.c graph/c/node.c graph/c/update.c changeable/c/value.c changeable/c/apply.c changeable/c/invert.c crow/c/crow.c places/c/crowify.c places/c/crowify_bench.c reactivity/c/scheduler.c reactivity/c/order.c reactivity/c/rank.c reactivity/c/causes.c changeable/c/ptrmap.c reactivity/c/tracker.c
 	$(CC) $(CFLAGS) -o $@ $^ -lm
