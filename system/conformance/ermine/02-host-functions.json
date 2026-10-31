@@ -211,6 +211,12 @@
 			"expect": {}
 		},
 		{
+			"op": "code",
+			"at": "/x",
+			"program": [],
+			"expect": {}
+		},
+		{
 			"op": "close",
 			"expect": {}
 		},
