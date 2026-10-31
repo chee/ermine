@@ -1,0 +1,167 @@
+{
+	"title": "with carry (AsyncContext), a run that ran again is not open after its await: what is current is nothing, and what it reads counts for nothing",
+	"steps": [
+		{
+			"op": "carry",
+			"on": true,
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "o",
+			"info": {
+				"actor": "test"
+			},
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 1,
+				"a": 1
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "compute",
+			"name": "c",
+			"scope": "o",
+			"f": {
+				"async": {
+					"if": [
+						{
+							"eq": [
+								{
+									"read": "x"
+								},
+								1
+							]
+						},
+						{
+							"wait": [
+								"p",
+								{
+									"do": [
+										{
+											"log": {
+												"current": null
+											}
+										},
+										{
+											"read": "a"
+										}
+									]
+								}
+							]
+						},
+						{
+							"wait": [
+								"q"
+							]
+						}
+					]
+				}
+			},
+			"to": "c",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 2
+			},
+			"expect": {
+				"tick": 3
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "resolve",
+			"promise": "p",
+			"value": null,
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"reads": true,
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 2
+					},
+					{
+						"starts": "c",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 1,
+						"ended": "pending",
+						"reads": [
+							"x"
+						]
+					},
+					{
+						"due": "c",
+						"tick": 3
+					},
+					{
+						"starts": "c",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 2,
+						"ended": "pending",
+						"reads": [
+							"x"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					null
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"a": 2
+			},
+			"expect": {
+				"tick": 4
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": []
+			}
+		}
+	]
+}

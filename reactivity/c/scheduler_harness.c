@@ -6,6 +6,13 @@
 // {"wait":[p,e]} also holds e and the run; resolve evaluates e through the run, then settles the
 // promise with its value or error, as a then does.
 //
+// {"stream":[e..]} is an async generator (SC_STREAM): {"yield":e} gives e's value, and an element
+// giving a promise waits for it. After a wait its code runs through sc_run_with_run like async's,
+// and one closed while waiting goes on to its next yield, then stops, as JavaScript's does.
+//
+// {"async":e} as a computation's whole code marks it an async function's. After its await, e runs
+// through sc_run_with_run (the harness's AsyncContext) unless {"op":"carry","on":false} was said.
+//
 // A computer's program takes sc_get_run at its start and holds it, so a write in a run (even after
 // an await) names the run. In a set, act, teardown or run() the computer's latest run is used;
 // "open" is the run open.
@@ -424,17 +431,18 @@ typedef struct ctx {
 	const op_value *previous;
 } ctx;
 
-typedef enum { V_OK, V_PENDING, V_PROMISE, V_THROW, V_STOP, V_PENDS } vkind;
+typedef enum { V_OK, V_PENDING, V_PROMISE, V_THROW, V_STOP, V_PENDS, V_STREAM } vkind;
 #define ENDS(v) ((v).k == V_THROW || (v).k == V_STOP || (v).k == V_PENDS)
 typedef struct val {
 	vkind k;
 	op_value *j;
 	char *err;
 	sc_promise *p;
+	struct streamer *t;
 } val;
 
-static val ok(op_value *j) { return (val){V_OK, j, NULL, NULL}; }
-static val thrown(char *e) { return (val){V_THROW, NULL, e, NULL}; }
+static val ok(op_value *j) { return (val){.k = V_OK, .j = j}; }
+static val thrown(char *e) { return (val){.k = V_THROW, .err = e}; }
 static void release(val v) {
 	op_free(v.j);
 	free(v.err);
@@ -445,6 +453,7 @@ typedef struct waiting {
 	sc_promise *p;
 	const op_value *then;
 	ctx c;
+	struct streamer *stream;
 } waiting;
 static waiting **waits;
 static size_t nwaits, capwaits;
@@ -501,8 +510,11 @@ static waiting *make_wait(char *name, const op_value *then, const ctx *c) {
 }
 
 static val evaluate(const op_value *e, const ctx *c);
+static val make_stream(const op_value *list, const ctx *c);
 static val made_in(const char *form, const op_value *a0, const op_value *a1, const op_value *a2,
 	const op_value *arg);
+
+static bool carrying = true;
 
 static sc_pair **infos;
 static size_t ninfos, capinfos;
@@ -646,7 +658,7 @@ static val evaluate(const op_value *e, const ctx *c) {
 		sc_track_status st = sc_track(sch, en->key);
 		char *out = sc_escaped(sch);
 		if (out) return thrown(out);
-		if (st == SC_STOP) return (val){V_STOP, NULL, NULL, NULL};
+		if (st == SC_STOP) return (val){.k = V_STOP};
 		return ok(en->value ? op_ref(en->value) : op_null());
 	}
 	if (strcmp(form, "sum") == 0 || strcmp(form, "mod") == 0) {
@@ -733,25 +745,25 @@ static val evaluate(const op_value *e, const ctx *c) {
 	}
 	if (strcmp(form, "throw") == 0) {
 		EVAL(v, arg);
-		if (v.k == V_PENDING) return (val){V_PENDS, NULL, NULL, NULL};
+		if (v.k == V_PENDING) return (val){.k = V_PENDS};
 		char *why = copyString(v.j && text(v.j) ? text(v.j) : "null");
 		release(v);
 		return thrown(why);
 	}
-	if (strcmp(form, "pending") == 0) return (val){V_PENDING, NULL, NULL, NULL};
+	if (strcmp(form, "pending") == 0) return (val){.k = V_PENDING};
 	if (strcmp(form, "wait") == 0) {
 		char *name;
 		val r = string_of(a0, c, &name);
 		if (r.k != V_OK) return r;
 		if (name == NULL) return thrown(copyString("wait on a non-string"));
-		return (val){V_PROMISE, NULL, NULL, make_wait(name, a1, c)->p};
+		return (val){.k = V_PROMISE, .p = make_wait(name, a1, c)->p};
 	}
 	if (strcmp(form, "await") == 0) {
 		char *name;
 		val r = string_of(arg, c, &name);
 		if (r.k != V_OK) return r;
 		waiting *w = name ? made_as(name) : NULL;
-		val out = w ? (val){V_PROMISE, NULL, NULL, w->p} : thrown(formatString("no promise %s", name ? name : "null"));
+		val out = w ? (val){.k = V_PROMISE, .p = w->p} : thrown(formatString("no promise %s", name ? name : "null"));
 		free(name);
 		return out;
 	}
@@ -822,6 +834,8 @@ static val evaluate(const op_value *e, const ctx *c) {
 	}
 	if (strcmp(form, "effect") == 0 || strcmp(form, "compute") == 0) return made_in(form, a0, a1, a2, arg);
 	if (strcmp(form, "quote") == 0) return ok(op_ref((op_value *)arg));
+	if (strcmp(form, "async") == 0) return evaluate(arg, c);
+	if (strcmp(form, "stream") == 0) return make_stream(arg, c);
 	return thrown(formatString("unknown form %s", form));
 }
 
@@ -839,10 +853,13 @@ static size_t nprogs, capprogs;
 
 static sc_scope *self_of(prog *p) { return p->self ? p->self : sc_get_current_scope(sch); }
 
+static sc_stream stream_of(struct streamer *t);
+
 static sc_out out_of(val v) {
 	switch (v.k) {
 	case V_OK: return (sc_out){.kind = SC_VALUE, .value = v.j};
 	case V_PROMISE: return (sc_out){.kind = SC_AWAIT, .promise = v.p};
+	case V_STREAM: return (sc_out){.kind = SC_STREAM, .stream = stream_of(v.t)};
 	case V_THROW: return (sc_out){.kind = SC_FAILED, .error = v.err};
 	default: return (sc_out){.kind = SC_PENDING};
 	}
@@ -909,6 +926,107 @@ static sc_out stepper_next(void *data, bool settled, void *value, char *error) {
 	t->last = value;
 	return stepper_go(t);
 }
+
+// A stream's body: elements in order. The pull being answered is answered by the next yield, the
+// end, or a throw. over: nothing more to give. held: waiting on a promise (giving: to yield what it
+// settles with). closed: the scheduler is done with it.
+typedef struct streamer {
+	const op_value *list;
+	size_t i;
+	ctx c;
+	sc_run *run;
+	sc_promise *pull;
+	bool over, held, giving, closed;
+} streamer;
+static streamer **streamers;
+static size_t nstreamers, capstreamers;
+static sc_promise **pulls;
+static size_t npulls, cappulls;
+
+static val make_stream(const op_value *list, const ctx *c) {
+	if (!is(list, OP_LIST)) return thrown(copyString("stream of a non-list"));
+	streamer *t = allocate(sizeof *t);
+	t->list = list;
+	t->c = *c;
+	t->c.run = NULL;
+	PUSH(streamers, nstreamers, capstreamers, t);
+	return (val){.k = V_STREAM, .t = t};
+}
+
+static waiting *waiting_on(const sc_promise *p) {
+	for (size_t i = 0; i < nwaits; i++)
+		if (waits[i]->p == p) return waits[i];
+	return NULL;
+}
+
+static void stream_go(streamer *t) {
+	sc_promise *pull = t->pull;
+	while (t->i < t->list->count) {
+		const op_value *x = t->list->items[t->i++];
+		bool giving = is(x, OP_MAP) && x->count > 0 && strcmp(x->keys[0], "yield") == 0;
+		val v = evaluate(giving ? x->items[0] : x, &t->c);
+		if (v.k == V_PROMISE) {
+			waiting *w = waiting_on(v.p);
+			if (w == NULL) continue;
+			w->stream = t;
+			t->held = true;
+			t->giving = giving;
+			return;
+		}
+		if (v.k == V_THROW || v.k == V_STOP) {
+			t->over = true;
+			sc_reject(pull, v.k == V_THROW ? v.err : copyString("stopped"));
+			return;
+		}
+		if (v.k == V_PENDS || (v.k == V_PENDING && giving)) {
+			t->over = v.k == V_PENDS;
+			sc_resolve_pending(pull);
+			return;
+		}
+		if (giving) {
+			sc_resolve(pull, v.j ? v.j : op_null());
+			return;
+		}
+		release(v);
+	}
+	t->over = true;
+	sc_resolve_done(pull);
+}
+
+static void stream_later(void *data) { stream_go(data); }
+
+// What a promise the stream waited on settled with (the value is the stream's now).
+static void stream_wake(streamer *t, op_value *value, char *error) {
+	t->held = false;
+	if (error != NULL) {
+		t->over = true;
+		sc_reject(t->pull, error);
+	} else if (t->giving) {
+		sc_resolve(t->pull, value ? value : op_null());
+	} else {
+		op_free(value);
+		if (carrying && t->run != NULL) sc_run_with_run(t->run, stream_later, t);
+		else stream_go(t);
+	}
+}
+
+static sc_promise *stream_next(void *data) {
+	streamer *t = data;
+	sc_promise *p = sc_promise_new(sch);
+	PUSH(pulls, npulls, cappulls, p);
+	t->pull = p;
+	sc_run *r = sc_get_run(sch);
+	if (t->run) sc_run_unref(t->run);
+	t->run = r ? sc_run_ref(r) : NULL;
+	t->c.run = t->run;
+	if (t->over) sc_resolve_done(p);
+	else stream_go(t);
+	return p;
+}
+
+static void stream_close(void *data) { ((streamer *)data)->closed = true; }
+
+static sc_stream stream_of(streamer *t) { return (sc_stream){stream_next, stream_close, t}; }
 
 static sc_out program_f(void *previous, void *data) {
 	prog *p = data;
@@ -1151,24 +1269,68 @@ static val made_in(const char *form, const op_value *a0, const op_value *a1, con
 	return ok(op_null());
 }
 
+static bool async_code(const sc_scope *self) {
+	for (size_t i = 0; self != NULL && i < nprogs; i++) {
+		const op_value *f = progs[i]->self == self ? progs[i]->f : NULL;
+		if (f != NULL) return is(f, OP_MAP) && f->count > 0 && strcmp(f->keys[0], "async") == 0;
+	}
+	return false;
+}
+
+struct later {
+	const op_value *e;
+	const ctx *c;
+	val v;
+};
+
+static void evaluate_later(void *data) {
+	struct later *l = data;
+	l->v = evaluate(l->e, l->c);
+}
+
 static op_value *settle(const op_value *r, bool resolve) {
 	const char *name = text(op_get(r, "promise"));
 	waiting *w = name ? wait_for(name) : NULL;
 	if (w == NULL) return answer_error(formatString("no promise %s", name ? name : "null"));
 	for (size_t i = 0; i < nwaits; i++)
 		if (waits[i] == w) waits[i] = waits[--nwaits];
+	// What a stream waiting on this promise is woken with.
+	op_value *wake = NULL;
+	char *wakeError = NULL;
 	if (!resolve) {
 		const char *why = text(op_get(r, "error"));
+		if (w->stream) wakeError = copyString(why ? why : "null");
 		sc_reject(w->p, copyString(why ? why : "null"));
 	} else if (w->then) {
-		val v = evaluate(w->then, &w->c);
-		if (v.k == V_THROW) sc_reject(w->p, v.err);
-		else if (v.k == V_PENDING || v.k == V_PENDS) sc_resolve_pending(w->p);
-		else sc_resolve(w->p, v.j ? v.j : op_null());
+		val v;
+		if (carrying && w->c.run != NULL && async_code(w->c.self)) {
+			struct later l = {w->then, &w->c, ok(NULL)};
+			sc_run_with_run(w->c.run, evaluate_later, &l);
+			v = l.v;
+		} else {
+			v = evaluate(w->then, &w->c);
+		}
+		if (v.k == V_STOP) {
+			release(v);
+			if (w->stream) wakeError = copyString("stopped");
+			sc_reject(w->p, copyString("stopped"));
+		} else if (v.k == V_THROW) {
+			if (w->stream) wakeError = copyString(v.err);
+			sc_reject(w->p, v.err);
+		} else if (v.k == V_STREAM) {
+			sc_resolve_stream(w->p, stream_of(v.t));
+		} else if (v.k == V_PENDING || v.k == V_PENDS) {
+			sc_resolve_pending(w->p);
+		} else {
+			if (w->stream && v.j) wake = op_ref(v.j);
+			sc_resolve(w->p, v.j ? v.j : op_null());
+		}
 	} else {
 		const op_value *value = op_get(r, "value");
+		if (w->stream && value) wake = op_ref((op_value *)value);
 		sc_resolve(w->p, value ? op_ref((op_value *)value) : op_null());
 	}
+	if (w->stream) stream_wake(w->stream, wake, wakeError);
 	carry(sc_escaped(sch));
 	if (w->c.run) sc_run_unref(w->c.run);
 	w->c.run = NULL;
@@ -1332,6 +1494,11 @@ static op_value *answer(const op_value *r) {
 		return out;
 	}
 	if (strcmp(op, "tick") == 0) return answer_tick(latest_tick);
+	if (strcmp(op, "carry") == 0) {
+		const op_value *on = op_get(r, "on");
+		carrying = !(is(on, OP_BOOL) && !on->bool_);
+		return op_map();
+	}
 	return answer_error(formatString("unknown op %s", op));
 }
 
@@ -1363,10 +1530,15 @@ void hh_finish(void) {
 	for (size_t i = 0; i < nwaits; i++) wait_free(waits[i]);
 	for (size_t i = 0; i < nold; i++) wait_free(old[i]);
 	for (size_t i = 0; i < ndone; i++) wait_free(done[i]);
+	for (size_t i = 0; i < npulls; i++) sc_promise_free(pulls[i]);
 	for (size_t i = 0; i < nnamed; i++) free(sc_scope_user(named[i]));
 	for (size_t i = 0; i < nunnamed; i++) free(unnamed[i]);
 	free(unnamed);
 	sc_free(sch);
+	for (size_t i = 0; i < nstreamers; i++) {
+		if (streamers[i]->run) sc_run_unref(streamers[i]->run);
+		free(streamers[i]);
+	}
 	for (size_t i = 0; i < nmoments; i++) {
 		free(moments[i].error);
 		free(moments[i].through);
@@ -1396,6 +1568,8 @@ void hh_finish(void) {
 	free(logged);
 	free(moments);
 	free(waits);
+	free(streamers);
+	free(pulls);
 	free(old);
 	free(done);
 	free(progs);

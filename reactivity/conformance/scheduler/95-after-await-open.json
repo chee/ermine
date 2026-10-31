@@ -1,6 +1,7 @@
 {
-	"title": "after an await nothing is open: a cleanup on the scope open, an effect, or a scope within is unscoped, and the run fails; a write by the writer open is from outside, though the run's own writer still names it",
+	"title": "without carry (no AsyncContext), after an await nothing is open: a cleanup on the scope open, an effect, or a scope within is unscoped, and the run fails; a write by the writer open is from outside, though the run's own writer still names it",
 	"steps": [
+		{ "op": "carry", "on": false, "expect": {} },
 		{
 			"op": "root",
 			"name": "o",
@@ -29,17 +30,19 @@
 			"name": "a",
 			"scope": "o",
 			"f": {
-				"wait": [
-					"p1",
-					{
-						"cleanup": [
-							null,
-							{
-								"log": "never"
-							}
-						]
-					}
-				]
+				"async": {
+					"wait": [
+						"p1",
+						{
+							"cleanup": [
+								null,
+								{
+									"log": "never"
+								}
+							]
+						}
+					]
+				}
 			},
 			"to": "a",
 			"expect": {}
@@ -49,16 +52,18 @@
 			"name": "b",
 			"scope": "o",
 			"f": {
-				"wait": [
-					"p2",
-					{
-						"effect": [
-							"e",
-							1,
-							null
-						]
-					}
-				]
+				"async": {
+					"wait": [
+						"p2",
+						{
+							"effect": [
+								"e",
+								1,
+								null
+							]
+						}
+					]
+				}
 			},
 			"to": "b",
 			"expect": {}
@@ -68,15 +73,17 @@
 			"name": "c",
 			"scope": "o",
 			"f": {
-				"wait": [
-					"p3",
-					{
-						"within": [
-							{ "why": "late" },
-							1
-						]
-					}
-				]
+				"async": {
+					"wait": [
+						"p3",
+						{
+							"within": [
+								{ "why": "late" },
+								1
+							]
+						}
+					]
+				}
 			},
 			"to": "c",
 			"expect": {}
@@ -86,29 +93,31 @@
 			"name": "d",
 			"scope": "o",
 			"f": {
-				"wait": [
-					"p4",
-					{
-						"do": [
-							{
-								"current": null
-							},
-							{
-								"write": [
-									"k",
-									1,
-									"open"
-								]
-							},
-							{
-								"write": [
-									"m",
-									1
-								]
-							}
-						]
-					}
-				]
+				"async": {
+					"wait": [
+						"p4",
+						{
+							"do": [
+								{
+									"current": null
+								},
+								{
+									"write": [
+										"k",
+										1,
+										"open"
+									]
+								},
+								{
+									"write": [
+										"m",
+										1
+									]
+								}
+							]
+						}
+					]
+				}
 			},
 			"to": "d",
 			"expect": {}

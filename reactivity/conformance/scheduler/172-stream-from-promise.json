@@ -1,0 +1,104 @@
+{
+	"title": "a promise that settles to a stream [chee 10-31: \"we could allow an async iterator computer no?\", \"yield means a new value, a stream\", \"for the open question: whatever solidjs2.0 does\"]: the stream is the result, not the iterable: its values land in turn",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": {
+				"actor": "test"
+			},
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "S",
+			"scope": "o",
+			"to": "S",
+			"f": {
+				"wait": [
+					"p",
+					{
+						"stream": [
+							{
+								"yield": 7
+							},
+							{
+								"yield": 8
+							}
+						]
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "resolve",
+			"promise": "p",
+			"value": null,
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"key": "S",
+			"expect": {
+				"value": 7
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"key": "S",
+			"expect": {
+				"value": 8
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "S",
+						"tick": 1
+					},
+					{
+						"starts": "S",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "S",
+						"run": 1,
+						"ended": "pending"
+					},
+					{
+						"ends": "S",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"ends": "S",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		}
+	]
+}
