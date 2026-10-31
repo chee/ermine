@@ -1,0 +1,233 @@
+{
+	"title": "two inserts at one place, one after the other's own element in the middle of its run: Qaxb on every peer, as FugueMax has it (x's before is b's before, so x goes before b)",
+	"steps": [
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "device",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"expect": {
+				"key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
+		},
+		{
+			"op": "device",
+			"name": "c",
+			"seed": "0303030303030303030303030303030303030303030303030303030303030303",
+			"expect": {
+				"key": "ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1"
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "t",
+			"patches": [
+				{
+					"path": [],
+					"value": "Q"
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "t",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						1,
+						1
+					],
+					"value": "a"
+				}
+			],
+			"expect": {
+				"n": 2,
+				"lamport": 2
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "b",
+			"of": "a",
+			"at": 1,
+			"expect": {
+				"added": 2
+			}
+		},
+		{
+			"op": "write",
+			"device": "b",
+			"node": "o",
+			"patches": [
+				{
+					"path": [],
+					"value": "_"
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 3
+			}
+		},
+		{
+			"op": "write",
+			"device": "b",
+			"node": "o",
+			"patches": [
+				{
+					"path": [],
+					"value": "_"
+				}
+			],
+			"expect": {
+				"n": 2,
+				"lamport": 4
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "t",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						2,
+						2
+					],
+					"value": "b"
+				}
+			],
+			"expect": {
+				"n": 3,
+				"lamport": 3
+			}
+		},
+		{
+			"op": "write",
+			"device": "b",
+			"node": "t",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						2,
+						2
+					],
+					"value": "x"
+				}
+			],
+			"expect": {
+				"n": 3,
+				"lamport": 5
+			}
+		},
+		{
+			"op": "value",
+			"device": "a",
+			"node": "t",
+			"expect": {
+				"value": "Qab"
+			}
+		},
+		{
+			"op": "value",
+			"device": "b",
+			"node": "t",
+			"expect": {
+				"value": "Qax"
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "b",
+			"of": "a",
+			"at": 3,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "b",
+			"to": "a",
+			"of": "b",
+			"at": 1,
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "c",
+			"of": "a",
+			"at": 1,
+			"expect": {
+				"added": 2
+			}
+		},
+		{
+			"op": "pass",
+			"from": "b",
+			"to": "c",
+			"of": "b",
+			"at": 1,
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "value",
+			"device": "a",
+			"node": "t",
+			"expect": {
+				"value": "Qaxb"
+			}
+		},
+		{
+			"op": "value",
+			"device": "b",
+			"node": "t",
+			"expect": {
+				"value": "Qaxb"
+			}
+		},
+		{
+			"op": "value",
+			"device": "c",
+			"node": "t",
+			"expect": {
+				"value": "Qax"
+			}
+		},
+		{
+			"op": "steps",
+			"device": "c",
+			"of": "b",
+			"expect": {
+				"steps": [
+					"8958208139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b39401f6616f6576616c756581a26470617468806576616c7565615f031a68e7780080",
+					"8958208139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394025820db3f8aa190bdca65866eb32f853e8d8e39e4b643d68ebea26c606a81aabd02f9616f6576616c756581a26470617468806576616c7565615f041a68e778008101",
+					"8a58208139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394035820068c681689fcc0e0208812261c8e69fcdd0cbfb3d66a25c54197039bbca2100861746576616c756581a36470617468806572616e67658202026576616c75656178051a68e77800818258208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c0281828258208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c0080"
+				]
+			}
+		}
+	]
+}

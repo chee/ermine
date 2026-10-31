@@ -4,7 +4,8 @@
 // seeds,
 // a write's when is the request's or 1760000000, and the k-th random call gives k big-endian.
 //   encode  { step: { device, n, before, node, relative?, part, patches, lamport, when, on?, ids?, who? } } -> { bytes }
-//           ids: per patch null or { after: id | null, gone: [[id, count], …] }, an id as written
+//           ids: per patch null or { after: id | null, gone: [[id, count], …], before?: id | true },
+//           an id as written
 //           (WIRE.md): this device's x or [x, k], another's [device, c] or [device, n, k]
 //   decode  { bytes } -> { step } | { refused: true }
 //   hash    { bytes } -> { hash }        blake3
@@ -227,10 +228,13 @@ function stepIn(s: Request, device?: string, before?: Uint8Array | null): Step {
 		type Written = number | (string | number)[]
 		const id = (i: Written): Value =>
 			Array.isArray(i) && typeof i[0] === "string" ? [unhex(keyOf(i[0])), ...i.slice(1)] : i
-		out.ids = (s.ids as ({ after: Written | null; gone: [Written, number][] } | null)[])
-			.map((x) =>
-				x && [x.after === null ? null : id(x.after), x.gone.map(([i, c]) => [id(i), c])]
-			)
+		type In = { after: Written | null; gone: [Written, number][]; before?: Written | true }
+		out.ids = (s.ids as (In | null)[]).map((x) => {
+			if (!x) return null
+			const a = [x.after === null ? null : id(x.after), x.gone.map(([i, c]) => [id(i), c])]
+			if (x.before !== undefined) a.push(x.before === true ? true : id(x.before))
+			return a
+		})
 	}
 	if (s.who !== undefined) out.who = s.who
 	return out
@@ -252,8 +256,12 @@ function stepOut(s: Step) {
 		...(s.ids !== undefined && {
 			ids: s.ids.map((x) => {
 				if (x === null) return null
-				const [after, gone] = x as [Value, [Value, number][]]
-				return { after: idOut(after), gone: gone.map(([i, c]) => [idOut(i), c]) }
+				const [after, gone, before] = x as [Value, [Value, number][], Value?]
+				return {
+					after: idOut(after),
+					gone: gone.map(([i, c]) => [idOut(i), c]),
+					...(before !== undefined && { before: idOut(before) }),
+				}
 			}),
 		}),
 		...(s.who !== undefined && { who: s.who }),

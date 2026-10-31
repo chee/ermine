@@ -1,0 +1,1654 @@
+{
+	"title": "no interleaving: a splice by ids also names the element it goes before at its writer (WIRE.md, ids), and inserts at one place go by FugueMax's rule, so two devices typing at one place keep their words whole in any direction: each prepending a word a character at a time (abc, xyz), each typing backward in the middle, each adding three todos at the top of a list, and each typing forward, come out one word then the other on every peer, whatever came first. old steps, ids with no before, go as they did (before them: the end), so two old prepends still mix. before as an id, as true (its after's) and none decode; true with no after, or a fourth item, is not a step (its steps' bytes here, before and all)",
+	"steps": [
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "device",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"expect": {
+				"key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
+		},
+		{
+			"op": "device",
+			"name": "c",
+			"seed": "0303030303030303030303030303030303030303030303030303030303030303",
+			"expect": {
+				"key": "ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1"
+			}
+		},
+		{
+			"op": "device",
+			"name": "w",
+			"seed": "0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a",
+			"expect": {
+				"key": "43a72e714401762df66b68c26dfbdf2682aaec9f2474eca4613e424a0fbafd3c"
+			}
+		},
+		{
+			"op": "device",
+			"name": "v",
+			"seed": "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b",
+			"expect": {
+				"key": "66be7e332c7a453332bd9d0a7f7db055f5c5ef1a06ada66d98b39fb6810c473a"
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pre",
+			"patches": [
+				{
+					"path": [],
+					"value": "Q"
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "b",
+			"of": "a",
+			"at": 1,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pre",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						0
+					],
+					"value": "c"
+				}
+			],
+			"expect": {
+				"n": 2,
+				"lamport": 2
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pre",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						0
+					],
+					"value": "b"
+				}
+			],
+			"expect": {
+				"n": 3,
+				"lamport": 3
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pre",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						0
+					],
+					"value": "a"
+				}
+			],
+			"expect": {
+				"n": 4,
+				"lamport": 4
+			}
+		},
+		{
+			"op": "write",
+			"device": "b",
+			"node": "pre",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						0
+					],
+					"value": "z"
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 2
+			}
+		},
+		{
+			"op": "write",
+			"device": "b",
+			"node": "pre",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						0
+					],
+					"value": "y"
+				}
+			],
+			"expect": {
+				"n": 2,
+				"lamport": 3
+			}
+		},
+		{
+			"op": "write",
+			"device": "b",
+			"node": "pre",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				}
+			],
+			"expect": {
+				"n": 3,
+				"lamport": 4
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "b",
+			"of": "a",
+			"at": 2,
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "pass",
+			"from": "b",
+			"to": "a",
+			"of": "b",
+			"at": 1,
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "pass",
+			"from": "b",
+			"to": "c",
+			"of": "b",
+			"at": 1,
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "c",
+			"of": "a",
+			"at": 1,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "c",
+			"of": "a",
+			"at": 2,
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "value",
+			"device": "a",
+			"node": "pre",
+			"expect": {
+				"value": "abcxyzQ"
+			}
+		},
+		{
+			"op": "value",
+			"device": "b",
+			"node": "pre",
+			"expect": {
+				"value": "abcxyzQ"
+			}
+		},
+		{
+			"op": "value",
+			"device": "c",
+			"node": "pre",
+			"expect": {
+				"value": "abcxyzQ"
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "back",
+			"patches": [
+				{
+					"path": [],
+					"value": "<>"
+				}
+			],
+			"expect": {
+				"n": 5,
+				"lamport": 5
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "b",
+			"of": "a",
+			"at": 5,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "back",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						1,
+						1
+					],
+					"value": "c"
+				}
+			],
+			"expect": {
+				"n": 6,
+				"lamport": 6
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "back",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						1,
+						1
+					],
+					"value": "b"
+				}
+			],
+			"expect": {
+				"n": 7,
+				"lamport": 7
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "back",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						1,
+						1
+					],
+					"value": "a"
+				}
+			],
+			"expect": {
+				"n": 8,
+				"lamport": 8
+			}
+		},
+		{
+			"op": "write",
+			"device": "b",
+			"node": "back",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						1,
+						1
+					],
+					"value": "z"
+				}
+			],
+			"expect": {
+				"n": 4,
+				"lamport": 6
+			}
+		},
+		{
+			"op": "write",
+			"device": "b",
+			"node": "back",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						1,
+						1
+					],
+					"value": "y"
+				}
+			],
+			"expect": {
+				"n": 5,
+				"lamport": 7
+			}
+		},
+		{
+			"op": "write",
+			"device": "b",
+			"node": "back",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						1,
+						1
+					],
+					"value": "x"
+				}
+			],
+			"expect": {
+				"n": 6,
+				"lamport": 8
+			}
+		},
+		{
+			"op": "pass",
+			"from": "b",
+			"to": "a",
+			"of": "b",
+			"at": 4,
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "b",
+			"of": "a",
+			"at": 6,
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "pass",
+			"from": "b",
+			"to": "c",
+			"of": "b",
+			"at": 4,
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "c",
+			"of": "a",
+			"at": 5,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "c",
+			"of": "a",
+			"at": 6,
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "value",
+			"device": "a",
+			"node": "back",
+			"expect": {
+				"value": "<abcxyz>"
+			}
+		},
+		{
+			"op": "value",
+			"device": "b",
+			"node": "back",
+			"expect": {
+				"value": "<abcxyz>"
+			}
+		},
+		{
+			"op": "value",
+			"device": "c",
+			"node": "back",
+			"expect": {
+				"value": "<abcxyz>"
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "todo",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"items": [
+							{
+								"t": "old"
+							}
+						]
+					}
+				}
+			],
+			"expect": {
+				"n": 9,
+				"lamport": 9
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "b",
+			"of": "a",
+			"at": 9,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "todo",
+			"patches": [
+				{
+					"path": [
+						"items"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": [
+						{
+							"t": "a1"
+						}
+					]
+				}
+			],
+			"expect": {
+				"n": 10,
+				"lamport": 10
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "todo",
+			"patches": [
+				{
+					"path": [
+						"items"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": [
+						{
+							"t": "a2"
+						}
+					]
+				}
+			],
+			"expect": {
+				"n": 11,
+				"lamport": 11
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "todo",
+			"patches": [
+				{
+					"path": [
+						"items"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": [
+						{
+							"t": "a3"
+						}
+					]
+				}
+			],
+			"expect": {
+				"n": 12,
+				"lamport": 12
+			}
+		},
+		{
+			"op": "write",
+			"device": "b",
+			"node": "todo",
+			"patches": [
+				{
+					"path": [
+						"items"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": [
+						{
+							"t": "b1"
+						}
+					]
+				}
+			],
+			"expect": {
+				"n": 7,
+				"lamport": 10
+			}
+		},
+		{
+			"op": "write",
+			"device": "b",
+			"node": "todo",
+			"patches": [
+				{
+					"path": [
+						"items"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": [
+						{
+							"t": "b2"
+						}
+					]
+				}
+			],
+			"expect": {
+				"n": 8,
+				"lamport": 11
+			}
+		},
+		{
+			"op": "write",
+			"device": "b",
+			"node": "todo",
+			"patches": [
+				{
+					"path": [
+						"items"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": [
+						{
+							"t": "b3"
+						}
+					]
+				}
+			],
+			"expect": {
+				"n": 9,
+				"lamport": 12
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "b",
+			"of": "a",
+			"at": 10,
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "pass",
+			"from": "b",
+			"to": "a",
+			"of": "b",
+			"at": 7,
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "pass",
+			"from": "b",
+			"to": "c",
+			"of": "b",
+			"at": 7,
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "c",
+			"of": "a",
+			"at": 9,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "c",
+			"of": "a",
+			"at": 10,
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "value",
+			"device": "a",
+			"node": "todo",
+			"expect": {
+				"value": {
+					"items": [
+						{
+							"t": "a3"
+						},
+						{
+							"t": "a2"
+						},
+						{
+							"t": "a1"
+						},
+						{
+							"t": "b3"
+						},
+						{
+							"t": "b2"
+						},
+						{
+							"t": "b1"
+						},
+						{
+							"t": "old"
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "value",
+			"device": "b",
+			"node": "todo",
+			"expect": {
+				"value": {
+					"items": [
+						{
+							"t": "a3"
+						},
+						{
+							"t": "a2"
+						},
+						{
+							"t": "a1"
+						},
+						{
+							"t": "b3"
+						},
+						{
+							"t": "b2"
+						},
+						{
+							"t": "b1"
+						},
+						{
+							"t": "old"
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "value",
+			"device": "c",
+			"node": "todo",
+			"expect": {
+				"value": {
+					"items": [
+						{
+							"t": "a3"
+						},
+						{
+							"t": "a2"
+						},
+						{
+							"t": "a1"
+						},
+						{
+							"t": "b3"
+						},
+						{
+							"t": "b2"
+						},
+						{
+							"t": "b1"
+						},
+						{
+							"t": "old"
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "fwd",
+			"patches": [
+				{
+					"path": [],
+					"value": "<>"
+				}
+			],
+			"expect": {
+				"n": 13,
+				"lamport": 13
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "b",
+			"of": "a",
+			"at": 13,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "fwd",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						1,
+						1
+					],
+					"value": "a"
+				}
+			],
+			"expect": {
+				"n": 14,
+				"lamport": 14
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "fwd",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						2,
+						2
+					],
+					"value": "b"
+				}
+			],
+			"expect": {
+				"n": 15,
+				"lamport": 15
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "fwd",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						3,
+						3
+					],
+					"value": "c"
+				}
+			],
+			"expect": {
+				"n": 16,
+				"lamport": 16
+			}
+		},
+		{
+			"op": "write",
+			"device": "b",
+			"node": "fwd",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						1,
+						1
+					],
+					"value": "x"
+				}
+			],
+			"expect": {
+				"n": 10,
+				"lamport": 14
+			}
+		},
+		{
+			"op": "write",
+			"device": "b",
+			"node": "fwd",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						2,
+						2
+					],
+					"value": "y"
+				}
+			],
+			"expect": {
+				"n": 11,
+				"lamport": 15
+			}
+		},
+		{
+			"op": "write",
+			"device": "b",
+			"node": "fwd",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						3,
+						3
+					],
+					"value": "z"
+				}
+			],
+			"expect": {
+				"n": 12,
+				"lamport": 16
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "b",
+			"of": "a",
+			"at": 14,
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "pass",
+			"from": "b",
+			"to": "a",
+			"of": "b",
+			"at": 10,
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "pass",
+			"from": "b",
+			"to": "c",
+			"of": "b",
+			"at": 10,
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "c",
+			"of": "a",
+			"at": 13,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "c",
+			"of": "a",
+			"at": 14,
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "value",
+			"device": "a",
+			"node": "fwd",
+			"expect": {
+				"value": "<abcxyz>"
+			}
+		},
+		{
+			"op": "value",
+			"device": "b",
+			"node": "fwd",
+			"expect": {
+				"value": "<abcxyz>"
+			}
+		},
+		{
+			"op": "value",
+			"device": "c",
+			"node": "fwd",
+			"expect": {
+				"value": "<abcxyz>"
+			}
+		},
+		{
+			"op": "steps",
+			"device": "a",
+			"of": "a",
+			"expect": {
+				"steps": [
+					"8958208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c01f6637072656576616c756581a26470617468806576616c75656151011a68e7780080",
+					"8a58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c025820ab3b0e7ee1db47ae0bd2ef2ba862d8801fc38d7212796fd89f8518ba9f2d94e3637072656576616c756581a36470617468806572616e67658200006576616c75656163021a68e7780081018183f680820100",
+					"8a58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c035820ed838e25b33adc7d22d13d386414ef0dce5dc677527fea113457f420e19d3184637072656576616c756581a36470617468806572616e67658200006576616c75656162031a68e7780081018183f68001",
+					"8a58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c04582068d34a6ad0c1df5434d44f74a911348dfbfd72027c42d51f96d8ca48dc84aa56637072656576616c756581a36470617468806572616e67658200006576616c75656161041a68e7780081018183f68001",
+					"8958208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c05582085fd51f683cac01fe831b26b285956282f152e86da4aca8a29c49bbe46b320ee646261636b6576616c756581a26470617468806576616c7565623c3e051a68e7780080",
+					"8a58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c0658208842c13ffd0d307b25f92793a0c0ce305a3b519f4f21c6c7455e8be84755d1e3646261636b6576616c756581a36470617468806572616e67658201016576616c75656163061a68e778008101818382010080820101",
+					"8a58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c075820ddcc954dba290c91fb0d5f3ab9c49c7c976785ec5048bcb38134148805af7f22646261636b6576616c756581a36470617468806572616e67658201016576616c75656162071a68e77800810181838202008001",
+					"8a58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c085820d6b9d2ca02ef18ca0b1330a591fd6091075d23c4302a28f7d79cadef3a4bbfe5646261636b6576616c756581a36470617468806572616e67658201016576616c75656161081a68e77800810181838203008001",
+					"8958208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c095820df3194b735d702abb4364083b26b2cb34486b31bd3e51ce22866908e82f8179c64746f646f6576616c756581a26470617468806576616c7565a1656974656d7381a16174636f6c64091a68e7780080",
+					"8a58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c0a58209279e2178c1cc7246cc9825a6f6eb8a7093ce73977694891512f86147669c1fc64746f646f6576616c756581a3647061746881656974656d736572616e67658200006576616c756581a161746261310a1a68e7780081018183f680820100",
+					"8a58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c0b58201a24196dbca2f6c7265255ab597568b5c60b20f6519ed91733e947fb837086af64746f646f6576616c756581a3647061746881656974656d736572616e67658200006576616c756581a161746261320b1a68e7780081018183f68001",
+					"8a58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c0c5820d5c7472f9d5eae76bb99ada091270e45a2ae863a90b2c1acaf2c57bdb08cfea764746f646f6576616c756581a3647061746881656974656d736572616e67658200006576616c756581a161746261330c1a68e7780081018183f68001",
+					"8958208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c0d582008fdb194848e03ce6b2edd6cd5ca4945d45a103d89a9befbed7532e137e73f64636677646576616c756581a26470617468806576616c7565623c3e0d1a68e7780080",
+					"8a58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c0e5820250aedb0e16a51a78c12d58899ed83e921db0316044494600848dc0898ee1e83636677646576616c756581a36470617468806572616e67658201016576616c756561610e1a68e778008101818382010080820101",
+					"8a58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c0f5820f2deb1c853b126896a4bc3c484aa87b3d61e204b28f7a5193e14612fa6a8d99b636677646576616c756581a36470617468806572616e67658202026576616c756561620f1a68e77800810181830180f5",
+					"8a58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c1058204dbf24b5989e3a26e2f355a6cb4e4861b2bc6bfe0bb5cc1ca71846f157c12eb2636677646576616c756581a36470617468806572616e67658203036576616c75656163101a68e77800810181830180f5"
+				]
+			}
+		},
+		{
+			"op": "steps",
+			"device": "a",
+			"of": "b",
+			"expect": {
+				"steps": [
+					"8a58208139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b39401f6637072656576616c756581a36470617468806572616e67658200006576616c7565617a021a68e77800818258208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c018183f6808358208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c0100",
+					"8a58208139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394025820e9e59a998c46126f6bab6d24b2785cbea8af040d943cd1ffe8d179c59099a6ae637072656576616c756581a36470617468806572616e67658200006576616c75656179031a68e7780081018183f68001",
+					"8a58208139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b39403582029d6b0a2d7dad708abe19a74ac984972db46e5e3657673d60ac4ff404d3f5f2d637072656576616c756581a36470617468806572616e67658200006576616c75656178041a68e7780081018183f68001",
+					"8a58208139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b39404582054c2f3a04620992377e9464f7dc7bde79e5b1e963bbeba64958c325ababe17f8646261636b6576616c756581a36470617468806572616e67658201016576616c7565617a061a68e77800818258208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c0581838358208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c0500808358208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c0501",
+					"8a58208139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394055820ec6db20abc68895611d11020045452ca71bae007880007cedd50ad52100a6f9e646261636b6576616c756581a36470617468806572616e67658201016576616c75656179071a68e77800810181838358208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c05008001",
+					"8a58208139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b3940658206cb753726198deccd70681dd83ee3a5f9d9ca9199e85f4b0b2e4cd66e846cf80646261636b6576616c756581a36470617468806572616e67658201016576616c75656178081a68e77800810181838358208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c05008001",
+					"8a58208139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394075820bfc72ada725df6fe3246e7b4aa8ca37c6fe57d3f2efd0de17d4920957eb39d4764746f646f6576616c756581a3647061746881656974656d736572616e67658200006576616c756581a161746262310a1a68e77800818258208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c098183f6808358208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c0900",
+					"8a58208139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b3940858207fe128af370d057df5933ae98a6cde9af213689cecd6fbac8742bf3ade754d1c64746f646f6576616c756581a3647061746881656974656d736572616e67658200006576616c756581a161746262320b1a68e7780081018183f68001",
+					"8a58208139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394095820b7de8f3a22ac4a1245f9782c836502084bf690df14f2ca13de3c94fbd5ca066164746f646f6576616c756581a3647061746881656974656d736572616e67658200006576616c756581a161746262330c1a68e7780081018183f68001",
+					"8a58208139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b3940a582050b047e00b633340f7e3929c1b6aa3df5e80f42c12ed7b3621fcf96522e877aa636677646576616c756581a36470617468806572616e67658201016576616c756561780e1a68e77800818258208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c0d81838358208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c0d00808358208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c0d01",
+					"8a58208139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b3940b58204f61eb83f6544137b033677d12992ad4f78f5b4a17b94852d9efb72f10868a9f636677646576616c756581a36470617468806572616e67658202026576616c756561790f1a68e77800810181830180f5",
+					"8a58208139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b3940c5820fd58f5af0e65b35828df2aa84178ebd67652ac2e7d75e129b5d89b2dfedbdbd1636677646576616c756581a36470617468806572616e67658203036576616c7565617a101a68e77800810181830180f5"
+				]
+			}
+		},
+		{
+			"op": "take",
+			"device": "c",
+			"run": {
+				"device": "w",
+				"sign": "w",
+				"steps": [
+					{
+						"n": 1,
+						"node": "old",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"value": "Q"
+							}
+						],
+						"lamport": 1,
+						"when": 0,
+						"on": []
+					},
+					{
+						"n": 2,
+						"node": "old",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"range": [
+									0,
+									0
+								],
+								"value": "c"
+							}
+						],
+						"lamport": 2,
+						"when": 0,
+						"on": [
+							[
+								"w",
+								1
+							]
+						],
+						"ids": [
+							{
+								"after": null,
+								"gone": []
+							}
+						]
+					},
+					{
+						"n": 3,
+						"node": "old",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"range": [
+									0,
+									0
+								],
+								"value": "b"
+							}
+						],
+						"lamport": 3,
+						"when": 0,
+						"on": [
+							[
+								"w",
+								2
+							]
+						],
+						"ids": [
+							{
+								"after": null,
+								"gone": []
+							}
+						]
+					},
+					{
+						"n": 4,
+						"node": "old",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"range": [
+									0,
+									0
+								],
+								"value": "a"
+							}
+						],
+						"lamport": 4,
+						"when": 0,
+						"on": [
+							[
+								"w",
+								3
+							]
+						],
+						"ids": [
+							{
+								"after": null,
+								"gone": []
+							}
+						]
+					}
+				]
+			},
+			"expect": {
+				"added": 4
+			}
+		},
+		{
+			"op": "take",
+			"device": "c",
+			"run": {
+				"device": "v",
+				"sign": "v",
+				"steps": [
+					{
+						"n": 1,
+						"node": "old",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"range": [
+									0,
+									0
+								],
+								"value": "z"
+							}
+						],
+						"lamport": 2,
+						"when": 0,
+						"on": [
+							[
+								"w",
+								1
+							]
+						],
+						"ids": [
+							{
+								"after": null,
+								"gone": []
+							}
+						]
+					},
+					{
+						"n": 2,
+						"node": "old",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"range": [
+									0,
+									0
+								],
+								"value": "y"
+							}
+						],
+						"lamport": 3,
+						"when": 0,
+						"on": [
+							[
+								"v",
+								1
+							]
+						],
+						"ids": [
+							{
+								"after": null,
+								"gone": []
+							}
+						]
+					},
+					{
+						"n": 3,
+						"node": "old",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"range": [
+									0,
+									0
+								],
+								"value": "x"
+							}
+						],
+						"lamport": 4,
+						"when": 0,
+						"on": [
+							[
+								"v",
+								2
+							]
+						],
+						"ids": [
+							{
+								"after": null,
+								"gone": []
+							}
+						]
+					}
+				]
+			},
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "take",
+			"device": "b",
+			"run": {
+				"device": "v",
+				"sign": "v",
+				"steps": [
+					{
+						"n": 1,
+						"node": "old",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"range": [
+									0,
+									0
+								],
+								"value": "z"
+							}
+						],
+						"lamport": 2,
+						"when": 0,
+						"on": [
+							[
+								"w",
+								1
+							]
+						],
+						"ids": [
+							{
+								"after": null,
+								"gone": []
+							}
+						]
+					},
+					{
+						"n": 2,
+						"node": "old",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"range": [
+									0,
+									0
+								],
+								"value": "y"
+							}
+						],
+						"lamport": 3,
+						"when": 0,
+						"on": [
+							[
+								"v",
+								1
+							]
+						],
+						"ids": [
+							{
+								"after": null,
+								"gone": []
+							}
+						]
+					},
+					{
+						"n": 3,
+						"node": "old",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"range": [
+									0,
+									0
+								],
+								"value": "x"
+							}
+						],
+						"lamport": 4,
+						"when": 0,
+						"on": [
+							[
+								"v",
+								2
+							]
+						],
+						"ids": [
+							{
+								"after": null,
+								"gone": []
+							}
+						]
+					}
+				]
+			},
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "take",
+			"device": "b",
+			"run": {
+				"device": "w",
+				"sign": "w",
+				"steps": [
+					{
+						"n": 1,
+						"node": "old",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"value": "Q"
+							}
+						],
+						"lamport": 1,
+						"when": 0,
+						"on": []
+					}
+				]
+			},
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "take",
+			"device": "b",
+			"run": {
+				"device": "w",
+				"sign": "w",
+				"steps": [
+					{
+						"n": 1,
+						"node": "old",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"value": "Q"
+							}
+						],
+						"lamport": 1,
+						"when": 0,
+						"on": []
+					},
+					{
+						"n": 2,
+						"node": "old",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"range": [
+									0,
+									0
+								],
+								"value": "c"
+							}
+						],
+						"lamport": 2,
+						"when": 0,
+						"on": [
+							[
+								"w",
+								1
+							]
+						],
+						"ids": [
+							{
+								"after": null,
+								"gone": []
+							}
+						]
+					},
+					{
+						"n": 3,
+						"node": "old",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"range": [
+									0,
+									0
+								],
+								"value": "b"
+							}
+						],
+						"lamport": 3,
+						"when": 0,
+						"on": [
+							[
+								"w",
+								2
+							]
+						],
+						"ids": [
+							{
+								"after": null,
+								"gone": []
+							}
+						]
+					},
+					{
+						"n": 4,
+						"node": "old",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"range": [
+									0,
+									0
+								],
+								"value": "a"
+							}
+						],
+						"lamport": 4,
+						"when": 0,
+						"on": [
+							[
+								"w",
+								3
+							]
+						],
+						"ids": [
+							{
+								"after": null,
+								"gone": []
+							}
+						]
+					}
+				]
+			},
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "value",
+			"device": "c",
+			"node": "old",
+			"expect": {
+				"value": "xaybzcQ"
+			}
+		},
+		{
+			"op": "value",
+			"device": "b",
+			"node": "old",
+			"expect": {
+				"value": "xaybzcQ"
+			}
+		},
+		{
+			"op": "decode",
+			"bytes": "8a58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c035820070707070707070707070707070707070707070707070707070707070707070763646f636576616c756581a364706174688161746572616e67658201016576616c756561780300808183018002",
+			"expect": {
+				"step": {
+					"device": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+					"n": 3,
+					"before": "0707070707070707070707070707070707070707070707070707070707070707",
+					"node": "doc",
+					"part": "value",
+					"patches": [
+						{
+							"path": [
+								"t"
+							],
+							"range": [
+								1,
+								1
+							],
+							"value": "x"
+						}
+					],
+					"lamport": 3,
+					"when": 0,
+					"on": [],
+					"ids": [
+						{
+							"after": 1,
+							"gone": [],
+							"before": 2
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "decode",
+			"bytes": "8a58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c035820070707070707070707070707070707070707070707070707070707070707070763646f636576616c756581a364706174688161746572616e67658201016576616c75656178030080818401800202",
+			"expect": {
+				"refused": true
+			}
+		},
+		{
+			"op": "decode",
+			"bytes": "8a58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c035820070707070707070707070707070707070707070707070707070707070707070763646f636576616c756581a364706174688161746572616e67658201016576616c7565617803008081838258208139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b3940480f5",
+			"expect": {
+				"step": {
+					"device": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+					"n": 3,
+					"before": "0707070707070707070707070707070707070707070707070707070707070707",
+					"node": "doc",
+					"part": "value",
+					"patches": [
+						{
+							"path": [
+								"t"
+							],
+							"range": [
+								1,
+								1
+							],
+							"value": "x"
+						}
+					],
+					"lamport": 3,
+					"when": 0,
+					"on": [],
+					"ids": [
+						{
+							"after": [
+								"8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+								4
+							],
+							"gone": [],
+							"before": true
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "decode",
+			"bytes": "8a58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c035820070707070707070707070707070707070707070707070707070707070707070763646f636576616c756581a364706174688161746572616e67658201016576616c756561780300808183f6808358208139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b3940200",
+			"expect": {
+				"step": {
+					"device": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+					"n": 3,
+					"before": "0707070707070707070707070707070707070707070707070707070707070707",
+					"node": "doc",
+					"part": "value",
+					"patches": [
+						{
+							"path": [
+								"t"
+							],
+							"range": [
+								1,
+								1
+							],
+							"value": "x"
+						}
+					],
+					"lamport": 3,
+					"when": 0,
+					"on": [],
+					"ids": [
+						{
+							"after": null,
+							"gone": [],
+							"before": [
+								"8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+								2,
+								0
+							]
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "decode",
+			"bytes": "8a58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c035820070707070707070707070707070707070707070707070707070707070707070763646f636576616c756581a364706174688161746572616e67658201016576616c756561780300808183f680f5",
+			"expect": {
+				"refused": true
+			}
+		}
+	]
+}

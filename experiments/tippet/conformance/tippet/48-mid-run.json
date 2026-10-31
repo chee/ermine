@@ -1,0 +1,187 @@
+{
+	"title": "a splice by ids after an element in the middle of a run, the first one there its own after's next: an old step (no before) into a put string goes right after it, as it did (\"the Xquick brown fox\"), and so do new steps; the scan compares the first one it meets by its own after and before, wherever in a run it starts",
+	"steps": [
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "device",
+			"name": "w",
+			"seed": "0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a",
+			"expect": {
+				"key": "43a72e714401762df66b68c26dfbdf2682aaec9f2474eca4613e424a0fbafd3c"
+			}
+		},
+		{
+			"op": "take",
+			"device": "a",
+			"run": {
+				"device": "w",
+				"sign": "w",
+				"steps": [
+					{
+						"n": 1,
+						"node": "t",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"value": "the quick brown fox"
+							}
+						],
+						"lamport": 1,
+						"when": 0,
+						"on": []
+					},
+					{
+						"n": 2,
+						"node": "t",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"range": [
+									4,
+									4
+								],
+								"value": "X"
+							}
+						],
+						"lamport": 2,
+						"when": 0,
+						"on": [
+							[
+								"w",
+								1
+							]
+						],
+						"ids": [
+							{
+								"after": [
+									1,
+									3
+								],
+								"gone": []
+							}
+						]
+					}
+				]
+			},
+			"expect": {
+				"added": 2
+			}
+		},
+		{
+			"op": "value",
+			"device": "a",
+			"node": "t",
+			"expect": {
+				"value": "the Xquick brown fox"
+			}
+		},
+		{
+			"op": "device",
+			"name": "v",
+			"seed": "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b",
+			"expect": {
+				"key": "66be7e332c7a453332bd9d0a7f7db055f5c5ef1a06ada66d98b39fb6810c473a"
+			}
+		},
+		{
+			"op": "device",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"expect": {
+				"key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
+		},
+		{
+			"op": "write",
+			"device": "v",
+			"node": "t",
+			"patches": [
+				{
+					"path": [],
+					"value": "the quick brown fox"
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "v",
+			"node": "t",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						4,
+						4
+					],
+					"value": "X"
+				}
+			],
+			"expect": {
+				"n": 2,
+				"lamport": 2
+			}
+		},
+		{
+			"op": "write",
+			"device": "v",
+			"node": "t",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						11,
+						11
+					],
+					"value": "Y"
+				}
+			],
+			"expect": {
+				"n": 3,
+				"lamport": 3
+			}
+		},
+		{
+			"op": "pass",
+			"from": "v",
+			"to": "b",
+			"of": "v",
+			"at": 1,
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "value",
+			"device": "b",
+			"node": "t",
+			"expect": {
+				"value": "the Xquick Ybrown fox"
+			}
+		},
+		{
+			"op": "steps",
+			"device": "b",
+			"of": "v",
+			"expect": {
+				"steps": [
+					"89582066be7e332c7a453332bd9d0a7f7db055f5c5ef1a06ada66d98b39fb6810c473a01f661746576616c756581a26470617468806576616c75657374686520717569636b2062726f776e20666f78011a68e7780080",
+					"8a582066be7e332c7a453332bd9d0a7f7db055f5c5ef1a06ada66d98b39fb6810c473a0258209b9ee169779fbd4e41eff2ecf0be494d29f68ed4acfd71274c8db36c2cdc278b61746576616c756581a36470617468806572616e67658204046576616c75656158021a68e778008101818382010380820104",
+					"8a582066be7e332c7a453332bd9d0a7f7db055f5c5ef1a06ada66d98b39fb6810c473a0358200ff727681f9175ee5a90beb211cc729c2095202d5f57a47404ff724c066b4cb161746576616c756581a36470617468806572616e6765820b0b6576616c75656159031a68e77800810181838202098082020a"
+				]
+			}
+		}
+	]
+}

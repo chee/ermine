@@ -1,0 +1,386 @@
+{
+	"title": "a write to another node between keystrokes (a gap in lamports, so typing is two runs) changes nothing: Q12xb with no gap (a, b on t) and with one (d, e on u)",
+	"steps": [
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "device",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"expect": {
+				"key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "t",
+			"patches": [
+				{
+					"path": [],
+					"value": "Q"
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "t",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						1,
+						1
+					],
+					"value": "1"
+				}
+			],
+			"expect": {
+				"n": 2,
+				"lamport": 2
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "t",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						2,
+						2
+					],
+					"value": "2"
+				}
+			],
+			"expect": {
+				"n": 3,
+				"lamport": 3
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "b",
+			"of": "a",
+			"at": 1,
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "t",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						3,
+						3
+					],
+					"value": "b"
+				}
+			],
+			"expect": {
+				"n": 4,
+				"lamport": 4
+			}
+		},
+		{
+			"op": "write",
+			"device": "b",
+			"node": "o",
+			"patches": [
+				{
+					"path": [],
+					"value": "_"
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 4
+			}
+		},
+		{
+			"op": "write",
+			"device": "b",
+			"node": "o",
+			"patches": [
+				{
+					"path": [],
+					"value": "_"
+				}
+			],
+			"expect": {
+				"n": 2,
+				"lamport": 5
+			}
+		},
+		{
+			"op": "write",
+			"device": "b",
+			"node": "t",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						3,
+						3
+					],
+					"value": "x"
+				}
+			],
+			"expect": {
+				"n": 3,
+				"lamport": 6
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "b",
+			"of": "a",
+			"at": 4,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "b",
+			"to": "a",
+			"of": "b",
+			"at": 1,
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "value",
+			"device": "a",
+			"node": "t",
+			"expect": {
+				"value": "Q12xb"
+			}
+		},
+		{
+			"op": "value",
+			"device": "b",
+			"node": "t",
+			"expect": {
+				"value": "Q12xb"
+			}
+		},
+		{
+			"op": "device",
+			"name": "d",
+			"seed": "0404040404040404040404040404040404040404040404040404040404040404",
+			"expect": {
+				"key": "ca93ac1705187071d67b83c7ff0efe8108e8ec4530575d7726879333dbdabe7c"
+			}
+		},
+		{
+			"op": "device",
+			"name": "e",
+			"seed": "0505050505050505050505050505050505050505050505050505050505050505",
+			"expect": {
+				"key": "6e7a1cdd29b0b78fd13af4c5598feff4ef2a97166e3ca6f2e4fbfccd80505bf1"
+			}
+		},
+		{
+			"op": "write",
+			"device": "d",
+			"node": "u",
+			"patches": [
+				{
+					"path": [],
+					"value": "Q"
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "d",
+			"node": "u",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						1,
+						1
+					],
+					"value": "1"
+				}
+			],
+			"expect": {
+				"n": 2,
+				"lamport": 2
+			}
+		},
+		{
+			"op": "write",
+			"device": "d",
+			"node": "u",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						2,
+						2
+					],
+					"value": "2"
+				}
+			],
+			"expect": {
+				"n": 3,
+				"lamport": 3
+			}
+		},
+		{
+			"op": "pass",
+			"from": "d",
+			"to": "e",
+			"of": "d",
+			"at": 1,
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "write",
+			"device": "d",
+			"node": "p",
+			"patches": [
+				{
+					"path": [],
+					"value": "_"
+				}
+			],
+			"expect": {
+				"n": 4,
+				"lamport": 4
+			}
+		},
+		{
+			"op": "write",
+			"device": "d",
+			"node": "u",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						3,
+						3
+					],
+					"value": "b"
+				}
+			],
+			"expect": {
+				"n": 5,
+				"lamport": 5
+			}
+		},
+		{
+			"op": "write",
+			"device": "e",
+			"node": "p",
+			"patches": [
+				{
+					"path": [],
+					"value": "_"
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 4
+			}
+		},
+		{
+			"op": "write",
+			"device": "e",
+			"node": "p",
+			"patches": [
+				{
+					"path": [],
+					"value": "_"
+				}
+			],
+			"expect": {
+				"n": 2,
+				"lamport": 5
+			}
+		},
+		{
+			"op": "write",
+			"device": "e",
+			"node": "u",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						3,
+						3
+					],
+					"value": "x"
+				}
+			],
+			"expect": {
+				"n": 3,
+				"lamport": 6
+			}
+		},
+		{
+			"op": "pass",
+			"from": "d",
+			"to": "e",
+			"of": "d",
+			"at": 4,
+			"expect": {
+				"added": 2
+			}
+		},
+		{
+			"op": "pass",
+			"from": "e",
+			"to": "d",
+			"of": "e",
+			"at": 1,
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "value",
+			"device": "d",
+			"node": "u",
+			"expect": {
+				"value": "Q12xb"
+			}
+		},
+		{
+			"op": "value",
+			"device": "e",
+			"node": "u",
+			"expect": {
+				"value": "Q12xb"
+			}
+		}
+	]
+}
