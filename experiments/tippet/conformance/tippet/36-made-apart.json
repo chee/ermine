@@ -1,5 +1,5 @@
 {
-	"title": "two writes made apart on one value: at paths apart both stand, one version; at one path, or one inside the other (a key, a splice each into one text, a key put inside a value put whole), both stay: the merge first (the later applied over the earlier, a splice's range as written), then each side as it wrote it; a write that saw both replaces both, there only",
+	"title": "two writes made apart on one value: at paths apart both stand, one version; at one path, or one inside the other (a key, a splice each into one text, a key put inside a value put whole), both stay: the merge first (the later applied over the earlier, a splice where its writer meant: by ids, after the element it followed), then each side as it wrote it; a write that saw both replaces both, there only",
 	"steps": [
 		{
 			"op": "device",
@@ -416,7 +416,7 @@
 			"expect": {
 				"versions": [
 					{
-						"value": "!cast",
+						"value": "!cats",
 						"from": [
 							[
 								"a",
@@ -556,7 +556,7 @@
 			"expect": {
 				"versions": [
 					{
-						"value": "!cast",
+						"value": "!cats",
 						"from": [
 							[
 								"a",

@@ -3,7 +3,9 @@
 // Bytes are lowercase hex; a device is named by its 64-hex key. Deterministic: keys come from
 // seeds,
 // a write's when is the request's or 1760000000, and the k-th random call gives k big-endian.
-//   encode  { step: { device, n, before, node, relative?, part, patches, lamport, when, on?, who? } } -> { bytes }
+//   encode  { step: { device, n, before, node, relative?, part, patches, lamport, when, on?, ids?, who? } } -> { bytes }
+//           ids: per patch null or { after: id | null, gone: [[id, count], …] }, an id as written
+//           (WIRE.md): this device's x or [x, k], another's [device, c] or [device, n, k]
 //   decode  { bytes } -> { step } | { refused: true }
 //   hash    { bytes } -> { hash }        blake3
 //   sign    { seed, bytes } -> { sig }   ed25519
@@ -11,7 +13,8 @@
 //   unpack  { pack, before? } -> { steps } | { refused: true }
 //   message { message } -> { bytes }     a run is ["run", device, sig, steps]
 //   read    { bytes } -> { message } | { refused: true }
-//   device  { name, seed } -> { key }    a log that writes, with its graph and sync
+//   device  { name, seed, rebase?, forgets? } -> { key }    a log that writes, with its graph and sync;
+//                                        rebase: history's (how many steps an entry can undo)
 //   relay   { name } -> {}               no key, no graph
 //   write   { device, node, part?, patches, when?, who? } -> { n, lamport }
 //   disk    { name, seed, log? } -> { key }    a log on the file store, no graph; log: initial hex
@@ -116,7 +119,11 @@ function made(log: Log, relay: boolean, signer?: Signer): Device {
 	return d
 }
 
-async function createDevice(seed: Uint8Array): Promise<Device> {
+async function createDevice(
+	seed: Uint8Array,
+	rebase?: number,
+	forgets?: boolean,
+): Promise<Device> {
 	const s = createScheduler()
 	const table = createTable((part, id) => places.onTableChange(part as Key, id))
 	const places = createPlaces({
@@ -130,7 +137,7 @@ async function createDevice(seed: Uint8Array): Promise<Device> {
 	const scope = s.createRootScope({ actor: "harness" })
 	const run = <T>(f: () => T) => s.runWithScope(scope, f)
 	const log = createLog({ writes: true, seed })
-	const history = createHistory({ log, table, places, run })
+	const history = createHistory({ log, table, places, run, rebase, forgets })
 	await history.load()
 	const d = made(log, false, await createSigner(seed))
 	d.graph = {
@@ -216,9 +223,20 @@ function stepIn(s: Request, device?: string, before?: Uint8Array | null): Step {
 	if (s.on !== undefined) {
 		out.on = (s.on as [string, number][]).map(([d, n]) => ({ device: keyOf(d), n }))
 	}
+	if (s.ids !== undefined) {
+		type Written = number | (string | number)[]
+		const id = (i: Written): Value =>
+			Array.isArray(i) && typeof i[0] === "string" ? [unhex(keyOf(i[0])), ...i.slice(1)] : i
+		out.ids = (s.ids as ({ after: Written | null; gone: [Written, number][] } | null)[])
+			.map((x) =>
+				x && [x.after === null ? null : id(x.after), x.gone.map(([i, c]) => [id(i), c])]
+			)
+	}
 	if (s.who !== undefined) out.who = s.who
 	return out
 }
+const idOut = (i: Value) =>
+	Array.isArray(i) && i[0] instanceof Uint8Array ? [hex(i[0]), ...i.slice(1)] : i
 function stepOut(s: Step) {
 	return {
 		device: s.device,
@@ -231,6 +249,13 @@ function stepOut(s: Step) {
 		lamport: s.lamport,
 		when: s.when,
 		...(s.on !== undefined && { on: s.on.map((o) => [o.device, o.n]) }),
+		...(s.ids !== undefined && {
+			ids: s.ids.map((x) => {
+				if (x === null) return null
+				const [after, gone] = x as [Value, [Value, number][]]
+				return { after: idOut(after), gone: gone.map(([i, c]) => [idOut(i), c]) }
+			}),
+		}),
 		...(s.who !== undefined && { who: s.who }),
 	}
 }
@@ -371,7 +396,7 @@ async function one(r: Request): Promise<Answer> {
 
 		case "device": {
 			if (devices.has(r.name)) throw new Error(`${r.name} is made`)
-			const d = await createDevice(unhex(r.seed))
+			const d = await createDevice(unhex(r.seed), r.rebase, r.forgets)
 			devices.set(r.name, d)
 			return { key: d.log.device! }
 		}

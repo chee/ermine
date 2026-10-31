@@ -1,6 +1,7 @@
 // History: a graph and its log, tied. The recorder turns kept writes into steps; the lander writes
 // steps from elsewhere into the graph. An entry's value is its steps' patches applied in order of
-// lamport, then device; a step that lands earlier makes the entry be worked out again.
+// lamport, then device, a splice by ids where its writer meant (elements.ts); a step that lands
+// earlier makes the entry be worked out again, undone back to it when it can be (rebase).
 // versions(node, part) lists the merge, then each head's own value (at most the 16 newest heads).
 // forget(sync) is a try-out: it snapshots and lets go the runs that have passed on, and a late step
 // is then skipped rather than merged in.
@@ -10,11 +11,14 @@ import apply, { type Patch } from "@ermine/changeable/apply"
 import { decode, encode, type Value } from "@ermine/encoding/cbor"
 import type { Places } from "@ermine/places"
 import type { Key, Table } from "@ermine/graph/table"
-import { decodeStep, type On, same, type Step } from "./step.ts"
+import { decodeStep, type On, same, type Step, writeIds } from "./step.ts"
+import { fresh, type State, step as applyStep } from "./elements.ts"
 import type { Log } from "./log.ts"
 import type { Sync } from "./sync.ts"
 
-type Ref = [lamport: number, device: string, n: number]
+// seq: how many elements its device's steps before it insert (WIRE.md, ids)
+type Ref = [lamport: number, device: string, n: number, seq: number]
+type Own = State & { tail: { ref: Ref; undo: Patch[]; back: (() => void)[] }[]; all: boolean }
 export type Failed = { device: string; n: number; node: string; part: string; why: string }
 export type Version = {
 	value: unknown
@@ -22,13 +26,15 @@ export type Version = {
 	from: { heads: [device: string, n: number][] }
 }
 const MOST = 16
+// at most this many steps after a late one are read for named, before an index is made
+const FEW = 64
 
 const before = (a: Ref, b: Ref) => a[0] < b[0] || (a[0] === b[0] && a[1] < b[1])
 const name = (part: string, node: string) => `${part}\0${node}`
 const covers = (s: Step, r: Ref) =>
 	s.on
 		? s.on.some((o) => o.device === r[1] && o.n === r[2])
-		: before(r, [s.lamport, s.device, s.n])
+		: before(r, [s.lamport, s.device, s.n, 0])
 const touched = (p: Patch) => p.move ? [p.path, p.move.path] : [p.path]
 const overlap = (a: readonly unknown[], b: readonly unknown[]) => {
 	for (let i = 0; i < a.length && i < b.length; i++) if (a[i] !== b[i]) return false
@@ -74,6 +80,9 @@ export function createHistory(o: {
 	kept?: (node: string, part: string) => boolean
 	run?: <T>(f: () => T) => T
 	forgets?: boolean
+	// how many of each entry's newest steps keep the patches that undo them (256): a step landing
+	// among them is worked in by undoing back to it, not from the first step. 0: always from the first
+	rebase?: number
 }): History {
 	const { log, table, places } = o
 	const kept = o.kept ?? keptByDefault
@@ -84,6 +93,12 @@ export function createHistory(o: {
 	// it; and the newest old step, which names every step before it. so a late step is looked up,
 	// never every later step read again
 	const namers = new Map<string, { by: Map<string, Ref>; old?: Ref }>()
+	// per entry, the value its steps make as history worked it out (the graph's, but for a write here
+	// that made no step) and its strings' and arrays' elements (elements.ts), and its newest steps
+	// (rebase) in the order applied, each with what undoes it; all: those are every step in it. none:
+	// not known (after a load: made again from the first step when needed). forgets: none at all
+	const window = o.forgets ? 0 : o.rebase ?? 256
+	const own = new Map<string, Own>()
 	const failed: Failed[] = []
 	const unkept: Omit<Failed, "device" | "n">[] = []
 	let landing = false
@@ -101,10 +116,14 @@ export function createHistory(o: {
 		frame: { info: { device: s.device, n: s.n, lamport: s.lamport }, parent: undefined },
 	})
 
-	function place(s: Step): boolean {
-		const k = name(s.part, s.node), ref: Ref = [s.lamport, s.device, s.n]
+	function place(s: Step, ref: Ref): boolean {
+		const k = name(s.part, s.node)
 		let refs = entries.get(k)
-		if (!refs) entries.set(k, refs = [])
+		// an entry seen from its first step, a whole value: its own from nothing, every step in its tail
+		if (!refs) {
+			entries.set(k, refs = [])
+			if (!o.forgets && whole(s)) own.set(k, { ...fresh(), tail: [], all: true })
+		}
 		if (o.forgets) return refs[0] && before(ref, refs[0]) ? false : (refs[0] = ref, true)
 		let i = refs.length
 		while (i > 0 && before(ref, refs[i - 1])) i--
@@ -120,8 +139,8 @@ export function createHistory(o: {
 		for (const o of s.on) n.by.set(`${o.device} ${o.n}`, newer(n.by.get(`${o.device} ${o.n}`), r))
 	}
 
-	function head(s: Step, last: boolean) {
-		const k = name(s.part, s.node), ref: Ref = [s.lamport, s.device, s.n]
+	function head(s: Step, ref: Ref, last: boolean) {
+		const k = name(s.part, s.node)
 		if (o.forgets) return void (last && heads.set(k, [ref]))
 		const hs = (heads.get(k) ?? []).filter((h) => !covers(s, h))
 		if (last || !named(k, ref)) hs.push(ref)
@@ -130,6 +149,20 @@ export function createHistory(o: {
 	// a step of the entry's after ref names it (one not held passed over)
 	function named(k: string, ref: Ref) {
 		let n = namers.get(k)
+		// no index yet and few steps after ref (only those can name it): read them, no index made
+		const refs = entries.get(k) ?? []
+		let i = refs.length
+		while (!n && i > 0 && refs.length - i <= FEW && before(ref, refs[i - 1])) i--
+		if (!n && refs.length - i <= FEW) {
+			for (; i < refs.length; i++) {
+				try {
+					if (covers(decodeStep(log.step(refs[i][1], refs[i][2])), ref)) return true
+				} catch {
+					// not held
+				}
+			}
+			return false
+		}
 		if (!n) {
 			namers.set(k, n = { by: new Map() })
 			for (const r of entries.get(k) ?? []) {
@@ -189,19 +222,19 @@ export function createHistory(o: {
 			const side = steps.flatMap((s, i) =>
 				i >= start && seen[i] & bit && seen[i] !== all ? s.patches.flatMap(touched) : []
 			)
-			let value: unknown
+			const st = fresh()
 			for (let i = start; i < steps.length; i++) {
-				const ps = seen[i] & bit
-					? steps[i].patches
-					: steps[i].patches.filter((p) =>
-						!touched(p).some((a) => side.some((b) => overlap(a, b)))
-					)
-				if (!ps.length) continue
+				const s = steps[i]
+				const keep = s.patches.map((p) =>
+					!!(seen[i] & bit) || !touched(p).some((a) => side.some((b) => overlap(a, b)))
+				)
+				if (!keep.some(Boolean)) continue
 				try {
-					value = apply(value, ps)
+					applyStep(st, { ...s, seq: refs[i][3] }, { keep })
 				} catch {
 				}
 			}
+			const value = st.value
 			const b = bytesOf(value)
 			if (!listed.some((x) => same(x, b))) listed.push(b), out.push(item(value, [h]))
 		})
@@ -226,22 +259,74 @@ export function createHistory(o: {
 		})
 	}
 
-	function redo(s: Step) {
-		const refs = entries.get(name(s.part, s.node))!
-		let value: unknown, last = s
+	const trim = (mine: Own) => {
+		if (mine.tail.length > window) {
+			mine.tail.splice(0, mine.tail.length - window), mine.all = false
+		}
+	}
+	// a step applied after the rest to an entry's own value, and noted in its tail: its patches as
+	// applied there, by position; one that doesn't apply passed over (nothing to undo), its error
+	function onto(mine: Own, r: Ref, s: Step): { applied: Patch[] } | { error: unknown } {
+		const undo: Patch[] = [], back: (() => void)[] = []
+		try {
+			const { applied } = applyStep(mine, { ...s, seq: r[3] }, { undo, back })
+			mine.tail.push({ ref: r, undo, back }), trim(mine)
+			return { applied }
+		} catch (error) {
+			mine.tail.push({ ref: r, undo: [], back: [] }), trim(mine)
+			return { error }
+		}
+	}
+
+	// an entry's own value worked out again from refs[from] on (from 0: from nothing), each step
+	// applied in order. note: new failures into failed. the last that applied, and those failed
+	// before that apply now
+	function replay(k: string, mine: Own, from: number, note: boolean) {
+		const refs = entries.get(k)!
+		let last: Step | undefined
 		const fixed = new Set<Failed>()
-		for (const r of refs) {
-			const step = decodeStep(log.step(r[1], r[2])),
+		for (let i = from; i < refs.length; i++) {
+			const step = decodeStep(log.step(refs[i][1], refs[i][2])),
 				was = failed.find((f) => f.device === step.device && f.n === step.n)
-			try {
-				value = apply(value, step.patches)
+			const out = onto(mine, refs[i], step)
+			if ("applied" in out) {
 				last = step
 				if (was) fixed.add(was)
-			} catch (e) {
-				if (!was) fail(step, e)
-			}
+			} else if (!was && note) fail(step, out.error)
 		}
-		write(last, [value === undefined ? { path: [] } : { path: [], value }])
+		own.set(k, mine)
+		return { last, fixed }
+	}
+	// an entry's own value made again from its first step, not written (a write here needs it)
+	const rebuild = (
+		k: string,
+	) => (replay(k, { ...fresh(), tail: [], all: true }, 0, false), own.get(k)!)
+
+	// an entry worked out again for its early steps (placed, not applied): its own value undone back
+	// to before the earliest, when its tail reaches that far, else from nothing; then every step from
+	// there applied in order, and the value written whole
+	function rework(k: string, early: Ref[]) {
+		const refs = entries.get(k)!
+		const first = early.reduce((a, b) => before(b, a) ? b : a)
+		let mine = own.get(k), from = 0
+		if (mine) {
+			let t = mine.tail.length, value = mine.value
+			const backs: (() => void)[] = []
+			while (t > 0 && before(first, mine.tail[t - 1].ref)) {
+				const x = mine.tail[--t]
+				value = apply(value, x.undo), backs.push(...[...x.back].reverse())
+			}
+			if (t > 0 || mine.all) {
+				for (const f of backs) f()
+				mine.tail.length = t, mine.value = value
+				from = refs.findIndex((r) => r[1] === first[1] && r[2] === first[2])
+			} else mine = undefined
+		}
+		const { last, fixed } = replay(k, mine ?? { ...fresh(), tail: [], all: true }, from, true)
+		const value = own.get(k)!.value
+		write(last ?? decodeStep(log.step(first[1], first[2])), [
+			value === undefined ? { path: [] } : { path: [], value },
+		])
 		if (fixed.size) {
 			failed.splice(0, failed.length, ...failed.filter((f) => !fixed.has(f))), tell()
 		}
@@ -249,15 +334,23 @@ export function createHistory(o: {
 
 	// entries a step landed early in, to be worked out again once the log is quiet: once for a
 	// whole catch-up, however many runs it comes in. a step going last in one waits with it
-	const pending = new Map<string, Step>()
+	const waiting = new Map<string, Ref[]>()
 	function land(steps: Step[]) {
 		for (const s of steps) {
 			const k = name(s.part, s.node)
 			try {
-				const last = place(s)
+				const r: Ref = [s.lamport, s.device, s.n, log.seq(s.device, s.n)]
+				const last = place(s, r)
 				if (o.forgets && !last) continue
-				head(s, last)
-				if (!last || pending.has(k)) pending.set(k, s)
+				head(s, r, last)
+				const mine = own.get(k)
+				if (!last || waiting.has(k)) waiting.set(k, [...waiting.get(k) ?? [], r])
+				else if (mine) {
+					// by its ids, as its own value has it
+					const out = onto(mine, r, s)
+					if ("applied" in out) write(s, out.applied)
+					else fail(s, out.error)
+				} else if (s.ids?.some(Boolean) && !o.forgets) rework(k, [r])
 				else write(s, s.patches)
 			} catch (e) {
 				fail(s, e)
@@ -265,13 +358,13 @@ export function createHistory(o: {
 		}
 	}
 	function flush() {
-		const all = [...pending.values()]
-		pending.clear()
-		for (const s of all) {
+		const all = [...waiting]
+		waiting.clear()
+		for (const [k, early] of all) {
 			try {
-				redo(s)
+				rework(k, early)
 			} catch (e) {
-				fail(s, e)
+				fail(decodeStep(log.step(early[0][1], early[0][2])), e)
 			}
 		}
 	}
@@ -296,25 +389,56 @@ export function createHistory(o: {
 		const who = f.change?.actor, k = name(String(f.part), f.id)
 		const first = f.patches[0], whole = first?.path.length === 0 && !first.range && !first.move
 		let s: Step
+		const patches = f.patches.map(clean)
+		// its splices named by ids from the entry's own elements, applied there (as the graph has it);
+		// none known, or not applying there: by their ranges
+		const me = log.device,
+			mine = me === undefined || o.forgets || broken.has(k)
+				? undefined
+				: own.get(k) ?? (entries.get(k)?.length ? rebuild(k) : undefined)
+		const undo: Patch[] = [], back: (() => void)[] = []
+		const n = me === undefined ? 0 : log.count(me) + 1
+		const at = { device: me ?? "", n, seq: me === undefined ? 0 : log.seq(me, n) }
+		let ids: Value[] | undefined
+		if (mine) {
+			try {
+				ids = writeIds(
+					at,
+					applyStep(mine, { ...at, lamport: log.lamport + 1, patches }, {
+						undo,
+						back,
+						name: true,
+					}).ids,
+				)
+			} catch {
+				// not as the graph has it: its own value made again when next needed
+				own.delete(k)
+			}
+		}
 		try {
 			if (broken.has(k) && !whole) throw new Error("its entry has a write not kept")
 			s = log.write({
 				node: f.id,
 				part: String(f.part),
-				patches: f.patches.map(clean),
+				patches,
 				on: (heads.get(k) ?? []).map(([, device, n]) => ({ device, n })),
+				...(ids?.some(Boolean) && { ids }),
 				when: f.change?.time ?? Math.floor(Date.now() / 1000),
 				...(typeof who === "string" && { who }),
 			})
 		} catch (e) {
+			// its own value has a write no step holds: made again when next needed
+			if (ids) own.delete(k)
 			broken.add(k)
 			unkept.push({ node: f.id, part: String(f.part), why: String(e) })
 			return tell()
 		}
 		broken.delete(k)
-		const last = place(s)
-		head(s, last)
-		if (!last) redo(s)
+		const r: Ref = [s.lamport, s.device, s.n, at.seq], last = place(s, r)
+		head(s, r, last)
+		// last always (one past the highest lamport seen). named: in its own value already
+		if (mine && ids) mine.tail.push({ ref: r, undo, back }), trim(mine)
+		else if (own.has(k)) onto(own.get(k)!, r, s)
 	})
 	const unlisten = log.on((device, steps) => {
 		if (device !== log.device) land(steps)
@@ -355,7 +479,10 @@ export function createHistory(o: {
 				count = snap.count
 				quietly(() => {
 					for (const [part, node, v, refs, hs] of snap.entries) {
+						// a snapshot from before seq
+						for (const r of refs) r[3] ??= log.seq(r[1], r[2])
 						entries.set(name(part, node), refs), namers.delete(name(part, node))
+						own.delete(name(part, node))
 						const hd = hs ? hs.map((i) => refs[i]) : refs.slice(-1)
 						heads.set(name(part, node), hd.filter((r) => r !== undefined))
 						if (v === null) continue

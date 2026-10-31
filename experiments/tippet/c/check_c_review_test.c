@@ -1,5 +1,6 @@
-// Tries to break tippet's C; a FAIL line is a bug it found. ONLY=123456789rfl picks checks, NOA=1
-// skips 6a, UNLINK=1 unlinks 7's link. Run ./tippet-review-test-check dir (build.sh builds it).
+// Tries to break tippet's C; a FAIL line is a bug it found. ONLY=123456789rflhams picks checks, NOA=1
+// skips 6a, UNLINK=1 unlinks 7's link, SNAP=n sets s's entries. Run ./tippet-review-test-check dir (build.sh builds
+// it).
 #define _POSIX_C_SOURCE 200809L
 #include <dirent.h>
 #include <fcntl.h>
@@ -58,7 +59,7 @@ static uint8_t ps[64];
 static tp_write put(int x) {
 	uint8_t p[] = {0x81, 0xa2, 0x64, 'p', 'a', 't', 'h', 0x80, 0x65, 'v', 'a', 'l', 'u', 'e', (uint8_t)(x % 24)};
 	memcpy(ps, p, sizeof p);
-	tp_write w = {{(const uint8_t *)"pig", 3}, {(const uint8_t *)"value", 5}, {ps, sizeof p}, {NULL, 0}, 1760000000, {NULL, 0}};
+	tp_write w = {{(const uint8_t *)"pig", 3}, {(const uint8_t *)"value", 5}, {ps, sizeof p}, {NULL, 0}, 1760000000, {NULL, 0}, {NULL, 0}};
 	return w;
 }
 
@@ -672,7 +673,7 @@ static void links(void) {
 	uint64_t n, lam;
 	for (int i = 0; i < 1500; i++) {
 		big[17] = (uint8_t)('a' + i % 26);
-		tp_write w = {{(const uint8_t *)"pig", 3}, {(const uint8_t *)"value", 5}, {big, k}, {NULL, 0}, 1, {NULL, 0}};
+		tp_write w = {{(const uint8_t *)"pig", 3}, {(const uint8_t *)"value", 5}, {big, k}, {NULL, 0}, 1, {NULL, 0}, {NULL, 0}};
 		CHECK(!tp_log_write(log, &w, &n, &lam));
 	}
 	so.log = log;
@@ -772,7 +773,7 @@ static int dev_make(dev *d, tp_store *store, uint8_t s) {
 	tp_log_options o = {mem, store, seed, 1, {0, 0, 0}, dev_told, d};
 	d->log = tp_log_new(&o);
 	tp_log_load(d->log);
-	tp_history_options ho = {mem, d->log, d->table, d->places, NULL, inside, d, forgets};
+	tp_history_options ho = {mem, d->log, d->table, d->places, NULL, inside, d, forgets, 0};
 	d->history = tp_history_new(&ho);
 	return tp_history_load(d->history);
 }
@@ -797,7 +798,7 @@ static const uint8_t x0[] = {0x81, 0xa2, 0x64, 'p', 'a', 't', 'h', 0x80, 0x65, '
 static const uint8_t x1[] = {0x81, 0xa2, 0x64, 'p', 'a', 't', 'h', 0x81, 0x61, 'x', 0x65, 'v', 'a', 'l', 'u', 'e', 1};
 static const uint8_t y1[] = {0x81, 0xa2, 0x64, 'p', 'a', 't', 'h', 0x81, 0x61, 'y', 0x65, 'v', 'a', 'l', 'u', 'e', 1};
 static void edit(tp_log *log, const uint8_t *p, size_t n) {
-	tp_write w = {{(const uint8_t *)"doc", 3}, {(const uint8_t *)"value", 5}, {p, n}, {NULL, 0}, 1, {NULL, 0}};
+	tp_write w = {{(const uint8_t *)"doc", 3}, {(const uint8_t *)"value", 5}, {p, n}, {NULL, 0}, 1, {NULL, 0}, {NULL, 0}};
 	uint64_t s, l;
 	tp_log_write(log, &w, &s, &l);
 }
@@ -1176,7 +1177,7 @@ static void apart(tp_log *log, uint8_t v) {
 	uint8_t p[sizeof x0];
 	memcpy(p, x0, sizeof p), p[sizeof p - 1] = v;
 	tp_write w = {{(const uint8_t *)"doc", 3}, {(const uint8_t *)"value", 5}, {p, sizeof p}, {NULL, 0}, 1,
-		{(const uint8_t *)"\x80", 1}};
+		{(const uint8_t *)"\x80", 1}, {NULL, 0}};
 	uint64_t s, l;
 	tp_log_write(log, &w, &s, &l);
 }
@@ -1232,7 +1233,7 @@ static void actor(void) {
 	tp_log *a = writer(70, 0, NULL);
 	uint8_t p[sizeof x0];
 	memcpy(p, x0, sizeof p);
-	tp_write w = {{(const uint8_t *)"doc", 3}, {(const uint8_t *)"value", 5}, {p, sizeof p}, {NULL, 0}, 1, {(const uint8_t *)"\x80", 1}};
+	tp_write w = {{(const uint8_t *)"doc", 3}, {(const uint8_t *)"value", 5}, {p, sizeof p}, {NULL, 0}, 1, {(const uint8_t *)"\x80", 1}, {NULL, 0}};
 	uint64_t n, l;
 	tp_log_write(a, &w, &n, &l);
 	w.who = (tp_span){(const uint8_t *)"juno", 4};
@@ -1279,6 +1280,133 @@ static void long_run(const char *dir) {
 	wipe(d);
 }
 
+// ---- s. seq (WIRE.md, ids) when a step can't be read back, and from an old snapshot
+
+static const uint8_t *blind; // a device whose step 2 the store won't read back
+static int reads;
+static long (*got)(void *self, const uint8_t device[32], uint64_t n, uint8_t *out, size_t cap);
+static long blinded(void *self, const uint8_t device[32], uint64_t n, uint8_t *out, size_t cap) {
+	reads++;
+	if (blind && n == 2 && !memcmp(device, blind, 32)) return -1;
+	return got(self, device, n, out, cap);
+}
+static void put_at(tp_log *log, const char *node, const uint8_t *p, size_t n) {
+	tp_write w = {{(const uint8_t *)node, strlen(node)}, {(const uint8_t *)"value", 5}, {p, n}, {NULL, 0}, 1, {NULL, 0}, {NULL, 0}};
+	uint64_t s, l;
+	tp_log_write(log, &w, &s, &l);
+}
+// a patch: s at i (a short text, i below 24)
+static size_t insert(uint8_t *p, unsigned i, const char *s) {
+	size_t k = strlen(s), at = 15;
+	memcpy(p, "\x81\xa3\x64path\x80\x65range\x82", 15);
+	p[at++] = (uint8_t)i, p[at++] = (uint8_t)i;
+	memcpy(p + at, "\x65value", 6), at += 6;
+	p[at++] = (uint8_t)(0x60 + k), memcpy(p + at, s, k);
+	return at + k;
+}
+static const char *text(dev *d, const char *node) {
+	static char out[64];
+	const nd_entry *e = tb_get(d->table, tb_string("value"), tb_string(node));
+	if (!e || !e->value || e->value->type != OP_STR || e->value->bytes >= sizeof out) return "(none)";
+	memcpy(out, e->value->str, e->value->bytes), out[e->value->bytes] = 0;
+	return out;
+}
+typedef struct {
+	dev *d;
+	op_value *value;
+	op_patch patch;
+} typed;
+static void untyped(void *p) { op_free(((typed *)p)->value), free(p); }
+static void type_f(void *data) {
+	typed *t = data;
+	nd_entry *e = tb_get(t->d->table, tb_string("value"), tb_string("t"));
+	size_t at;
+	if (!e || nd_update(e, &t->patch, 1, (ch_header){.has_time = 1, .time = 2}, &at)) {
+		untyped(t);
+		return;
+	}
+	pl_hold(t->d->places, e, t, untyped);
+	pl_changed changed = {1, {e, NULL}};
+	pl_commit(t->d->places, &changed);
+}
+
+static void seqs(void) {
+	printf("s. seq when a step can't be read back; an old snapshot's refs\n");
+	static const uint8_t whole[] = {0x81, 0xa2, 0x64, 'p', 'a', 't', 'h', 0x80, 0x65, 'v', 'a', 'l', 'u', 'e', 0x60};
+	uint8_t p[64];
+	{
+		// old steps: o put, o "ab", t put, t "cd", t "e" at 2; r can't read step 2 ("ab") while it takes
+		tp_log *w = writer(100, 0, NULL);
+		put_at(w, "o", whole, sizeof whole), put_at(w, "o", p, insert(p, 0, "ab"));
+		put_at(w, "t", whole, sizeof whole), put_at(w, "t", p, insert(p, 0, "cd"));
+		put_at(w, "t", p, insert(p, 2, "e"));
+		tp_store *st = tp_memory_store(&mem, 1 << 20);
+		got = st->get, st->get = blinded;
+		dev r, h;
+		dev_make(&r, st, 101);
+		blind = tp_log_device(w);
+		take_all(r.log, w);
+		blind = NULL;
+		size_t lost = failures(&r);
+		typed *t = calloc(1, sizeof *t);
+		t->d = &r, t->value = op_str("!");
+		t->patch.place.has_range = 1, t->patch.place.from = t->patch.place.to = 2;
+		t->patch.has_value = 1, t->patch.value = t->value;
+		sc_run_with_scope(r.scope, type_f, t);
+		dev_make(&h, tp_memory_store(&mem, 1 << 20), 102);
+		take_all(h.log, w), take_all(h.log, r.log);
+		char mine[64];
+		snprintf(mine, sizeof mine, "%s", text(&r, "t"));
+		printf("  a step not read back: %zu failed; r's ! after it: r %s, a peer %s\n", lost, mine, text(&h, "t"));
+		CHECK(lost == 1 && !strcmp(mine, "cd!e") && !strcmp(text(&h, "t"), "cd!e") && failures(&h) == 0);
+		uint64_t seq = 0;
+		CHECK(!tp_log_seq(r.log, tp_log_device(w), 6, &seq) && seq == 5);
+		CHECK(tp_log_seq(r.log, tp_log_device(w), 7, &seq) == TP_BOUND);
+		dev_free(&r), dev_free(&h);
+		tp_log_free(w);
+	}
+	{
+		// entries, each one put, in a snapshot whose refs say no seq: loaded without reading back
+		// SNAP=n: n entries
+		int N = getenv("SNAP") ? atoi(getenv("SNAP")) : 2000;
+		tp_log *w = writer(103, 0, NULL);
+		uint8_t put0[] = {0x81, 0xa2, 0x64, 'p', 'a', 't', 'h', 0x80, 0x65, 'v', 'a', 'l', 'u', 'e', 0};
+		char node[16], hex[64];
+		for (int i = 0; i < N; i++) snprintf(node, sizeof node, "p%d", i), put_at(w, node, put0, sizeof put0);
+		tp_store *st = tp_memory_store(&mem, 1 << 24);
+		void (*shut)(void *self) = st->close;
+		st->close = kept_open;
+		got = st->get, st->get = blinded;
+		dev r;
+		dev_make(&r, st, 104);
+		take_all(r.log, w);
+		tp_hex(hex, tp_log_device(w), 32);
+		tp_buf o = {NULL, 0, 0, (size_t)-1, &mem, 0};
+		tp_put_head(&o, 5, 2), tp_put_text(&o, "count"), tp_put_head(&o, 5, 1);
+		tp_put_head(&o, 3, 64), tp_put(&o, hex, 64), tp_put_head(&o, 0, N);
+		tp_put_text(&o, "entries"), tp_put_head(&o, 4, N);
+		for (int i = 0; i < N; i++) {
+			snprintf(node, sizeof node, "p%d", i);
+			tp_put_head(&o, 4, 4), tp_put_text(&o, "value"), tp_put_text(&o, node), tp_put_head(&o, 0, 0);
+			tp_put_head(&o, 4, 1), tp_put_head(&o, 4, 3), tp_put_head(&o, 0, (uint64_t)i + 1);
+			tp_put_head(&o, 3, 64), tp_put(&o, hex, 64), tp_put_head(&o, 0, (uint64_t)i + 1);
+		}
+		CHECK(!tp_buf_why(&o) && !tp_log_snapshot(r.log, o.p, o.len));
+		tp_buf_free(&o);
+		dev_free(&r);
+		reads = 0;
+		double t0 = now();
+		int why = dev_make(&r, st, 104);
+		printf("  an old snapshot of %d entries: loaded %s in %.0f ms, %d steps read back\n", N,
+			why ? tp_why(why) : "ok", (now() - t0) * 1000, reads);
+		snprintf(node, sizeof node, "p%d", N - 1);
+		CHECK(!why && reads == 0 && tb_get(r.table, tb_string("value"), tb_string(node)));
+		dev_free(&r);
+		shut(st->self);
+		tp_log_free(w);
+	}
+}
+
 int main(int argc, char **argv) {
 	if (argc != 2) return fprintf(stderr, "usage: check-c-review dir\n"), 2;
 	setvbuf(stdout, NULL, _IONBF, 0);
@@ -1299,6 +1427,7 @@ int main(int argc, char **argv) {
 	if (!only || strchr(only, 'h')) heads(), printf("  heap now %zu\n", H.now);
 	if (!only || strchr(only, 'a')) actor(), printf("  heap now %zu\n", H.now);
 	if (!only || strchr(only, 'm')) long_run(argv[1]), printf("  heap now %zu\n", H.now);
+	if (!only || strchr(only, 's')) seqs(), printf("  heap now %zu\n", H.now);
 	rmdir(argv[1]);
 	CHECK(H.now == 0);
 	printf("check-c-review: %s, %d failed\n", failed ? "FAIL" : "ok", failed);

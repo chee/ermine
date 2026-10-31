@@ -1,1 +1,4 @@
-{ "allow": ["--allow-write"] }
+{
+	"allow": ["--allow-write"],
+	"again": { "name": "rebase: 2", "op": "device", "set": { "rebase": 2 } }
+}
