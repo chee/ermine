@@ -273,12 +273,22 @@ typedef struct es_step {
 	void (*quit)(void *ctx);
 	void *ctx;
 } es_step;
-typedef enum { ES_OUT_VALUE, ES_OUT_PENDING, ES_OUT_FAILED, ES_OUT_PAUSE } es_out_kind;
+// A compute may give ES_OUT_STREAM (an async generator): each value next gives is the run's result
+// in turn, and the next is pulled once that is written. next runs with the run open and gives a
+// value (a promise is awaited first), a failure, or ES_OUT_DONE once the stream is over. close is
+// called once, when the computer is done with the stream.
+typedef struct es_stream {
+	struct es_out (*next)(struct es_context *c, void *ctx);
+	void (*close)(void *ctx);
+	void *ctx;
+} es_stream;
+typedef enum { ES_OUT_VALUE, ES_OUT_PENDING, ES_OUT_FAILED, ES_OUT_PAUSE, ES_OUT_STREAM, ES_OUT_DONE } es_out_kind;
 typedef struct es_out {
 	es_out_kind kind;
 	op_value *value;
 	char *error;
 	es_step step;
+	es_stream stream;
 } es_out;
 static inline es_out es_out_of(op_value *v) { return (es_out){.kind = ES_OUT_VALUE, .value = v}; }
 static inline es_out es_out_pending(void) { return (es_out){.kind = ES_OUT_PENDING}; }
@@ -452,7 +462,7 @@ typedef struct {
 
 // What a pending process waits on: a memo it read, a send to nothing, process code not yet at its
 // path, a promise, or nothing it says.
-typedef enum { ES_WAIT_NODE, ES_WAIT_SEND, ES_WAIT_CODE, ES_WAIT_PROMISE, ES_WAIT_PENDING } es_waiting_kind;
+typedef enum { ES_WAIT_NODE, ES_WAIT_SEND, ES_WAIT_CODE, ES_WAIT_PROMISE, ES_WAIT_PENDING, ES_WAIT_STREAM } es_waiting_kind;
 typedef struct {
 	es_waiting_kind kind;
 	int has_path;
@@ -1034,7 +1044,7 @@ sc_scope *es_acting(es_ermine *e);
 int es_is_computer(es_ermine *e, const char *id);
 int es_is_memo(es_ermine *e, const char *id);
 es_context *es_computer_context(es_ermine *e, const char *id);
-int es_awaiting(es_ermine *e, const char *id);
+int es_awaiting(es_ermine *e, const char *id); // 0, ES_WAIT_PROMISE or ES_WAIT_STREAM
 int es_get_status(es_context *c, es_target x, es_status *out);
 // es_get_status for one field (key: "state", "error", "phase", "waiting" or "n"; NULL: all), so
 // a reader is told only when that field may change.
