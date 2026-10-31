@@ -1,0 +1,105 @@
+{
+	"title": "with carry (AsyncContext), after an await the run is open while it waits: what is current is its computer, its frame and its writer, and a scope made there is made",
+	"steps": [
+		{
+			"op": "carry",
+			"on": true,
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "o",
+			"info": {
+				"actor": "notes"
+			},
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "c",
+			"scope": "o",
+			"f": {
+				"async": {
+					"wait": [
+						"p",
+						{
+							"do": [
+								{
+									"log": {
+										"current": null
+									}
+								},
+								{
+									"scope": [
+										"k",
+										{
+											"why": "late"
+										}
+									]
+								}
+							]
+						}
+					]
+				}
+			},
+			"to": "c",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "resolve",
+			"promise": "p",
+			"value": null,
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					{
+						"scope": "c",
+						"info": {
+							"run": 1,
+							"mark": 1
+						},
+						"writer": "c"
+					}
+				]
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 1
+					},
+					{
+						"starts": "c",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 1,
+						"ended": "pending"
+					},
+					{
+						"ends": "c",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		}
+	]
+}

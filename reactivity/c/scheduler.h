@@ -19,7 +19,7 @@
 //     The scheduler's own are SC_DISPOSED, SC_UNSCOPED and SC_EMPTY. A create returns NULL for
 //     any of them.
 //   - A track returns SC_OK or SC_STOP. After SC_STOP (its writer is due) the run must end now.
-//     A track outside a run, or after it returned, counts for nothing.
+//     A track outside a run, or after it returned, counts for nothing, except in sc_run_with_run.
 //   - A run may return a promise (sc_promise_new) that the host settles later with sc_resolve or
 //     sc_reject. The run ends pending and the result lands at the next pulse.
 //   - Where the reference's f returns or throws PENDING, f returns SC_PENDING. A promise settles
@@ -68,6 +68,8 @@ typedef enum {
 	SC_AWAIT,
 	// promise and step: the run ends pending; when the promise settles the same run goes on, in step.
 	SC_PAUSE,
+	// stream: the run ends pending; each value the stream gives lands as the run's result in turn.
+	SC_STREAM,
 } sc_out_kind;
 
 // What carries on a run once its promise has settled (SC_PAUSE). next is given what the promise
@@ -81,20 +83,31 @@ typedef struct sc_step {
 	void *data;
 } sc_step;
 
+// What gives a stream's values (SC_STREAM). next pulls the next value, with the run open as in
+// sc_run_with_run: it returns a promise the host settles with the value (sc_resolve), with
+// sc_resolve_done once the stream is over, or with sc_reject. close is called once, with nothing
+// open, when the scheduler is done with the stream: it ended, failed, or was let go.
+typedef struct sc_stream {
+	sc_promise *(*next)(void *data);
+	void (*close)(void *data);
+	void *data;
+} sc_stream;
+
 typedef struct sc_out {
 	sc_out_kind kind;
 	void *value;
 	char *error;
 	sc_promise *promise;
 	sc_step step;
+	sc_stream stream;
 } sc_out;
 
 typedef struct sc_def {
 	// Each run. Keys are tracked through sc_track; after SC_STOP, return at once (what is returned
-	// is dropped). A track after an await counts for nothing. Call sc_get_run at f's start and
-	// hold the run if f writes after an await. previous is the computer's last result (a compute's:
-	// the last given to set; an effect's: the last acted on), NULL for none. A result equal to the
-	// last is not held, so it stays the last set.
+	// is dropped). A track after an await counts for nothing, unless in sc_run_with_run. Call
+	// sc_get_run at f's start and hold the run if f writes after an await. previous is the
+	// computer's last result (a compute's: the last given to set; an effect's: the last acted on),
+	// NULL for none. A result equal to the last is not held, so it stays the last set.
 	sc_out (*f)(void *previous, void *data);
 	// A compute's: takes a result not equal to the last. Effects leave it NULL.
 	char *(*set)(void *value, void *data);
@@ -234,6 +247,10 @@ const char *sc_run_with_scope(sc_scope *o, void (*f)(void *data), void *data);
 // Like sc_run_with_scope but with frame open instead of o's own: what is made is o's, a change
 // made is frame's. A NULL frame means o's own.
 const char *sc_run_with(sc_scope *o, ch_frame *frame, void (*f)(void *data), void *data);
+// Runs f as code after an await in run. While run waits (it returned SC_AWAIT, has not landed and
+// is its computer's latest), run is open in f and its tracks count; after SC_STOP the run ends
+// stopped when it lands. Otherwise nothing is open.
+void sc_run_with_run(sc_run *run, void (*f)(void *data), void *data);
 
 // Tracked, and made under the scope open; first runs at the next pulse (early effects run now).
 // info gives its own n pairs, before its run's. Keys must be unique and not "run" or "mark".
@@ -273,6 +290,11 @@ sc_promise *sc_promise_new(sc_scheduler *s);
 void sc_resolve(sc_promise *p, void *value);
 void sc_resolve_pending(sc_promise *p);
 void sc_reject(sc_promise *p, char *error);
+// A pull's promise settles with this once the stream is over.
+void sc_resolve_done(sc_promise *p);
+// Settles it to a stream: the first run awaiting it takes the stream as its result; if
+// none does, the stream is closed when the promise is freed.
+void sc_resolve_stream(sc_promise *p, sc_stream stream);
 void sc_promise_free(sc_promise *p);
 
 #endif

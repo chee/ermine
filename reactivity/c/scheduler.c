@@ -117,7 +117,12 @@ struct sc_run {
 	const void *kept;
 	bool has_step;
 	sc_step step;
+	// A stream it pulls (SC_STREAM), and whether it has given a value.
+	bool has_stream, streamed;
+	sc_stream stream;
 	size_t refs;
+	// Its promise has not landed yet.
+	bool waiting;
 };
 
 typedef struct landed {
@@ -126,6 +131,8 @@ typedef struct landed {
 	void *value;
 	char *error;
 	bool step;
+	bool pull, done;
+	sc_stream stream;
 } landed;
 
 struct sc_promise {
@@ -133,6 +140,9 @@ struct sc_promise {
 	sc_run **rs;
 	size_t nrs, caprs;
 	bool settled, given;
+	// A pull's, and settled done; a stream taken by a run.
+	bool pull, done, taken;
+	sc_stream stream;
 	sc_out_kind kind;
 	void *value;
 	char *error;
@@ -199,6 +209,8 @@ struct sc_scheduler {
 	sc_scope *open;
 	ch_frame *open_frame;
 	sc_run *open_writer;
+	// The run sc_run_with_run is going on in.
+	sc_run *after;
 	size_t swept;
 	// thrown: the first error from a listener (sc_throw) or a cleanup, held until what was going on
 	// finishes. escaped: what came out of the last call, for sc_escaped.
@@ -349,9 +361,14 @@ static sc_run *ran_ref(sc_run *r) {
 }
 
 static void quit_step(sc_run *r) {
-	if (!r->has_step) return;
-	r->has_step = false;
-	r->step.quit(r->step.data);
+	if (r->has_step) {
+		r->has_step = false;
+		r->step.quit(r->step.data);
+	}
+	if (r->has_stream) {
+		r->has_stream = false;
+		r->stream.close(r->stream.data);
+	}
 }
 
 static void ran_release(sc_run *r) {
@@ -399,6 +416,7 @@ static void run_reset(sc_run *r) {
 	r->nloop = 0;
 	r->nreads = 0;
 	r->stopped = NULL;
+	r->waiting = false;
 	r->cut = false;
 	r->has_kept = false;
 	r->kept = NULL;
@@ -439,9 +457,38 @@ static void trim_run(sc_scheduler *s, tg_node *f) {
 }
 
 
+// The run sc_run_with_run is going on in, while nothing else is open: it is waiting, is its
+// computer's latest, and the computer is alive.
+static sc_run *late(const sc_scheduler *s) {
+	sc_run *r = s->after;
+	if (r == NULL || s->open != NULL || s->reading != NULL || s->running != NULL) return NULL;
+	return r->waiting && r->c->ran == r && r->c->state == ALIVE ? r : NULL;
+}
+
+// What is open: the scope, frame and run, else the late run's.
+static sc_scope *now_scope(const sc_scheduler *s) {
+	if (s->open != NULL) return s->open;
+	sc_run *r = late(s);
+	return r ? r->c : NULL;
+}
+
+static ch_frame *now_frame(const sc_scheduler *s) {
+	if (s->open != NULL) return s->open_frame;
+	sc_run *r = late(s);
+	return r ? r->frame : NULL;
+}
+
+static sc_run *now_run(const sc_scheduler *s) {
+	if (s->open != NULL) return s->open_writer;
+	return late(s);
+}
+
+// The run making a change: the one going on, else the late run.
+static sc_run *by_run(const sc_scheduler *s) { return s->running != NULL ? s->running : late(s); }
+
 static ch_frame *frame_under(sc_scheduler *s, sc_scope *up) {
 	if (up == NULL) return NULL;
-	return s->open == up ? s->open_frame : up->frame;
+	return now_scope(s) == up ? now_frame(s) : up->frame;
 }
 
 static sc_scope *make_scope(sc_scheduler *s, kind_t kind, sc_scope *parent, const sc_pair *info,
@@ -488,7 +535,7 @@ sc_scope *sc_create_root_scope(sc_scheduler *s, const sc_pair *info, size_t n) {
 }
 
 sc_scope *sc_create_scope(sc_scheduler *s, const sc_pair *info, size_t n, sc_scope *parent) {
-	if (parent == NULL) parent = s->open;
+	if (parent == NULL) parent = now_scope(s);
 	if (parent == NULL || parent->state != ALIVE) return NULL;
 	return make_scope(s, PLAIN, parent, info, n);
 }
@@ -499,15 +546,15 @@ bool sc_scope_alive(const sc_scope *o) { return o->state == ALIVE; }
 bool sc_scope_old(const sc_scope *o) { return o->old; }
 bool sc_scope_early(const sc_scope *o) { return o->kind == EFFECT && o->def.early; }
 sc_scope *sc_scope_parent(const sc_scope *o) { return o->parent; }
-sc_scope *sc_get_current_scope(const sc_scheduler *s) { return s->open; }
-sc_run *sc_get_run(const sc_scheduler *s) { return s->open_writer; }
+sc_scope *sc_get_current_scope(const sc_scheduler *s) { return now_scope(s); }
+sc_run *sc_get_run(const sc_scheduler *s) { return now_run(s); }
 
-ch_frame *sc_get_current_frame(const sc_scheduler *s) { return s->open_frame; }
+ch_frame *sc_get_current_frame(const sc_scheduler *s) { return now_frame(s); }
 ch_frame *sc_scope_frame(sc_scope *o) { return o->frame; }
 ch_frame *sc_run_frame(const sc_run *run) { return run->frame; }
 
 ch_frame *sc_create_frame(sc_scheduler *s, const sc_pair *info, size_t n, ch_frame *up) {
-	return ch_frame_make(info, n, up != NULL ? up : s->open_frame);
+	return ch_frame_make(info, n, up != NULL ? up : now_frame(s));
 }
 
 static ch_frame *latest(const sc_scope *c) { return c->ran != NULL ? c->ran->frame : c->frame; }
@@ -521,9 +568,10 @@ typedef struct {
 static opened opens(sc_scope *o) {
 	sc_scheduler *s = o->s;
 	opened was = {s->open, s->open_frame, s->open_writer};
+	sc_run *by = now_run(s);
 	s->open = o;
 	s->open_frame = o->kind != PLAIN ? latest(o) : o->frame;
-	if (o->kind != PLAIN) s->open_writer = o->ran;
+	s->open_writer = o->kind != PLAIN ? o->ran : by;
 	return was;
 }
 
@@ -832,13 +880,17 @@ const char *sc_run_with(sc_scope *o, ch_frame *frame, void (*f)(void *), void *d
 	sc_run *was = s->reading;
 	sc_scope *wasopen = s->open;
 	ch_frame *wasframe = s->open_frame;
+	sc_run *waswriter = s->open_writer;
+	sc_run *by = now_run(s);
 	s->reading = NULL;
 	s->open = sc_retain(o);
 	s->open_frame = frame != NULL ? frame : o->frame;
+	s->open_writer = by;
 	f(data);
 	s->reading = was;
 	s->open = wasopen;
 	s->open_frame = wasframe;
+	s->open_writer = waswriter;
 	unhold(o);
 	return NULL;
 }
@@ -922,6 +974,7 @@ uint64_t sc_mark(sc_scheduler *s, const void *const *keys, size_t count, sc_run 
 	uint64_t t = ++s->tick;
 	dues now = {0};
 	bool told = s->nlisteners[ON_MARK] > 0;
+	sc_run *self = by_run(s);
 	sc_scope *w = writer && writer->c->kind == COMPUTE && writer->c->state == ALIVE ? writer->c : NULL;
 	for (size_t i = 0; i < count; i++) {
 		const void *key = keys[i];
@@ -933,7 +986,7 @@ uint64_t sc_mark(sc_scheduler *s, const void *const *keys, size_t count, sc_run 
 		for (tg_link *l = node->first; l != NULL; l = l->after) {
 			sc_scope *c = l->from->owner;
 			bool old = tg_old(l);
-			if (old && s->running != NULL && s->running->c == c) continue;
+			if (old && self != NULL && self->c == c) continue;
 			if (due(s, c, t, writer, old) && told) VEC_PUSH(now.v, now.n, now.cap, c);
 		}
 	}
@@ -982,11 +1035,37 @@ static sc_track_status follow(sc_scheduler *s, sc_run *r, const void *key) {
 	return SC_OK;
 }
 
+// A run's values were handed to the order when it ended; it goes on with a copy of its own.
+static void unadopt(sc_scope *c, sc_run *r) {
+	if (!r->adopted) return;
+	pm *mine = c->spare;
+	c->spare = NULL;
+	if (mine == NULL) mine = xalloc(sizeof *mine);
+	if (r->values) {
+		for (size_t i = 0; i < r->values->cap; i++)
+			if (r->values->keys[i] != NULL) pm_set(mine, r->values->keys[i], NULL);
+	}
+	r->values = mine;
+	r->adopted = false;
+}
+
 sc_track_status sc_track(sc_scheduler *s, const void *key) {
-	if (s->reading == NULL) return SC_OK;
+	sc_run *r = s->reading;
+	if (r == NULL) {
+		r = late(s);
+		if (r == NULL) return SC_OK;
+	}
 	char *outer = s->thrown;
 	s->thrown = NULL;
-	sc_track_status st = follow(s, s->reading, key);
+	sc_track_status st;
+	if (r == s->reading) {
+		st = follow(s, r, key);
+	} else {
+		unadopt(r->c, r);
+		tg_resume(r->c->node);
+		st = follow(s, r, key);
+		tg_leave(r->c->node);
+	}
 	escape(s, unbracket(s, outer));
 	return st;
 }
@@ -1110,7 +1189,20 @@ static void deliver(sc_promise *p, sc_run *r) {
 		ran_release(r);
 		return;
 	}
-	landed l = {r, p->kind, NULL, NULL, r->has_step};
+	if (p->pull && !r->has_stream) {
+		ran_release(r);
+		return;
+	}
+	landed l = {.r = r, .kind = p->kind, .step = r->has_step, .pull = p->pull, .done = p->done};
+	if (p->kind == SC_STREAM) {
+		// The first run it lands at takes the stream; any other gets nothing.
+		if (p->taken || r->has_step || r->has_stream) {
+			l.kind = SC_VALUE;
+		} else {
+			p->taken = true;
+			l.stream = p->stream;
+		}
+	}
 	if (p->kind == SC_VALUE && p->value != NULL) {
 		if (s->opt.keep) s->opt.keep(p->value, s->opt.data);
 		else p->given = true;
@@ -1125,16 +1217,73 @@ static void deliver(sc_promise *p, sc_run *r) {
 		s->listeners[ON_SETTLE][i]->f.settle(s->listeners[ON_SETTLE][i]->data);
 }
 
+static void drop_landed(sc_scheduler *s, landed l) {
+	drop_value(s, l.value);
+	free(l.error);
+	if (l.kind == SC_STREAM) l.stream.close(l.stream.data);
+}
+
 static void awaiting(sc_scheduler *s, sc_run *r, sc_promise *p) {
 	finish(s, r, SC_PENDED, -1, NULL, NULL, NULL, 0);
+	r->waiting = true;
 	if (p->settled) deliver(p, ran_ref(r));
 	else VEC_PUSH(p->rs, p->nrs, p->caprs, ran_ref(r));
+}
+
+typedef struct pulling {
+	sc_stream stream;
+	sc_promise *p;
+} pulling;
+
+static void call_next(void *data) {
+	pulling *g = data;
+	g->p = g->stream.next(g->stream.data);
+}
+
+// Asks the stream for its next value with the run open (as sc_run_with_run). The value lands at a
+// pulse like a promise's.
+static void pull(sc_scheduler *s, sc_run *r) {
+	(void)s;
+	r->waiting = true;
+	pulling g = {r->stream, NULL};
+	sc_run_with_run(r, call_next, &g);
+	// The stream was let go while it ran.
+	if (!r->has_stream || g.p == NULL) return;
+	g.p->pull = true;
+	if (g.p->settled) deliver(g.p, ran_ref(r));
+	else VEC_PUSH(g.p->rs, g.p->nrs, g.p->caprs, ran_ref(r));
 }
 
 static void discard(sc_scheduler *s, sc_out out) {
 	if (out.kind == SC_VALUE) drop_value(s, out.value);
 	else if (out.kind == SC_FAILED) free(out.error);
 	else if (out.kind == SC_PAUSE) out.step.quit(out.step.data);
+	else if (out.kind == SC_STREAM) out.stream.close(out.stream.data);
+}
+
+// The run was stopped by a read whose writer is due: it waits after that writer and runs again.
+static void stop_run(sc_scheduler *s, sc_run *r) {
+	sc_scope *c = r->c;
+	if (!od_has(s->order, &c->od)) {
+		loop_drop(s, c->loop, c->nloop);
+		c->loop = r->loop;
+		c->nloop = r->nloop;
+		r->loop = NULL;
+		r->nloop = 0;
+	}
+	od_waits(s->order, &c->od, &r->stopped->od);
+	od_set(s->order, &c->od, r->mark);
+	finish(s, r, SC_STOPPED_RUN, -1, NULL, r->stopped, NULL, 0);
+}
+
+static void pull(sc_scheduler *s, sc_run *r);
+
+// Each value the stream gives is the run's result in turn; the next is pulled once it is written.
+static void streaming(sc_scheduler *s, sc_run *r, sc_stream st) {
+	r->stream = st;
+	r->has_stream = true;
+	r->streamed = false;
+	pull(s, r);
 }
 
 static void conclude(sc_scheduler *s, sc_run *r, sc_out out) {
@@ -1143,22 +1292,17 @@ static void conclude(sc_scheduler *s, sc_run *r, sc_out out) {
 		discard(s, out);
 	} else if (r->stopped) {
 		discard(s, out);
-		if (!od_has(s->order, &c->od)) {
-			loop_drop(s, c->loop, c->nloop);
-			c->loop = r->loop;
-			c->nloop = r->nloop;
-			r->loop = NULL;
-			r->nloop = 0;
-		}
-		od_waits(s->order, &c->od, &r->stopped->od);
-		od_set(s->order, &c->od, r->mark);
-		finish(s, r, SC_STOPPED_RUN, -1, NULL, r->stopped, NULL, 0);
+		stop_run(s, r);
 	} else if (out.kind == SC_FAILED) {
 		finish(s, r, SC_FAIL, -1, out.error, NULL, NULL, 0);
 	} else if (out.kind == SC_PENDING) {
 		finish(s, r, SC_PENDED, -1, NULL, NULL, NULL, 0);
 	} else if (out.kind == SC_AWAIT) {
 		awaiting(s, r, out.promise);
+	} else if (out.kind == SC_STREAM) {
+		finish(s, r, SC_PENDED, -1, NULL, NULL, NULL, 0);
+		streaming(s, r, out.stream);
+		if (od_has(s->order, &c->od)) quit_step(r);
 	} else if (out.kind == SC_PAUSE) {
 		r->step = out.step;
 		r->has_step = true;
@@ -1188,17 +1332,7 @@ static void resume(sc_scheduler *s, sc_run *r, landed l) {
 	s->open_frame = frame;
 	s->open_writer = r;
 	tg_resume(c->node);
-	if (r->adopted) {
-		pm *mine = c->spare;
-		c->spare = NULL;
-		if (mine == NULL) mine = xalloc(sizeof *mine);
-		if (r->values) {
-			for (size_t i = 0; i < r->values->cap; i++)
-				if (r->values->keys[i] != NULL) pm_set(mine, r->values->keys[i], NULL);
-		}
-		r->values = mine;
-		r->adopted = false;
-	}
+	unadopt(c, r);
 	sc_out out = step.next(step.data, l.kind != SC_FAILED, l.value, l.error);
 	s->reading = was;
 	s->running = wasRunning;
@@ -1210,14 +1344,42 @@ static void resume(sc_scheduler *s, sc_run *r, landed l) {
 	conclude(s, r, out);
 }
 
+// A value the stream gave lands: it is the run's result, and the next is pulled at once. A stream
+// that is done with nothing given leaves undefined (NULL) as the result.
+static void flow(sc_scheduler *s, sc_run *r, landed l) {
+	sc_scope *c = r->c;
+	if (l.kind == SC_FAILED) {
+		quit_step(r);
+		finish(s, r, SC_FAIL, -1, l.error, NULL, NULL, 0);
+	} else if (l.done) {
+		bool none = !r->streamed;
+		quit_step(r);
+		if (none) result(s, r, NULL);
+	} else {
+		r->streamed = true;
+		if (l.kind == SC_PENDING) finish(s, r, SC_PENDED, -1, NULL, NULL, NULL, 0);
+		else result(s, r, l.value);
+		if (r->has_stream && c->state == ALIVE && c->ran == r) pull(s, r);
+	}
+}
+
 static char *land(sc_scheduler *s, landed l) {
 	char *outer = s->thrown;
 	s->thrown = NULL;
 	sc_run *r = l.r;
+	r->waiting = false;
 	if (r->c->state != ALIVE || r->c->runs != r->n || od_has(s->order, &r->c->od)) {
-		drop_value(s, l.value);
-		free(l.error);
+		drop_landed(s, l);
 		quit_step(r);
+	} else if (r->stopped) {
+		drop_landed(s, l);
+		quit_step(r);
+		stop_run(s, r);
+	} else if (l.pull) {
+		flow(s, r, l);
+	} else if (l.kind == SC_STREAM) {
+		streaming(s, r, l.stream);
+		if (od_has(s->order, &r->c->od)) quit_step(r);
 	} else if (l.step) {
 		if (l.kind == SC_PENDING) {
 			quit_step(r);
@@ -1524,9 +1686,9 @@ void sc_pulse(sc_scheduler *s) {
 		if (failed) break;
 		s->acts.head = s->acts.n = 0;
 	}
-	char *late = runQueuedCleanups(s);
-	if (failed) free(late);
-	else failed = late;
+	char *closing = runQueuedCleanups(s);
+	if (failed) free(closing);
+	else failed = closing;
 	s->pulsing = false;
 	cs_end(s->causes);
 	s->pulses++;
@@ -1590,15 +1752,16 @@ static bool claim(sc_computer *c, bool again) {
 	if (c->older) c->older->newer = c;
 	p->newest = c;
 	if (!again) return true;
-	if (s->running && s->running->nloop > 0) s->running->cut = true;
+	sc_run *by = by_run(s);
+	if (by && by->nloop > 0) by->cut = true;
 	uint64_t t = ++s->tick;
 	dues now = {0};
 	bool told = s->nlisteners[ON_MARK] > 0;
-	bool now_due = due(s, c, t, s->running, false);
+	bool now_due = due(s, c, t, by, false);
 	char *outer = s->thrown;
 	s->thrown = NULL;
 	if (now_due && told) VEC_PUSH(now.v, now.n, now.cap, c);
-	if (told) told_mark(s, NULL, 0, s->running, &now, t);
+	if (told) told_mark(s, NULL, 0, by, &now, t);
 	escape(s, unbracket(s, outer));
 	return true;
 }
@@ -1608,7 +1771,7 @@ bool sc_claim_same(sc_computer *c) { return claim(c, false); }
 
 
 static sc_computer *make(sc_scheduler *s, kind_t kind, sc_def def, const sc_pair *info, size_t n) {
-	sc_scope *o = s->open;
+	sc_scope *o = now_scope(s);
 	if (o == NULL || o->state != ALIVE) return NULL;
 	if (kind != EFFECT) def.early = false;
 	sc_scope *c = make_scope(s, kind, o, NULL, 0);
@@ -1620,7 +1783,8 @@ static sc_computer *make(sc_scheduler *s, kind_t kind, sc_def def, const sc_pair
 	od_started(s->order, &c->od);
 	// Made in a run, set, act or teardown, it carries that run's cause so a loop through what it
 	// changes is seen. In a run known to loop, the loop is cut here, as a dropped loop mark cuts it.
-	if (s->running && s->running->nloop > 0) s->running->cut = true;
+	sc_run *by = by_run(s);
+	if (by && by->nloop > 0) by->cut = true;
 	uint64_t t = ++s->tick;
 	if (info == NULL) n = 0;
 	sc_pair *own = xalloc((n + 1) * sizeof *own);
@@ -1632,11 +1796,11 @@ static sc_computer *make(sc_scheduler *s, kind_t kind, sc_def def, const sc_pair
 	free(own);
 	dues now = {0};
 	bool told = s->nlisteners[ON_MARK] > 0;
-	bool now_due = due(s, c, t, s->running, false);
+	bool now_due = due(s, c, t, by, false);
 	char *outer = s->thrown;
 	s->thrown = NULL;
 	if (now_due && told) VEC_PUSH(now.v, now.n, now.cap, c);
-	if (told) told_mark(s, NULL, 0, s->running, &now, t);
+	if (told) told_mark(s, NULL, 0, by, &now, t);
 	if (def.early && now_due) {
 		hold(s, first(s, c, od_rank(s->order, &c->od)));
 		if (c->acting) do_act(s, unqueue(s, c));
@@ -1684,11 +1848,24 @@ static void settle(sc_promise *p, sc_out_kind kind, void *value, char *error) {
 void sc_resolve(sc_promise *p, void *value) { settle(p, SC_VALUE, value, NULL); }
 void sc_resolve_pending(sc_promise *p) { settle(p, SC_PENDING, NULL, NULL); }
 void sc_reject(sc_promise *p, char *error) { settle(p, SC_FAILED, NULL, error); }
+void sc_resolve_done(sc_promise *p) {
+	if (!p->settled) p->done = true;
+	settle(p, SC_VALUE, NULL, NULL);
+}
+void sc_resolve_stream(sc_promise *p, sc_stream stream) {
+	if (p->settled) {
+		stream.close(stream.data);
+		return;
+	}
+	p->stream = stream;
+	settle(p, SC_STREAM, NULL, NULL);
+}
 
 void sc_promise_free(sc_promise *p) {
 	for (size_t i = 0; i < p->nrs; i++) ran_release(p->rs[i]);
 	free(p->rs);
 	if (!p->given) drop_value(p->s, p->value);
+	if (p->settled && p->kind == SC_STREAM && !p->taken) p->stream.close(p->stream.data);
 	free(p->error);
 	free(p);
 }
@@ -1710,8 +1887,7 @@ void sc_free(sc_scheduler *s) {
 			free(qs[k]->v[i]);
 		}
 	for (size_t i = s->headlanded; i < s->nlanded; i++) {
-		drop_value(s, s->landed[i].value);
-		free(s->landed[i].error);
+		drop_landed(s, s->landed[i]);
 		ran_release(s->landed[i].r);
 	}
 	for (size_t i = 0; i < s->nall; i++) {
@@ -1742,4 +1918,27 @@ void sc_free(sc_scheduler *s) {
 	s->life->gone = true;
 	if (--s->life->refs == 0) free(s->life);
 	free(s);
+}
+
+void sc_run_with_run(sc_run *run, void (*f)(void *data), void *data) {
+	if (run->life->gone) {
+		f(data);
+		return;
+	}
+	sc_scheduler *s = run->s;
+	sc_run *was = s->reading, *wasRunning = s->running, *waswriter = s->open_writer, *wasAfter = s->after;
+	sc_scope *wasopen = s->open;
+	ch_frame *wasframe = s->open_frame;
+	s->reading = s->running = s->open_writer = NULL;
+	s->open = NULL;
+	s->open_frame = NULL;
+	s->after = ran_ref(run);
+	f(data);
+	s->after = wasAfter;
+	s->reading = was;
+	s->running = wasRunning;
+	s->open = wasopen;
+	s->open_frame = wasframe;
+	s->open_writer = waswriter;
+	ran_release(run);
 }

@@ -8,6 +8,7 @@ import {
 	PENDING,
 	type Run,
 	SchedulerError,
+	type SchedulerOptions,
 	type Scope,
 } from "./scheduler.ts"
 import { type Told, trace } from "./scheduler_harness.ts"
@@ -25,9 +26,9 @@ const now = (s: ReturnType<typeof createScheduler>): Now => {
 }
 const named = (run: Run | undefined) => run && [run.computer, run.n]
 
-function setup() {
+function setup(options?: SchedulerOptions) {
 	const moments: Told[] = []
-	const s = createScheduler()
+	const s = createScheduler(options)
 	trace(s, (m) => void moments.push(m))
 	const store = new Map<unknown, unknown>()
 	const write = (key: unknown, v: unknown, by?: Run | Computer) => {
@@ -249,8 +250,8 @@ Deno.test("read: tracked in a run's synchronous part; outside a run, and in run(
 	assertEquals(runs, 2)
 })
 
-Deno.test("after an await a read counts for nothing; the writer kept from the run's start still names the run", async () => {
-	const { s, at, ends, write, get, moments } = setup()
+Deno.test("without carry, after an await a read counts for nothing; the writer kept from the run's start still names the run", async () => {
+	const { s, at, ends, write, get, moments } = setup({ carry: false })
 	let resolve!: () => void
 	const gate = new Promise<void>((r) => resolve = r)
 	const c = at(() =>
@@ -273,6 +274,70 @@ Deno.test("after an await a read counts for nothing; the writer kept from the ru
 	write("a", 2)
 	s.pulse()
 	assertEquals(ends(c).length, before)
+})
+
+Deno.test("with carry, after an await a read is the run's and the run open names the writer", async () => {
+	const { s, at, ends, write, get, moments } = setup()
+	let resolve!: () => void
+	const gate = new Promise<void>((r) => resolve = r)
+	const c = at(() =>
+		s.createComputer(async () => {
+			await gate
+			get("a")
+			write("w", 1, s.getRun())
+			return 1
+		}, () => {})
+	)
+	const b = at(() => s.createComputer(() => get("w"), () => {}))
+	s.pulse()
+	resolve()
+	await new Promise((r) => setTimeout(r, 0))
+	s.pulse()
+	assertEquals(ends(c).map((m) => m.ended), ["pending", "done"])
+	assert(moments.some((m) => "due" in m && m.due === b && m.by === c))
+	write("a", 2)
+	s.pulse()
+	assertEquals(ends(c).map((m) => m.ended), ["pending", "done", "pending"])
+})
+
+Deno.test("without carry, in runWith(run, f) after an await the run is open and a read is its", async () => {
+	const { s, at, ends, write, get, moments } = setup({ carry: false })
+	let resolve!: () => void
+	const gate = new Promise<void>((r) => resolve = r)
+	const c = at(() =>
+		s.createComputer(async () => {
+			const run = s.getRun()!
+			await gate
+			s.runWith(run, () => {
+				get("a")
+				write("w", 1, s.getRun())
+			})
+			return 1
+		}, () => {})
+	)
+	const b = at(() => s.createComputer(() => get("w"), () => {}))
+	s.pulse()
+	resolve()
+	await new Promise((r) => setTimeout(r, 0))
+	s.pulse()
+	assertEquals(ends(c).map((m) => m.ended), ["pending", "done"])
+	assert(moments.some((m) => "due" in m && m.due === b && m.by === c))
+	write("a", 2)
+	s.pulse()
+	assertEquals(ends(c).map((m) => m.ended), ["pending", "done", "pending"])
+})
+
+Deno.test("runWith(run, f) for a run that has landed has nothing open", async () => {
+	const { s, at, get } = setup({ carry: false })
+	let run: Run | undefined
+	at(() => s.createComputer(() => (run = s.getRun(), Promise.resolve(1)), () => {}))
+	s.pulse()
+	await new Promise((r) => setTimeout(r, 0))
+	s.pulse()
+	s.runWith(run!, () => {
+		get("a")
+		assertEquals([s.getRun(), s.getCurrentScope()], [undefined, undefined])
+	})
 })
 
 Deno.test("wake: told when a promise settles; its result lands at the next pulse", async () => {
@@ -763,8 +828,8 @@ Deno.test("scope: a run's scope is its own: a pulse with another scope open lend
 	assertStrictEquals(c.parent, o)
 })
 
-Deno.test("scope: after an await in a run nothing is open; making is unscoped", async () => {
-	const { s, at } = setup()
+Deno.test("scope: without carry, after an await in a run nothing is open; making is unscoped", async () => {
+	const { s, at } = setup({ carry: false })
 	const seen: unknown[] = []
 	at(() =>
 		s.createComputer(async () => {
@@ -782,6 +847,37 @@ Deno.test("scope: after an await in a run nothing is open; making is unscoped", 
 	s.pulse()
 	await new Promise((r) => setTimeout(r, 0))
 	assertEquals(seen, [true, undefined, "unscoped"])
+})
+
+Deno.test("scope: with carry, after an await the run's computer is open while it waits; making is under it", async () => {
+	const { s, at } = setup()
+	const seen: unknown[] = []
+	const c = at(() =>
+		s.createComputer(async () => {
+			await null
+			seen.push(s.getCurrentScope(), s.getRun()?.n, s.createScope({ why: "test" }).parent)
+			return 0
+		}, () => {})
+	)
+	s.pulse()
+	await new Promise((r) => setTimeout(r, 0))
+	assertEquals(seen, [c, 1, c])
+})
+
+Deno.test("scope: with carry, a computer torn down while it waits has nothing open after its await", async () => {
+	const { s, at } = setup()
+	let late: unknown = "unset"
+	const d = at(() =>
+		s.createComputer(async () => {
+			await null
+			late = s.getCurrentScope()
+			return 0
+		}, () => {})
+	)
+	s.pulse()
+	s.teardown(d)
+	await new Promise((r) => setTimeout(r, 0))
+	assertEquals(late, undefined)
 })
 
 Deno.test("scope: the caller of an async function doesn't see the callee's scope after its first await", async () => {

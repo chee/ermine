@@ -1,0 +1,166 @@
+{
+	"title": "with carry (AsyncContext), a read after an await of a key whose writer is due stops the run: it ends stopped, waiting on the writer, and runs again after it",
+	"steps": [
+		{
+			"op": "carry",
+			"on": true,
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "o",
+			"info": {
+				"actor": "test"
+			},
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 1
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "compute",
+			"name": "w",
+			"scope": "o",
+			"f": {
+				"read": "x"
+			},
+			"to": "b",
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "c",
+			"scope": "o",
+			"f": {
+				"async": {
+					"wait": [
+						"p",
+						{
+							"read": "b"
+						}
+					]
+				}
+			},
+			"to": "c",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "w",
+						"tick": 2
+					},
+					{
+						"due": "c",
+						"tick": 3
+					},
+					{
+						"starts": "w",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "w",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "c",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 1,
+						"ended": "pending"
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 2
+			},
+			"expect": {
+				"tick": 5
+			}
+		},
+		{
+			"op": "resolve",
+			"promise": "p",
+			"value": null,
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"reads": true,
+			"expect": {
+				"moments": [
+					{
+						"due": "w",
+						"tick": 5
+					},
+					{
+						"ends": "c",
+						"run": 1,
+						"ended": "stopped",
+						"waits": "w",
+						"reads": [
+							"b"
+						]
+					},
+					{
+						"starts": "w",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "w",
+						"run": 2,
+						"ended": "done",
+						"equal": false,
+						"reads": [
+							"x"
+						]
+					},
+					{
+						"starts": "c",
+						"run": 2,
+						"rank": 1
+					},
+					{
+						"ends": "c",
+						"run": 2,
+						"ended": "pending",
+						"reads": []
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"key": "b",
+			"expect": {
+				"value": 2
+			}
+		}
+	]
+}

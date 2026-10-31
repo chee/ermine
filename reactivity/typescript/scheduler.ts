@@ -4,8 +4,11 @@
 // A change must say who made it: the run open (getRun()), a Run kept from before an await, or a
 // computer. With none, the change is from outside (the host, sync).
 //
-// A run lasts until its function returns, which for an async function is its first await. Only
-// keys tracked before that are the run's, so read what you need before you await.
+// A run lasts until its function returns, which for an async function is its first await. Where
+// the host has AsyncContext (or node's AsyncLocalStorage), an async function's code after an await
+// goes on in the run while it waits: its scope and frame are open and what it reads is the run's,
+// until the run lands or its computer runs again. Elsewhere, or with carry: false, nothing is open
+// after an await unless the code is in runWith(run, f).
 import type { Info } from "@ermine/changeable"
 import { type Cause, createCauses } from "./causes.ts"
 import { isPromise, same } from "./helpers.ts"
@@ -129,6 +132,10 @@ type Ran = {
 	loop?: Computer[]
 	cut?: boolean
 	paused?: Gen
+	stream?: Stream
+	streamed?: boolean
+	waiting?: boolean
+	late?: boolean
 }
 type Act = { r: Ran; value: unknown; at: number }
 type Queue = { items: (Act | undefined)[]; head: number; live: number }
@@ -138,6 +145,10 @@ type Out = { value: unknown } | { error: unknown }
 // goes on when it settles.
 type Gen = Generator<unknown, unknown, unknown>
 const isGen = (v: unknown): v is Gen => Object.prototype.toString.call(v) === "[object Generator]"
+type Stream = AsyncIterator<unknown>
+const isStream = (v: unknown): v is AsyncIterable<unknown> =>
+	v !== null && (typeof v === "object" || typeof v === "function") &&
+	typeof (v as AsyncIterable<unknown>)[Symbol.asyncIterator] === "function"
 class Paused {
 	constructor(readonly gen: Gen, readonly p: PromiseLike<unknown>) {}
 }
@@ -153,6 +164,12 @@ function advance(gen: Gen, input: unknown, threw: boolean): unknown {
 function quit(gen: Gen) {
 	try {
 		gen.return(undefined)
+	} catch { /* let go */ }
+}
+function close(it: Stream) {
+	try {
+		const p = it.return?.()
+		if (isPromise(p)) p.then(undefined, () => {})
 	} catch { /* let go */ }
 }
 
@@ -184,6 +201,24 @@ type Told<K extends keyof Scheduler> = Scheduler[K] extends (f: (...a: infer A) 
 
 class Stop {}
 
+const isAsync = (f: object) =>
+	(f as { [Symbol.toStringTag]?: string })[Symbol.toStringTag] === "AsyncFunction"
+type Later = { get(): Ran | undefined; run<T>(r: Ran | undefined, f: () => T): T }
+function createLater(): Later | undefined {
+	type Store = { getStore(): Ran | undefined; run<T>(r: Ran | undefined, f: () => T): T }
+	const g = globalThis as {
+		AsyncContext?: { Variable: new () => Later }
+		process?: {
+			getBuiltinModule?: (name: string) => { AsyncLocalStorage?: new () => Store } | undefined
+		}
+	}
+	if (g.AsyncContext?.Variable) return new g.AsyncContext.Variable()
+	const Local = g.process?.getBuiltinModule?.("node:async_hooks")?.AsyncLocalStorage
+	if (Local === undefined) return
+	const store = new Local()
+	return { get: () => store.getStore(), run: (r, f) => store.run(r, f) }
+}
+
 const blank = (info: Info) => {
 	for (const _ in info) return false
 	return true
@@ -193,7 +228,9 @@ const none = /* @__PURE__ */ Object.freeze([]) as never[]
 const inside: unique symbol = /* @__PURE__ */ Symbol("inside")
 type Own = Run & { [inside]: Ran }
 
-export function createScheduler(): Scheduler {
+export type SchedulerOptions = { carry?: boolean }
+
+export function createScheduler(options?: SchedulerOptions): Scheduler {
 	const tracks = told<Told<"onTrack">>()
 	const marks = told<Told<"onMark">>()
 	const starts = told<Told<"onRunStart">>()
@@ -215,7 +252,7 @@ export function createScheduler(): Scheduler {
 	const causes = createCauses<Computer>()
 	const acts: Queue = { items: [], head: 0, live: 0 }
 	const earlies: Queue = { items: [], head: 0, live: 0 }
-	const landed: ({ r: Ran; out: Out; gen?: Gen } | undefined)[] = []
+	const landed: ({ r: Ran; out: Out; gen?: Gen; stream?: Stream } | undefined)[] = []
 	let steps = 0
 	let landedHead = 0
 	const queued: Computer[] = []
@@ -238,6 +275,23 @@ export function createScheduler(): Scheduler {
 		if (t) throw t.error
 	}
 
+	const later = options?.carry === false ? undefined : createLater()
+	// The run runWith(run, f) gave; null when f has nothing open.
+	let after: Ran | null | undefined
+
+	// The run code after an await goes on in, while nothing else is open.
+	function late(): Ran | undefined {
+		if (open || reading || running) return
+		const r = after === undefined ? later?.get() : after
+		return r?.waiting && r.c.ran === r && r.c.state === "alive" ? r : undefined
+	}
+
+	function now(): typeof open {
+		if (open !== undefined) return open
+		const r = late()
+		return r && { scope: r.c, frame: r.own.frame, by: r.own }
+	}
+
 	function enter<T>(next: typeof open, f: () => T): T {
 		const was = open
 		open = next
@@ -249,13 +303,16 @@ export function createScheduler(): Scheduler {
 	}
 
 	function parent(): Scope {
-		if (open === undefined) throw unscoped()
-		if (open.scope.state !== "alive") throw disposed()
-		return open.scope
+		const o = now()
+		if (o === undefined) throw unscoped()
+		if (o.scope.state !== "alive") throw disposed()
+		return o.scope
 	}
 
-	const frameUnder = (up: Scope | undefined): Frame | undefined =>
-		up !== undefined && open?.scope === up ? open.frame : up?.frame
+	function frameUnder(up: Scope | undefined): Frame | undefined {
+		const o = now()
+		return up !== undefined && o?.scope === up ? o.frame : up?.frame
+	}
 
 	function grow(up: Scope | undefined, info: Info): Scope {
 		if (blank(info)) throw empty()
@@ -317,15 +374,15 @@ export function createScheduler(): Scheduler {
 
 	// Live, so read it now and do not keep it.
 	function getInfo(): Info | undefined {
-		return open?.frame.info
+		return now()?.frame.info
 	}
 
 	function createFrame(info: Info, up?: Frame): Frame {
-		return { info, parent: up ?? open?.frame }
+		return { info, parent: up ?? now()?.frame }
 	}
 
 	function getRun(): Run | undefined {
-		const by = open?.by
+		const by = now()?.by
 		return by === undefined || !("kind" in by) ? by : by.ran?.own
 	}
 
@@ -334,7 +391,7 @@ export function createScheduler(): Scheduler {
 	const opens = (o: Scope) => ({
 		scope: o,
 		frame: "kind" in o ? latest(o as Computer) : o.frame,
-		by: "kind" in o ? o as Computer : open?.by,
+		by: "kind" in o ? o as Computer : now()?.by,
 	})
 
 	function registerTeardown(o: Scope, f: () => unknown) {
@@ -402,10 +459,11 @@ export function createScheduler(): Scheduler {
 		unlink(c)
 		link(c.parent!, c)
 		if (!again) return true
-		if (running?.loop) running.cut = true
+		const by = running ?? late()
+		if (by?.loop) by.cut = true
 		const t = ++tick
-		const now = due(c, t, running) ? [c] : none
-		const failed = marks.tell([], running?.own, now, t)
+		const now = due(c, t, by) ? [c] : none
+		const failed = marks.tell([], by?.own, now, t)
 		if (failed) throw failed.error
 		return true
 	}
@@ -512,7 +570,7 @@ export function createScheduler(): Scheduler {
 		o.teardowns = []
 		const failed = down(o, cut(o), fs)
 		o.state = "gone"
-		if (c?.ran?.paused !== undefined) letGo(c.ran)
+		if (c?.ran) letGo(c.ran)
 		if (c) c.ran = undefined
 		unlink(o)
 		return failed
@@ -611,14 +669,15 @@ export function createScheduler(): Scheduler {
 		live.add(c)
 		if (key !== undefined) write(c, key)
 		order.started(c)
-		if (running?.loop) running.cut = true
+		const by = running ?? late()
+		if (by?.loop) by.cut = true
 		const t = ++tick
 		;(c as { info: Info }).info = { ...info, mark: t }
 		;(c as { frame: Frame }).frame = { info: c.info, parent: frameUnder(o) }
-		const now = due(c, t, running) ? [c] : []
+		const now = due(c, t, by) ? [c] : []
 		const outer = thrown
 		thrown = undefined
-		holdFirst(marks.tell([], running?.own, now, t))
+		holdFirst(marks.tell([], by?.own, now, t))
 		if (c.early && now.length) {
 			try {
 				first(c, order.rank(c))
@@ -670,6 +729,7 @@ export function createScheduler(): Scheduler {
 		const r = by === undefined ? undefined : "kind" in by ? by.ran : (by as Own)[inside]
 		const w = r?.c.kind === "compute" && r.c.state === "alive" ? r.c : undefined
 		const now: Computer[] = marks.fs.length ? [] : none
+		const self = (running ?? late())?.c
 		for (const key of keys) {
 			if (w) write(w, key)
 			const node = nodes.get(key)
@@ -677,7 +737,7 @@ export function createScheduler(): Scheduler {
 			for (let l = node.first; l !== null; l = l.after) {
 				const c = l.from.owner as Computer
 				const old = tracker.old(l)
-				if (old && running?.c === c) continue
+				if (old && self === c) continue
 				if (due(c, t, r, old) && now !== none) now.push(c)
 			}
 		}
@@ -739,7 +799,22 @@ export function createScheduler(): Scheduler {
 	}
 
 	function track(key: unknown) {
-		if (reading) follow(reading, key)
+		if (reading) return follow(reading, key)
+		const r = late()
+		if (r) followLate(r, key)
+	}
+
+	function followLate(r: Ran, key: unknown) {
+		if (!r.late) {
+			r.late = true
+			r.values = r.values.slice()
+		}
+		tracker.resume(r.c.node)
+		try {
+			follow(r, key)
+		} finally {
+			tracker.leave(r.c.node)
+		}
 	}
 
 	function first(c: Computer, rank: number) {
@@ -774,7 +849,7 @@ export function createScheduler(): Scheduler {
 			loop: c.loop,
 		}
 		c.loop = undefined
-		if (c.ran?.paused !== undefined) letGo(c.ran)
+		if (c.ran) letGo(c.ran)
 		c.ran = r
 		if (c.acting) unact(c)
 		for (const f of starts.fs) {
@@ -796,7 +871,7 @@ export function createScheduler(): Scheduler {
 		const wasOpen = open
 		open = { scope: c, frame: own.frame, by: own }
 		try {
-			value = c.f(c.last?.value)
+			value = later && isAsync(c.f) ? later.run(r, () => c.f(c.last?.value)) : c.f(c.last?.value)
 			if (isGen(value)) value = advance(value, undefined, false)
 		} catch (e) {
 			if (e === PENDING) value = PENDING
@@ -812,19 +887,25 @@ export function createScheduler(): Scheduler {
 
 	function letGo(r: Ran) {
 		const gen = r.paused
-		if (gen === undefined) return
-		r.paused = undefined
+		const it = r.stream
+		if (gen === undefined && it === undefined) return
+		r.paused = r.stream = undefined
 		const wasOpen = open
 		const was = reading
 		const wasRunning = running
+		const wasAfter = after
 		open = undefined
 		reading = running = undefined
+		after = null
 		try {
-			quit(gen)
+			const f = () => gen ? quit(gen) : close(it!)
+			if (later) later.run(undefined, f)
+			else f()
 		} finally {
 			open = wasOpen
 			reading = was
 			running = wasRunning
+			after = wasAfter
 		}
 	}
 
@@ -836,7 +917,72 @@ export function createScheduler(): Scheduler {
 		if (value === PENDING) return finish(r, "pending")
 		if (value instanceof Paused) return paused(r, value)
 		if (isPromise(value)) return awaiting(r, value)
+		if (isStream(value)) {
+			finish(r, "pending")
+			return streaming(r, value)
+		}
 		result(r, value)
+	}
+
+	// Each value the stream gives is the run's result in turn; the next is pulled once it is written.
+	function streaming(r: Ran, source: AsyncIterable<unknown>) {
+		let it: Stream
+		try {
+			it = source[Symbol.asyncIterator]()
+		} catch (e) {
+			return finish(r, "failed", { error: e })
+		}
+		r.stream = it
+		pull(r, it)
+	}
+
+	function pull(r: Ran, it: Stream) {
+		r.waiting = true
+		r.late = false
+		const settle = (out: Out) => {
+			if (r.stream !== it) return
+			if (r.c.state !== "alive" || r.c.runs !== r.n) return letGo(r)
+			landed.push({ r, out, stream: it })
+			escaped ??= settles.tell()
+		}
+		let step: unknown
+		try {
+			step = runAfter(r, () => later ? later.run(r, () => it.next()) : it.next())
+		} catch (e) {
+			step = Promise.reject(e)
+		}
+		Promise.resolve(step).then(
+			(value) => settle({ value }),
+			(error) => settle({ error }),
+		)
+	}
+
+	function flow(r: Ran, it: Stream, out: Out) {
+		r.waiting = false
+		const c = r.c
+		if (r.stream !== it) return
+		if (c.state !== "alive" || c.runs !== r.n || order.has(c)) return letGo(r)
+		const outer = thrown
+		thrown = undefined
+		try {
+			if (r.stopped) return stop(r)
+			if ("error" in out) {
+				r.stream = undefined
+				return finish(r, "failed", { error: out.error })
+			}
+			const step = out.value as IteratorResult<unknown>
+			if (step.done) {
+				r.stream = undefined
+				if (!r.streamed) result(r, undefined)
+				return
+			}
+			r.streamed = true
+			if (step.value === PENDING) finish(r, "pending")
+			else result(r, step.value)
+			if (r.stream === it && c.state === "alive" && c.ran === r) pull(r, it)
+		} finally {
+			rethrow(outer)
+		}
 	}
 
 	function paused(r: Ran, w: Paused) {
@@ -977,6 +1123,8 @@ export function createScheduler(): Scheduler {
 
 	function awaiting(r: Ran, p: PromiseLike<unknown>) {
 		finish(r, "pending")
+		r.waiting = true
+		r.late = false
 		const settle = (out: Out) => {
 			if (r.c.state !== "alive" || r.c.runs !== r.n) return
 			landed.push({ r, out })
@@ -989,12 +1137,15 @@ export function createScheduler(): Scheduler {
 	}
 
 	function land(r: Ran, out: Out) {
+		r.waiting = false
 		if (r.c.state !== "alive" || r.c.runs !== r.n || order.has(r.c)) return
 		const outer = thrown
 		thrown = undefined
 		try {
-			if ("error" in out) finish(r, "failed", { error: out.error })
+			if (r.stopped) stop(r)
+			else if ("error" in out) finish(r, "failed", { error: out.error })
 			else if (out.value === PENDING) finish(r, "pending")
+			else if (isStream(out.value)) streaming(r, out.value)
 			else result(r, out.value)
 		} finally {
 			rethrow(outer)
@@ -1099,9 +1250,10 @@ export function createScheduler(): Scheduler {
 			for (;;) {
 				// Taken from a head as each lands, since shift is linear and many may settle at once.
 				while (landedHead < landed.length) {
-					const { r, out, gen } = landed[landedHead]!
+					const { r, out, gen, stream } = landed[landedHead]!
 					landed[landedHead++] = undefined
 					if (gen !== undefined) resume(r, gen, out)
+					else if (stream !== undefined) flow(r, stream, out)
 					else land(r, out)
 				}
 				landed.length = landedHead = 0
@@ -1149,20 +1301,40 @@ export function createScheduler(): Scheduler {
 		const was = reading
 		reading = undefined
 		try {
-			return enter({ scope: o, frame: o.frame, by: open?.by }, f)
+			return enter({ scope: o, frame: o.frame, by: now()?.by }, f)
 		} finally {
 			reading = was
 		}
 	}
 
-	function runWith<T>(o: Scope, frame: Frame, f: () => T): T {
+	function runWith<T>(o: Scope | Run, frame: Frame | (() => T), f?: () => T): T {
+		if (typeof frame === "function") return runAfter((o as Own)[inside], frame)
+		o = o as Scope
 		if (o.state !== "alive") throw disposed()
 		const was = reading
 		reading = undefined
 		try {
-			return enter({ scope: o, frame, by: open?.by }, f)
+			return enter({ scope: o, frame, by: now()?.by }, f!)
 		} finally {
 			reading = was
+		}
+	}
+
+	function runAfter<T>(r: Ran, f: () => T): T {
+		const wasOpen = open
+		const was = reading
+		const wasRunning = running
+		const wasAfter = after
+		open = undefined
+		reading = running = undefined
+		after = r
+		try {
+			return f()
+		} finally {
+			open = wasOpen
+			reading = was
+			running = wasRunning
+			after = wasAfter
 		}
 	}
 
@@ -1172,8 +1344,8 @@ export function createScheduler(): Scheduler {
 		runWithScope,
 		runWith,
 		createFrame,
-		getCurrentScope: () => open?.scope,
-		getCurrentFrame: () => open?.frame,
+		getCurrentScope: () => now()?.scope,
+		getCurrentFrame: () => now()?.frame,
 		getInfo,
 		getRun,
 		registerTeardown,
@@ -1226,7 +1398,11 @@ export type Scheduler = {
 	createRootScope: (info: Info) => Scope
 	createScope: (info: Info, parent?: Scope) => Scope
 	runWithScope: <T>(o: Scope, f: () => T) => T
-	runWith: <T>(o: Scope, frame: Frame, f: () => T) => T
+	runWith: {
+		// f is code after an await in run: while run waits, it is open and f's reads are its.
+		<T>(run: Run, f: () => T): T
+		<T>(o: Scope, frame: Frame, f: () => T): T
+	}
 	createFrame: (info: Info, up?: Frame) => Frame
 	getCurrentScope: () => Scope | undefined
 	getCurrentFrame: () => Frame | undefined
