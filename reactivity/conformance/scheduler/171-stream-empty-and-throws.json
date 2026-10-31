@@ -1,0 +1,119 @@
+{
+	"title": "a stream's end [chee 10-31: \"we could allow an async iterator computer no?\", \"yield means a new value, a stream\", \"for the open question: whatever solidjs2.0 does\"]: one that gives nothing ends done with undefined as its result; one that throws ends failed after the values it gave",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": {
+				"actor": "test"
+			},
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "N",
+			"scope": "o",
+			"to": "N",
+			"f": {
+				"stream": []
+			},
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "T",
+			"scope": "o",
+			"to": "T",
+			"f": {
+				"stream": [
+					{
+						"yield": 1
+					},
+					{
+						"throw": "boom"
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"key": "N",
+			"expect": {
+				"value": null
+			}
+		},
+		{
+			"op": "get",
+			"key": "T",
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "N",
+						"tick": 1
+					},
+					{
+						"due": "T",
+						"tick": 2
+					},
+					{
+						"starts": "N",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "N",
+						"run": 1,
+						"ended": "pending"
+					},
+					{
+						"starts": "T",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "T",
+						"run": 1,
+						"ended": "pending"
+					},
+					{
+						"ends": "N",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"ends": "T",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"ends": "T",
+						"run": 1,
+						"ended": "failed",
+						"error": "boom"
+					}
+				]
+			}
+		}
+	]
+}

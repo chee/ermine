@@ -1,0 +1,324 @@
+{
+	"title": "with carry (AsyncContext), after an await the run is open while it waits: a cleanup on the scope open, an effect, a scope within are made, and a write by the writer open is the run's",
+	"steps": [
+		{
+			"op": "carry",
+			"on": true,
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "o",
+			"info": {
+				"actor": "test"
+			},
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "r",
+			"scope": "o",
+			"f": {
+				"do": [
+					{
+						"read": "k"
+					},
+					{
+						"read": "m"
+					}
+				]
+			},
+			"to": "r",
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "a",
+			"scope": "o",
+			"f": {
+				"async": {
+					"wait": [
+						"p1",
+						{
+							"cleanup": [
+								null,
+								{
+									"log": "never"
+								}
+							]
+						}
+					]
+				}
+			},
+			"to": "a",
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "b",
+			"scope": "o",
+			"f": {
+				"async": {
+					"wait": [
+						"p2",
+						{
+							"effect": [
+								"e",
+								1,
+								null
+							]
+						}
+					]
+				}
+			},
+			"to": "b",
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "c",
+			"scope": "o",
+			"f": {
+				"async": {
+					"wait": [
+						"p3",
+						{
+							"within": [
+								{
+									"why": "late"
+								},
+								1
+							]
+						}
+					]
+				}
+			},
+			"to": "c",
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "d",
+			"scope": "o",
+			"f": {
+				"async": {
+					"wait": [
+						"p4",
+						{
+							"do": [
+								{
+									"current": null
+								},
+								{
+									"write": [
+										"k",
+										1,
+										"open"
+									]
+								},
+								{
+									"write": [
+										"m",
+										1
+									]
+								}
+							]
+						}
+					]
+				}
+			},
+			"to": "d",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "r",
+						"tick": 1
+					},
+					{
+						"due": "a",
+						"tick": 2
+					},
+					{
+						"due": "b",
+						"tick": 3
+					},
+					{
+						"due": "c",
+						"tick": 4
+					},
+					{
+						"due": "d",
+						"tick": 5
+					},
+					{
+						"starts": "r",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "r",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "a",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "a",
+						"run": 1,
+						"ended": "pending"
+					},
+					{
+						"starts": "b",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "b",
+						"run": 1,
+						"ended": "pending"
+					},
+					{
+						"starts": "c",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 1,
+						"ended": "pending"
+					},
+					{
+						"starts": "d",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "d",
+						"run": 1,
+						"ended": "pending"
+					}
+				]
+			}
+		},
+		{
+			"op": "resolve",
+			"promise": "p1",
+			"value": null,
+			"expect": {}
+		},
+		{
+			"op": "resolve",
+			"promise": "p2",
+			"value": null,
+			"expect": {}
+		},
+		{
+			"op": "resolve",
+			"promise": "p3",
+			"value": null,
+			"expect": {}
+		},
+		{
+			"op": "resolve",
+			"promise": "p4",
+			"value": null,
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "e",
+						"tick": 7,
+						"writer": "b"
+					},
+					{
+						"due": "r",
+						"tick": 8,
+						"writer": "d"
+					}
+				]
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"ends": "a",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"ends": "b",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"ends": "c",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"ends": "d",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "e",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "e",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "r",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "r",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"acts": "e",
+						"run": 1
+					}
+				]
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": []
+			}
+		}
+	]
+}

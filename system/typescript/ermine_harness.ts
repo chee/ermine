@@ -47,7 +47,8 @@
 // program: steps { do: [fn, ...args], as? }; "$x" in an arg is the name x. fn is a @ermine/system
 // function or one of:
 //   ["createMemo", name, options, expr]        options.equal "json"; options.gen: a generator compute
-//   ["createEffect", name, expr, log, "throws"?, options?]
+//                                              options.stream: an async generator, ["yield", e] a value
+//   ["createEffect", name, expr, log, "throws"?, options?]   options.stream as createMemo's
 //   ["createAction", path, steps, expr?, "gen"?]
 //   ["caught", log, steps]                     logs the code of an error the steps throw
 //   ["addTeardown", log, tag?]
@@ -536,10 +537,26 @@ function handler(api: Sys, path: string, fn: (...a: any[]) => unknown) {
 	})
 }
 
+function stream(api: Sys, env: Env, steps: Step[]) {
+	return async function* (): AsyncGenerator<unknown, void, unknown> {
+		const inner: Env = new Map(env)
+		for (const step of steps) {
+			const v: unknown = step.do[0] === "yield"
+				? yield expr(api, inner, step.do[1])
+				: call(api, inner, step.do)
+			if (step.as !== undefined) inner.set(step.as, v)
+		}
+	}
+}
+
 function define(api: Sys, env: Env, fn: string, raw: unknown[]): unknown {
 	if (fn === "createMemo") {
 		const [name, options, e] = raw as [string, Record<string, unknown>, unknown]
 		const equal = options?.equal === "json" ? json : undefined
+		if (Array.isArray(options?.stream)) {
+			const { stream: steps, ...rest } = options
+			return api.createMemo(name, stream(api, env, steps as Step[]), { ...rest, equal } as never)
+		}
 		if (Array.isArray(options?.gen)) {
 			const steps = options.gen as Step[]
 			const { gen: _, ...rest } = options
@@ -564,10 +581,18 @@ function define(api: Sys, env: Env, fn: string, raw: unknown[]): unknown {
 		unknown,
 		string,
 		unknown,
-		| { early?: boolean; act?: Step[]; caught?: string; cleanup?: string; returns?: unknown }
+		| {
+			early?: boolean
+			act?: Step[]
+			caught?: string
+			cleanup?: string
+			returns?: unknown
+			stream?: Step[]
+		}
 		| undefined,
 	]
-	return api.createEffect(name, () => expr(api, env, e), (v) => {
+	const f = options?.stream ? stream(api, env, options.stream) : () => expr(api, env, e)
+	return api.createEffect(name, f, (v) => {
 		log(to, v)
 		if (throws === "throws") throw new Error(`act ${JSON.stringify(v)}`)
 		if (options?.act !== undefined) {

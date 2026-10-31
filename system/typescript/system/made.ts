@@ -1,5 +1,5 @@
 import { type Id, type Path, PlacesError } from "@ermine/places"
-import type { Computer, Equal, Scope } from "@ermine/reactivity"
+import { type Computer, type Equal, PENDING, type Scope } from "@ermine/reactivity"
 import { isPromise } from "@ermine/reactivity/helpers"
 import type { Inner } from "../context.ts"
 import { keyOf, up } from "./addressing.ts"
@@ -28,7 +28,7 @@ type Computed = {
 	c?: Computer
 	code: Code
 	readonly memo: boolean
-	awaiting: boolean
+	awaiting?: "a promise" | "a stream"
 	gave?: unknown
 }
 type Placed = {
@@ -107,7 +107,9 @@ export function again(inner: Inner, own: Scope, path: Path, code: Code): Compute
 		if (!s.claim(m.c, undefined, !sameSource(m.code, code))) {
 			throw new PlacesError("already-there", path.join("/"))
 		}
+		const wasAsync = isAsync(m.code.f)
 		m.code = code
+		if (isAsync(code.f) !== wasAsync) m.c.f = body(m, m.c.f)
 		hold(inner, bin!, m)
 		return m
 	}
@@ -138,7 +140,6 @@ export function computerNode(
 		path,
 		code,
 		memo: kind === "memo",
-		awaiting: false,
 	}
 	const bin = binOf(own)
 	const at = keyOf(path)
@@ -226,7 +227,7 @@ function* watched(m: Computed, gen: Generator<unknown, unknown, unknown>, mine: 
 				threw = false
 				continue
 			}
-			if (mine()) m.awaiting = true
+			if (mine()) m.awaiting = "a promise"
 			try {
 				input = yield step.value
 				threw = false
@@ -234,7 +235,7 @@ function* watched(m: Computed, gen: Generator<unknown, unknown, unknown>, mine: 
 				input = e
 				threw = true
 			} finally {
-				if (mine()) m.awaiting = false
+				if (mine()) m.awaiting = undefined
 			}
 		}
 	} finally {
@@ -243,18 +244,72 @@ function* watched(m: Computed, gen: Generator<unknown, unknown, unknown>, mine: 
 }
 const isGen = (v: unknown): v is Generator<unknown, unknown, unknown> =>
 	Object.prototype.toString.call(v) === "[object Generator]"
+const isStream = (v: unknown): v is AsyncIterable<unknown> =>
+	v !== null && (typeof v === "object" || typeof v === "function") &&
+	typeof (v as AsyncIterable<unknown>)[Symbol.asyncIterator] === "function"
+
+// A stream compute's stream: it waits on a stream until its first value is written (the next is
+// pulled then), or the stream ends without one.
+function watchedStream(m: Computed, source: AsyncIterable<unknown>, mine: () => boolean) {
+	return {
+		[Symbol.asyncIterator]() {
+			const it = source[Symbol.asyncIterator]()
+			let pulls = 0
+			const done = () => void (mine() && (m.awaiting = undefined))
+			return {
+				next(v?: unknown) {
+					if (pulls === 1) done()
+					const p = it.next(v)
+					if (pulls++ === 0) {
+						Promise.resolve(p).then(
+							(step) => (step.done || step.value === PENDING) && done(),
+							done,
+						)
+					}
+					return p
+				},
+				return(v?: unknown) {
+					done()
+					return it.return ? it.return(v) : Promise.resolve({ done: true as const, value: v })
+				},
+			}
+		},
+	}
+}
+
+const tagOf = (f: unknown) => (f as { [Symbol.toStringTag]?: string })[Symbol.toStringTag]
+const isAsync = (f: unknown) => {
+	const tag = tagOf(f)
+	return tag === "AsyncFunction" || tag === "AsyncGeneratorFunction"
+}
+
+// The computer's function: an async function's is told async too, so the scheduler carries its run
+// past its awaits where it can.
+export function body(m: Computed, f: (previous: unknown) => unknown) {
+	const plain = (f as { plain?: typeof f }).plain ?? f
+	if (!isAsync(m.code.f)) return plain
+	const g = (previous: unknown) => plain(previous)
+	Object.defineProperty(g, Symbol.toStringTag, { value: tagOf(m.code.f) })
+	return Object.assign(g, { plain })
+}
 
 export const ran = (m: Computed, previous: unknown) => {
 	let r = m.code.f(previous)
 	if (isGen(r)) {
 		const w: Generator<unknown, unknown, unknown> = watched(m, r, () => m.gave === w)
 		r = w
+	} else if (!isPromise(r) && isStream(r)) {
+		const w: AsyncIterable<unknown> = watchedStream(m, r, () => m.gave === w)
+		r = w
+		m.gave = r
+		m.awaiting = "a stream"
+		return r
 	}
 	m.gave = r
 	if (isPromise(r)) {
-		m.awaiting = true
-		const done = () => void (m.gave === r && (m.awaiting = false))
+		m.awaiting = "a promise"
+		const done = () => void (m.gave === r && (m.awaiting = undefined))
 		r.then(done, done)
-	} else m.awaiting = false
+	} else m.awaiting = undefined
 	return r
 }

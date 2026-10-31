@@ -15,6 +15,9 @@ struct bridge {
 	sc_promise *sp;
 	char *id;
 	int settled;
+	// a stream's pull: the stream, and whether it is the first
+	void *stream;
+	int first;
 };
 
 // a memo or effect made: its code, in place (its owner running again gives it new code). Held by
@@ -36,7 +39,8 @@ struct made {
 	es_equal equal;
 	void *equal_ctx;
 	unsigned holds;
-	int gone, given, awaiting;
+	int gone, given;
+	int awaiting; // 0, or ES_WAIT_PROMISE / ES_WAIT_STREAM
 	int pausing;
 	void *awaiting_for;
 	int binned;
@@ -250,7 +254,7 @@ es_context *es_computer_context(es_ermine *e, const char *id) {
 
 int es_awaiting(es_ermine *e, const char *id) {
 	made *m = live(e, id);
-	return m != NULL && m->awaiting;
+	return m == NULL ? 0 : m->awaiting;
 }
 
 // its code running ----------
@@ -317,7 +321,97 @@ static sc_out paused_next(void *data, bool ok, void *value, char *error) {
 	return ran(m, step.next(m->cx, step.ctx, ok, value, error));
 }
 
+// a stream a compute gave: a node waits on it from its run until the first value is written (the
+// second pull) or it ends without one
+typedef struct {
+	struct es_computers *x;
+	char *id;
+	es_stream s;
+	int pulls;
+} strm;
+
+static void strm_ended(strm *k) {
+	made *m = es_map_get(&k->x->by_id, k->id);
+	if (m != NULL && m->awaiting_for == k) {
+		m->awaiting = 0;
+		m->awaiting_for = NULL;
+	}
+}
+
+static void pulled(void *ctx, int ok, const op_value *value, const char *error) {
+	bridge *b = ctx;
+	// the stream may be closed (and freed) by now; it clears its bridges' pointer when it goes
+	if (!ok && b->first && b->stream != NULL) strm_ended(b->stream);
+	b->settled = 1;
+	if (ok) sc_resolve(b->sp, op_ref((op_value *)value));
+	else sc_reject(b->sp, es_dup(error != NULL ? error : "error"));
+}
+
+static sc_promise *strm_next(void *data) {
+	strm *k = data;
+	struct es_computers *x = k->x;
+	made *m = es_map_get(&x->by_id, k->id);
+	if (k->pulls == 1) strm_ended(k);
+	bridge *b = es_alloc(sizeof *b);
+	b->x = x;
+	b->id = es_dup(k->id);
+	b->sp = sc_promise_new(x->e->scheduler);
+	b->stream = k;
+	b->first = k->pulls++ == 0;
+	ES_PUSH(x->bridges, x->nbridges, x->capbridges, b);
+	es_out r = m == NULL || m->cx == NULL ? es_out_failed(es_dup("closed")) : k->s.next(m->cx, k->s.ctx);
+	es_promise *p = r.kind == ES_OUT_VALUE ? es_promise_of(x->e, r.value) : NULL;
+	if (p != NULL) {
+		op_free(r.value);
+		es_promise_then(p, pulled, b);
+		return b->sp;
+	}
+	if (r.kind == ES_OUT_VALUE) {
+		sc_resolve(b->sp, r.value);
+	} else if (r.kind == ES_OUT_FAILED) {
+		if (b->first) strm_ended(k);
+		sc_reject(b->sp, r.error != NULL ? r.error : es_dup("error"));
+	} else if (r.kind == ES_OUT_PENDING) {
+		if (b->first) strm_ended(k);
+		sc_resolve_pending(b->sp);
+	} else if (r.kind == ES_OUT_PAUSE || r.kind == ES_OUT_STREAM) {
+		if (r.kind == ES_OUT_PAUSE) {
+			op_free(r.value);
+			r.step.quit(r.step.ctx);
+		} else {
+			r.stream.close(r.stream.ctx);
+		}
+		if (b->first) strm_ended(k);
+		sc_reject(b->sp, es_dup("a stream gave a pause or a stream"));
+	} else {
+		if (b->first) strm_ended(k);
+		sc_resolve_done(b->sp);
+	}
+	b->settled = 1;
+	return b->sp;
+}
+
+static void strm_close(void *data) {
+	strm *k = data;
+	strm_ended(k);
+	for (size_t i = 0; i < k->x->nbridges; i++)
+		if (k->x->bridges[i]->stream == k) k->x->bridges[i]->stream = NULL;
+	k->s.close(k->s.ctx);
+	free(k->id);
+	free(k);
+}
+
 static sc_out ran(made *m, es_out r) {
+	if (r.kind == ES_OUT_STREAM) {
+		strm *k = es_alloc(sizeof *k);
+		k->x = m->x;
+		k->id = es_dup(m->id);
+		k->s = r.stream;
+		m->awaiting = ES_WAIT_STREAM;
+		m->awaiting_for = k;
+		return (sc_out){.kind = SC_STREAM, .stream = {strm_next, strm_close, k}};
+	}
+	if (r.kind == ES_OUT_DONE) return (sc_out){.kind = SC_FAILED, .error = es_dup("done")};
 	if (r.kind == ES_OUT_PENDING) return (sc_out){.kind = SC_PENDING};
 	if (r.kind == ES_OUT_PAUSE) {
 		es_promise *p = es_promise_of(m->x->e, r.value);
@@ -331,7 +425,7 @@ static sc_out ran(made *m, es_out r) {
 		b->id = es_dup(m->id);
 		b->sp = sc_promise_new(x->e->scheduler);
 		ES_PUSH(x->bridges, x->nbridges, x->capbridges, b);
-		m->awaiting = 1;
+		m->awaiting = ES_WAIT_PROMISE;
 		m->awaiting_for = b;
 		m->pausing = 1;
 		paused *k = es_alloc(sizeof *k);
@@ -358,7 +452,7 @@ static sc_out ran(made *m, es_out r) {
 	b->id = es_dup(m->id);
 	b->sp = sc_promise_new(x->e->scheduler);
 	ES_PUSH(x->bridges, x->nbridges, x->capbridges, b);
-	m->awaiting = 1;
+	m->awaiting = ES_WAIT_PROMISE;
 	m->awaiting_for = b;
 	es_promise_then(p, settled, b);
 	return (sc_out){.kind = SC_AWAIT, .promise = b->sp};
@@ -847,6 +941,7 @@ static void said_of(es_context *c, const char *owner, const op_value *w, es_wait
 	if (w == NULL) return;
 	if (w->type == OP_STR) {
 		if (strcmp(w->str, "a promise") == 0) out->kind = ES_WAIT_PROMISE;
+		if (strcmp(w->str, "a stream") == 0) out->kind = ES_WAIT_STREAM;
 		return;
 	}
 	if (w->type != OP_MAP) return;
@@ -1002,7 +1097,7 @@ static int computer_status(es_context *c, const char *id, const op_value *v, con
 		}
 	}
 	if (es_awaiting(e, id)) {
-		es_waiting item = {.kind = ES_WAIT_PROMISE};
+		es_waiting item = {.kind = es_awaiting(e, id)};
 		ES_PUSH(waiting, nwaiting, cap, item);
 	}
 	if (nwaiting == 0) {

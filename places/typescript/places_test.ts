@@ -3,7 +3,12 @@ import { assert, assertEquals, assertStrictEquals, assertThrows } from "@std/ass
 import createEntry, { type ChangeHeader } from "@ermine/graph/entry"
 import update from "@ermine/changeable/update"
 import type { Patch } from "@ermine/changeable/apply"
-import { type Computer, createScheduler, SchedulerError } from "@ermine/reactivity"
+import {
+	type Computer,
+	createScheduler,
+	SchedulerError,
+	type SchedulerOptions,
+} from "@ermine/reactivity"
 import { type Told, trace } from "../../reactivity/typescript/scheduler_harness.ts"
 import { createPaths } from "@ermine/reactivity/paths"
 import { createTable, type Id, type Key } from "@ermine/graph/table"
@@ -13,9 +18,9 @@ import { updateEntry } from "./crowify.ts"
 import { get, list, lookup, members } from "./lib.ts"
 import { createChangeBase, createChangeHeader } from "./header.ts"
 
-function world() {
+function world(options?: SchedulerOptions) {
 	const moments: Told[] = []
-	const s = createScheduler()
+	const s = createScheduler(options)
 	s.onTrackingEnd((key) => l.release(key))
 	trace(s, (m) => void moments.push(m))
 	const table = createTable((part, id) => l.onTableChange(part as Key, id))
@@ -503,8 +508,8 @@ Deno.test("places: nothing open: a write is unscoped and nothing changes; a read
 
 const settle = () => new Promise((done) => setTimeout(done, 0))
 
-Deno.test("places: after an await in a run nothing is open: a write throws unscoped, a read counts for nothing", async () => {
-	const { s, l, notes, hosted, edit, value } = world()
+Deno.test("places: without carry, after an await in a run nothing is open: a write throws unscoped, a read counts for nothing", async () => {
+	const { s, l, notes, hosted, edit, value } = world({ carry: false })
 	value("A", "one")
 	let runs = 0
 	const seen: unknown[] = []
@@ -531,6 +536,29 @@ Deno.test("places: after an await in a run nothing is open: a write throws unsco
 	hosted(() => edit("value", "A", [{ path: [], value: "two" }]))
 	s.pulse()
 	await settle()
+	assertEquals(runs, 2)
+})
+
+Deno.test("places: with carry, after an await a run is open while it waits: a write is the run's, a read is its own", async () => {
+	const { s, l, notes, hosted, edit, value } = world()
+	value("A", "one")
+	let runs = 0
+	let made: ChangeHeader | undefined
+	s.runWithScope(notes, () =>
+		s.createComputer(async () => {
+			runs++
+			await settle()
+			if (runs === 1) made = edit("value", "B", [{ path: [], value: 1 }]).change
+			l.readValue("value", "C")
+			return 0
+		}, () => {}))
+	s.pulse()
+	await settle()
+	assertEquals(made?.actor, "notes")
+	assertEquals(made?.frame.info.run, 1)
+	s.pulse()
+	hosted(() => edit("value", "C", [{ path: [], value: 1 }]))
+	s.pulse()
 	assertEquals(runs, 2)
 })
 

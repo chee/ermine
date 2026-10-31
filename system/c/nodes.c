@@ -1063,11 +1063,7 @@ static void wait_for(es_context *c, const char *const *path, size_t npath) {
 	const char *key = computer != NULL ? computer : c->node;
 	if (computer == NULL && !es_map_has(&x->setting, c->node)) return;
 	int has_n = computer != NULL;
-	// the number this run will have: its computer's latest record's, plus one (that record is read and
-	// tracked, as system/reading.ts' waitFor reads it)
-	const crn_run *latest = NULL;
-	if (has_n) es_latest_run(e, computer, &latest);
-	unsigned n = has_n ? (latest != NULL ? latest->n : 0) + 1 : 0;
+	unsigned n = has_n ? sc_run_n(run) : 0;
 	es_missing *m = es_map_get(&x->missing, key);
 	if (m == NULL) {
 		m = es_alloc(sizeof *m);

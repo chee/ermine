@@ -1,0 +1,191 @@
+{
+	"title": "a stream compute [chee 10-31: \"we could allow an async iterator computer no?\", \"yield means a new value, a stream\", \"for the open question: whatever solidjs2.0 does\"]: f gives an async iterable; the run ends pending, and each value it yields lands at a pulse as the run's result in turn (the same run: no new starts). The next value is pulled once the last is written, before effects act on it. When it is done nothing more is told",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": {
+				"actor": "test"
+			},
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "S",
+			"scope": "o",
+			"to": "S",
+			"f": {
+				"stream": [
+					{
+						"log": "first"
+					},
+					{
+						"yield": 1
+					},
+					{
+						"log": "second"
+					},
+					{
+						"yield": 2
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "effect",
+			"name": "E",
+			"scope": "o",
+			"f": {
+				"read": "S"
+			},
+			"act": {
+				"log": {
+					"given": "value"
+				}
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"key": "S",
+			"expect": {
+				"value": null
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"key": "S",
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"key": "S",
+			"expect": {
+				"value": 2
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					"first",
+					null,
+					"second",
+					1,
+					2
+				]
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "S",
+						"tick": 1
+					},
+					{
+						"due": "E",
+						"tick": 2
+					},
+					{
+						"starts": "S",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "S",
+						"run": 1,
+						"ended": "pending"
+					},
+					{
+						"starts": "E",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "E",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"acts": "E",
+						"run": 1
+					},
+					{
+						"due": "E",
+						"tick": 3,
+						"writer": "S"
+					},
+					{
+						"ends": "S",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "E",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "E",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"acts": "E",
+						"run": 2
+					},
+					{
+						"due": "E",
+						"tick": 4,
+						"writer": "S"
+					},
+					{
+						"ends": "S",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "E",
+						"run": 3,
+						"rank": 1
+					},
+					{
+						"ends": "E",
+						"run": 3,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"acts": "E",
+						"run": 3
+					}
+				]
+			}
+		}
+	]
+}

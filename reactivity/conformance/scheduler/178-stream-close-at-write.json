@@ -1,0 +1,81 @@
+{
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": {
+				"actor": "test"
+			},
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"a": 1
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "compute",
+			"name": "S",
+			"scope": "o",
+			"to": "S",
+			"f": {
+				"stream": [
+					{
+						"yield": {
+							"read": "a"
+						}
+					},
+					{
+						"yield": 2
+					},
+					{
+						"finally": {
+							"log": "closed"
+						}
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"a": 3
+			},
+			"expect": {
+				"tick": 4
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": []
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					"closed"
+				]
+			}
+		}
+	],
+	"title": "a stream is closed when its computer runs again, not when it is made due [chee 10-31: \"whatever solidjs2.0 does\"]"
+}
