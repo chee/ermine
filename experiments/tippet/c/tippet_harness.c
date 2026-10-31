@@ -284,6 +284,13 @@ static op_value *ids_in(const op_value *v) {
 			op_value *p = op_list();
 			op_push(p, i2), op_push(p, op_int(c)), op_push(g, p);
 		}
+		const op_value *before = op_get(x, "before");
+		if (before && before->type == OP_BOOL && before->bool_) op_push(a, op_bool(1));
+		else if (before) {
+			op_value *b = id_in(before);
+			if (!b) return op_free(a), op_free(out), NULL;
+			op_push(a, b);
+		}
 		op_push(out, a);
 	}
 	return out;
@@ -367,13 +374,13 @@ static void id_out(FILE *out, tp_in *in) {
 
 static void ids_out(FILE *out, const tp_step *s) {
 	tp_in in = {s->ids.p, s->ids.p + s->ids.n};
-	uint64_t k, g;
+	uint64_t k, g, items;
 	tp_array(&in, &k);
 	fputs(",\"ids\":[", out);
 	for (uint64_t i = 0; i < k; i++) {
 		if (i) fputc(',', out);
 		if (tp_null(&in)) { fputs("null", out); continue; }
-		tp_array(&in, &g);
+		tp_array(&in, &items);
 		fputs("{\"after\":", out);
 		if (tp_null(&in)) fputs("null", out);
 		else id_out(out, &in);
@@ -385,7 +392,10 @@ static void ids_out(FILE *out, const tp_step *s) {
 			fputs(j ? ",[" : "[", out), id_out(out, &in);
 			tp_whole(&in, &count), fprintf(out, ",%llu]", (unsigned long long)count);
 		}
-		fputs("]}", out);
+		fputc(']', out);
+		if (items == 3 && in.p < in.end && *in.p == 0xf5) in.p++, fputs(",\"before\":true", out);
+		else if (items == 3) fputs(",\"before\":", out), id_out(out, &in);
+		fputc('}', out);
 	}
 	fputc(']', out);
 }

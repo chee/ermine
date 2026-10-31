@@ -1,0 +1,245 @@
+{
+	"title": "a step whose before is left of its after doesn't apply, and takes nothing away: the element it names gone (d) stays, before a late step lands and after (the same at any rebase)",
+	"steps": [
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "device",
+			"name": "w",
+			"seed": "0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a",
+			"expect": {
+				"key": "43a72e714401762df66b68c26dfbdf2682aaec9f2474eca4613e424a0fbafd3c"
+			}
+		},
+		{
+			"op": "device",
+			"name": "v",
+			"seed": "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b",
+			"expect": {
+				"key": "66be7e332c7a453332bd9d0a7f7db055f5c5ef1a06ada66d98b39fb6810c473a"
+			}
+		},
+		{
+			"op": "device",
+			"name": "r",
+			"seed": "4040404040404040404040404040404040404040404040404040404040404040",
+			"expect": {
+				"key": "677a74d964e4a84ffa5025a8b5537b5c4a37ad6d146e854783ac734684a207c4"
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "t",
+			"patches": [
+				{
+					"path": [],
+					"value": "abcdefgh"
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "t",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						8,
+						8
+					],
+					"value": "!"
+				}
+			],
+			"expect": {
+				"n": 2,
+				"lamport": 2
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "r",
+			"of": "a",
+			"at": 1,
+			"expect": {
+				"added": 2
+			}
+		},
+		{
+			"op": "take",
+			"device": "r",
+			"run": {
+				"device": "w",
+				"sign": "w",
+				"steps": [
+					{
+						"n": 1,
+						"node": "t",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"range": [
+									0,
+									0
+								],
+								"value": "Z"
+							}
+						],
+						"lamport": 5,
+						"when": 0,
+						"on": [
+							[
+								"a",
+								1
+							]
+						],
+						"ids": [
+							{
+								"after": [
+									"a",
+									1,
+									7
+								],
+								"gone": [
+									[
+										[
+											"a",
+											1,
+											3
+										],
+										1
+									]
+								],
+								"before": [
+									"a",
+									1,
+									5
+								]
+							}
+						]
+					}
+				]
+			},
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "value",
+			"device": "r",
+			"node": "t",
+			"expect": {
+				"value": "abcdefgh!"
+			}
+		},
+		{
+			"op": "take",
+			"device": "r",
+			"run": {
+				"device": "v",
+				"sign": "v",
+				"steps": [
+					{
+						"n": 1,
+						"node": "t",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"range": [
+									5,
+									5
+								],
+								"value": "Y"
+							}
+						],
+						"lamport": 3,
+						"when": 0,
+						"on": [
+							[
+								"a",
+								1
+							]
+						],
+						"ids": [
+							{
+								"after": [
+									"a",
+									1,
+									4
+								],
+								"gone": [],
+								"before": [
+									"a",
+									1,
+									5
+								]
+							}
+						]
+					}
+				]
+			},
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "value",
+			"device": "r",
+			"node": "t",
+			"expect": {
+				"value": "abcdeYfgh!"
+			}
+		},
+		{
+			"op": "write",
+			"device": "r",
+			"node": "t",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						2,
+						2
+					],
+					"value": "Q"
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 6
+			}
+		},
+		{
+			"op": "value",
+			"device": "r",
+			"node": "t",
+			"expect": {
+				"value": "abQcdeYfgh!"
+			}
+		},
+		{
+			"op": "steps",
+			"device": "r",
+			"of": "r",
+			"expect": {
+				"steps": [
+					"8a5820677a74d964e4a84ffa5025a8b5537b5c4a37ad6d146e854783ac734684a207c401f661746576616c756581a36470617468806572616e67658202026576616c75656151061a68e778008382582043a72e714401762df66b68c26dfbdf2682aaec9f2474eca4613e424a0fbafd3c0182582066be7e332c7a453332bd9d0a7f7db055f5c5ef1a06ada66d98b39fb6810c473a018258208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c0281838358208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c0101808358208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c0102"
+				]
+			}
+		}
+	]
+}

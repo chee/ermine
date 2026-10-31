@@ -14,11 +14,14 @@
 # a failure prints a shrunk reproduction: seed, oracle, the abstract ops, and the protocol lines
 # sent (a conformance scenario's steps). a "+forget" oracle failed with a forgetting device in it.
 #   python3 experiments/tippet/conformance/fuzz.py SEEDS [--kinds=free,list,race,link,disk,jump]
-#     [--first=N] [--out=DIR] [--noshrink] [--cost] 'ts:0=deno run -A --quiet experiments/tippet/typescript/tippet_harness.ts'
+#     [--first=N] [--out=DIR] [--noshrink] [--cost] [--gaps] 'ts:0=deno run -A --quiet experiments/tippet/typescript/tippet_harness.ts'
 #     'c:2=experiments/tippet/c/tippet-harness' 'k:256=experiments/tippet/c/tippet-harness-check' …
 # each harness 'name:rebase=command'; run from the repository's root. a few dozen seeds a kind;
 # jump (a paste past 2^20 characters) is slow, so it runs few. --out DIR: each repro's protocol
-# lines as DIR/<kind>-<seed>-<oracle>.jsonl, whole.
+# lines as DIR/<kind>-<seed>-<oracle>.jsonl, whole. --gaps: a write to another node before some
+# keystrokes (a gap in lamports, so typing is cut into runs) and, in race, runs passed part way
+# between bursts, so they land late and are worked in again, and one typing on from the end of
+# another's burst taken part way (after an element in the middle of the other's run).
 import json, os, queue, random, re, subprocess, sys, tempfile, threading, time
 
 SAN = re.compile(r"AddressSanitizer|UndefinedBehaviorSanitizer|LeakSanitizer|runtime error:")
@@ -97,7 +100,7 @@ def short(x, n=300):
 
 # ---------------------------------------------------------------- scenarios
 
-def gen(seed, kind):
+def gen(seed, kind, gaps=False):
     r = random.Random(seed * 7919 + len(kind))
     n = r.choice([3, 3, 4, 5])
     devs = [{"name": NAMES[i], "rebase": r.choice([None, None, 0, 2, 256]), "forgets": False} for i in range(n)]
@@ -118,6 +121,8 @@ def gen(seed, kind):
         if mid:
             o["at"] = round(r.random(), 3)
         o.update(kw)
+        if gaps:
+            o["gaps"] = [i for i in range(o["len"]) if r.random() < 0.3]
         return o
 
     def listop():
@@ -173,7 +178,17 @@ def gen(seed, kind):
             at = r.choice(["end", round(r.random(), 3)])
             a, b = two()
             ln = r.choice([4, 6, 8])
-            ops += [burst(a, t="doc", mode=m, at=at, len=ln), burst(b, t="doc", mode=m, at=at, len=ln)]
+            if gaps and r.random() < 0.5:
+                # b takes a's burst part way and types on from its end while a goes on: b's goes
+                # after an element in the middle of a's run
+                ops += [burst(a, t="doc", mode="fwd", at="end", len=ln), {"o": "batch", "a": a, "b": b},
+                        burst(b, t="doc", mode="fwd", at="end", len=ln), burst(a, t="doc", mode="fwd", at="end", len=ln)]
+            else:
+                ops += [burst(a, t="doc", mode=m, at=at, len=ln), burst(b, t="doc", mode=m, at=at, len=ln)]
+            if gaps:
+                for _ in range(r.randrange(0, 3)):
+                    x, y = two()
+                    ops.insert(r.randrange(len(ops) - 1, len(ops) + 1), {"o": "pass", "a": x, "b": y, "of": r.choice([q for q in names if q not in (a, b)] or names), "u": round(r.random(), 3), "dup": False})
             if len(names) > 3 and r.random() < 0.5:
                 ops.append(burst(r.choice([x for x in names if x not in (a, b)]), t="doc", mode=m, at=at, len=ln))
             ops.append({"o": "batch", "a": a, "b": b})
@@ -292,6 +307,8 @@ class Sim:
                 mode = o["mode"]
                 mine = ""
                 for i in range(o["len"]):
+                    if i in o.get("gaps", ()):
+                        self.write(d, "gap", [{"path": [], "value": i}])
                     ch = self.tag(owner)
                     mine += ch
                     p = 0 if mode == "pre" else at if mode == "back" else at + i
@@ -796,7 +813,7 @@ def main():
     found, mixed, shown, seen, t0 = {}, {}, {}, {}, time.time()
     for kind in kinds:
         for seed in range(first, first + (min(seeds, 2) if kind == "jump" else seeds)):
-            scn = gen(seed, kind)
+            scn = gen(seed, kind, "--gaps" in opt)
             sim = Sim(scn, specs).run()
             for _, _, mode, was in sim.notes:
                 m = mixed.setdefault(mode, [0, 0])
