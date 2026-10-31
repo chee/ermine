@@ -1,0 +1,87 @@
+{
+	"title": "onError(error, fn, next): middleware around each error ermine throws through its own functions, given the function's name; what next gives is what is thrown. a logs and passes on, b throws another (gone) in its place, and that is what the program catches",
+	"steps": [
+		{
+			"op": "ermine",
+			"features": [
+				{
+					"name": "a",
+					"onError": "log"
+				},
+				{
+					"name": "b",
+					"onError": "replace"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"createMemo",
+						"x",
+						{},
+						1
+					]
+				},
+				{
+					"do": [
+						"caught",
+						"caught",
+						[
+							{
+								"do": [
+									"createMemo",
+									"x",
+									{},
+									1
+								]
+							}
+						]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "log",
+			"name": "hooks",
+			"expect": {
+				"values": [
+					[
+						"a",
+						"onError",
+						"createMemo",
+						"already-there"
+					],
+					[
+						"b",
+						"onError",
+						"createMemo",
+						"already-there"
+					]
+				]
+			}
+		},
+		{
+			"op": "log",
+			"name": "caught",
+			"expect": {
+				"values": [
+					"gone"
+				]
+			}
+		}
+	]
+}

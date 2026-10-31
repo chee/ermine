@@ -1,7 +1,7 @@
 // The ermine harness's test features.
 import { Refusal } from "@ermine/processes/guard"
 import { no } from "@ermine/protect"
-import type { Feature, Hook, ProcessContext } from "./ermine.ts"
+import { ErmineError, type Feature, type Hook, type ProcessContext } from "./ermine.ts"
 
 export function testFeature(
 	spec: Record<string, unknown>,
@@ -9,9 +9,10 @@ export function testFeature(
 		log: (name: string, v: unknown) => void
 		slots: Map<string, (o: ProcessContext | undefined) => unknown>
 		late: Map<string, () => void>
+		later: (pulse: () => void) => void
 	},
 ): Feature {
-	const { log, slots, late } = o
+	const { log, slots, late, later } = o
 	const name = spec.name as string
 	const say = (hook: Hook, ...more: unknown[]) => log("hooks", [name, hook, ...more])
 	const boom = () => {
@@ -90,6 +91,41 @@ export function testFeature(
 					if (how === "drop") return st
 					const out = next(x, st)
 					return how === "add" && out !== undefined ? { ...out, [name]: true } : out
+				})
+			}
+			if (spec.onId) {
+				f.onId((kind, next) => {
+					say("onId", kind)
+					if (spec.onId === "throw") boom()
+					if (spec.onId === "throw-process" && kind === "process") boom()
+					const id = next(kind)
+					return spec.onId === "wrap" ? `${name}-${id}` : id
+				})
+			}
+			if (spec.onSchedule) {
+				f.onSchedule((pulse, next) => {
+					say("onSchedule")
+					if (spec.onSchedule === "throw") boom()
+					if (spec.onSchedule === "later") return later(pulse)
+					next(pulse)
+				})
+			}
+			if (spec.onCreateFunction) {
+				f.onCreateFunction((made, next) => {
+					say("onCreateFunction", made.kind, made.id)
+					if (spec.onCreateFunction === "throw") boom()
+					if (spec.onCreateFunction === "drop") return
+					next(made)
+				})
+			}
+			if (spec.onError) {
+				f.onError((error, fn, next) => {
+					say("onError", fn, (error as { code?: string }).code ?? "error")
+					if (spec.onError === "throw") boom()
+					if (spec.onError === "replace") {
+						return new ErmineError("gone", `${name} replaced it`)
+					}
+					return next(error, fn)
 				})
 			}
 			if (spec.onRecord) {

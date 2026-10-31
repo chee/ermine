@@ -132,6 +132,11 @@ void pl_stop(pl_watch *w);
 const op_value *pl_at(const op_value *v, const op_key *path, size_t n, op_value *scratch);
 // Borrowed until the node changes (a typed array element: until the next pl_read).
 const op_value *pl_read(pl *l, tb_key part, tb_key id, const op_key *path, size_t n);
+// What the delete patch { path, range: [a, b] } would take out: a string, list or typed array of
+// its own (a list shares its items), in *out for the caller to op_free. Tracked as pl_read is. It
+// fails as that patch does: an OP_ code, *out NULL.
+int pl_read_range(pl *l, tb_key part, tb_key id, const op_key *path, size_t n, int64_t a, int64_t b,
+	op_value **out);
 const op_value *pl_read_here(pl *l, tb_key part, tb_key id, const op_key *path, size_t n);
 const op_value *pl_a_map(void);
 const ch_header *pl_change(pl *l, tb_key part, tb_key id);

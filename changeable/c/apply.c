@@ -321,6 +321,9 @@ static int span_bytes(const op_value *s, int64_t a, int64_t b, size_t *x, size_t
 	*y = seek(s, b, a, *x);
 	return 1;
 }
+int op_string_span(const op_value *s, int64_t a, int64_t b, size_t *x, size_t *y) {
+	return span_bytes(s, a, b, x, y);
+}
 // Rests the finger just after a splice's text, or at the start when a join moved what is before it.
 static void point(op_value *s, size_t joins, int64_t code, size_t byte) {
 	int fits = joins == 0 && s->bytes <= UINT32_MAX;

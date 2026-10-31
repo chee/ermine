@@ -36,10 +36,12 @@
 // A call that gave a promise logs how it settled to "promised".
 //
 // A test feature: { name, needs?, onTable?, onRead?, onWrite?, onTeardown?, onRecord?, onStatus?,
-// slot?, early?, late? }. Each hook logs [name, hook, ...] to "hooks", then does what its value says:
+// onId?, onSchedule?, onCreateFunction?, onError?, slot?, early?, late? }. Each hook logs [name, hook, ...] to "hooks", then does what its value says:
 // "log" calls next, "drop" does not, "throw" throws "<name> threw", onWrite "refuse" throws a
 // Refusal, onRead "add" adds an item, onWrite "copy" passes a copy, onTeardown "why" prefixes why
-// with "<name>:", onStatus "add" adds the field <name>. Limits: only "host", ids, parts, takes,
+// with "<name>:", onStatus "add" adds the field <name>. onId "wrap" prefixes the
+// id with "<name>-", "throw-process" throws for a process's id only; onSchedule "later" runs the pulse itself after the request; onCreateFunction
+// "drop" does not pass it on; onError "replace" throws a "gone" error instead. Limits: only "host", ids, parts, takes,
 // times: n.
 //
 // program: steps { do: [fn, ...args], as? }; "$x" in an arg is the name x. fn is a @ermine/system
@@ -74,6 +76,7 @@ import { no, pending, type Policy, yes } from "@ermine/protect"
 import { PENDING } from "@ermine/reactivity"
 import type { Id, Key } from "@ermine/graph/table"
 import { type Request, serve } from "../../conformance/typescript/harness.ts"
+import { fromJson, toJson } from "../../conformance/typescript/form.ts"
 import {
 	type Call,
 	createErmine,
@@ -158,7 +161,12 @@ function make(o: Request = {}): Made {
 			? named.get(f) ?? (() => {
 				throw new Error(`no feature ${f}`)
 			})()
-			: testFeature(f as Record<string, unknown>, { log, slots, late })
+			: testFeature(f as Record<string, unknown>, {
+				log,
+				slots,
+				late,
+				later: (pulse) => void later.push(pulse),
+			})
 	)
 	if (o.calls === "never") features.push(noCalls)
 	const made: Made = {
@@ -238,7 +246,7 @@ const inline: Feature = {
 function arg(env: Env, a: unknown): unknown {
 	if (typeof a === "string" && a.startsWith("$")) return env.get(a.slice(1))
 	if (Array.isArray(a)) return a.map((x) => arg(env, x))
-	if (isHandle(a)) return a
+	if (isHandle(a) || ArrayBuffer.isView(a)) return a
 	if (a !== null && typeof a === "object") {
 		return Object.fromEntries(Object.entries(a).map(([k, v]) => [k, arg(env, v)]))
 	}
@@ -489,6 +497,29 @@ const imported: Sys = {
 const hostSystem = (e: Ermine): Sys => opened(e.within)
 
 // The host's steps mint handles for nodes, as the host may.
+// Bytes and typed arrays written as {"/": {bytes | int8 | ...: ...}} become themselves.
+const kinds = [
+	"bytes",
+	"int8",
+	"int16",
+	"uint16",
+	"int32",
+	"uint32",
+	"int64",
+	"uint64",
+	"float32",
+	"float64",
+]
+function typed(x: unknown): unknown {
+	if (Array.isArray(x)) return x.map(typed)
+	if (x === null || typeof x !== "object") return x
+	const form = (x as Record<string, unknown>)["/"]
+	if (form !== null && typeof form === "object" && Object.keys(x).length === 1) {
+		const k = Object.keys(form)
+		if (k.length === 1 && kinds.includes(k[0])) return fromJson(x)
+	}
+	return Object.fromEntries(Object.entries(x).map(([k, v]) => [k, typed(v)]))
+}
 function minted(e: Ermine, x: unknown): unknown {
 	if (Array.isArray(x)) return x.map((y) => minted(e, y))
 	if (x === null || typeof x !== "object") return x
@@ -566,6 +597,7 @@ function plain(v: unknown): unknown {
 	if (typeof v === "symbol") return String(v.description ?? v.toString())
 	if (typeof v === "function") return "function"
 	if (v instanceof Error) return message(v)
+	if (ArrayBuffer.isView(v)) return toJson(v)
 	if (Array.isArray(v)) return v.map(plain)
 	if (v !== null && typeof v === "object") {
 		return Object.fromEntries(
@@ -761,7 +793,7 @@ async function answer(r: Request): Promise<Record<string, unknown>> {
 			}
 		}
 		case "host": {
-			const v = call(m.hostSys, m.host, minted(e, r.call) as [string, ...unknown[]])
+			const v = call(m.hostSys, m.host, minted(e, typed(r.call)) as [string, ...unknown[]])
 			watched(v)
 			if (r.as !== undefined) m.host.set(r.as, v)
 			return v === undefined ? {} : { value: plain(v) }

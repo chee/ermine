@@ -1,0 +1,106 @@
+{
+	"title": "onId(kind, next): middleware around each new id, kind \"node\" or \"process\"; the hook may give its own. the first feature is outermost, so a wraps what b gives; the base's id is last. a start's id goes through it as kind \"process\"",
+	"steps": [
+		{
+			"op": "ermine",
+			"features": [
+				{
+					"name": "a",
+					"onId": "wrap"
+				},
+				{
+					"name": "b",
+					"onId": "log"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "node",
+			"expect": {
+				"id": "a-n1",
+				"attributes": {
+					"ermine.host.args": [],
+					"ermine.features": [
+						{
+							"name": "a",
+							"needs": [],
+							"hooks": [
+								"onId"
+							]
+						},
+						{
+							"name": "b",
+							"needs": [],
+							"hooks": [
+								"onId"
+							]
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "a-proc:p"
+			}
+		},
+		{
+			"op": "log",
+			"name": "hooks",
+			"expect": {
+				"values": [
+					[
+						"a",
+						"onId",
+						"node"
+					],
+					[
+						"b",
+						"onId",
+						"node"
+					],
+					[
+						"a",
+						"onId",
+						"node"
+					],
+					[
+						"b",
+						"onId",
+						"node"
+					],
+					[
+						"a",
+						"onId",
+						"node"
+					],
+					[
+						"b",
+						"onId",
+						"node"
+					],
+					[
+						"a",
+						"onId",
+						"process"
+					],
+					[
+						"b",
+						"onId",
+						"process"
+					]
+				]
+			}
+		}
+	]
+}

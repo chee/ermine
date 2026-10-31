@@ -717,7 +717,7 @@ static int explain_node(es_context *c, const es_node_data *n, const op_key *key,
 	return 0;
 }
 
-int es_explain(es_context *c, es_target x, const op_key *key, size_t nkey, es_explained **out) {
+static int explain_body(es_context *c, es_target x, const op_key *key, size_t nkey, es_explained **out) {
 	*out = NULL;
 	int code = es_alive(c->ermine);
 	if (code) return code;
@@ -727,6 +727,9 @@ int es_explain(es_context *c, es_target x, const op_key *key, size_t nkey, es_ex
 	code = explain_node(c, &n, key, nkey, out);
 	es_node_data_free(&n);
 	return code;
+}
+int es_explain(es_context *c, es_target x, const op_key *key, size_t nkey, es_explained **out) {
+	return ES_GO(c->ermine, "explain", explain_body(c, x, key, nkey, out));
 }
 
 static int explain_part(es_context *c, es_target x, const char *part, es_explained **out) {
@@ -743,12 +746,18 @@ static int explain_part(es_context *c, es_target x, const char *part, es_explain
 	return code;
 }
 
-int es_explain_attributes(es_context *c, es_target x, es_explained **out) {
+static int explain_attributes_body(es_context *c, es_target x, es_explained **out) {
 	return explain_part(c, x, "attributes", out);
 }
+int es_explain_attributes(es_context *c, es_target x, es_explained **out) {
+	return ES_GO(c->ermine, "explainAttributes", explain_attributes_body(c, x, out));
+}
 
-int es_explain_children(es_context *c, es_target x, es_explained **out) {
+static int explain_children_body(es_context *c, es_target x, es_explained **out) {
 	return explain_part(c, x, "children", out);
+}
+int es_explain_children(es_context *c, es_target x, es_explained **out) {
+	return ES_GO(c->ermine, "explainChildren", explain_children_body(c, x, out));
 }
 
 int es_explain_view(es_context *c, const es_change_view *v, es_explained **out) {
@@ -1605,22 +1614,21 @@ static int create_action(es_context *c, es_at p, es_action fn, void *ctx, es_han
 		free(sc_register_teardown(e->scheduler, own, placed_gone, k));
 	}
 	es_node_data n = {1, path.names, path.n, NULL, (char *)"value"};
-	if (e->on_create_function != NULL) {
-		es_created made = {"action", NULL, &n, m.id, c->node};
-		e->on_create_function(e->on_create_function_ctx, &made);
-	}
-	es_queue_pulse(e);
+	es_created made = {"action", NULL, &n, m.id, c->node};
+	code = es_hook_create_function(e, &made);
+	int pulse = es_queue_pulse(e);
+	if (code == 0) code = pulse;
 	if (out != NULL) *out = es_handle_make(c, &n);
 	free(m.id);
 	es_names_free(&path);
-	return 0;
+	return code;
 }
 
 int es_create_action_at(es_context *c, es_at p, es_action fn, void *ctx, es_handle **out,
 	const ch_location *site) {
 	if (out != NULL) *out = NULL;
 	const ch_location *was = es_enter(c->ermine, site);
-	int code = create_action(c, p, fn, ctx, out);
+	int code = ES_GO(c->ermine, "createAction", create_action(c, p, fn, ctx, out));
 	es_enter(c->ermine, was);
 	return code;
 }
@@ -1813,7 +1821,7 @@ int es_execute_action_at(es_context *c, es_target x, const op_value *const *args
 	op_value **out, const ch_location *site) {
 	*out = NULL;
 	const ch_location *was = es_enter(c->ermine, site);
-	int code = execute_action(c, x, args, nargs, out, site);
+	int code = ES_GO(c->ermine, "executeAction", execute_action(c, x, args, nargs, out, site));
 	es_enter(c->ermine, was);
 	return code;
 }
@@ -1823,7 +1831,7 @@ static const op_value *frame_value_of(const ch_frame *o, const char *key, op_typ
 	return v != NULL && v->type == type ? v : NULL;
 }
 
-int es_get_caller(es_context *c, es_caller *out) {
+static int get_caller_body(es_context *c, es_caller *out) {
 	es_ermine *e = c->ermine;
 	*out = (es_caller){0};
 	for (ch_frame *o = es_open_frame(c); o != NULL; o = o->parent) {
@@ -1837,6 +1845,9 @@ int es_get_caller(es_context *c, es_caller *out) {
 		return 1;
 	}
 	return 0;
+}
+int es_get_caller(es_context *c, es_caller *out) {
+	return ES_GO(c->ermine, "getCaller", get_caller_body(c, out));
 }
 
 int es_caller_place(void *ctx, const char *const **from, size_t *nfrom) {
@@ -1906,7 +1917,7 @@ static int teardown_on(es_context *c, sc_scope *own, es_teardown fn, void *ctx) 
 	return code;
 }
 
-int es_add_teardown(es_context *c, es_teardown fn, void *ctx) {
+static int add_teardown_run(es_context *c, es_teardown fn, void *ctx) {
 	es_ermine *e = c->ermine;
 	int code = es_alive(e);
 	if (code) return code;
@@ -1923,7 +1934,7 @@ int es_add_teardown(es_context *c, es_teardown fn, void *ctx) {
 	return teardown_on(c, own, fn, ctx);
 }
 
-int es_cleanup(es_context *c, es_teardown fn, void *ctx) {
+static int cleanup_run(es_context *c, es_teardown fn, void *ctx) {
 	es_ermine *e = c->ermine;
 	int code = es_alive(e);
 	if (code) return code;
@@ -1956,7 +1967,7 @@ static char *writer_gone(void *data) {
 
 static const char *const MARK_KEYS[3] = {"caller", "handler", "call"};
 
-int es_create_writer(es_context *c, op_value **writer) {
+static int create_writer_run(es_context *c, op_value **writer) {
 	es_ermine *e = c->ermine;
 	struct es_actions *x = e->actions;
 	*writer = NULL;
@@ -2089,4 +2100,14 @@ int es_with_writer(es_ermine *e, const op_value *writer, es_thunk f, void *ctx) 
 	hframe_drop(under);
 	if (bad != NULL) return es_fail_text(bad);
 	return l.code;
+}
+
+int es_add_teardown(es_context *c, es_teardown fn, void *ctx) {
+	return ES_GO(c->ermine, "addTeardown", add_teardown_run(c, fn, ctx));
+}
+int es_cleanup(es_context *c, es_teardown fn, void *ctx) {
+	return ES_GO(c->ermine, "cleanup", cleanup_run(c, fn, ctx));
+}
+int es_create_writer(es_context *c, op_value **writer) {
+	return ES_GO(c->ermine, "createWriter", create_writer_run(c, writer));
 }

@@ -807,10 +807,11 @@ int es_build(es_context *c, const char *const *path, size_t npath, const op_valu
 	const char *given, char **out) {
 	es_ermine *e = c->ermine;
 	*out = NULL;
-	char *id = given != NULL ? es_dup(given) : es_new_id(e);
-	if (npath == 0) return free(id), places_fail(ES_ALREADY_THERE, "/");
+	if (npath == 0) return places_fail(ES_ALREADY_THERE, "/");
+	char *id = NULL;
+	int code = given != NULL ? (id = es_dup(given), 0) : es_make_id(e, "node", &id);
+	if (code) return code;
 	char *parent = es_dup(pl_root(c->places).string);
-	int code = 0;
 	for (size_t i = 0; i + 1 < npath && !code; i++) {
 		const char *there;
 		code = get_id(c, path, i + 1, &there);
@@ -820,7 +821,9 @@ int es_build(es_context *c, const char *const *path, size_t npath, const op_valu
 			parent = es_dup(there);
 			continue;
 		}
-		char *folder = es_new_id(e);
+		char *folder;
+		code = es_make_id(e, "node", &folder);
+		if (code) break;
 		code = es_place_under(c, parent, path[i], folder, path, i + 1);
 		free(parent);
 		parent = folder;
@@ -922,12 +925,15 @@ int es_seen_in(es_ermine *e, es_context *reader, const char *id, es_names *out) 
 
 // getNode, ensureNode, createNode, ref ----------
 
-int es_get_node(es_context *c, es_at p, es_handle **out) {
+static int get_node_body(es_context *c, es_at p, es_handle **out) {
 	es_names path;
 	TRY(es_resolve(c, p, &path));
 	*out = handle_at(c, &path, "value");
 	es_names_free(&path);
 	return 0;
+}
+int es_get_node(es_context *c, es_at p, es_handle **out) {
+	return ES_GO(c->ermine, "getNode", get_node_body(c, p, out));
 }
 
 typedef struct {
@@ -964,14 +970,22 @@ static int ensuring_at(es_context *c, es_at p, const op_value *value, es_make ma
 	return 0;
 }
 
-int es_ensure_node_at(es_context *c, es_at p, const op_value *value, es_handle **out,
+static int ensure_node_at_body(es_context *c, es_at p, const op_value *value, es_handle **out,
 	const ch_location *site) {
 	return ensuring_at(c, p, value, NULL, NULL, out, site);
 }
+int es_ensure_node_at(es_context *c, es_at p, const op_value *value, es_handle **out,
+	const ch_location *site) {
+	return ES_GO(c->ermine, "ensureNode", ensure_node_at_body(c, p, value, out, site));
+}
 
-int es_ref_at(es_context *c, es_at p, es_make make, void *ctx, es_handle **out,
+static int ref_at_body(es_context *c, es_at p, es_make make, void *ctx, es_handle **out,
 	const ch_location *site) {
 	return ensuring_at(c, p, NULL, make, ctx, out, site);
+}
+int es_ref_at(es_context *c, es_at p, es_make make, void *ctx, es_handle **out,
+	const ch_location *site) {
+	return ES_GO(c->ermine, "ref", ref_at_body(c, p, make, ctx, out, site));
 }
 
 typedef struct {
@@ -989,15 +1003,18 @@ static int create_in(void *p) {
 }
 // a new node under folder, named by a fresh name of its own: drawn as an id is, but never its id
 // (a name is what list gives, and a process holds no ids)
-int es_create_node_at(es_context *c, es_at folder, const op_value *value, es_handle **out,
+static int create_node_at_body(es_context *c, es_at folder, const op_value *value, es_handle **out,
 	const ch_location *site) {
 	es_ermine *e = c->ermine;
 	if (out != NULL) *out = NULL;
-	char *id = es_new_id(e);
+	char *id, *name;
+	int code = es_make_id(e, "node", &id);
+	if (code) return code;
 	creating s = {.c = c, .value = value, .id = id};
-	int code = es_resolve(c, folder, &s.path);
+	code = es_resolve(c, folder, &s.path);
 	if (code) return free(id), code;
-	char *name = es_new_id(e);
+	code = es_make_id(e, "node", &name);
+	if (code) return free(id), es_names_free(&s.path), code;
 	names_add(&s.path, name);
 	free(name);
 	code = in_pulse(c, create_in, &s, site);
@@ -1006,6 +1023,10 @@ int es_create_node_at(es_context *c, es_at folder, const op_value *value, es_han
 	if (out != NULL) *out = handle_at(c, &s.path, "value");
 	es_names_free(&s.path);
 	return 0;
+}
+int es_create_node_at(es_context *c, es_at folder, const op_value *value, es_handle **out,
+	const ch_location *site) {
+	return ES_GO(c->ermine, "createNode", create_node_at_body(c, folder, value, out, site));
 }
 
 // reads ----------
@@ -1094,10 +1115,12 @@ void es_setting(es_ermine *e, const char *process, int running) {
 	}
 }
 
+// range: NULL reads the value at key; else { a, b } reads that span of it into *owned (a copy).
 static int read_part(es_context *c, es_target x, const char *part, const op_key *key, size_t nkey,
-	const op_value **out) {
+	const int64_t *range, const op_value **out, op_value **owned) {
 	es_ermine *e = c->ermine;
 	*out = NULL;
+	if (owned != NULL) *owned = NULL;
 	es_node_data n;
 	TRY(node_part(c, x, part, &n));
 	const char *id;
@@ -1118,25 +1141,62 @@ static int read_part(es_context *c, es_target x, const char *part, const op_key 
 	}
 	if (!code && c->peeping == 0) es_calls_read(e, n.part, id, key, nkey, 1, 0);
 	if (!code) {
-		const op_value *v = pl_read(c->places, tb_string(n.part), tb_string(id), key, nkey);
+		const op_value *v = NULL;
+		int failed = 0;
+		if (range == NULL) v = pl_read(c->places, tb_string(n.part), tb_string(id), key, nkey);
+		else {
+			failed = pl_read_range(c->places, tb_string(n.part), tb_string(id), key, nkey, range[0],
+				range[1], owned);
+			v = *owned;
+		}
 		int pending = 0;
 		if (strcmp(n.part, "value") == 0 && es_is_memo(e, id)) {
-			pending = v == NULL && cst_pending(c->places, tb_string(id));
+			pending = v == NULL && !failed &&
+				cst_pending(c->places, tb_string(id));
 		}
 		code = check(c);
 		if (!code && pending) code = es_fail(ES_PENDING, "%s", "");
+		if (!code && failed) code = es_fail(ES_FAILED, "%s", op_code_name(failed));
 		if (!code) *out = v;
+		else if (owned != NULL) op_free(*owned), *owned = NULL;
 	}
 	es_node_data_free(&n);
 	return code;
 }
 
+static int read_body(es_context *c, es_target x, const op_key *key, size_t nkey, const op_value **out) {
+	return read_part(c, x, NULL, key, nkey, NULL, out, NULL);
+}
 int es_read(es_context *c, es_target x, const op_key *key, size_t nkey, const op_value **out) {
-	return read_part(c, x, NULL, key, nkey, out);
+	return ES_GO(c->ermine, "read", read_body(c, x, key, nkey, out));
+}
+static int read_attributes_body(es_context *c, es_target x, const op_key *key, size_t nkey,
+	const op_value **out) {
+	return read_part(c, x, "attributes", key, nkey, NULL, out, NULL);
 }
 int es_read_attributes(es_context *c, es_target x, const op_key *key, size_t nkey,
 	const op_value **out) {
-	return read_part(c, x, "attributes", key, nkey, out);
+	return ES_GO(c->ermine, "readAttributes", read_attributes_body(c, x, key, nkey, out));
+}
+static int read_range_body(es_context *c, es_target x, const op_key *key, size_t nkey, int64_t a, int64_t b,
+	op_value **out) {
+	const int64_t range[2] = {a, b};
+	const op_value *v;
+	return read_part(c, x, NULL, key, nkey, range, &v, out);
+}
+int es_read_range(es_context *c, es_target x, const op_key *key, size_t nkey, int64_t a, int64_t b,
+	op_value **out) {
+	return ES_GO(c->ermine, "read", read_range_body(c, x, key, nkey, a, b, out));
+}
+static int read_attributes_range_body(es_context *c, es_target x, const op_key *key, size_t nkey, int64_t a,
+	int64_t b, op_value **out) {
+	const int64_t range[2] = {a, b};
+	const op_value *v;
+	return read_part(c, x, "attributes", key, nkey, range, &v, out);
+}
+int es_read_attributes_range(es_context *c, es_target x, const op_key *key, size_t nkey, int64_t a,
+	int64_t b, op_value **out) {
+	return ES_GO(c->ermine, "readAttributes", read_attributes_range_body(c, x, key, nkey, a, b, out));
 }
 
 void es_versions_free(es_versions *v) {
@@ -1155,7 +1215,7 @@ static int versions_part(es_context *c, es_target x, const char *part, const op_
 	es_node_data n;
 	TRY(node_part(c, x, part, &n));
 	const op_value *shown;
-	int code = read_part(c, x, part, key, nkey, &shown);
+	int code = read_part(c, x, part, key, nkey, NULL, &shown, NULL);
 	const char *id = NULL;
 	if (!code && !es_id_of(c, &n, &id)) {
 		es_node_data_free(&n);
@@ -1209,17 +1269,27 @@ static int handles_for(es_context *t, es_versions *v) {
 	return 0;
 }
 
-int es_read_all(es_context *c, es_target x, const op_key *key, size_t nkey, es_versions *out) {
+static int read_all_body(es_context *c, es_target x, const op_key *key, size_t nkey, es_versions *out) {
 	return versions_part(c, x, NULL, key, nkey, out);
 }
-int es_read_all_attributes(es_context *c, es_target x, const op_key *key, size_t nkey,
+int es_read_all(es_context *c, es_target x, const op_key *key, size_t nkey, es_versions *out) {
+	return ES_GO(c->ermine, "readAll", read_all_body(c, x, key, nkey, out));
+}
+static int read_all_attributes_body(es_context *c, es_target x, const op_key *key, size_t nkey,
 	es_versions *out) {
 	return versions_part(c, x, "attributes", key, nkey, out);
 }
-int es_read_all_children(es_context *c, es_target x, es_versions *out) {
+int es_read_all_attributes(es_context *c, es_target x, const op_key *key, size_t nkey,
+	es_versions *out) {
+	return ES_GO(c->ermine, "readAllAttributes", read_all_attributes_body(c, x, key, nkey, out));
+}
+static int read_all_children_body(es_context *c, es_target x, es_versions *out) {
 	TRY(versions_part(c, x, "children", NULL, 0, out));
 	handles_for(c, out);
 	return 0;
+}
+int es_read_all_children(es_context *c, es_target x, es_versions *out) {
+	return ES_GO(c->ermine, "readAllChildren", read_all_children_body(c, x, out));
 }
 
 void es_items_free(es_items *i) {
@@ -1233,7 +1303,7 @@ static void items_push(es_items *l, const op_value *value, const char *from, es_
 	l->items[l->n++] = (es_item){.value = value, .from = from, .node = node, .refused = no};
 }
 
-int es_read_entries(es_context *c, es_target x, es_items *out) {
+static int read_entries_body(es_context *c, es_target x, es_items *out) {
 	es_ermine *e = c->ermine;
 	*out = (es_items){0};
 	es_node_data n;
@@ -1309,11 +1379,14 @@ int es_read_entries(es_context *c, es_target x, es_items *out) {
 	if (code) es_items_free(out);
 	return code;
 }
+int es_read_entries(es_context *c, es_target x, es_items *out) {
+	return ES_GO(c->ermine, "readEntries", read_entries_body(c, x, out));
+}
 
-int es_has_node(es_context *c, es_target x, int *out) {
+static int has_node_body(es_context *c, es_target x, int *out) {
 	es_items items;
 	*out = 0;
-	TRY(es_read_entries(c, x, &items));
+	TRY(read_entries_body(c, x, &items));
 	for (size_t i = 0; i < items.n; i++) {
 		if (!items.items[i].refused) {
 			*out = 1;
@@ -1322,6 +1395,9 @@ int es_has_node(es_context *c, es_target x, int *out) {
 	}
 	es_items_free(&items);
 	return 0;
+}
+int es_has_node(es_context *c, es_target x, int *out) {
+	return ES_GO(c->ermine, "hasNode", has_node_body(c, x, out));
 }
 
 typedef struct {
@@ -1334,12 +1410,15 @@ static void peep_run(void *p) {
 	s->code = s->f(s->ctx);
 	if (s->code == ES_PENDING) s->code = 0;
 }
-int es_peep(es_context *c, es_thunk f, void *ctx) {
+static int peep_body(es_context *c, es_thunk f, void *ctx) {
 	peeping s = {f, ctx, 0};
 	c->peeping++;
 	pl_peep(c->places, peep_run, &s);
 	c->peeping--;
 	return s.code;
+}
+int es_peep(es_context *c, es_thunk f, void *ctx) {
+	return ES_GO(c->ermine, "peep", peep_body(c, f, ctx));
 }
 
 void es_children_free(es_children *c) {
@@ -1349,7 +1428,7 @@ void es_children_free(es_children *c) {
 	*c = (es_children){0};
 }
 
-int es_list(es_context *c, es_target x, es_names *out) {
+static int list_body(es_context *c, es_target x, es_names *out) {
 	es_ermine *e = c->ermine;
 	*out = (es_names){0};
 	es_node_data n;
@@ -1379,15 +1458,18 @@ int es_list(es_context *c, es_target x, es_names *out) {
 	*out = got;
 	return 0;
 }
+int es_list(es_context *c, es_target x, es_names *out) {
+	return ES_GO(c->ermine, "list", list_body(c, x, out));
+}
 
-int es_read_children(es_context *c, es_target x, es_children *out) {
+static int read_children_body(es_context *c, es_target x, es_children *out) {
 	*out = (es_children){0};
 	es_node_data n;
 	TRY(es_node_of(c, x, &n));
 	const char *id;
 	es_id_of(c, &n, &id);
 	es_names names;
-	int code = es_list(c, x, &names);
+	int code = list_body(c, x, &names);
 	if (code) return es_node_data_free(&n), code;
 	const op_value *kids = id != NULL
 		? pl_read(c->places, tb_string("children"), tb_string(id), NULL, 0) : NULL;
@@ -1413,6 +1495,9 @@ int es_read_children(es_context *c, es_target x, es_children *out) {
 	if (!code) code = check(c);
 	if (code) es_children_free(out);
 	return code;
+}
+int es_read_children(es_context *c, es_target x, es_children *out) {
+	return ES_GO(c->ermine, "readChildren", read_children_body(c, x, out));
 }
 
 const char *const *es_get_args(es_context *c, size_t *n) {
@@ -1450,13 +1535,21 @@ static int patch_part(es_context *c, es_target x, const char *part, const op_pat
 	return in_pulse(c, patch_in, &s, site);
 }
 
-int es_patch_at(es_context *c, es_target x, const op_patch *patches, size_t n,
+static int patch_at_body(es_context *c, es_target x, const op_patch *patches, size_t n,
 	const ch_location *site) {
 	return patch_part(c, x, NULL, patches, n, site);
 }
-int es_patch_attributes_at(es_context *c, es_target x, const op_patch *patches, size_t n,
+int es_patch_at(es_context *c, es_target x, const op_patch *patches, size_t n,
+	const ch_location *site) {
+	return ES_GO(c->ermine, "patch", patch_at_body(c, x, patches, n, site));
+}
+static int patch_attributes_at_body(es_context *c, es_target x, const op_patch *patches, size_t n,
 	const ch_location *site) {
 	return patch_part(c, x, "attributes", patches, n, site);
+}
+int es_patch_attributes_at(es_context *c, es_target x, const op_patch *patches, size_t n,
+	const ch_location *site) {
+	return ES_GO(c->ermine, "patchAttributes", patch_attributes_at_body(c, x, patches, n, site));
 }
 
 // patchChildren ----------
@@ -1508,9 +1601,12 @@ static int place_in(void *v) {
 	es_names_free(&path);
 	return code;
 }
-int es_place_at(es_context *c, es_at p, es_target x, const ch_location *site) {
+static int place_at_body(es_context *c, es_at p, es_target x, const ch_location *site) {
 	tree s = {.c = c, .p = p, .x = x};
 	return in_pulse(c, place_in, &s, site);
+}
+int es_place_at(es_context *c, es_at p, es_target x, const ch_location *site) {
+	return ES_GO(c->ermine, "place", place_at_body(c, p, x, site));
 }
 
 // a saved child of a folder that something else shadows at its path is not the process's to move
@@ -1695,10 +1791,14 @@ static int children_in(void *p) {
 	es_node_data_free(&n);
 	return code;
 }
-int es_patch_children_at(es_context *c, es_target x, const op_patch *patches, size_t n,
+static int patch_children_at_body(es_context *c, es_target x, const op_patch *patches, size_t n,
 	const ch_location *site) {
 	childing s = {c, x, patches, n};
 	return in_pulse(c, children_in, &s, site);
+}
+int es_patch_children_at(es_context *c, es_target x, const op_patch *patches, size_t n,
+	const ch_location *site) {
+	return ES_GO(c->ermine, "patchChildren", patch_children_at_body(c, x, patches, n, site));
 }
 
 // a name out of its folder; a process's node there (named by its row): the process is stopped,
@@ -1747,9 +1847,12 @@ static int unplace_in(void *v) {
 	es_names_free(&path);
 	return code;
 }
-int es_unplace_at(es_context *c, es_at p, const ch_location *site) {
+static int unplace_at_body(es_context *c, es_at p, const ch_location *site) {
 	tree s = {.c = c, .p = p};
 	return in_pulse(c, unplace_in, &s, site);
+}
+int es_unplace_at(es_context *c, es_at p, const ch_location *site) {
+	return ES_GO(c->ermine, "unplace", unplace_at_body(c, p, site));
 }
 
 // move's patches, checked as move checks: the one it goes into first; to the same name: none. Each
@@ -1829,9 +1932,12 @@ static int rename_in(void *v) {
 	es_names_free(&to);
 	return code;
 }
-int es_rename_at(es_context *c, es_at from, es_at to, const ch_location *site) {
+static int rename_at_body(es_context *c, es_at from, es_at to, const ch_location *site) {
 	tree s = {.c = c, .p = from, .to = to};
 	return in_pulse(c, rename_in, &s, site);
+}
+int es_rename_at(es_context *c, es_at from, es_at to, const ch_location *site) {
+	return ES_GO(c->ermine, "rename", rename_at_body(c, from, to, site));
 }
 
 static int remove_in(void *v) {
@@ -1889,7 +1995,10 @@ static int remove_in(void *v) {
 	es_node_data_free(&n);
 	return code;
 }
-int es_remove_at(es_context *c, es_target x, const ch_location *site) {
+static int remove_at_body(es_context *c, es_target x, const ch_location *site) {
 	tree s = {.c = c, .x = x};
 	return in_pulse(c, remove_in, &s, site);
+}
+int es_remove_at(es_context *c, es_target x, const ch_location *site) {
+	return ES_GO(c->ermine, "remove", remove_at_body(c, x, site));
 }
