@@ -32,6 +32,7 @@ export type Waiting =
 	| { readonly code: Path }
 	| { readonly send: Path | null; readonly since: number }
 	| "a promise"
+	| "a stream"
 	| "PENDING"
 
 // A write a feature's onWrite held back, shown where it would have shown.

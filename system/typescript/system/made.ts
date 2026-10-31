@@ -28,7 +28,7 @@ type Computed = {
 	c?: Computer
 	code: Code
 	readonly memo: boolean
-	awaiting: boolean
+	awaiting?: "a promise" | "a stream"
 	gave?: unknown
 }
 type Placed = {
@@ -138,7 +138,6 @@ export function computerNode(
 		path,
 		code,
 		memo: kind === "memo",
-		awaiting: false,
 	}
 	const bin = binOf(own)
 	const at = keyOf(path)
@@ -226,7 +225,7 @@ function* watched(m: Computed, gen: Generator<unknown, unknown, unknown>, mine: 
 				threw = false
 				continue
 			}
-			if (mine()) m.awaiting = true
+			if (mine()) m.awaiting = "a promise"
 			try {
 				input = yield step.value
 				threw = false
@@ -234,7 +233,7 @@ function* watched(m: Computed, gen: Generator<unknown, unknown, unknown>, mine: 
 				input = e
 				threw = true
 			} finally {
-				if (mine()) m.awaiting = false
+				if (mine()) m.awaiting = undefined
 			}
 		}
 	} finally {
@@ -243,18 +242,52 @@ function* watched(m: Computed, gen: Generator<unknown, unknown, unknown>, mine: 
 }
 const isGen = (v: unknown): v is Generator<unknown, unknown, unknown> =>
 	Object.prototype.toString.call(v) === "[object Generator]"
+const isStream = (v: unknown): v is AsyncIterable<unknown> =>
+	v !== null && (typeof v === "object" || typeof v === "function") &&
+	typeof (v as AsyncIterable<unknown>)[Symbol.asyncIterator] === "function"
+
+// A stream compute's stream: it waits on a stream until its first value is written (the next is
+// pulled then), or the stream ends without one.
+function watchedStream(m: Computed, source: AsyncIterable<unknown>, mine: () => boolean) {
+	return {
+		[Symbol.asyncIterator]() {
+			const it = source[Symbol.asyncIterator]()
+			let pulls = 0
+			const done = () => void (mine() && (m.awaiting = undefined))
+			return {
+				next(v?: unknown) {
+					if (pulls === 1) done()
+					const p = it.next(v)
+					if (pulls++ === 0) {
+						Promise.resolve(p).then((step) => step.done && done(), done)
+					}
+					return p
+				},
+				return(v?: unknown) {
+					return it.return ? it.return(v) : Promise.resolve({ done: true as const, value: v })
+				},
+			}
+		},
+	}
+}
 
 export const ran = (m: Computed, previous: unknown) => {
 	let r = m.code.f(previous)
 	if (isGen(r)) {
 		const w: Generator<unknown, unknown, unknown> = watched(m, r, () => m.gave === w)
 		r = w
+	} else if (!isPromise(r) && isStream(r)) {
+		const w: AsyncIterable<unknown> = watchedStream(m, r, () => m.gave === w)
+		r = w
+		m.gave = r
+		m.awaiting = "a stream"
+		return r
 	}
 	m.gave = r
 	if (isPromise(r)) {
-		m.awaiting = true
-		const done = () => void (m.gave === r && (m.awaiting = false))
+		m.awaiting = "a promise"
+		const done = () => void (m.gave === r && (m.awaiting = undefined))
 		r.then(done, done)
-	} else m.awaiting = false
+	} else m.awaiting = undefined
 	return r
 }
