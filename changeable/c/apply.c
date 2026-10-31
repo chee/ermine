@@ -178,6 +178,13 @@ static op_value *made_typed(work *w, op_elements kind, const unsigned char *a, s
 	t->bytes = na + nb + nc;
 	return t;
 }
+// Bytes, or a typed array of the same kind as like, made of the three runs.
+static op_value *made_like(work *w, const op_value *like, const unsigned char *a, size_t na,
+	const unsigned char *b, size_t nb, const unsigned char *c, size_t nc) {
+	op_value *t = made_typed(w, like->kind, a, na, b, nb, c, nc);
+	if (like->type == OP_BYTES) t->type = OP_BYTES, t->kind = 0;
+	return t;
+}
 static op_value *made_list(work *w, size_t count) {
 	op_value *l = made(w, op_list());
 	if (count) {
@@ -568,7 +575,7 @@ static int splice(work *w, const op_key *path, size_t n, int64_t a, int64_t b, o
 	op_value *s = get(w, path, n);
 	if (s == NULL) fail(w, OP_NO_KEY);
 	if (a > b) fail(w, OP_RANGE);
-	if ((s->type != OP_STR && s->type != OP_LIST && s->type != OP_TYPED))
+	if ((s->type != OP_STR && s->type != OP_LIST && s->type != OP_TYPED && s->type != OP_BYTES))
 		fail(w, OP_WRONG_KIND);
 	taken = taken || w->undo;
 	int64_t start = a, end = a;
@@ -635,12 +642,13 @@ static int splice(work *w, const op_key *path, size_t n, int64_t a, int64_t b, o
 			set(w, path, n, out, 1);
 		}
 		if (v && !w->undo) drop(w, v);
-	} else if (s->type == OP_TYPED) {
+	} else if (s->type == OP_TYPED || s->type == OP_BYTES) {
 		if ((uint64_t)b > op_length(s)) fail(w, OP_RANGE);
-		size_t z = op_size(s->kind), x = (size_t)a * z, y = (size_t)b * z;
-		if (v != NULL && (v->type != OP_TYPED || v->kind != s->kind)) fail(w, OP_WRONG_KIND);
+		size_t z = s->type == OP_BYTES ? 1 : op_size(s->kind), x = (size_t)a * z, y = (size_t)b * z;
+		if (v != NULL && (v->type != s->type || (s->type == OP_TYPED && v->kind != s->kind)))
+			fail(w, OP_WRONG_KIND);
 		w->size = v ? op_length(v) : 0;
-		if (taken) back = w->taken = made_typed(w, s->kind, s->data + x, y - x, NULL, 0, NULL, 0);
+		if (taken) back = w->taken = made_like(w, s, s->data + x, y - x, NULL, 0, NULL, 0);
 		if (w->inplace && w->size * z == y - x) {
 			op_value *holder, *was = s;
 			if (w->owned != NULL) {
@@ -650,7 +658,7 @@ static int splice(work *w, const op_key *path, size_t n, int64_t a, int64_t b, o
 			if (s != was) note(w, s, was, path, n, 0, 1);
 			if (v) memcpy(s->data + x, v->data, v->bytes);
 		} else {
-			out = made_typed(w, s->kind, s->data, x, v ? v->data : NULL, v ? v->bytes : 0, s->data + y,
+			out = made_like(w, s, s->data, x, v ? v->data : NULL, v ? v->bytes : 0, s->data + y,
 				s->bytes - y);
 			int keep = w->inplace && w->top == NULL && n > 0 && !noted(w, s) && !pset_has(&w->made, s);
 			if (keep) op_ref(s);
@@ -710,6 +718,7 @@ static op_value *deep(work *w, op_value *v) {
 		return m;
 	}
 	case OP_TYPED: return made(w, op_typed(v->kind, v->data, op_length(v)));
+	case OP_BYTES: return made(w, op_bytes(v->data, v->bytes));
 	default: return v;
 	}
 }
@@ -940,8 +949,8 @@ static op_value *put_back(work *r, op_value *v, int root) {
 	for (size_t i = 0; i < b->n; i++) {
 		if (b->swaps[i].now != v) continue;
 		op_value *was = b->swaps[i].was;
-		if (was->type == OP_TYPED) {
-			if (v->type != OP_TYPED || was->bytes != v->bytes) return v;
+		if (was->type == OP_TYPED || was->type == OP_BYTES) {
+			if (v->type != was->type || was->bytes != v->bytes) return v;
 			if (v->bytes) memcpy(was->data, v->data, v->bytes);
 		}
 		if (root) return was;

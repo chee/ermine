@@ -259,13 +259,13 @@
 					],
 					"range": [
 						0,
-						1
+						2
 					]
 				}
 			],
 			"expect": {
 				"error": {
-					"code": "wrong-kind",
+					"code": "range",
 					"patch": 0
 				}
 			}

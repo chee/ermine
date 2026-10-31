@@ -25,7 +25,7 @@ export function answer(r: Request): Answer {
 			try {
 				return { bytes: hex(encode(v)) }
 			} catch (e) {
-				if (e instanceof CborError) return { error: "no-encoding" }
+				if (e instanceof CborError) return { error: e.code }
 				throw e
 			}
 		}
@@ -36,7 +36,7 @@ export function answer(r: Request): Answer {
 				const v = decode(b)
 				return { value: toJson(v), again: hex(encode(v)) }
 			} catch (e) {
-				if (e instanceof CborError) return { error: "not-an-encoding" }
+				if (e instanceof CborError) return { error: e.code }
 				throw e
 			}
 		}

@@ -1,0 +1,218 @@
+{
+	"title": "bytes splice in place by range; what a reader holds of them never changes",
+	"steps": [
+		{
+			"op": "start",
+			"value": {
+				"b": {
+					"/": {
+						"bytes": "AQID"
+					}
+				}
+			},
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"hold": "h",
+			"expect": {
+				"value": {
+					"b": {
+						"/": {
+							"bytes": "AQID"
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"b"
+					],
+					"range": [
+						1,
+						2
+					],
+					"value": {
+						"/": {
+							"bytes": "CQ"
+						}
+					}
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"b"
+						],
+						"range": [
+							1,
+							2
+						],
+						"value": {
+							"/": {
+								"bytes": "Ag"
+							}
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"b"
+					],
+					"range": [
+						0,
+						1
+					],
+					"value": {
+						"/": {
+							"bytes": "Bw"
+						}
+					}
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"b"
+						],
+						"range": [
+							0,
+							1
+						],
+						"value": {
+							"/": {
+								"bytes": "AQ"
+							}
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "held",
+			"name": "h",
+			"expect": {
+				"value": {
+					"b": {
+						"/": {
+							"bytes": "AQID"
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"value": {
+					"b": {
+						"/": {
+							"bytes": "BwkD"
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "unwrite",
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"b"
+						],
+						"range": [
+							0,
+							1
+						],
+						"value": {
+							"/": {
+								"bytes": "Bw"
+							}
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"value": {
+					"b": {
+						"/": {
+							"bytes": "AQkD"
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"b"
+					],
+					"range": [
+						3,
+						3
+					],
+					"value": {
+						"/": {
+							"bytes": "BAU"
+						}
+					}
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"b"
+						],
+						"range": [
+							3,
+							5
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"value": {
+					"b": {
+						"/": {
+							"bytes": "AQkDBAU"
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "held",
+			"name": "h",
+			"expect": {
+				"value": {
+					"b": {
+						"/": {
+							"bytes": "AQID"
+						}
+					}
+				}
+			}
+		}
+	]
+}

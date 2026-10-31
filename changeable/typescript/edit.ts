@@ -2,8 +2,8 @@
 // Base is never changed; whatever the recipe doesn't touch is shared with it.
 //
 // Rules:
-// - Plain objects, arrays and typed arrays (not Uint8Array) are drafted. Everything else is a
-//   leaf, read as it is: strings, numbers, bytes, Map, Set, class instances. Changing a leaf in
+// - Plain objects, arrays and typed arrays (bytes too) are drafted. Everything else is a
+//   leaf, read as it is: strings, numbers, Map, Set, class instances. Changing a leaf in
 //   place changes base too, so don't; assign a new one.
 // - Strings and typed arrays can be edited in place with the splice helper (the recipe's second
 //   argument).
@@ -16,6 +16,7 @@
 // - Using a draft after edit returns throws.
 // - A recipe may return a value instead; it replaces the whole root.
 import type { Key, Patch } from "./apply.ts"
+import { isTyped, type Typed } from "@ermine/changeable/kinds"
 import { walk } from "@ermine/changeable/walk-string"
 
 export const nothing = /* @__PURE__ */ Symbol("nothing")
@@ -33,9 +34,6 @@ type Node = {
 	proxy?: object
 }
 
-type Typed = Int8Array | Uint16Array | Int16Array | Uint32Array | Int32Array
-const typed = (v: unknown): v is Typed =>
-	ArrayBuffer.isView(v) && !(v instanceof DataView) && !(v instanceof Uint8Array)
 function plain(v: object) {
 	const p = Object.getPrototypeOf(v)
 	return p === Object.prototype || p === null
@@ -43,7 +41,7 @@ function plain(v: object) {
 function kind(v: unknown): Kind | undefined {
 	if (v === null || typeof v !== "object") return
 	if (Array.isArray(v)) return "list"
-	if (typed(v)) return "typed"
+	if (isTyped(v)) return "typed"
 	if (plain(v)) return "map"
 }
 
@@ -464,9 +462,9 @@ function helpers(context: Context): Helpers {
 			ins = insert || undefined
 		} else {
 			const t = node(v) ? state(node(v)!) : v
-			if (!typed(t)) throw new TypeError("not a string or a typed array")
+			if (!isTyped(t)) throw new TypeError("not a string or a typed array")
 			const w = insert === undefined ? undefined : snap(insert) as Typed | undefined
-			if (w !== undefined && (!typed(w) || w.constructor !== t.constructor)) {
+			if (w !== undefined && (!isTyped(w) || w.constructor !== t.constructor)) {
 				throw new TypeError("not the same kind of typed array")
 			}
 			if (end > t.length) throw new RangeError("past the end")

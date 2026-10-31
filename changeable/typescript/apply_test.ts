@@ -34,12 +34,20 @@ Deno.test("apply: spans of strings in code points, lists, typed arrays", () => {
 	assertEquals(out, { s: "axb", l: [9, 3], t: new Int16Array([1, 2, 3, 4]) })
 })
 
-Deno.test("apply: bytes are one whole value, never spliced", () => {
+Deno.test("apply: bytes splice by range, as any typed array", () => {
 	const b = new Uint8Array([1, 2, 3])
+	assertEquals(apply({ b }, [{ path: ["b"], range: [3, 3], value: new Uint8Array([4]) }]), {
+		b: new Uint8Array([1, 2, 3, 4]),
+	})
+	assertEquals(apply({ b }, [{ path: ["b"], range: [0, 1] }]), { b: new Uint8Array([2, 3]) })
+	const undo: Patch[] = []
+	apply({ b }, [{ path: ["b"], range: [1, 2], value: new Uint8Array([8, 9]) }], { undo })
+	assertEquals(undo, [{ path: ["b"], range: [1, 3], value: new Uint8Array([2]) }])
 	const into = (p: Patch) => code(() => apply({ b }, [p]))
-	assertEquals(into({ path: ["b"], range: [3, 3], value: new Uint8Array([4]) }), "wrong-kind")
-	assertEquals(into({ path: ["b"], range: [0, 1] }), "wrong-kind")
+	assertEquals(into({ path: ["b"], range: [0, 4] }), "range")
 	assertEquals(into({ path: ["b", 0], value: 9 }), "wrong-kind")
+	assertEquals(into({ path: ["b"], range: [0, 1], value: new Int8Array([2]) }), "wrong-kind")
+	assertEquals(into({ path: ["b"], range: [0, 1], value: "x" }), "wrong-kind")
 	const t = new Int8Array([1])
 	assertEquals(
 		code(() => apply(t, [{ path: [], range: [1, 1], value: new Uint8Array([2]) }])),

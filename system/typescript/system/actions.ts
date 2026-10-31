@@ -145,7 +145,7 @@ export function executeActionAs(inner: Inner, p: Target, ...args: unknown[]): un
 		throw PENDING
 	}
 	if (typeof fn !== "function") {
-		throw new SendError("not-a-method", n.path?.join("/") ?? "a node it was handed")
+		throw new SendError("not-a-method", n.path?.join("/"))
 	}
 	calls.answered(caller, at)
 	const k = calls.next()

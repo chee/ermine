@@ -1,5 +1,5 @@
 {
-	"title": "bytes are one whole value: never joined or cut",
+	"title": "bytes join and cut as any typed array",
 	"steps": [
 		{
 			"op": "squish",
@@ -9,8 +9,7 @@
 			],
 			"expect": {
 				"patches": [
-					{ "path": ["b"], "range": [0, 0], "value": { "/": { "bytes": "AQ" } } },
-					{ "path": ["b"], "range": [1, 1], "value": { "/": { "bytes": "AgM" } } }
+					{ "path": ["b"], "range": [0, 0], "value": { "/": { "bytes": "AQID" } } }
 				]
 			}
 		},
@@ -22,8 +21,7 @@
 			],
 			"expect": {
 				"patches": [
-					{ "path": ["b"], "range": [0, 0], "value": { "/": { "bytes": "AQID" } } },
-					{ "path": ["b"], "range": [1, 2] }
+					{ "path": ["b"], "range": [0, 0], "value": { "/": { "bytes": "AQM" } } }
 				]
 			}
 		},
@@ -35,8 +33,32 @@
 			],
 			"expect": {
 				"patches": [
-					{ "path": ["b"], "range": [0, 0], "value": { "/": { "bytes": "AP8" } } },
-					{ "path": ["b"], "range": [2, 2], "value": { "/": { "bytes": "" } } }
+					{ "path": ["b"], "range": [0, 0], "value": { "/": { "bytes": "AP8" } } }
+				]
+			}
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [0, 0], "value": { "/": { "bytes": "AQ" } } },
+				{ "path": ["t"], "range": [0, 1] }
+			],
+			"expect": {
+				"patches": [
+					{ "path": ["t"], "range": [0, 0], "value": { "/": { "bytes": "" } } }
+				]
+			}
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["b"], "range": [0, 0], "value": { "/": { "int8": [1] } } },
+				{ "path": ["b"], "range": [1, 1], "value": { "/": { "bytes": "Ag" } } }
+			],
+			"expect": {
+				"patches": [
+					{ "path": ["b"], "range": [0, 0], "value": { "/": { "int8": [1] } } },
+					{ "path": ["b"], "range": [1, 1], "value": { "/": { "bytes": "Ag" } } }
 				]
 			}
 		}

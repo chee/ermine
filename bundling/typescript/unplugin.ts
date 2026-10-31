@@ -33,9 +33,12 @@ const VIRTUAL = "\0"
 
 const clean = (id: string) => id.replace(/[?#].*$/, "")
 
+// Written out, not SITE_ENTRY: publishing rewrites only a literal specifier.
+const siteEntry = () => import.meta.resolve("@ermine/system/site")
+
 function guardedFiles(): string[] {
 	try {
-		const entry = import.meta.resolve(SITE_ENTRY)
+		const entry = siteEntry()
 		if (!entry.startsWith("file:")) return []
 		return [fileURLToPath(entry), fileURLToPath(new URL("./typescript/site.ts", entry))]
 	} catch {
@@ -45,7 +48,7 @@ function guardedFiles(): string[] {
 
 function ownFolder(): string | undefined {
 	try {
-		const entry = import.meta.resolve(SITE_ENTRY)
+		const entry = siteEntry()
 		return entry.startsWith("file:") ? dirname(fileURLToPath(entry)) + sep : undefined
 	} catch {
 		return undefined

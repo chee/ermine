@@ -374,7 +374,6 @@ struct es_context {
 	// inner ----------
 	// the places it acts in; node is who it acts as, and the policy is asked of it
 	pl *places;
-	char *box;
 	char *node;
 	int guarded;
 	gd *guard;
@@ -814,13 +813,11 @@ struct es_ermine {
 	struct es_hosting *hosting;
 };
 
-// Options for start: args (has_args 0: none), and the places the process lives in (a view of this
-// ermine's, NULL for its own).
+// Options for start: args (has_args 0: none).
 typedef struct {
 	const char *const *args;
 	size_t nargs;
 	int has_args;
-	pl *places;
 } es_start_options;
 typedef struct {
 	es_ermine *ermine;
@@ -1037,9 +1034,8 @@ int es_execute_action_at(es_context *c, es_target x, const op_value *const *args
 #define es_execute_action(...) es_execute_action_at(__VA_ARGS__, CH_HERE)
 int es_get_caller(es_context *c, es_caller *out);
 // Where the open call's caller is placed, for the guard's caller hook (ctx is the asking
-// context). 1 with *from and *nfrom (*from NULL: the host), or 0 if no call is open. *box is never
-// set here.
-int es_caller_place(void *ctx, const char *const **from, size_t *nfrom, tb_key *box);
+// context). 1 with *from and *nfrom (*from NULL: the host), or 0 if no call is open.
+int es_caller_place(void *ctx, const char *const **from, size_t *nfrom);
 void es_caller_free(es_caller *c);
 // fn as the scope open goes (through onTeardown): why "replaced" (the owner ran again), "ended", or the
 // reason a stop was given

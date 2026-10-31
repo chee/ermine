@@ -230,7 +230,6 @@ typedef struct {
 } held_rec;
 typedef struct {
 	const char *feature;
-	char *root;
 	char **at;
 	size_t nat;
 } row_rec;
@@ -612,7 +611,6 @@ static const char *row_at(es_ermine *e, const char *root, char *const *at, size_
 	return v != NULL && v->type == OP_STR ? v->str : NULL;
 }
 static void row_free(row_rec *r) {
-	free(r->root);
 	pr_names_free(r->at, r->nat);
 	free(r);
 }
@@ -620,7 +618,7 @@ static row_rec *row_held(es_ermine *e, const char *id) {
 	hosting *h = host_of(e);
 	row_rec *r = es_map_get(&h->rows, id);
 	if (r == NULL) return NULL;
-	const char *there = row_at(e, r->root, r->at, r->nat);
+	const char *there = row_at(e, e->root, r->at, r->nat);
 	if (there != NULL && strcmp(there, id) == 0) return r;
 	es_map_del(&h->rows, id);
 	row_free(r);
@@ -772,12 +770,7 @@ static int write_land(write_frame *f, const es_write *x) {
 	f->landed = 1;
 	int told = unhold(h, x->part, x->id);
 	if (!told && strcmp(x->part, PART_PROCESS) == 0) {
-		for (size_t i = 0; i < h->rows.n; i++) {
-			if (strcmp(((row_rec *)h->rows.vals[i])->root, x->id) == 0) {
-				told = 1;
-				break;
-			}
-		}
+		if (h->rows.n > 0 && strcmp(x->id, e->root) == 0) told = 1;
 	}
 	if (told) mark_held(e);
 	return f->land(f->ctx, x);
@@ -1892,7 +1885,7 @@ static int start_under(es_ermine *e, es_program fn, void *ctx, const char *const
 		po.has_args = 1;
 	}
 	pr_refusal no;
-	pl *where = starter != NULL ? starter->places : o != NULL && o->places != NULL ? o->places : e->places;
+	pl *where = e->places;
 	pr_process *made = site != NULL
 		? pr_start_at(e->processes, where, steps, nsteps, &po, &no, site->file, (int)site->line, site->function)
 		: pr_start(e->processes, where, steps, nsteps, &po, &no);
@@ -2035,8 +2028,6 @@ static char *stop_process(proc_rec *rec, const char *why) {
 	hosting *h = host_of(e);
 	sc_scope *hold = rec->child ? pr_scope(rec->started.process) : NULL;
 	if (hold != NULL) sc_retain(hold);
-	es_context *own = es_map_get(&h->contexts, rec->id);
-	char *world = es_dup(own != NULL ? pl_root(own->places).string : e->root);
 	char *why_ = es_dup(why != NULL ? why : "ended");
 	es_map_set(&e->whys, rec->id, why_);
 	char *bad = pr_stop(e->processes, rec->started.process);
@@ -2044,16 +2035,14 @@ static char *stop_process(proc_rec *rec, const char *why) {
 	free(why_);
 	es_held_drop(e, rec->id);
 	rec->running = 0;
-	held_rec *held = held_of(h, PART_PROCESS, world);
+	held_rec *held = held_of(h, PART_PROCESS, e->root);
 	const char *at;
 	const char *const *names;
 	size_t n = pr_at(rec->started.process, &names);
-	at = row_at(e, world, (char *const *)names, n);
+	at = row_at(e, e->root, (char *const *)names, n);
 	if (at != NULL && strcmp(at, rec->id) == 0 && held != NULL) {
 		row_rec *r = es_alloc(sizeof *r);
 		r->feature = held->feature;
-		r->root = world;
-		world = NULL;
 		r->nat = n;
 		r->at = es_alloc((n + 1) * sizeof *r->at);
 		for (size_t i = 0; i < n; i++) r->at[i] = es_dup(names[i]);
@@ -2062,7 +2051,6 @@ static char *stop_process(proc_rec *rec, const char *why) {
 		es_map_set(&h->rows, rec->id, r);
 		mark_held(e);
 	}
-	free(world);
 	if (hold != NULL) sc_release(hold);
 	return bad;
 }

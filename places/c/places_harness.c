@@ -28,8 +28,7 @@ static const void *key_of(const char *name) {
 
 // Test stand-in for processes: a trie on the value entry "rows", with each ask counted.
 static size_t steps_asked, names_asked;
-static pl *view;
-static pl *reader(void) { return view != NULL ? view : world_places; }
+static int rowed;
 
 static op_key *rows_keys(const pl_here *here, const char *extra, size_t *n) {
 	op_key *keys = world_alloc((here->length + 2) * sizeof *keys);
@@ -113,7 +112,7 @@ static op_value *path_json(const char *const *from, size_t depth, const char *co
 static op_value *lookup_json(const char *const *names, size_t n, const char *const *from, size_t nfrom,
 	bool all) {
 	size_t *depths = world_alloc((nfrom + 1) * sizeof *depths);
-	size_t found = pl_lookup(reader(), names, n, from, nfrom, all, depths);
+	size_t found = pl_lookup(world_places, names, n, from, nfrom, all, depths);
 	op_value *out;
 	if (all) {
 		out = op_list();
@@ -164,7 +163,7 @@ static op_value *eval(const op_value *e, ctx *c) {
 		size_t n;
 		const char **names = world_address(x, &n);
 		tb_key id;
-		int found = pl_get(reader(), names, n, &id);
+		int found = pl_get(world_places, names, n, &id);
 		free(names);
 		if (!alive(c)) return NULL;
 		return found ? op_str(id.string) : op_null();
@@ -173,7 +172,7 @@ static op_value *eval(const op_value *e, ctx *c) {
 		size_t n;
 		const char **names = world_address(x, &n);
 		tb_key id;
-		int found = pl_get(reader(), names, n, &id);
+		int found = pl_get(world_places, names, n, &id);
 		free(names);
 		if (!alive(c)) return NULL;
 		if (!found) return op_null();
@@ -184,7 +183,7 @@ static op_value *eval(const op_value *e, ctx *c) {
 		bool names = op_get(e, "names") != NULL;
 		size_t n;
 		const char **path = world_address(x, &n);
-		pl_members list = names ? pl_list(reader(), path, n) : pl_members_at(reader(), path, n);
+		pl_members list = names ? pl_list(world_places, path, n) : pl_members_at(world_places, path, n);
 		free(path);
 		op_value *a;
 		if (!names) a = world_ids(&list);
@@ -308,7 +307,7 @@ op_value *ph_answer(const op_value *r) {
 		size_t n;
 		const char **names = world_address(op_get(r, "path"), &n);
 		tb_key id;
-		int found = pl_get(reader(), names, n, &id);
+		int found = pl_get(world_places, names, n, &id);
 		free(names);
 		pl_status(world_places);
 		op_value *o = op_map();
@@ -318,7 +317,7 @@ op_value *ph_answer(const op_value *r) {
 	if (strcmp(op, "list") == 0) {
 		size_t n;
 		const char **path = world_address(op_get(r, "at"), &n);
-		pl_members list = pl_list(reader(), path, n);
+		pl_members list = pl_list(world_places, path, n);
 		free(path);
 		pl_status(world_places);
 		op_value *a = op_list();
@@ -369,7 +368,7 @@ op_value *ph_answer(const op_value *r) {
 		return op_map();
 	}
 	if (strcmp(op, "rows") == 0) {
-		if (view != NULL) return op_map();
+		if (rowed) return op_map();
 		const op_value *of = op_get(r, "of");
 		size_t n = 0;
 		if (of == NULL) tries_walk[n++] = &rows;
@@ -382,7 +381,8 @@ op_value *ph_answer(const op_value *r) {
 			}
 		}
 		tries_walk[n++] = &pl_children;
-		view = pl_view(world_places, tb_string("R"), tries_walk, n);
+		world_contribute(tries_walk, n);
+		rowed = 1;
 		return op_map();
 	}
 	if (strcmp(op, "asked") == 0) {
@@ -403,8 +403,7 @@ op_value *ph_answer(const op_value *r) {
 }
 
 void ph_finish(void) {
-	if (view != NULL) pl_free(view);
-	view = NULL;
+	rowed = 0;
 	world_finish();
 	for (size_t i = 0; i < nkeys; i++) free(keys[i]);
 	free(keys);

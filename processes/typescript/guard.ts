@@ -1,5 +1,5 @@
 // Turns a protect policy's answers into what a run does with them. With no policy everything is
-// allowed. A Refusal's ask omits from.box, so nothing it reads may say where its box sits.
+// allowed.
 import type { Key as Step } from "@ermine/changeable/apply"
 import {
 	type Answer,
@@ -19,6 +19,7 @@ import { at, type Id, type Member, type Path, type Places } from "@ermine/places
 export const REFUSED: unique symbol = /* @__PURE__ */ Symbol.for("ermine.refused")
 
 export class Refusal extends Error {
+	readonly code = "refused"
 	constructor(readonly answer: Extract<Answer, { answer: "no" }>, readonly ask: Ask) {
 		super(`${ask.op} refused: ${answer.reason}`)
 	}
@@ -30,8 +31,7 @@ export type Setup = {
 	table: Pick<Table, "get">
 	may?: Policy
 	from?: Path
-	box?: Id
-	caller?: () => { from?: Path; box?: Id } | undefined
+	caller?: () => { from?: Path } | undefined
 }
 
 export type Thing = { readonly id: Id; readonly path?: Path }
@@ -43,17 +43,8 @@ export const slot = (parent: Thing, name: string): Target => target(parent, "chi
 
 const everything: Policy = () => yes
 
-const placeOf = (path?: Path, box?: Id): Place | undefined =>
-	path === undefined && box === undefined
-		? undefined
-		: { ...path !== undefined && { path: [...path] }, ...box !== undefined && { box } }
-
-function shown(a: Ask): Ask {
-	if (a.from?.box === undefined) return a
-	const { box: _, ...place } = a.from
-	const { from: _from, ...rest } = a
-	return place.path === undefined && place.route === undefined ? rest : { ...rest, from: place }
-}
+const placeOf = (path?: Path): Place | undefined =>
+	path === undefined ? undefined : { path: [...path] }
 
 export function createGuard(setup: Setup): {
 	read: (...targets: Target[]) => void
@@ -64,7 +55,7 @@ export function createGuard(setup: Setup): {
 } {
 	const { places, table, scheduler } = setup
 	const policy = setup.may ?? everything
-	const from = placeOf(setup.from, setup.box)
+	const from = placeOf(setup.from)
 	const told = may(policy, (part, id, field) => places.readValue(part as Key, id, field))
 	const quiet = may(
 		policy,
@@ -78,9 +69,9 @@ export function createGuard(setup: Setup): {
 		const same = (x?: readonly unknown[], y?: readonly unknown[]) =>
 			x === undefined ? y === undefined : y !== undefined && x.length === y.length &&
 				x.every((n, i) => n === y[i])
-		if (same(a.from?.path, c.from) && a.from?.box === c.box) return [a, first]
+		if (same(a.from?.path, c.from)) return [a, first]
 		const { from: _, ...rest } = a
-		const place = placeOf(c.from, c.box)
+		const place = placeOf(c.from)
 		const b: Ask = place === undefined ? rest : { ...rest, from: place }
 		const second = ask(b)
 		if (second.answer === "no" || (first.answer === "yes" && second.answer === "pending")) {
@@ -99,7 +90,7 @@ export function createGuard(setup: Setup): {
 		let waiting = false
 		for (const t of targets) {
 			const [a, answer] = asked(ask, op, t)
-			if (answer.answer === "no") throw new Refusal(answer, shown(a))
+			if (answer.answer === "no") throw new Refusal(answer, a)
 			if (answer.answer === "pending") waiting = true
 		}
 		if (waiting) throw PENDING
@@ -127,7 +118,7 @@ export function createGuard(setup: Setup): {
 			target: { path: [...source] },
 			from,
 		}
-		throw new Refusal(no("into-itself"), shown(a))
+		throw new Refusal(no("into-itself"), a)
 	}
 
 	function place(slot: Target, node: Target, ops: readonly string[]) {
@@ -141,11 +132,11 @@ export function createGuard(setup: Setup): {
 		const [a, answer] = slot.id === REFUSED || node.id === REFUSED
 			? [placing, no("refused")]
 			: both(quiet, placing)
-		if (answer.answer === "no") throw new Refusal(answer, shown(a))
+		if (answer.answer === "no") throw new Refusal(answer, a)
 		let waiting = answer.answer === "pending"
 		for (const op of ops) {
 			const [b, got] = asked(quiet, op, node)
-			if (got.answer === "no") throw new Refusal(got, shown(b))
+			if (got.answer === "no") throw new Refusal(got, b)
 			if (got.answer === "pending") waiting = true
 		}
 		if (waiting) throw PENDING

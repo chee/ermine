@@ -156,8 +156,6 @@ export type Options = {
 
 export type StartOptions = {
 	args?: readonly string[]
-	// The places the process lives in (such as a box's). Defaults to the ermine's own.
-	places?: Places
 }
 
 export type Started = {
@@ -216,10 +214,8 @@ export function uuidv7(): string {
 
 export function createErmine(options: Options = {}): Ermine {
 	let closed = false
-	// Errors from ermine itself (start, closed) go through the onError hooks like a function's.
-	const hinted = (e: ErmineError, fn?: string) => errored(e, fn)
 	const alive = () => {
-		if (closed) throw hinted(new ErmineError("closed", "ermine is closed"))
+		if (closed) throw errored(new ErmineError("closed", "ermine is closed"), undefined)
 	}
 
 	const s = options.scheduler ?? createScheduler()
@@ -376,13 +372,13 @@ export function createErmine(options: Options = {}): Ermine {
 		return touches ? { feature: h.feature, write: "status" } : undefined
 	}
 	// Stopped processes whose row removal a feature held back, by the process's node.
-	const heldRows = new Map<Id, { feature: string; root: Id; at: Path }>()
-	const rowAt = (root: Id, at: Path): Id | undefined => idAt(table.get(PROCESS, root)?.value, at)
+	const heldRows = new Map<Id, { feature: string; at: Path }>()
+	const rowAt = (at: Path): Id | undefined => idAt(table.get(PROCESS, root)?.value, at)
 	// A held row that a later write already took out is dropped silently.
 	const rowHeld = (id: Id) => {
 		const r = heldRows.get(id)
 		if (r === undefined) return undefined
-		if (rowAt(r.root, r.at) === id) return r
+		if (rowAt(r.at) === id) return r
 		heldRows.delete(id)
 		return undefined
 	}
@@ -412,14 +408,14 @@ export function createErmine(options: Options = {}): Ermine {
 		},
 	)
 	// The caller of the open call, as a place: a process's at, or a computer's process's. The host has none.
-	const caller = (): { from?: Path; box?: Id } | undefined => {
+	const caller = (): { from?: Path } | undefined => {
 		const o = callAbove(s.getCurrentFrame())
 		if (o === undefined) return undefined
 		const by = (o.info.caller as { node?: Id } | undefined)?.node
 		if (by === undefined || by === node) return {}
 		const ctx = contexts.get(by) ?? computerAt(madeNodes, by)?.inner
 		if (ctx?.context.process === undefined) return {}
-		return { from: ctx.context.at, ...ctx.box !== undefined && { box: ctx.box } }
+		return { from: ctx.context.at }
 	}
 	const parts: Parts = {
 		scheduler: s,
@@ -437,7 +433,7 @@ export function createErmine(options: Options = {}): Ermine {
 				landed = true
 				let told = unhold(x.part, x.id)
 				if (!told && x.part === PROCESS) {
-					for (const r of heldRows.values()) if (r.root === x.id) told = true
+					if (x.id === root && heldRows.size > 0) told = true
 				}
 				// A mark only schedules the rerun, so it is made before the write lands.
 				if (told) s.mark([heldKey])
@@ -625,7 +621,6 @@ export function createErmine(options: Options = {}): Ermine {
 		const started: Process[] = []
 
 		function stop(process: Process, why: Why = "ended") {
-			const world = contexts.get(process.id)?.places.root ?? root
 			whys.set(process.id, why)
 			try {
 				processes!.stop(process)
@@ -635,9 +630,9 @@ export function createErmine(options: Options = {}): Ermine {
 				const i = started.indexOf(process)
 				if (i !== -1) started.splice(i, 1)
 			}
-			const h = heldOf(PROCESS, world)
-			if (rowAt(world, process.at) === process.id && h !== undefined) {
-				heldRows.set(process.id, { feature: h.feature, root: world, at: process.at })
+			const h = heldOf(PROCESS, root)
+			if (rowAt(process.at) === process.id && h !== undefined) {
+				heldRows.set(process.id, { feature: h.feature, at: process.at })
 				s.mark([heldKey])
 			}
 		}
@@ -658,18 +653,17 @@ export function createErmine(options: Options = {}): Ermine {
 		): Started | (Refused & { held?: { process: Id; feature: string } }) {
 			alive()
 			if (typeof fn !== "function") {
-				throw hinted(
+				throw errored(
 					new ErmineError("not-a-function", "start takes the program: its function"),
 					"start",
 				)
 			}
 			const paths = pathsOf(at)
-			const here = o.places ?? p
 			enterScheduler(s)
 			let made: ReturnType<Processes["start"]>
 			try {
 				made = processes!.start(
-					here,
+					p,
 					paths.at,
 					{
 						args: o.args,
@@ -681,7 +675,7 @@ export function createErmine(options: Options = {}): Ermine {
 						const pid = inside.id
 						const inner = createProcessContext(parts, {
 							scope: inside.scope,
-							places: here,
+							places: p,
 							folder: inside.folder,
 							at: inside.at,
 							args: inside.args,
@@ -692,7 +686,6 @@ export function createErmine(options: Options = {}): Ermine {
 								scope: inside.scope,
 							},
 							node: pid,
-							...here.root !== root && { box: here.root },
 						})
 						contexts.set(pid, inner)
 						attach(base, inner)

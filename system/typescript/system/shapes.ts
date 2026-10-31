@@ -96,8 +96,8 @@ export type Explained =
 	}
 
 export class SendError extends Error {
-	constructor(readonly code: "not-a-method", readonly at: string) {
-		super(`${code} (${at})`)
+	constructor(readonly code: "not-a-method", readonly at?: string) {
+		super(at === undefined ? code : `${code} (${at})`)
 		this.name = "SendError"
 	}
 }

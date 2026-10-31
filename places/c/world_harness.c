@@ -93,9 +93,13 @@ sc_scope *world_host;
 static const pl_contributor *const *contributors;
 static size_t ncontributors;
 
+// From here on, places walks with these contributors (the same table, paths and scheduler).
 void world_contribute(const pl_contributor *const *list, size_t n) {
 	contributors = list;
 	ncontributors = n;
+	if (world_places == NULL) return;
+	pl_connect(world_places, &(pl_setup){.root = tb_string("R"), .table = world_table,
+		.paths = world_paths, .scheduler = world_scheduler, .contributors = list, .ncontributors = n});
 }
 
 static tb_event table_event;

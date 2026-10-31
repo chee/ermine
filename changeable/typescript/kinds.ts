@@ -8,6 +8,6 @@ export function isPojo(v: unknown): v is Record<string, unknown> {
 	return p === Object.prototype || p === null
 }
 
-export type Typed = Int8Array | Uint16Array | Int16Array | Uint32Array | Int32Array
-export const isTyped = (v: unknown): v is Typed =>
-	ArrayBuffer.isView(v) && !(v instanceof DataView) && !(v instanceof Uint8Array)
+// A typed array is bytes (a Uint8Array) or any other typed array: a patch splices either by range.
+export type Typed = Uint8Array | Int8Array | Uint16Array | Int16Array | Uint32Array | Int32Array
+export const isTyped = (v: unknown): v is Typed => ArrayBuffer.isView(v) && !(v instanceof DataView)

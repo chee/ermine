@@ -36,30 +36,18 @@ export function getStatusAs(inner: Inner, x: Target, key?: string): unknown {
 	return key === undefined ? status : status?.[key]
 }
 
-const recordedBy = (inner: Inner, owner: Id, p: Path): Path | null => {
-	const { base } = here(inner)
-	const root = computerAt(base.made, owner)?.inner.places.root ??
-		base.processes.get(owner)?.places.root
-	return root === undefined || root === inner.places.root ? p : null
-}
-
-const waitOf = (
-	inner: Inner,
-	owner: Id,
-	w: { path?: Path; id?: Id; since: number },
-): Waiting => ({
-	send: (w.path !== undefined ? recordedBy(inner, owner, w.path) : seen(inner, w.id!)) ?? null,
+const waitOf = (inner: Inner, w: { path?: Path; id?: Id; since: number }): Waiting => ({
+	send: (w.path !== undefined ? w.path : seen(inner, w.id!)) ?? null,
 	since: w.since,
 })
-const saidOf = (inner: Inner, owner: Id, w: unknown): Waiting => {
+const saidOf = (inner: Inner, w: unknown): Waiting => {
 	if (w !== null && typeof w === "object" && "missing" in w) {
-		return { node: recordedBy(inner, owner, (w as { missing: Path }).missing) }
+		return { node: (w as { missing: Path }).missing }
 	}
 	if (w !== null && typeof w === "object" && "send" in w) {
 		const { send, since } = w as { send: Path | Id; since: number }
 		return waitOf(
 			inner,
-			owner,
 			Array.isArray(send) ? { path: send, since } : { id: send as Id, since },
 		)
 	}
@@ -87,10 +75,8 @@ function ownStatus(inner: Inner, n: NodeData, id: Id, key?: string): Status {
 		if (st === undefined) return { state: "done", ...held }
 		if (st !== PENDING) return { state: "failed", error: st, ...held }
 		const said = places.readValue(STATUS_TABLE, id, [WAITING])
-		const live = calls.waits(id).map((w) => waitOf(inner, id, w))
-		const waiting = Array.isArray(said) && said.length
-			? said.map((w) => saidOf(inner, id, w))
-			: live
+		const live = calls.waits(id).map((w) => waitOf(inner, w))
+		const waiting = Array.isArray(said) && said.length ? said.map((w) => saidOf(inner, w)) : live
 		return { state: "pending", waiting: waiting.length ? waiting : ["PENDING"], ...held }
 	}
 	const wants = (k: string) => key === undefined || key === k
@@ -115,10 +101,10 @@ function ownStatus(inner: Inner, n: NodeData, id: Id, key?: string): Status {
 			waiting.push({ node: seen(inner, w.id) ?? null })
 		}
 	}
-	for (const w of calls.waits(id)) waiting.push(waitOf(inner, id, w))
+	for (const w of calls.waits(id)) waiting.push(waitOf(inner, w))
 	const m = base.missing.get(id)
 	if (m !== undefined && runN !== undefined && m.n === runN) {
-		for (const p of m.paths) waiting.push({ node: recordedBy(inner, id, p) })
+		for (const p of m.paths) waiting.push({ node: p })
 	}
 	if (computer.awaiting) waiting.push("a promise")
 	if (waiting.length === 0) waiting.push("PENDING")

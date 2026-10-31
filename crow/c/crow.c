@@ -133,14 +133,18 @@ void cr_let_go(cr_crow *u, const void *root) {
 	free(r);
 }
 
+// A typed array or bytes: its elements are its own, no items under it.
+static int flat(const op_value *v) { return v->type == OP_TYPED || v->type == OP_BYTES; }
+
 static int container(const op_value *v) {
-	return v != NULL && (v->type == OP_LIST || v->type == OP_MAP || v->type == OP_TYPED);
+	return v != NULL && (v->type == OP_LIST || v->type == OP_MAP || flat(v));
 }
 
 // A shallow copy: the same items with one reference on each, a map's keys shared; a typed
-// array's elements are copied.
+// array's elements, or bytes, are copied.
 static op_value *copy(const op_value *v) {
 	if (v->type == OP_TYPED) return op_typed(v->kind, v->data, op_length(v));
+	if (v->type == OP_BYTES) return op_bytes(v->data, v->bytes);
 	op_value *c;
 	if (v->type == OP_MAP) c = op_map_copy(v);
 	else {
@@ -187,7 +191,7 @@ static op_value *owned(op_value *v, void *data) {
 static void let_go(set *mine, const op_value *v, int top) {
 	if (!container(v)) return;
 	int owned = del(mine, v);
-	if ((!owned && !top) || v->type == OP_TYPED) return;
+	if ((!owned && !top) || flat(v)) return;
 	for (size_t i = 0; i < v->count; i++) let_go(mine, v->items[i], 0);
 }
 
@@ -216,7 +220,7 @@ static void drop(cr_crow *u, op_value *v) {
 	set *in = pm_get(&u->owner, v);
 	if (in == NULL) return;
 	leave(u, in, v);
-	if (v->type == OP_TYPED) return;
+	if (flat(v)) return;
 	for (size_t i = 0; i < v->count; i++) drop(u, v->items[i]);
 }
 
@@ -249,7 +253,7 @@ static void let_all(cr_crow *u, op_value *v, const given *g, set **seen) {
 	}
 	set *in = pm_get(&u->owner, v);
 	if (in != NULL) leave(u, in, v);
-	if (v->type == OP_TYPED) return;
+	if (flat(v)) return;
 	for (size_t i = 0; i < v->count; i++) {
 		if (!container(v->items[i])) continue;
 		if (*seen == NULL) {

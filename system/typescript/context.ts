@@ -84,13 +84,12 @@ export type Parts = {
 	readonly onCreateFunction?: (made: CreatedFunction) => void
 	readonly alive: () => void
 	// In an action's call, the caller's place; asks are made as both.
-	readonly caller?: () => { from?: Path; box?: Id } | undefined
+	readonly caller?: () => { from?: Path } | undefined
 }
 
 export type Inner = {
 	readonly context: ProcessContext
 	readonly places: Places
-	readonly box?: Id
 	readonly node: Id
 	readonly guarded: boolean
 	readonly guard: ReturnType<typeof createGuard>
@@ -112,7 +111,6 @@ export function createProcessContext(
 		args: readonly string[]
 		process?: Process
 		node: Id
-		box?: Id
 	},
 ): Inner {
 	const { scheduler: s, table, commit } = parts
@@ -124,7 +122,6 @@ export function createProcessContext(
 		table,
 		may: parts.may,
 		from: o.at,
-		...o.box !== undefined && { box: o.box },
 		...parts.caller !== undefined && { caller: parts.caller },
 	})
 
@@ -227,7 +224,6 @@ export function createProcessContext(
 	return {
 		context,
 		places,
-		...o.box !== undefined && { box: o.box },
 		node: o.node,
 		guarded,
 		guard,

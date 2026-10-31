@@ -49,10 +49,9 @@ static op_value *ask_json(const pr_ask *ask) {
 	op_set(o, "target", target_json(&ask->target));
 	if (n->part || n->id.string || n->field || n->path) op_set(o, "node", target_json(n));
 	if (ask->who) op_set(o, "who", who_json(ask->who));
-	if (ask->from.path || ask->from.box.string) {
+	if (ask->from.path) {
 		op_value *from = op_map();
-		if (ask->from.path) op_set(from, "path", strings_json(ask->from.path, ask->from.npath));
-		if (ask->from.box.string) op_set(from, "box", op_str(ask->from.box.string));
+		op_set(from, "path", strings_json(ask->from.path, ask->from.npath));
 		op_set(o, "from", from);
 	}
 	return o;
@@ -154,11 +153,10 @@ static pr_answer recording(void *ctx, const pr_ask *ask, const pr_read *read) {
 typedef struct {
 	const char **from;
 	size_t nfrom;
-	const char *box;
 } caller;
-static int caller_at(void *ctx, const char *const **from, size_t *nfrom, tb_key *box) {
+static int caller_at(void *ctx, const char *const **from, size_t *nfrom) {
 	const caller *c = ctx;
-	*from = c->from, *nfrom = c->nfrom, *box = tb_string(c->box);
+	*from = c->from, *nfrom = c->nfrom;
 	return 1;
 }
 
@@ -557,17 +555,15 @@ static op_value *answer(const op_value *r) {
 		guard g = {.name = world_copy(world_text(op_get(r, "name")))};
 		size_t nfrom = 0;
 		const char **names = from ? world_address(from, &nfrom) : NULL;
-		const char *box = world_text(op_get(r, "box"));
 		const op_value *given = op_get(r, "caller");
 		caller *c = NULL;
 		if (given != NULL) {
 			c = world_alloc(sizeof *c);
 			const op_value *cfrom = op_get(given, "from");
 			c->from = cfrom ? world_address(cfrom, &c->nfrom) : NULL;
-			c->box = world_text(op_get(given, "box"));
 		}
 		g.g = gd_new(&(gd_setup){world_places, world_table, outer, names, nfrom,
-			.box = tb_string(box), .caller = c ? caller_at : NULL, .caller_ctx = c});
+			.caller = c ? caller_at : NULL, .caller_ctx = c});
 		g.caller = c;
 		free(names);
 		PUSH(guards, nguards, capguards, g);

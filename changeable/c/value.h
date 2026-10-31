@@ -66,7 +66,7 @@ op_value *op_bytes(const void *data, size_t n);
 op_value *op_typed(op_elements kind, const void *data, size_t count);
 op_value *op_stand(op_value *kind);
 size_t op_size(op_elements kind);
-size_t op_length(const op_value *typed);
+size_t op_length(const op_value *typed); // a typed array's elements, or bytes'
 // A map's keys are shared immutable names: make with op_name, share with op_name_ref, free with
 // op_name_free. A map copied by hand must op_name_ref each key, never strdup.
 char *op_name(const char *s);

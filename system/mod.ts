@@ -12,7 +12,7 @@
 //   items      a bare name: inside this process's node (its own; gone when it stops)
 //   ./items    beside this process: in the folder its node is in
 //   ../items   above that: in the folder that folder is in
-//   /items     from this process's root (its box's "/"; no box: the graph's root)
+//   /items     from the graph's root
 // For the host (no process) both a bare name and ./ land in the root.
 export { createNode, ensureNode, getNode, hasNode, ref } from "./typescript/system/nodes.ts"
 export {

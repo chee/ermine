@@ -1,6 +1,6 @@
 {
 	"name": "@ermine/protect",
-	"version": "0.0.0",
+	"version": "0.0.0-arctic-hare.0",
 	"license": "AGPL-3.0-or-later",
 	"exports": {
 		".": "./typescript/protect.ts"

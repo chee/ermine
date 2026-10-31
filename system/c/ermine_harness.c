@@ -8,7 +8,6 @@
 #define _POSIX_C_SOURCE 200809L
 #include "../../conformance/c/protocol_harness.h"
 #include "ermine.h"
-#include "ermine_harness.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -19,9 +18,6 @@
 		int code_ = (call); \
 		if (code_ != 0) return code_; \
 	} while (0)
-
-int (*hx_op)(const op_value *request, es_ermine *e, op_value **res);
-pl *(*hx_places)(const char *name);
 
 // --- the world ----------
 
@@ -66,7 +62,7 @@ typedef struct {
 } queued_t;
 
 typedef struct {
-	char *op, *path, *id, *from, *box;
+	char *op, *path, *id, *from;
 	int pending;
 } deny_t;
 
@@ -1863,10 +1859,6 @@ static pr_answer deny_run(void *ctx, const pr_ask *ask, const pr_read *read) {
 		}
 		if (d->path != NULL && !path_is(ask->target.path, ask->target.npath, d->path)) continue;
 		if (d->from != NULL && !path_is(ask->from.path, ask->from.npath, d->from)) continue;
-		if (d->box != NULL &&
-			(ask->from.box.string == NULL || strcmp(d->box, ask->from.box.string) != 0)) {
-			continue;
-		}
 		if (d->pending) return (pr_answer){.verdict = PR_PENDING};
 		return (pr_answer){.verdict = PR_NO, .reason = "denied"};
 	}
@@ -2107,7 +2099,6 @@ static int make(const op_value *r) {
 			if (text(d, "path") != NULL) x->path = es_dup(text(d, "path"));
 			if (text(d, "id") != NULL) x->id = es_dup(text(d, "id"));
 			if (text(d, "from") != NULL) x->from = es_dup(text(d, "from"));
-			if (text(d, "box") != NULL) x->box = es_dup(text(d, "box"));
 			x->pending = flag(d, "pending");
 		}
 		w->policy = pr_call(deny_run, NULL);
@@ -2150,7 +2141,6 @@ static void world_free(world_t *w) {
 		free(w->deny[i].path);
 		free(w->deny[i].id);
 		free(w->deny[i].from);
-		free(w->deny[i].box);
 	}
 	if (w->policy != NULL) pr_policy_free(w->policy);
 	free(w->envs);
@@ -2474,16 +2464,6 @@ static int op_start(const op_value *r, op_value **res) {
 		so.args = list;
 		so.nargs = args->count;
 		so.has_args = 1;
-	}
-	if (text(r, "in") != NULL) {
-		so.places = hx_places != NULL ? hx_places(text(r, "in")) : NULL;
-		if (so.places == NULL) {
-			int code = fail("no places %s", text(r, "in"));
-			free(W->next);
-			W->next = NULL;
-			W->pending = NULL;
-			return code;
-		}
 	}
 	es_started *started = NULL;
 	es_refused refused = {0};
@@ -2841,10 +2821,6 @@ static int answer(const op_value *r, op_value **res) {
 		*res = op_map();
 		op_set(*res, "frame", frame_shown(call != NULL ? call->frame : NULL));
 		return 0;
-	}
-	if (hx_op != NULL) {
-		int code = hx_op(r, e, res);
-		if (code != HX_NOT_MINE) return code;
 	}
 	return fail("no op %s", op);
 }

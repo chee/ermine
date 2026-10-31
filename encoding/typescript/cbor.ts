@@ -47,6 +47,9 @@ const STAND = 0x12345678
 /** What cannot be encoded, or bytes that are not an encoding. */
 export class CborError extends Error {
 	override name = "CborError"
+	constructor(readonly code: "no-encoding" | "not-an-encoding", message: string) {
+		super(message)
+	}
 }
 
 type Kind = { tag: number; size: number; make: new (n: number) => Typed }
@@ -248,7 +251,9 @@ function text(out: Out, s: string) {
 			return
 		}
 	}
-	if (!s.isWellFormed()) throw new CborError("a string with a lone surrogate has no encoding")
+	if (!s.isWellFormed()) {
+		throw new CborError("no-encoding", "a string with a lone surrogate has no encoding")
+	}
 	const most = length * 3, guess = size(most)
 	out.room(9 + most)
 	const n = out.n
@@ -292,7 +297,7 @@ function liveKind(x: unknown): string {
 }
 
 function stand(out: Out, x: unknown, depth: number) {
-	if (depth >= DEPTH) throw new CborError(`a value ${tooDeep} has no encoding`)
+	if (depth >= DEPTH) throw new CborError("no-encoding", `a value ${tooDeep} has no encoding`)
 	out.head(6, STAND)
 	text(out, liveKind(x))
 }
@@ -307,13 +312,13 @@ function value(out: Out, x: unknown, open: Set<object>, depth: number, live: boo
 	if (x === false) return out.byte(0xf4)
 	if (x === true) return out.byte(0xf5)
 	if (live && (typeof x === "function" || typeof x === "symbol")) return stand(out, x, depth)
-	if (typeof x !== "object") throw new CborError(`a ${typeof x} is not a value`)
+	if (typeof x !== "object") throw new CborError("no-encoding", `a ${typeof x} is not a value`)
 	if (x instanceof Uint8Array) {
 		out.head(2, x.length)
 		return out.bytes(x)
 	}
 	if (x instanceof Stand) {
-		if (depth >= DEPTH) throw new CborError(`a value ${tooDeep} has no encoding`)
+		if (depth >= DEPTH) throw new CborError("no-encoding", `a value ${tooDeep} has no encoding`)
 		out.head(6, STAND)
 		return value(out, x.kind, open, depth + 1, live)
 	}
@@ -321,7 +326,7 @@ function value(out: Out, x: unknown, open: Set<object>, depth: number, live: boo
 		const kind = BY_CLASS.get(x.constructor)
 		if (!kind) {
 			if (live) return stand(out, x, depth)
-			throw new CborError(`a ${x.constructor.name} is not a value`)
+			throw new CborError("no-encoding", `a ${x.constructor.name} is not a value`)
 		}
 		const t = x as Typed
 		out.head(6, kind.tag)
@@ -331,14 +336,14 @@ function value(out: Out, x: unknown, open: Set<object>, depth: number, live: boo
 		}
 		return out.bytes(elements(t, kind))
 	}
-	if (depth >= DEPTH) throw new CborError(`a value ${tooDeep} has no encoding`)
+	if (depth >= DEPTH) throw new CborError("no-encoding", `a value ${tooDeep} has no encoding`)
 	if (live && !Array.isArray(x)) {
 		const proto = Object.getPrototypeOf(x)
 		if (proto !== Object.prototype && proto !== null) return stand(out, x, depth)
 	}
 	const deep = depth > SHALLOW
 	if (deep) {
-		if (open.has(x)) throw new CborError("a value cannot hold itself")
+		if (open.has(x)) throw new CborError("no-encoding", "a value cannot hold itself")
 		open.add(x)
 	}
 	if (Array.isArray(x)) {
@@ -347,10 +352,10 @@ function value(out: Out, x: unknown, open: Set<object>, depth: number, live: boo
 	} else {
 		const proto = Object.getPrototypeOf(x)
 		if (proto !== Object.prototype && proto !== null) {
-			throw new CborError("a live value has no encoding")
+			throw new CborError("no-encoding", "a live value has no encoding")
 		}
 		if (Object.getOwnPropertySymbols(x).length) {
-			throw new CborError("a symbol key has no encoding")
+			throw new CborError("no-encoding", "a symbol key has no encoding")
 		}
 		let ks = Object.keys(x), bs = ks.map(key)
 		if (ks.length <= 16) {
@@ -388,7 +393,8 @@ export function encode(x: Value, options?: { live?: boolean }): Uint8Array {
 // decoding -------------------------------------------------------------------
 
 const SAFE = 2n ** 53n - 1n
-const wrong = (why: string) => new CborError(`not an encoding of a value: ${why}`)
+const wrong = (why: string) =>
+	new CborError("not-an-encoding", `not an encoding of a value: ${why}`)
 
 function halfValue(h: number): number {
 	const sign = h & 0x8000 ? -1 : 1

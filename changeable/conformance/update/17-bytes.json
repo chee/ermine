@@ -1,5 +1,5 @@
 {
-	"title": "bytes: one whole value, never spliced; a patch into them is wrong-kind",
+	"title": "bytes: spliced by range; the change keeps the patches and their undo",
 	"steps": [
 		{
 			"op": "start",
@@ -34,12 +34,7 @@
 					}
 				}
 			],
-			"expect": {
-				"error": {
-					"code": "wrong-kind",
-					"patch": 0
-				}
-			}
+			"expect": {}
 		},
 		{
 			"op": "update",
@@ -54,10 +49,52 @@
 					]
 				}
 			],
+			"expect": {}
+		},
+		{
+			"op": "entry",
 			"expect": {
-				"error": {
-					"code": "wrong-kind",
-					"patch": 0
+				"entry": {
+					"value": {
+						"b": {
+							"/": {
+								"bytes": "AgME"
+							}
+						}
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"b"
+									],
+									"range": [
+										0,
+										1
+									]
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"b"
+									],
+									"range": [
+										0,
+										0
+									],
+									"value": {
+										"/": {
+											"bytes": "AQ"
+										}
+									}
+								}
+							]
+						}
+					}
 				}
 			}
 		},
@@ -129,7 +166,7 @@
 									],
 									"value": {
 										"/": {
-											"bytes": "AQID"
+											"bytes": "AgME"
 										}
 									}
 								}

@@ -1,5 +1,5 @@
 {
-	"title": "the lifecycle: start(fn, at) runs fn as a process at at [chee 10-26: \"ermine.start(fn, path, {args?, box?})\"] (its folder the one it is in; the program's node, elsewhere, untouched), its setup given its api; its value what setup returns, shown at its path while it runs; a second at the same path refused taken. status(): done, failed with setup's throw (the process still there to read), pending on a promise till it settles. stop(why) tells its teardowns why. ermine.getProcessContext(process): its at, folder, args and scope. close(): every process stopped, newest first, ended, then the host's scope",
+	"title": "the lifecycle: start(fn, at) runs fn as a process at at (its folder the one it is in; the program's node, elsewhere, untouched), its setup given its api; its value what setup returns, shown at its path while it runs; a second at the same path refused taken. status(): done, failed with setup's throw (the process still there to read), pending on a promise till it settles. stop(why) tells its teardowns why. ermine.getProcessContext(process): its at, folder, args and scope. close(): every process stopped, newest first, ended, then the host's scope",
 	"steps": [
 		{
 			"op": "ermine",

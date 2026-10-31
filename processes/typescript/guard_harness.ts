@@ -1,7 +1,7 @@
 // The reference guard (guard.ts) on the line protocol: one JSON request per line in, one answer out.
 // policy: "yes" | "pending" | {no: reason} | {grants: [part, id]} | {all: [policy]} | {any: [policy]}
 //   | {only: [op], policy} | {denyid: id} | {denynode: id} | {access: [part, id]} | {whois: [actor, reader]}
-// { op: "guard", name, may?, from?, box?, caller? } → {}
+// { op: "guard", name, may?, from?, caller? } → {}
 // { op: "eval", guard, scope?, e, detail? } → { value } | { error: "pending" } | { error: code }
 //   | { error: "refused", reason, op, grant?, field? }   (detail: true adds grant and field)
 // { op: "watch", name, scope, guard, f, then?, effect? } → {}
@@ -191,7 +191,6 @@ function answer(r: Request): Json | undefined {
 					scheduler: s,
 					table,
 					from: r.from,
-					...r.box !== undefined && { box: r.box },
 					...r.caller !== undefined && { caller: () => r.caller },
 					may: r.may === undefined ? undefined : recording(policy(r.may)),
 				}),

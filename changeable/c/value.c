@@ -152,7 +152,10 @@ op_value *op_typed(op_elements kind, const void *data, size_t count) {
 	v->kind = kind;
 	return v;
 }
-size_t op_length(const op_value *t) { return t->bytes / op_size(t->kind); }
+// Bytes are a typed array of single bytes.
+size_t op_length(const op_value *t) {
+	return t->type == OP_BYTES ? t->bytes : t->bytes / op_size(t->kind);
+}
 op_value *op_map(void) { return make(OP_MAP); }
 void op_push(op_value *list, op_value *v) {
 	GROW(list->items, list->count, list->capacity);

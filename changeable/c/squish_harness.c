@@ -8,6 +8,9 @@
 #include "squish.h"
 #include "../../conformance/c/harness.h"
 
+// The "of" bytes are given to squish: no typed array's kind.
+#define BYTES (-1)
+
 static int lone(const op_value *v) {
 	if (v->type == OP_STR) return sq_str(v->str, v->bytes).lone;
 	if (v->type != OP_LIST && v->type != OP_MAP) return 0;
@@ -24,6 +27,7 @@ static sq_value value_of(const op_value *v) {
 		return l.lone = lone(v), l;
 	}
 	if (v->type == OP_TYPED) return sq_typed((int)v->kind, op_size(v->kind), v->data, op_length(v));
+	if (v->type == OP_BYTES) return sq_typed(BYTES, 1, v->data, v->bytes);
 	sq_value a = sq_any(v);
 	return a.lone = lone(v), a;
 }
@@ -38,7 +42,7 @@ static void put_value(FILE *out, const sq_value *v) {
 		op_free(s);
 		return;
 	case SQ_TYPED:
-		s = op_typed((op_elements)v->of, v->data, v->n);
+		s = v->of == BYTES ? op_bytes(v->data, v->n) : op_typed((op_elements)v->of, v->data, v->n);
 		op_json_write(out, s);
 		op_free(s);
 		return;

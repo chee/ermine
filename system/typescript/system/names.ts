@@ -45,8 +45,8 @@ export function placeAs(inner: Inner, p: string | Path, x: Target) {
 	})
 }
 
-// Taking a name out of a folder stops the process whose row names it. A name that a box's binding
-// gives is not the folder's to take out: that is nothing-there.
+// Taking a name out of a folder stops the process whose row names it. A saved child that something
+// else shadows at that name is not the folder's to take out: that is nothing-there.
 export function unplaceAs(inner: Inner, p: string | Path) {
 	const { base, places, inside, resolve, ask } = here(inner)
 	inside(() => {
