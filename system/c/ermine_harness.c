@@ -1149,7 +1149,7 @@ static int range_read(sys_t sys, const char *name, op_value *const *a, size_t n,
 	}
 	double lo = r->items[0]->num, hi = r->items[1]->num;
 	if (lo != (double)(int64_t)lo || hi != (double)(int64_t)hi || lo < 0 || hi < 0) {
-		return es_fail(ES_FAILED, "not-a-patch (patch 0)");
+		return es_fail(ES_FAILED, "not-a-patch");
 	}
 	return f(c, x, key, nkey, (int64_t)lo, (int64_t)hi, out);
 }
@@ -2747,10 +2747,9 @@ static int answer(const op_value *r, op_value **res) {
 	const char *op = hh_str(r, "op");
 	if (op == NULL) return fail("no op undefined");
 	if (strcmp(op, "ermine") == 0) {
-		world_t *old = W;
-		int code = make(r);
-		world_free(old);
-		TRY(code);
+		// the old world goes first: closing its ermine would wipe what a failed make threw
+		world_free(W);
+		TRY(make(r));
 		*res = op_map();
 		return 0;
 	}

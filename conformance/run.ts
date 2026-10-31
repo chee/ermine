@@ -1,7 +1,7 @@
 // Runs every suite's scenarios against a harness.
 //   deno task conformance [suite...] [--c | --check | --leaks]
 // A scenario <package>/conformance/<suite>/NN-name.json is { title, typescript?, on?, steps }.
-//   expect: answer fields, deep-equal   fails: true: the answer is { error }
+//   expect: answer fields, deep-equal   fails: true: the answer is an error, and expect is compared
 //   skip: fields not compared           no expect: not compared
 // <suite>/suite.json options:
 //   loose       answers may have fields beyond expect
@@ -103,8 +103,8 @@ function check(
 	window: [number, number],
 ) {
 	if (got === undefined) return "no answer"
-	if (step.fails) return got.error === undefined ? "no error" : undefined
-	if (got.error !== undefined && !(step.expect && "error" in step.expect)) {
+	if (step.fails && got.error === undefined) return "no error"
+	if (got.error !== undefined && !step.fails && !(step.expect && "error" in step.expect)) {
 		return `an error: ${show(got.error)}`
 	}
 	if (step.expect === undefined) return
