@@ -81,7 +81,7 @@ static size_t typing(uint8_t p[32], unsigned i) {
 static void type(tp_log *log, unsigned i) {
 	uint8_t p[32];
 	tp_write w = {{(const uint8_t *)"text", 4}, {(const uint8_t *)"value", 5}, {p, typing(p, i)},
-		{NULL, 0}, 1760000000 + i / 5, {NULL, 0}};
+		{NULL, 0}, 1760000000 + i / 5, {NULL, 0}, {NULL, 0}};
 	uint64_t n, lamport;
 	if (tp_log_write(log, &w, &n, &lamport)) abort();
 }
@@ -96,7 +96,7 @@ static tp_log *writer(void) {
 	tp_log_load(log);
 	uint8_t first[] = {0x81, 0xa2, 0x64, 'p', 'a', 't', 'h', 0x80, 0x65, 'v', 'a', 'l', 'u', 'e', 0x60};
 	tp_write w = {{(const uint8_t *)"text", 4}, {(const uint8_t *)"value", 5}, {first, sizeof first},
-		{NULL, 0}, 1760000000, {NULL, 0}};
+		{NULL, 0}, 1760000000, {NULL, 0}, {NULL, 0}};
 	tp_log_write(log, &w, &n, &lamport);
 	for (unsigned i = 0; i < CHARS; i++) type(log, i);
 	return log;
@@ -207,7 +207,7 @@ static void bench(tp_log *w, const messages *m, int file, int forgets) {
 	tp_log_options o = {mem[1], store, seed, 1, {0, 0, 0}, told, &d};
 	tp_log *log = tp_log_new(&o);
 	tp_log_load(log);
-	tp_history_options ho = {mem[2], log, table, places, NULL, inside, &d, forgets};
+	tp_history_options ho = {mem[2], log, table, places, NULL, inside, &d, forgets, 0};
 	d.history = tp_history_new(&ho);
 	tp_sync_options so = {mem[3], log, 0, NULL, NULL, NULL, 0, 0};
 	d.sync = tp_sync_new(&so);

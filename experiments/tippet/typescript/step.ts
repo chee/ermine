@@ -16,9 +16,17 @@ export type Step = {
 	when: number
 	who?: string
 	on?: readonly On[]
+	// per patch: the elements a splice names, as written (WIRE.md, ids), or null: by its range
+	ids?: readonly Value[]
 }
 
 export type On = { device: string; n: number }
+// an element of a string or array: made by a step, c its number among its device's elements; or
+// there since a step made its sequence new, c that step's n, k its place
+export type Id = { device: string; c: number; k?: number }
+// a splice by ids: it goes after one element (null: the start) and takes these away, each an id
+// and how many from it, its c or k on
+export type Anchor = { after: Id | null; gone: readonly [Id, number][] }
 
 const KEY = /^[0-9a-f]{64}$/
 
@@ -46,10 +54,52 @@ export const readOn = (device: string, n: number, on: unknown[]): On[] =>
 			: { device: hex((o as [Uint8Array])[0]), n: (o as [Uint8Array, number])[1] }
 	)
 
+// how many elements a patch inserts: a splice's (a patch with a range) string's code points or
+// array's items
+export const inserts = (p: Patch) =>
+	p.range === undefined
+		? 0
+		: typeof p.value === "string"
+		? [...p.value].length
+		: Array.isArray(p.value)
+		? p.value.length
+		: 0
+export const made = (s: Pick<Step, "patches">) => s.patches.reduce((n, p) => n + inserts(p), 0)
+
+// where a step is: its device, its n, and seq: how many elements its device's steps before it insert
+export type At = { device: string; n: number; seq: number }
+// this device's own by how far back: x (seq - x) or [x, k] (step n - x); another's whole
+const writeId = (s: At, i: Id): Value =>
+	i.device === s.device
+		? i.k === undefined ? s.seq - i.c : [s.n - i.c, i.k]
+		: i.k === undefined
+		? [unhex(i.device), i.c]
+		: [unhex(i.device), i.c, i.k]
+export const writeIds = (s: At, ids: readonly (Anchor | null)[]): Value[] =>
+	ids.map((x) => x && [x.after && writeId(s, x.after), x.gone.map(([i, c]) => [writeId(s, i), c])])
+const readId = (s: At, i: unknown): Id => {
+	if (typeof i === "number") return { device: s.device, c: s.seq - i }
+	const a = i as [unknown, number, number?]
+	if (typeof a[0] === "number") return { device: s.device, c: s.n - a[0], k: a[1] }
+	const d = hex(a[0] as Uint8Array)
+	return a.length === 2 ? { device: d, c: a[1] } : { device: d, c: a[1], k: a[2] }
+}
+export const readIds = (s: At, ids: readonly Value[]): (Anchor | null)[] =>
+	ids.map((x) => {
+		if (x === null) return null
+		const [after, gone] = x as [unknown, [unknown, number][]]
+		return {
+			after: after === null ? null : readId(s, after),
+			gone: gone.map(([i, c]) => [readId(s, i), c] as [Id, number]),
+		}
+	})
+
 export function encodeStep(s: Step): Uint8Array {
 	if (!KEY.test(s.device)) throw new TypeError("not a device")
+	if (s.ids !== undefined && s.on === undefined) throw new TypeError("ids without on")
 	const a = [unhex(s.device), s.n, s.before, written(s), s.part, s.patches, s.lamport, s.when]
 	if (s.on !== undefined) a.push(writtenOn(s))
+	if (s.ids !== undefined) a.push(s.ids as Value[])
 	if (s.who !== undefined) a.push(s.who)
 	return encode(a as Value)
 }
@@ -76,6 +126,28 @@ export const onOf = (device: Uint8Array, n: number) => (o: unknown) =>
 	whole(o) ? o >= 1 && o < n : Array.isArray(o) && o.length === 2 && key(o[0]) && whole(o[1]) &&
 		o[1] >= 1 && !same(o[0], device)
 
+// an element id as written: this device's x (whole or negative) or [x, k] (x whole, below n);
+// another's [device, c] or [device, n, k] (n from 1)
+export const idOf = (device: Uint8Array, n: number) => (i: unknown) =>
+	Number.isSafeInteger(i) || Array.isArray(i) &&
+		(typeof i[0] === "number"
+			? i.length === 2 && whole(i[0]) && i[0] < n && whole(i[1])
+			: key(i[0]) && !same(i[0], device) && whole(i[1]) &&
+				(i.length === 2 || (i.length === 3 && i[1] >= 1 && whole(i[2]))))
+// ids as written: one per patch, null or [after, gone], only on a patch with a range
+export const idsOf = (device: Uint8Array, n: number, patches: unknown[]) => (ids: unknown) => {
+	const id = idOf(device, n)
+	return Array.isArray(ids) && ids.length === patches.length &&
+		ids.every((x, i) =>
+			x === null || (Array.isArray(x) && x.length === 2 &&
+				(patches[i] as { range?: unknown }).range !== undefined &&
+				(x[0] === null || id(x[0])) && Array.isArray(x[1]) &&
+				x[1].every((g) =>
+					Array.isArray(g) && g.length === 2 && id(g[0]) && whole(g[1]) && g[1] >= 1
+				))
+		)
+}
+
 // node and part have no NUL, and nesting is at most cbor's DEPTH less one, since a run message
 // holds its patches one deeper.
 export function decodeStep(bytes: Uint8Array): Step {
@@ -83,15 +155,17 @@ export function decodeStep(bytes: Uint8Array): Step {
 	const inside = new Uint8Array(bytes.length + 1)
 	inside[0] = 0x81, inside.set(bytes, 1)
 	const a = (decode(inside) as Value[])[0]
-	if (!Array.isArray(a) || a.length < 8 || a.length > 10) throw new TypeError("not a step")
-	const said = Array.isArray(a[8]), at = said ? 9 : 8
+	if (!Array.isArray(a) || a.length < 8 || a.length > 11) throw new TypeError("not a step")
+	const said = Array.isArray(a[8]), named = said && Array.isArray(a[9])
+	const at = 8 + (said ? 1 : 0) + (named ? 1 : 0)
 	if (
 		!(a.length === at || (a.length === at + 1 && typeof a[at] === "string")) ||
 		!key(a[0]) || !whole(a[1]) || a[1] < 1 || !(a[2] === null || key(a[2])) ||
 		!(name(a[3]) || relative(a[3])) || !name(a[4]) ||
 		!Array.isArray(a[5]) ||
 		!a[5].every(patch) || !whole(a[6]) || !whole(a[7]) ||
-		(said && !(a[8] as unknown[]).every(onOf(a[0], a[1])))
+		(said && !(a[8] as unknown[]).every(onOf(a[0], a[1]))) ||
+		(named && !idsOf(a[0], a[1], a[5])(a[9]))
 	) throw new TypeError("not a step")
 	const [device, n, before, node, part, patches, lamport, when] = a
 	const who = a[at] as string | undefined
@@ -110,6 +184,7 @@ export function decodeStep(bytes: Uint8Array): Step {
 			when,
 		}
 	if (said) s.on = readOn(d, n, a[8] as unknown[])
+	if (named) s.ids = a[9] as Value[]
 	if (who !== undefined) s.who = who
 	return s
 }

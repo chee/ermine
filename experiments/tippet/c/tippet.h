@@ -33,7 +33,6 @@ enum {
 	TP_OWN = -10,
 	TP_GAP = -11,
 	TP_CHAIN = -12,
-	TP_LAMPORT = -13,
 	TP_SIGNATURE = -14,
 	TP_BEFORE = -15,
 };
@@ -55,6 +54,7 @@ typedef struct {
 	uint64_t lamport, when;
 	int relative;
 	tp_span on;
+	tp_span ids; // per patch: null or [after, gone] (WIRE.md, ids); p NULL: none
 } tp_step;
 
 #define TP_OWN_ID 75
@@ -71,6 +71,10 @@ typedef struct {
 	uint64_t from, to;
 } tp_patch;
 int tp_patch_next(tp_span patches, size_t *at, tp_patch *p);
+// how many elements a patch inserts, and a step's patches all told (WIRE.md, ids): a splice's
+// string's code points or array's items
+uint64_t tp_patch_made(const tp_patch *p);
+uint64_t tp_step_made(const tp_step *s);
 int tp_on_next(const tp_step *s, size_t *at, const uint8_t **device, uint64_t *n);
 
 
@@ -146,7 +150,7 @@ tp_store *tp_file_store(const tp_mem *mem, const char *dir, size_t max);
 typedef struct {
 	size_t devices; // devices held (4096)
 	uint64_t steps; // steps of one device's (1 << 24)
-	size_t step; // bytes of one step (1 << 20)
+	size_t step; // bytes of one step (a run's most, 1 << 24)
 } tp_limits;
 
 typedef struct tp_log tp_log;
@@ -178,6 +182,7 @@ typedef struct {
 	tp_span node, part, patches, who;
 	uint64_t when;
 	tp_span on;
+	tp_span ids; // after on only; none: p NULL
 } tp_write;
 // Stays open in the store until its run closes (32 steps or 2048 bytes).
 int tp_log_write(tp_log *log, const tp_write *w, uint64_t *n, uint64_t *lamport);
@@ -185,6 +190,8 @@ int tp_log_write(tp_log *log, const tp_write *w, uint64_t *n, uint64_t *lamport)
 size_t tp_log_devices(const tp_log *log);
 const uint8_t *tp_log_have(const tp_log *log, size_t i, uint64_t *have);
 uint64_t tp_log_count(const tp_log *log, const uint8_t device[32]);
+// how many elements the device's steps before step n insert (WIRE.md, ids); n past count + 1: TP_BOUND
+int tp_log_seq(const tp_log *log, const uint8_t device[32], uint64_t n, uint64_t *seq);
 int tp_log_prior(const tp_log *log, const uint8_t device[32], uint64_t n, tp_prior *p);
 long tp_log_step(const tp_log *log, const uint8_t device[32], uint64_t n, uint8_t *out, size_t cap);
 // Closes and syncs this device's open run first.

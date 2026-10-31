@@ -7,25 +7,46 @@
 #include <time.h>
 
 #include "../../../encoding/c/cbor.h"
+#include "elements.h"
 #include "wire.h"
 
+// seq: how many elements its device's steps before it insert (WIRE.md, ids)
 typedef struct {
-	uint64_t lamport, n;
+	uint64_t lamport, n, seq;
 	uint32_t device;
 	uint8_t head;
+	uint8_t ghost; // a head beside its device's newest step: it names nothing the step after it does
 } ref;
 
 // A kept entry, keyed by part and node. broken: a write here was not kept. unsure: the list of
 // failed
 // steps may be incomplete, so the next walk goes back to the first step. waits: a step landed early
 // in it, and it is worked out again once the run landing is all in (settle).
+typedef struct own own;
 typedef struct {
 	char *key;
 	size_t size;
 	ref one, *more;
+	own *mine;
 	uint32_t count;
 	uint8_t broken, unsure, waits;
 } entry;
+
+// What an entry holds when rebase is on: the value its steps make as history worked it out, and its
+// newest steps in the order applied, each with what undoes it (empty for one that did not apply).
+// all: the tail is every step of the entry, so undoing it all leaves nothing.
+typedef struct {
+	ref at;
+	op_undo undo;
+	el_back back; // what undoes its sequences' elements
+} rung;
+struct own {
+	op_value *value;
+	el_state el; // its strings' and arrays' elements (elements.h)
+	rung *tail;
+	size_t n, room;
+	uint8_t all;
+};
 
 // a step that landed early in entry k
 typedef struct {
@@ -57,6 +78,7 @@ struct tp_history {
 	void (*run)(void *ctx, void (*f)(void *data), void *data);
 	void *ctx;
 	int forgets;
+	size_t window; // steps of an entry that hold what undoes them; 0: none
 	pl_watch *watch;
 	entry *entries;
 	size_t nentries, roomentries;
@@ -396,7 +418,7 @@ static long entry_of(tp_history *h, const char *part, const char *node) {
 	entry *es = grown(h, h->entries, &h->roomentries, h->nentries, sizeof *es);
 	if (!es) return tp_free(&h->mem, key, size), -1;
 	h->entries = es;
-	es[h->nentries] = (entry){key, size, {0}, NULL, 0, 0, 0, 0};
+	es[h->nentries] = (entry){key, size, {0}, NULL, NULL, 0, 0, 0, 0};
 	h->slots[s] = ++h->nentries;
 	if (2 * h->nentries > h->nslots) {
 		size_t n = 2 * h->nslots, *slots = tp_alloc(&h->mem, n * sizeof *slots);
@@ -419,29 +441,67 @@ static int after(const tp_history *h, const ref *x, const ref *y) {
 	return memcmp(h->devices[x->device], h->devices[y->device], 32) > 0;
 }
 
+static void unown(tp_history *h, entry *e) {
+	own *m = e->mine;
+	if (!m) return;
+	for (size_t i = 0; i < m->n; i++) {
+		op_undo_free(&m->tail[i].undo);
+		el_back_free(&h->mem, &m->tail[i].back);
+	}
+	tp_free(&h->mem, m->tail, m->room * sizeof *m->tail);
+	el_state_free(&h->mem, &m->el);
+	op_free(m->value);
+	tp_free(&h->mem, m, sizeof *m);
+	e->mine = NULL;
+}
+
+// the newest steps only: older ones no longer hold what undoes them
+static void trim(tp_history *h, own *m, size_t window) {
+	if (m->n <= window) return;
+	size_t gone = m->n - window;
+	for (size_t i = 0; i < gone; i++) {
+		op_undo_free(&m->tail[i].undo);
+		el_back_free(&h->mem, &m->tail[i].back);
+	}
+	memmove(m->tail, m->tail + gone, window * sizeof *m->tail);
+	m->n = window, m->all = 0;
+}
+
 static void unplace(tp_history *h, entry *e) {
+	unown(h, e);
 	if (e->count > 1) tp_free(&h->mem, e->more, (e->count - 1) * sizeof *e->more);
 	e->more = NULL, e->count = 0;
 }
 
-static int placed(tp_history *h, long k, const uint8_t device[32], uint64_t n, uint64_t lamport) {
+static int placed(tp_history *h, long k, const uint8_t device[32], uint64_t n, uint64_t lamport,
+	uint64_t seq, int whole, ref *replaced) {
+	if (replaced) replaced->n = 0;
 	long d = device_of(h, device);
 	if (d < 0) return -1;
 	entry *e = &h->entries[k];
-	ref r = {lamport, n, (uint32_t)d, 1}, *mine = NULL;
+	ref r = {.lamport = lamport, .n = n, .seq = seq, .device = (uint32_t)d, .head = 1}, *mine = NULL;
 	int last = 1;
 	for (size_t i = 0; i < e->count; i++) {
 		ref *x = at(e, i);
 		if (after(h, x, &r)) last = 0;
-		if (x->device == r.device) mine = x;
+		if (x->device == r.device && !x->ghost) mine = x;
 	}
 	if (h->forgets) {
 		if (last) unplace(h, e), e->one = r, e->count = 1;
 		return last;
 	}
 	if (mine) {
-		if (mine->n < n) *mine = r;
+		if (mine->n < n) {
+			if (replaced) *replaced = *mine;
+			*mine = r;
+		}
 		return last;
+	}
+	if (!e->count && !h->forgets && whole) {
+		// an entry seen from its first step, a whole value: its own from nothing, every step in its tail
+		own *m = tp_alloc(&h->mem, sizeof *m);
+		if (m) memset(m, 0, sizeof *m), m->all = 1;
+		e->mine = m;
 	}
 	if (e->count) {
 		ref *more = tp_grow(&h->mem, e->more, (e->count - 1) * sizeof *more, e->count * sizeof *more);
@@ -467,6 +527,35 @@ static void unhead(tp_history *h, entry *e, const tp_step *s, const ref *r) {
 	for (size_t i = 0; i < e->count; i++) {
 		ref *x = at(e, i);
 		if (x->head && !(x->device == r->device && x->n == r->n) && covers(h, s, r, x)) x->head = 0;
+	}
+}
+
+// a head that is no longer the newest of its device: a ref of its own, noted ghost
+static void ghost(tp_history *h, long k, const ref *old) {
+	entry *e = &h->entries[k];
+	ref *more = tp_grow(&h->mem, e->more, (e->count - 1) * sizeof *more, e->count * sizeof *more);
+	if (!more) return;
+	e->more = more, more[e->count - 1] = *old, more[e->count - 1].ghost = 1;
+	e->count++;
+}
+
+// ghosts that are no head any more let go
+static void sweep(tp_history *h, entry *e) {
+	for (size_t i = 0; i < e->count;) {
+		ref *x = at(e, i);
+		if (!x->ghost || x->head) {
+			i++;
+			continue;
+		}
+		ref last = *at(e, e->count - 1);
+		ref *more = tp_grow(&h->mem, e->more, (e->count - 1) * sizeof *more, (e->count - 2) * sizeof *more);
+		if (!more && e->count > 2) {
+			i++;
+			continue;
+		}
+		e->more = e->count > 2 ? more : NULL;
+		if (i != e->count - 1) *at(e, i) = last;
+		e->count--;
 	}
 }
 
@@ -511,6 +600,7 @@ static void look(tp_history *h, const entry *e, cursor *c) {
 	}
 	if (!c->at.n) return;
 	c->at.lamport = s.lamport;
+	tp_log_seq(h->log, h->devices[c->at.device], c->at.n, &c->at.seq);
 	if (s.part.n != a || memcmp(s.part.p, part, a)) return;
 	if (s.relative) {
 		char own[TP_OWN_ID];
@@ -537,23 +627,34 @@ static int applies(tp_history *h, const ref *r) {
 }
 
 // Walk back from the frontier, newest first, to the newest step that puts the whole value and
-// applies; else to the first step.
-static int walked(tp_history *h, long k, const ref *late, tp_buf *out, size_t *count) {
+// applies (*whole set); else to the first step. from: only back to that step, whatever puts the
+// whole value.
+static int walked(tp_history *h, long k, const ref *late, const ref *from, int *whole, tp_buf *out,
+	size_t *count) {
 	entry *e = &h->entries[k];
 	size_t n = e->count;
+	if (whole) *whole = 0;
 	cursor *cs = tp_alloc(&h->mem, n * sizeof *cs);
 	if (!cs) return TP_NOMEM;
-	for (size_t i = 0; i < n; i++) cs[i].at = *at(e, i), look(h, e, &cs[i]);
+	for (size_t i = 0; i < n; i++) {
+		cs[i].at = *at(e, i);
+		if (at(e, i)->ghost) cs[i].at.n = 0, cs[i].ours = cs[i].whole = 0;
+		else look(h, e, &cs[i]);
+	}
 	for (;;) {
 		cursor *c = NULL;
 		for (size_t i = 0; i < n; i++) {
 			if (cs[i].at.n && (!c || after(h, &cs[i].at, &c->at))) c = &cs[i];
 		}
-		if (!c) break;
+		if (!c || (from && after(h, from, &c->at))) break;
 		if (c->ours) {
 			tp_put(out, &c->at, sizeof c->at);
 			if (tp_buf_why(out)) break;
-			if (late && !e->unsure && c->whole && !after(h, &c->at, late) && applies(h, &c->at)) break;
+			if (!from && late && !e->unsure && c->whole && !after(h, &c->at, late) &&
+				applies(h, &c->at)) {
+				if (whole) *whole = 1;
+				break;
+			}
 		}
 		c->at.n--, look(h, e, c);
 	}
@@ -614,25 +715,159 @@ static int write(tp_history *h, block *b) {
 	return w.code;
 }
 
+static long el_index(void *self, const uint8_t device[32]) { return device_of(self, device); }
+static const uint8_t *el_bytes(void *self, uint32_t i) { return ((tp_history *)self)->devices[i]; }
+static long el_find(void *self, const uint8_t device[32]) {
+	tp_history *h = self;
+	for (size_t i = 0; i < h->ndevices; i++) {
+		if (!memcmp(h->devices[i], device, 32)) return (long)i;
+	}
+	return -1;
+}
+static el_ctx elc(tp_history *h) { return (el_ctx){&h->mem, h, el_index, el_find, el_bytes}; }
+
+// a step applied after the rest to an entry's own value, and noted in its tail: its patches as
+// applied there, by position (*applied, malloc'd). one that does not apply is passed over (nothing
+// to undo): its code. *owned 0: no own value (or no room for its tail: it is dropped), nothing done
+static int onto(tp_history *h, long k, const ref *r, tp_span patches, const op_patch *ps, size_t n,
+	const el_anchor *ids, op_patch **applied, size_t *napplied, int *owned) {
+	own *m = h->entries[k].mine;
+	*owned = 0, *applied = NULL, *napplied = 0;
+	if (!m) return 0;
+	rung *g = grown(h, m->tail, &m->room, m->n, sizeof *g);
+	if (!g) {
+		unown(h, &h->entries[k]);
+		return 0;
+	}
+	m->tail = g;
+	op_undo u = {NULL, 0, 0};
+	el_back back = {NULL, 0, 0};
+	el_ctx c = elc(h);
+	el_ref er = {r->lamport, r->n, r->seq, r->device};
+	int code = el_step(&c, &m->el, &m->value, &er, patches, ps, n, NULL, ids, 0, &u, &back, applied,
+		napplied, NULL);
+	if (code) el_back_free(&h->mem, &back), u = (op_undo){NULL, 0, 0}, back = (el_back){NULL, 0, 0};
+	m->tail[m->n++] = (rung){*r, u, back};
+	trim(h, m, h->window);
+	*owned = 1;
+	return code;
+}
+
+// an entry's own value undone back through its tail, to t steps
+static int unwound(const own *m, size_t t, op_value **value) {
+	op_value *v = m->value ? op_ref(m->value) : NULL;
+	for (size_t i = m->n; i-- > t;) {
+		const op_undo *u = &m->tail[i].undo;
+		op_value *out = NULL;
+		size_t failed;
+		if (!u->n) continue;
+		if (op_apply(v, u->patches, u->n, NULL, &out, &failed)) return op_free(v), 0;
+		op_free(v), v = out;
+	}
+	*value = v;
+	return 1;
+}
+
+// step r read back (its block, for the caller to free) and applied to value and its elements; u, if
+// given, gets what undoes the value, bk what undoes the elements
+static int apply_ref(tp_history *h, const ref *r, op_value **value, el_state *es, op_undo *u,
+	el_back *bk, block **out) {
+	long length = fetch(h, h->devices[r->device], r->n);
+	tp_step s;
+	block *b = length < 0 ? NULL : block_of(h->bytes.p, (size_t)length);
+	*out = b;
+	if (!b || tp_step_decode(h->bytes.p, (size_t)length, &s)) return TP_STORE;
+	el_ctx c = elc(h);
+	el_anchor *ids;
+	int code = h->forgets ? (ids = NULL, 0) : el_read(&c, &s, r->seq, &ids);
+	if (code) return code;
+	el_ref er = {r->lamport, r->n, r->seq, r->device};
+	code = el_step(&c, es, value, &er, s.patches, b->patches, b->count, NULL, ids, 0, u, bk, NULL, NULL,
+		NULL);
+	el_anchors_free(&h->mem, ids, s.count);
+	return code;
+}
+
+// an entry's own value made again from its first step, not written (a write here needs it). NULL: no
+// room
+static own *rebuild(tp_history *h, long k) {
+	tp_buf list = {NULL, 0, 0, (size_t)-1, &h->mem, 0};
+	size_t count;
+	own *m = tp_alloc(&h->mem, sizeof *m);
+	if (!m) return NULL;
+	memset(m, 0, sizeof *m), m->all = 1;
+	if (walked(h, k, NULL, NULL, NULL, &list, &count)) {
+		tp_buf_free(&list);
+		tp_free(&h->mem, m, sizeof *m);
+		return NULL;
+	}
+	int ok = 1;
+	for (size_t i = 0; i < count && ok; i++) {
+		ref r = ((const ref *)list.p)[i];
+		op_undo u = {NULL, 0, 0};
+		el_back bk = {NULL, 0, 0};
+		block *b;
+		int code = apply_ref(h, &r, &m->value, &m->el, &u, &bk, &b);
+		if (b) block_free(b);
+		if (code) op_undo_free(&u), el_back_free(&h->mem, &bk), u = (op_undo){NULL, 0, 0}, bk = (el_back){NULL, 0, 0};
+		rung *g = grown(h, m->tail, &m->room, m->n, sizeof *g);
+		if (!g) {
+			op_undo_free(&u), el_back_free(&h->mem, &bk);
+			ok = 0;
+			break;
+		}
+		m->tail = g, g[m->n++] = (rung){r, u, bk};
+		trim(h, m, h->window);
+	}
+	tp_buf_free(&list);
+	h->entries[k].mine = m;
+	if (!ok) return unown(h, &h->entries[k]), NULL;
+	return m;
+}
+
 // The entry worked out again, for its early steps (lates, n of them; last: the earliest's block):
-// walked back to before the earliest, each early step a head no more if a step after it names it
-// (each step after the earliest read once, for all of them), then applied in order.
+// its own value undone back to before the earliest when its tail reaches that far, else from the
+// first step (or the newest that puts the whole value); each early step a head no more if a step
+// after it names it (each step after the earliest read once, for all of them); then every step from
+// there applied in order.
 static int redo(tp_history *h, long k, block *last, const ref *lates, size_t nlates) {
 	const ref *late = lates;
 	for (size_t j = 1; j < nlates; j++) {
 		if (after(h, late, &lates[j])) late = &lates[j];
 	}
 	tp_buf list = {NULL, 0, 0, (size_t)-1, &h->mem, 0};
-	size_t count;
+	size_t count, t = 0;
+	own *m = h->entries[k].mine;
+	op_value *value = NULL;
+	int whole = 0;
+	if (m) {
+		for (t = m->n; t > 0 && after(h, &m->tail[t - 1].at, late); t--) {}
+	}
+	// a tail with a step before the earliest (or every step) reaches; an undo that fails is not trusted
+	int reach = m && (t > 0 || m->all) && unwound(m, t, &value);
+	if (m && !reach) unown(h, &h->entries[k]), m = NULL;
 	uint8_t *done = tp_alloc(&h->mem, nlates);
-	if (!done || walked(h, k, late, &list, &count)) {
-		tp_free(&h->mem, done, nlates), tp_buf_free(&list), block_free(last);
+	if (!done || walked(h, k, late, reach ? late : NULL, &whole, &list, &count)) {
+		tp_free(&h->mem, done, nlates), tp_buf_free(&list), block_free(last), op_free(value);
 		h->entries[k].unsure = 1;
 		return TP_NOMEM;
 	}
 	memset(done, 0, nlates);
-	op_value *value = NULL;
-	int twice = 0;
+	el_state local = {NULL, 0, 0, NULL, 0, 0}, *es = &local;
+	if (reach) {
+		for (size_t i = m->n; i-- > t;) {
+			el_back_undo(&h->mem, &m->el, &m->tail[i].back);
+			op_undo_free(&m->tail[i].undo);
+		}
+		m->n = t, es = &m->el;
+	} else if (!h->forgets) {
+		// no tail that reaches: made again, from the step the walk began at
+		own *fresh = tp_alloc(&h->mem, sizeof *fresh);
+		if (fresh) memset(fresh, 0, sizeof *fresh), fresh->all = (uint8_t)!whole, es = &fresh->el;
+		unown(h, &h->entries[k]);
+		h->entries[k].mine = m = fresh;
+	}
+	int twice = 0, dropped = 0;
 	size_t left = nlates;
 	for (size_t i = 0; i < count && left && !h->forgets; i++) {
 		const ref *r = &((const ref *)list.p)[i];
@@ -646,27 +881,38 @@ static int redo(tp_history *h, long k, block *last, const ref *lates, size_t nla
 		}
 	}
 	tp_free(&h->mem, done, nlates);
+	sweep(h, &h->entries[k]);
 	for (size_t i = 0; i < count; i++) {
 		ref r = ((const ref *)list.p)[i];
 		const uint8_t *device = h->devices[r.device];
-		block *b = read_back(h, device, r.n);
-		op_value *out = NULL;
-		size_t failed;
-		int code = b ? op_apply(value, b->patches, b->count, NULL, &out, &failed) : TP_STORE;
+		block *b;
+		op_undo u = {NULL, 0, 0};
+		el_back bk = {NULL, 0, 0};
+		int code = apply_ref(h, &r, &value, es, m ? &u : NULL, &bk, &b);
 		failure *was = failed_at(h, device, r.n);
+		if (code) el_back_free(&h->mem, &bk), bk = (el_back){NULL, 0, 0};
+		if (m) {
+			rung *g = grown(h, m->tail, &m->room, m->n, sizeof *g);
+			if (g) m->tail = g, g[m->n++] = (rung){r, u, bk};
+			else op_undo_free(&u), el_back_free(&h->mem, &bk), dropped = 1, m = NULL;
+		} else el_back_free(&h->mem, &bk);
 		if (!code) {
-			op_free(value), value = out;
 			block_free(last), last = b;
 			if (was) was->fixed = 1, twice |= failed_after(h, was) != NULL;
 			continue;
 		}
 		if (!was) {
 			note(h, &h->failed, device, r.n, b ? b->node : "", b ? b->part : "",
-				b ? op_code_name(code) : tp_why(code));
+				code < 0 ? tp_why(code) : op_code_name(code));
 		}
 		if (b) block_free(b);
 	}
 	tp_buf_free(&list);
+	if (m) {
+		trim(h, m, h->window);
+		op_free(m->value), m->value = value ? op_ref(value) : NULL;
+	} else if (dropped) unown(h, &h->entries[k]);
+	el_state_free(&h->mem, &local);
 	whole_of(last, value);
 	int code = write(h, last);
 	unfail(h, !code);
@@ -718,22 +964,55 @@ static void land(tp_history *h, const uint8_t device[32], uint64_t n) {
 	long length = fetch(h, device, n);
 	block *b = length < 0 ? NULL : block_of(h->bytes.p, (size_t)length);
 	tp_step st;
-	if (!b || tp_step_decode(h->bytes.p, (size_t)length, &st)) {
+	uint64_t at;
+	int why = tp_log_seq(h->log, device, n, &at);
+	if (why || !b || tp_step_decode(h->bytes.p, (size_t)length, &st)) {
 		if (b) block_free(b);
-		note(h, &h->failed, device, n, "", "", tp_why(TP_STORE));
+		note(h, &h->failed, device, n, "", "", tp_why(why ? why : TP_STORE));
 		return;
 	}
+	el_ctx c = elc(h);
+	el_anchor *ids = NULL;
+	int code = h->forgets ? (ids = NULL, 0) : el_read(&c, &st, at, &ids);
+	if (code) {
+		block_free(b);
+		note(h, &h->failed, device, n, "", "", tp_why(code));
+		return;
+	}
+	int named_ids = el_named(ids, st.count);
+	tp_span patches = st.patches;
+	size_t from = 0;
+	tp_patch first;
+	int whole = !tp_patch_next(patches, &from, &first) && first.path.n == 1 && !first.ranged && !first.move.p;
 	long k = entry_of(h, b->part, b->node);
-	ref late = {(uint64_t)int_of(b->step->items[6]), n, 0, 0};
-	int last = k < 0 ? -1 : placed(h, k, device, n, late.lamport);
+	ref late = {.lamport = (uint64_t)int_of(b->step->items[6]), .n = n, .seq = at};
+	ref replaced = {0};
+	int last = k < 0 ? -1 : placed(h, k, device, n, late.lamport, at, whole, &replaced);
 	if (last >= 0) late.device = (uint32_t)device_of(h, device);
-	if (last >= 0 && !h->forgets) unhead(h, &h->entries[k], &st, &late);
+	if (last >= 0 && !h->forgets) {
+		unhead(h, &h->entries[k], &st, &late);
+		// the device's step before this one, if this names nothing of it, stays a head beside it
+		if (replaced.n && replaced.head && !covers(h, &st, &late, &replaced)) ghost(h, k, &replaced);
+		sweep(h, &h->entries[k]);
+	}
 	op_value *s = op_ref(b->step);
-	int code = last < 0                ? (block_free(b), TP_NOMEM)
-		: !last && !h->forgets       ? later(h, k, b, &late)
-		: h->entries[k].waits        ? (block_free(b), 0)
-		: last                       ? write(h, b)
-					     : (block_free(b), 0);
+	if (last < 0) code = (block_free(b), TP_NOMEM);
+	else if (!last && !h->forgets) code = later(h, k, b, &late);
+	else if (h->entries[k].waits || !last) code = (block_free(b), 0);
+	else {
+		// by its ids, as its own value has it; with none held, a step with ids is worked out again
+		int owned;
+		op_patch *applied;
+		size_t napplied;
+		code = onto(h, k, &late, patches, b->patches, b->count, ids, &applied, &napplied, &owned);
+		if (owned && code) block_free(b);
+		else if (owned) {
+			free(b->patches);
+			b->patches = applied ? applied : must(1), b->count = napplied;
+			code = write(h, b);
+		} else code = named_ids && !h->forgets ? redo(h, k, b, &late, 1) : write(h, b);
+	}
+	el_anchors_free(&h->mem, ids, st.count);
 	if (code) {
 		note(h, &h->failed, device, n, s->items[3]->str, s->items[4]->str,
 			code < 0 ? tp_why(code) : op_code_name(code));
@@ -785,8 +1064,8 @@ static int put_snapshot(tp_history *h, CborOut *o) {
 				if ((!was || after(h, r, was)) && (!next || after(h, next, r))) next = r;
 			}
 			tp_hex(hex, h->devices[next->device], 32);
-			cborPutHead(o, 4, 3), cborPutHead(o, 0, next->lamport);
-			cborPutText(o, hex, 64), cborPutHead(o, 0, next->n);
+			cborPutHead(o, 4, 4), cborPutHead(o, 0, next->lamport);
+			cborPutText(o, hex, 64), cborPutHead(o, 0, next->n), cborPutHead(o, 0, next->seq);
 			was = next;
 		}
 		size_t heads = 0;
@@ -840,12 +1119,16 @@ static int unsnap(tp_history *h, tp_in *in, tp_buf *names) {
 	h->entries[e].unsure = 1;
 	tp_in list = *in;
 	for (uint64_t i = 0; i < k; i++) {
-		uint64_t three;
-		if (tp_array(in, &three) || three != 3 || tp_whole(in, &lamport) || tp_text(in, &hex) ||
-			hex.n != 64 || tp_unhex(device, hex.p, 32) || tp_whole(in, &n))
+		uint64_t three, seq = 0;
+		if (tp_array(in, &three) || (three != 3 && three != 4) || tp_whole(in, &lamport) || tp_text(in, &hex) ||
+			hex.n != 64 || tp_unhex(device, hex.p, 32) || tp_whole(in, &n) || (three == 4 && tp_whole(in, &seq)))
 			return TP_NOTSTEP;
-		if (placed(h, e, device, n, lamport) < 0) return TP_NOMEM;
+		// a snapshot from before seq
+		int why = three == 3 ? tp_log_seq(h->log, device, n, &seq) : 0;
+		if (why) return why;
+		if (placed(h, e, device, n, lamport, seq, 0, NULL) < 0) return TP_NOMEM;
 	}
+	unown(h, &h->entries[e]);
 	entry *en = &h->entries[e];
 	uint64_t heads = 0, place;
 	ref *newest = NULL;
@@ -978,28 +1261,76 @@ static void recorded(const pl_fact *f, void *ctx) {
 	CborOut o = {NULL, 0, 0, true};
 	const uint8_t *me = tp_log_device(h->log);
 	int ok = put_patches(&o, f->patches, f->patches_length) && when >= 0;
-	tp_buf on = {NULL, 0, 0, (size_t)-1, &h->mem, 0};
+	size_t np = f->patches_length;
+	tp_buf on = {NULL, 0, 0, (size_t)-1, &h->mem, 0}, idb = {NULL, 0, 0, (size_t)-1, &h->mem, 0};
 	if (me) put_on(h, &h->entries[k], me, tp_log_count(h->log, me) + 1, &on);
+	// its splices named by ids from the entry's own elements, applied there (as the graph has it);
+	// none known, or not applying there: by their ranges
+	el_ctx c = elc(h);
+	el_anchor *named = NULL;
+	op_undo u = {NULL, 0, 0};
+	el_back bk = {NULL, 0, 0};
+	int ids = 0;
+	long mei = me ? device_of(h, me) : -1;
+	uint64_t seq = 0;
+	if (me) tp_log_seq(h->log, me, tp_log_count(h->log, me) + 1, &seq);
+	if (ok && mei >= 0 && !h->forgets && !h->entries[k].broken && !h->entries[k].waits) {
+		own *mine = h->entries[k].mine;
+		if (!mine && h->entries[k].count) mine = rebuild(h, k);
+		if (mine) {
+			el_ref er = {tp_log_lamport(h->log) + 1, tp_log_count(h->log, me) + 1, seq, (uint32_t)mei};
+			ids = !el_step(&c, &mine->el, &mine->value, &er, (tp_span){o.data, o.length}, f->patches, np,
+				NULL, NULL, 1, &u, &bk, NULL, NULL, &named);
+			if (!ids) el_back_free(&h->mem, &bk), bk = (el_back){NULL, 0, 0}, unown(h, &h->entries[k]);
+			else if (el_named(named, np)) el_write(&idb, &c, named, np, (uint32_t)mei, er.n, er.seq);
+		}
+	}
 	tp_write w = {{(const uint8_t *)node, strlen(node)}, {(const uint8_t *)part, strlen(part)},
 		{o.data, o.length}, {(const uint8_t *)who, who ? strlen(who) : 0}, (uint64_t)when,
-		{on.p, on.len}};
+		{on.p, on.len}, {idb.p, idb.len}};
 	uint64_t n, lamport;
-	int why = !ok ? TP_NOTSTEP : tp_buf_why(&on) ? tp_buf_why(&on) : tp_log_write(h->log, &w, &n, &lamport);
-	free(o.data), tp_buf_free(&on);
+	int why = !ok ? TP_NOTSTEP : tp_buf_why(&on) ? tp_buf_why(&on) : tp_buf_why(&idb) ? tp_buf_why(&idb)
+		: tp_log_write(h->log, &w, &n, &lamport);
+	el_anchors_free(&h->mem, named, np), tp_buf_free(&idb), tp_buf_free(&on);
 	if (why) {
+		// its own value has a write no step holds: made again when next needed
+		if (ids) op_undo_free(&u), el_back_free(&h->mem, &bk), unown(h, &h->entries[k]);
+		free(o.data);
 		h->entries[k].broken = 1;
 		note(h, &h->unkept, NULL, 0, node, part, tp_why(why));
 		return;
 	}
 	h->entries[k].broken = 0;
-	int last = placed(h, k, me, n, lamport);
-	ref late = {lamport, n, last >= 0 ? (uint32_t)device_of(h, me) : 0, 1};
+	int last = placed(h, k, me, n, lamport, seq, whole, NULL);
+	ref late = {lamport, n, seq, last >= 0 ? (uint32_t)device_of(h, me) : 0, 1, 0};
 	for (size_t i = 0; last >= 0 && i < h->entries[k].count; i++) {
 		ref *x = at(&h->entries[k], i);
 		x->head = x->device == late.device && x->n == n;
 	}
-	block *b = last ? NULL : read_back(h, me, n);
-	int code = last < 0 ? TP_NOMEM : b ? redo(h, k, b, &late, 1) : last ? 0 : TP_STORE;
+	if (last >= 0) sweep(h, &h->entries[k]);
+	int code = 0;
+	if (last < 0) {
+		code = TP_NOMEM;
+		if (ids) op_undo_free(&u), el_back_free(&h->mem, &bk), unown(h, &h->entries[k]);
+	} else if (!last) {
+		// early (a write here never is): its own value dropped, the entry worked out again now
+		if (ids) op_undo_free(&u), el_back_free(&h->mem, &bk), unown(h, &h->entries[k]);
+		block *b = read_back(h, me, n);
+		code = b ? redo(h, k, b, &late, 1) : TP_STORE;
+	} else if (ids) {
+		// named: it is in its own value already
+		own *m = h->entries[k].mine;
+		rung *g = m ? grown(h, m->tail, &m->room, m->n, sizeof *g) : NULL;
+		if (g) m->tail = g, m->tail[m->n++] = (rung){late, u, bk}, trim(h, m, h->window);
+		else op_undo_free(&u), el_back_free(&h->mem, &bk), unown(h, &h->entries[k]);
+	} else if (!h->entries[k].waits) {
+		int owned;
+		op_patch *applied;
+		size_t napplied;
+		onto(h, k, &late, (tp_span){o.data, o.length}, f->patches, np, NULL, &applied, &napplied, &owned);
+		free(applied);
+	}
+	free(o.data);
 	if (code) note(h, &h->failed, me, n, node, part, code < 0 ? tp_why(code) : op_code_name(code));
 }
 
@@ -1010,7 +1341,8 @@ tp_history *tp_history_new(const tp_history_options *o) {
 	memset(h, 0, sizeof *h);
 	h->mem = o->mem, h->log = o->log, h->table = o->table, h->places = o->places;
 	h->kept = o->kept, h->run = o->run, h->ctx = o->ctx, h->forgets = o->forgets;
-	h->bytes = (tp_buf){NULL, 0, 0, 1 << 20, &h->mem, 0};
+	h->window = o->forgets || o->rebase < 0 ? 0 : o->rebase ? (size_t)o->rebase : 256;
+	h->bytes = (tp_buf){NULL, 0, 0, TP_RUN, &h->mem, 0};
 	h->early = (tp_buf){NULL, 0, 0, (size_t)-1, &h->mem, 0};
 	h->nslots = 16;
 	if (!(h->slots = tp_alloc(&h->mem, h->nslots * sizeof *h->slots))) {
@@ -1145,7 +1477,7 @@ size_t tp_history_versions(tp_history *h, const char *node, const char *part, tp
 	uint32_t *seen = NULL;
 	uint8_t *bytes[TP_VERSIONS];
 	size_t sizes[TP_VERSIONS];
-	if (h->forgets || nh < 2 || walked(h, k, NULL, &list, &m) || !m) goto done;
+	if (h->forgets || nh < 2 || walked(h, k, NULL, NULL, NULL, &list, &m) || !m) goto done;
 	const ref *steps = (const ref *)list.p;
 	uint32_t all = (1u << nh) - 1;
 	if (!(seen = tp_alloc(&h->mem, m * sizeof *seen))) goto done;
@@ -1198,6 +1530,7 @@ size_t tp_history_versions(tp_history *h, const char *node, const char *part, tp
 		}
 		if (tp_buf_why(&side)) break;
 		op_value *value = NULL;
+		el_state es = {NULL, 0, 0, NULL, 0, 0};
 		for (size_t i = start; i < m; i++) {
 			long length = fetch(h, h->devices[steps[i].device], steps[i].n);
 			block *b = length < 0 ? NULL : block_of(h->bytes.p, (size_t)length);
@@ -1206,8 +1539,9 @@ size_t tp_history_versions(tp_history *h, const char *node, const char *part, tp
 				if (b) block_free(b);
 				continue;
 			}
-			size_t kept = 0, q = 0;
+			size_t left = 0, q = 0;
 			tp_patch p;
+			uint8_t *keep = must(s.count);
 			for (size_t at = 0; !tp_patch_next(s.patches, &at, &p); q++) {
 				tp_span t[2];
 				int clash = 0;
@@ -1216,14 +1550,22 @@ size_t tp_history_versions(tp_history *h, const char *node, const char *part, tp
 					tp_span y;
 					while (!clash && in.p < in.end && !tp_skip(&in, &y)) clash = overlap(t[r], y);
 				}
-				if (!clash) b->patches[kept++] = b->patches[q];
+				keep[q] = !clash, left += !clash;
 			}
-			op_value *next = NULL;
-			size_t failed;
-			if (kept && !op_apply(value, b->patches, kept, NULL, &next, &failed)) op_free(value), value = next;
-			else if (next) op_free(next);
+			el_ctx c = elc(h);
+			el_anchor *ids;
+			if (left && !el_read(&c, &s, steps[i].seq, &ids)) {
+				el_back bk = {NULL, 0, 0};
+				el_ref er = {steps[i].lamport, steps[i].n, steps[i].seq, steps[i].device};
+				el_step(&c, &es, &value, &er, s.patches, b->patches, b->count, keep, ids, 0, NULL, &bk,
+					NULL, NULL, NULL);
+				el_back_free(&h->mem, &bk);
+				el_anchors_free(&h->mem, ids, s.count);
+			}
+			free(keep);
 			block_free(b);
 		}
+		el_state_free(&h->mem, &es);
 		size_t n;
 		uint8_t *v = bytes_of(value, &n);
 		int known = !v;
