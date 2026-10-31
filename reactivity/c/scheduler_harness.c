@@ -1047,10 +1047,20 @@ static sc_promise *stream_next(void *data) {
 	return p;
 }
 
+// A closed stream's finally runs after the request that closed it (an async generator closed at a
+// yield awaits first), before the next.
+static streamer **closing;
+static size_t nclosing, capclosing;
+
 static void stream_close(void *data) {
 	streamer *t = data;
 	t->closed = true;
-	if (!t->held) stream_finally(t);
+	if (!t->held) PUSH(closing, nclosing, capclosing, t);
+}
+
+static void closings(void) {
+	for (size_t i = 0; i < nclosing; i++) stream_finally(closing[i]);
+	nclosing = 0;
 }
 
 static sc_stream stream_of(streamer *t) { return (sc_stream){stream_next, stream_close, t}; }
@@ -1545,6 +1555,7 @@ void hh_answer(const op_value *r, FILE *out) {
 	op_value *a = answer(r);
 	op_json_write(out, a);
 	op_free(a);
+	closings();
 }
 
 void hh_finish(void) {
@@ -1566,6 +1577,7 @@ void hh_finish(void) {
 		if (streamers[i]->run) sc_run_unref(streamers[i]->run);
 		free(streamers[i]);
 	}
+	free(closing);
 	for (size_t i = 0; i < nmoments; i++) {
 		free(moments[i].error);
 		free(moments[i].through);

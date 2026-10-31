@@ -1,0 +1,158 @@
+{
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": {
+				"actor": "test"
+			},
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"b": 0
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "compute",
+			"name": "S",
+			"scope": "o",
+			"to": "b",
+			"f": {
+				"stream": [
+					{
+						"yield": {
+							"sum": [
+								{
+									"read": "b"
+								},
+								1
+							]
+						}
+					},
+					{
+						"log": "between"
+					},
+					{
+						"yield": {
+							"sum": [
+								{
+									"read": "b"
+								},
+								10
+							]
+						}
+					},
+					{
+						"finally": {
+							"log": "closed"
+						}
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					"closed"
+				]
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"key": "b",
+			"expect": {
+				"value": 11
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					"between",
+					"closed"
+				]
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "S",
+						"tick": 2
+					},
+					{
+						"starts": "S",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "S",
+						"run": 1,
+						"ended": "pending"
+					},
+					{
+						"due": "S",
+						"tick": 3,
+						"writer": "S"
+					},
+					{
+						"ends": "S",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "S",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "S",
+						"run": 2,
+						"ended": "pending"
+					},
+					{
+						"ends": "S",
+						"run": 2,
+						"ended": "looping",
+						"equal": false,
+						"through": [
+							"S"
+						]
+					},
+					{
+						"ends": "S",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		}
+	],
+	"title": "a stream whose own value makes it due [chee 10-31: \"whatever solidjs2.0 does\"]: no next value is pulled while it is due; it runs again from the start"
+}

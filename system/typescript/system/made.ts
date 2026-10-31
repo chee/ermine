@@ -1,5 +1,5 @@
 import { type Id, type Path, PlacesError } from "@ermine/places"
-import type { Computer, Equal, Scope } from "@ermine/reactivity"
+import { type Computer, type Equal, PENDING, type Scope } from "@ermine/reactivity"
 import { isPromise } from "@ermine/reactivity/helpers"
 import type { Inner } from "../context.ts"
 import { keyOf, up } from "./addressing.ts"
@@ -261,11 +261,15 @@ function watchedStream(m: Computed, source: AsyncIterable<unknown>, mine: () => 
 					if (pulls === 1) done()
 					const p = it.next(v)
 					if (pulls++ === 0) {
-						Promise.resolve(p).then((step) => step.done && done(), done)
+						Promise.resolve(p).then(
+							(step) => (step.done || step.value === PENDING) && done(),
+							done,
+						)
 					}
 					return p
 				},
 				return(v?: unknown) {
+					done()
 					return it.return ? it.return(v) : Promise.resolve({ done: true as const, value: v })
 				},
 			}
@@ -273,15 +277,19 @@ function watchedStream(m: Computed, source: AsyncIterable<unknown>, mine: () => 
 	}
 }
 
-const isAsync = (f: unknown) =>
-	(f as { [Symbol.toStringTag]?: string })[Symbol.toStringTag] === "AsyncFunction"
+const tagOf = (f: unknown) => (f as { [Symbol.toStringTag]?: string })[Symbol.toStringTag]
+const isAsync = (f: unknown) => {
+	const tag = tagOf(f)
+	return tag === "AsyncFunction" || tag === "AsyncGeneratorFunction"
+}
 
-// The computer's function: an async function's is async too, so the scheduler carries its run past
-// its awaits where it can.
+// The computer's function: an async function's is told async too, so the scheduler carries its run
+// past its awaits where it can.
 export function body(m: Computed, f: (previous: unknown) => unknown) {
 	const plain = (f as { plain?: typeof f }).plain ?? f
 	if (!isAsync(m.code.f)) return plain
-	const g = async (previous: unknown) => await plain(previous)
+	const g = (previous: unknown) => plain(previous)
+	Object.defineProperty(g, Symbol.toStringTag, { value: tagOf(m.code.f) })
 	return Object.assign(g, { plain })
 }
 

@@ -288,6 +288,10 @@ export function createScheduler(options?: SchedulerOptions): Scheduler {
 		return r?.waiting && r.c.ran === r && r.c.state === "alive" ? r : undefined
 	}
 
+	// Plain code runs outside any run's context it is called from, so what it leaves for later is not
+	// that run's.
+	const outside = <T>(f: () => T): T => later?.get() ? later.run(undefined, f) : f()
+
 	function now(): typeof open {
 		if (open !== undefined) return open
 		const r = late()
@@ -406,6 +410,7 @@ export function createScheduler(options?: SchedulerOptions): Scheduler {
 	// error is given back.
 	function down(o: Scope, kids: Scope[], fs: (() => unknown)[]): { error: unknown } | undefined {
 		if (kids.length === 0 && fs.length === 0) return
+		if (later?.get()) return later.run(undefined, () => down(o, kids, fs))
 		let failed: { error: unknown } | undefined
 		const was = open
 		open = opens(o)
@@ -873,15 +878,9 @@ export function createScheduler(options?: SchedulerOptions): Scheduler {
 		const wasOpen = open
 		open = { scope: c, frame: own.frame, by: own }
 		try {
-			// Plain code is let out of any run's context it is called in, so what it leaves for later
-			// is not that run's.
-			value = later === undefined
-				? c.f(c.last?.value)
-				: isAsync(c.f)
+			value = later && isAsync(c.f)
 				? later.run(r, () => c.f(c.last?.value))
-				: later.get()
-				? later.run(undefined, () => c.f(c.last?.value))
-				: c.f(c.last?.value)
+				: outside(() => c.f(c.last?.value))
 			if (isGen(value)) value = advance(value, undefined, false)
 		} catch (e) {
 			if (e === PENDING) value = PENDING
@@ -900,6 +899,7 @@ export function createScheduler(options?: SchedulerOptions): Scheduler {
 		const it = r.stream
 		if (gen === undefined && it === undefined) return
 		r.paused = r.stream = undefined
+		r.waiting = false
 		const wasOpen = open
 		const was = reading
 		const wasRunning = running
@@ -994,7 +994,7 @@ export function createScheduler(options?: SchedulerOptions): Scheduler {
 				return finish(r, "pending")
 			}
 			result(r, step.value)
-			if (r.stream === it && c.state === "alive" && c.ran === r) pull(r, it)
+			if (r.stream === it && c.state === "alive" && c.ran === r && !order.has(c)) pull(r, it)
 		} finally {
 			rethrow(outer)
 		}
@@ -1003,6 +1003,8 @@ export function createScheduler(options?: SchedulerOptions): Scheduler {
 	function paused(r: Ran, w: Paused) {
 		r.paused = w.gen
 		finish(r, "pending")
+		r.waiting = true
+		r.late = false
 		const settle = (out: Out) => {
 			if (r.paused !== w.gen) return
 			if (r.c.state !== "alive" || r.c.runs !== r.n) return letGo(r)
@@ -1018,6 +1020,7 @@ export function createScheduler(options?: SchedulerOptions): Scheduler {
 	function resume(r: Ran, gen: Gen, out: Out) {
 		const c = r.c
 		if (r.paused !== gen) return
+		r.waiting = false
 		if (c.state !== "alive" || c.runs !== r.n || order.has(c)) return letGo(r)
 		r.paused = undefined
 		r.values = r.values.slice()
@@ -1203,7 +1206,8 @@ export function createScheduler(options?: SchedulerOptions): Scheduler {
 		q.head = 0
 	}
 
-	function act(a: Act) {
+	function act(a: Act): void {
+		if (later?.get()) return later.run(undefined, () => act(a))
 		const c = a.r.c
 		if (c.state !== "alive" || order.has(c)) return
 		const was = reading
@@ -1260,6 +1264,8 @@ export function createScheduler(options?: SchedulerOptions): Scheduler {
 		if (pulsing) return
 		if (later?.get()) return later.run(undefined, pulse)
 		pulsing = true
+		const wasAfter = after
+		after = undefined
 		const outer = thrown
 		thrown = undefined
 		let failed: { error: unknown } | undefined
@@ -1301,6 +1307,7 @@ export function createScheduler(options?: SchedulerOptions): Scheduler {
 		if (failed === undefined) {
 			holdFirst(afterPulses.tell())
 		}
+		after = wasAfter
 		thrown = escaped ?? failed ?? thrown
 		escaped = undefined
 		rethrow(outer)
