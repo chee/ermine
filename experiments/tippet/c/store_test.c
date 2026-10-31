@@ -29,7 +29,7 @@ static int failed;
 	} while (0)
 
 static tp_log *open_log(const tp_mem *mem, const char *dir, const uint8_t *seed) {
-	tp_log_options o = {*mem, tp_file_store(mem, dir, 1 << 20), seed, 1, {0, 0, 0}, NULL, NULL};
+	tp_log_options o = {*mem, tp_file_store(mem, dir, 1 << 20), seed, 1, {0, 0, 0, 0}, NULL, NULL, NULL};
 	if (!o.store) return NULL;
 	tp_log *log = tp_log_new(&o);
 	if (!log) return o.store->close(o.store->self), NULL;

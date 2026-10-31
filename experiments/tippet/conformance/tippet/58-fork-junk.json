@@ -1,0 +1,241 @@
+{
+	"title": "a run not signed as it is, meeting held steps with another hash, is no proof and shows no fork: refused signature where it meets the last step held, passed over where it meets an earlier one (the held steps are not read for it)",
+	"steps": [
+		{
+			"op": "device",
+			"name": "w",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "device",
+			"name": "w2",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"expect": {
+				"key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
+		},
+		{
+			"op": "device",
+			"name": "b",
+			"seed": "0303030303030303030303030303030303030303030303030303030303030303",
+			"expect": {
+				"key": "ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1"
+			}
+		},
+		{
+			"op": "take",
+			"device": "a",
+			"run": {
+				"device": "w",
+				"steps": [
+					{
+						"n": 1,
+						"node": "t",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"value": "x1"
+							}
+						],
+						"lamport": 1,
+						"when": 0,
+						"on": []
+					},
+					{
+						"n": 2,
+						"node": "t",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"value": "x2"
+							}
+						],
+						"lamport": 2,
+						"when": 0,
+						"on": []
+					},
+					{
+						"n": 3,
+						"node": "t",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"value": "x3"
+							}
+						],
+						"lamport": 3,
+						"when": 0,
+						"on": []
+					}
+				]
+			},
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "take",
+			"device": "b",
+			"run": {
+				"device": "w",
+				"steps": [
+					{
+						"n": 1,
+						"node": "t",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"value": "y1"
+							}
+						],
+						"lamport": 1,
+						"when": 0,
+						"on": []
+					},
+					{
+						"n": 2,
+						"node": "t",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"value": "y2"
+							}
+						],
+						"lamport": 2,
+						"when": 0,
+						"on": []
+					},
+					{
+						"n": 3,
+						"node": "t",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"value": "y3"
+							}
+						],
+						"lamport": 3,
+						"when": 0,
+						"on": []
+					}
+				],
+				"sign": "w2"
+			},
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "take",
+			"device": "a",
+			"run": {
+				"device": "w",
+				"sig": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+				"steps": [
+					{
+						"n": 1,
+						"node": "t",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"value": "z1"
+							}
+						],
+						"lamport": 1,
+						"when": 0,
+						"on": []
+					}
+				]
+			},
+			"expect": {
+				"added": 0
+			}
+		},
+		{
+			"op": "take",
+			"device": "a",
+			"run": {
+				"device": "w",
+				"sig": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+				"steps": [
+					{
+						"n": 3,
+						"node": "t",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"value": "z3"
+							}
+						],
+						"lamport": 3,
+						"when": 0,
+						"on": []
+					}
+				]
+			},
+			"expect": {
+				"refused": "signature"
+			}
+		},
+		{
+			"op": "forks",
+			"device": "a",
+			"expect": {
+				"forks": []
+			}
+		},
+		{
+			"op": "count",
+			"device": "a",
+			"of": "w",
+			"expect": {
+				"count": 3
+			}
+		},
+		{
+			"op": "pass",
+			"from": "b",
+			"to": "a",
+			"of": "w",
+			"at": 1,
+			"expect": {
+				"refused": "fork"
+			}
+		},
+		{
+			"op": "forks",
+			"device": "a",
+			"expect": {
+				"forks": [
+					{
+						"device": "w",
+						"n": 3,
+						"hashes": [
+							"b3bf9981e767a713ba95697fb5cb56ca6af78a82331db32ad94972bf7b2ecff6",
+							"f75ab839c23c09e132f145c138257c926e323a77dd2a5fae6acb4dc8719fcf21"
+						]
+					}
+				]
+			}
+		}
+	]
+}

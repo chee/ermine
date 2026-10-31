@@ -1,0 +1,109 @@
+{
+	"title": "a run of this device's own key that is not signed is refused as own and costs it nothing: its open run is not closed or signed for it (one run holds steps 1 to 3 after), and no fork is shown",
+	"steps": [
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0707070707070707070707070707070707070707070707070707070707070707",
+			"expect": {
+				"key": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c"
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "n",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"a": 1
+					}
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "n",
+			"patches": [
+				{
+					"path": [
+						"x"
+					],
+					"value": 2
+				}
+			],
+			"expect": {
+				"n": 2,
+				"lamport": 2
+			}
+		},
+		{
+			"op": "take",
+			"device": "a",
+			"run": {
+				"device": "a",
+				"sig": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+				"steps": [
+					{
+						"n": 1,
+						"before": null,
+						"node": "junk",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"value": 9
+							}
+						],
+						"lamport": 1,
+						"when": 5
+					}
+				]
+			},
+			"expect": {
+				"refused": "own"
+			}
+		},
+		{
+			"op": "forks",
+			"device": "a",
+			"expect": {
+				"forks": []
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "n",
+			"patches": [
+				{
+					"path": [
+						"y"
+					],
+					"value": 3
+				}
+			],
+			"expect": {
+				"n": 3,
+				"lamport": 3
+			}
+		},
+		{
+			"op": "run",
+			"device": "a",
+			"of": "a",
+			"from": 1,
+			"expect": {
+				"from": 1,
+				"to": 3,
+				"sig": "3b3a32cbdc638813eefe8550756578fb920510534e751bb823de1c7bcf66a0276c2cd0f9db97f55244b8f5f9cca54506d08c2d7ea04b6fddac232f3d2a867c0c"
+			}
+		}
+	]
+}

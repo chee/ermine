@@ -19,6 +19,7 @@ const char *tp_why(int code) {
 		case TP_CHAIN: return "chain";
 		case TP_SIGNATURE: return "signature";
 		case TP_BEFORE: return "before";
+		case TP_FORK: return "fork";
 		default: return "unknown";
 	}
 }

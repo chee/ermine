@@ -146,7 +146,8 @@ Taking a run, in order:
 
 1. own device: refused
 2. first n past held + 1: a gap, answered with have
-3. steps already held: passed over
+3. steps already held: passed over when the run's step at the lower of its last and the count held
+   is the held one; else a fork (forks): refused, `fork` (`own` for this device's)
 4. each step: its device the run's, n one more, before the hash of the one before
 5. sig good for the last step's hash
 
@@ -166,6 +167,7 @@ Each a cbor array. Anything else is dropped, silently.
     ["run", device, sig, pack]
     ["live", id, data]
     ["refused", device, n]
+    ["fork", device, sig, pack, sig, pack]
 
 - have: per device, how many steps the sender holds through its last signed step (its own: all).
   sent first on every link. answered with runs of each device the other side lacks, from its n + 1
@@ -174,6 +176,42 @@ Each a cbor array. Anything else is dropped, silently.
   it to its other links
 - refused: device 32 bytes, n the refusing side's count of it. that device is sent no more on that
   link
+- fork: device 32 bytes; two runs of it, each a sig and a pack with its first step whole (bstr), as
+  runs; a proof (forks). dropped when it does not check. sent on every link but the one it came
+  from, and after have on a new link
+
+## forks
+
+Mine (10-31), not decided. A device that signs two chains, differing from some n on: its key in two
+places, a backup restored and written on. Nobody is told by a refusal on one link; a fork is.
+
+- proof: two runs of one device, each as `fork` says: a pack whose first step is whole, its steps
+  one after another from n, each before the hash of the one before, sig good for the last's hash.
+  the two start at the same n, with steps of another hash there (the chains differ at n, and may
+  differ before it: n is a step where they differ, not the first); their bytes at most 2^24 all
+  told. checked by whoever gets it, from the message alone: it holds neither chain or one
+- found: taking a run whose first n is at most held, m the lower of its last and the count held; its
+  step m has another hash than the held one. the proof: the run from m to its end, and the held run
+  from m to its signed end (every held step is in a signed run, this device's own closed first).
+  nothing of what is held is read, and no open run is closed, until the run's own steps follow one
+  another and its sig is good; a run that fails that, meeting the last step held with another hash,
+  is refused `signature` (a pack against a step held that is not the writer's), and meeting an
+  earlier one is passed over, as before: not a fork, and as cheap as before
+- held: a proof only for a device the taker holds steps of, and at most 2^25 bytes of steps in all
+  the proofs it holds (past it, dropped: a run that would make one is refused `signature`)
+- told: the proof goes to every link but the one a `fork` came from, and, when a link says in its
+  have that it holds steps of the device, to it (once); once a device: a second proof of it is
+  dropped and not passed. a taker lists it for its host: `typescript/log.ts` forks and onFork,
+  `c/tippet.h` tp_log_forks, and the `sync` node's forks
+- answered: a run refused `chain` or `signature`, its first n at least 2 and step n - 1 held, is
+  answered with the taker's own run of that device from n - 1, a pack with its first whole, once a
+  device a link, unless a fork of it is known. the other side meets steps of another hash there: the
+  fork is found. a run from n shows nothing of step n - 1, so the taker is the one to show it
+- nothing is decided: the held chain stays, a run of the other is refused (`fork`), the device is
+  not stopped. whether to freeze it, pick a chain or show both is the host's. a fork is not held
+  past a restart: found again when a run of the other chain meets
+- not found: two peers with the same count of a device, each its own chain: have says counts only,
+  so nothing is sent and nothing meets, until one holds more
 
 ## pack
 

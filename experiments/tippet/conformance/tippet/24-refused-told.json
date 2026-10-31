@@ -1,5 +1,5 @@
 {
-	"title": "a run refused for good is told back, and that device is sent no more on that link",
+	"title": "a run refused for good is told back, and that device is sent no more on that link; a key in two logs finds the fork, and tells the peer",
 	"steps": [
 		{
 			"op": "device",
@@ -132,6 +132,12 @@
 						"refused",
 						"a",
 						1
+					],
+					[
+						"run",
+						"a",
+						1,
+						1
 					]
 				]
 			}
@@ -156,7 +162,18 @@
 			"from": "twin",
 			"to": "b",
 			"expect": {
-				"queued": []
+				"queued": [
+					[
+						"fork",
+						"a",
+						1
+					],
+					[
+						"refused",
+						"a",
+						2
+					]
+				]
 			}
 		},
 		{
@@ -173,6 +190,41 @@
 			"node": "pig",
 			"expect": {
 				"value": 1
+			}
+		},
+		{
+			"op": "deliver",
+			"from": "twin",
+			"to": "b",
+			"expect": {
+				"got": [
+					[
+						"fork",
+						"a",
+						1
+					],
+					[
+						"refused",
+						"a",
+						2
+					]
+				]
+			}
+		},
+		{
+			"op": "forks",
+			"device": "b",
+			"expect": {
+				"forks": [
+					{
+						"device": "a",
+						"n": 1,
+						"hashes": [
+							"4afdbfcb969b9a075f20d15bb8298eb199688fdb15830c1e0c5498909ed1ff01",
+							"6617c81d0508ce81447c9880c31cbc2f9bd287b296472f7538d2a84be1f7cb40"
+						]
+					}
+				]
 			}
 		}
 	]

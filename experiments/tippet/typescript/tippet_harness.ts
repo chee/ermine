@@ -14,8 +14,9 @@
 //   unpack  { pack, before? } -> { steps } | { refused: true }
 //   message { message } -> { bytes }     a run is ["run", device, sig, steps]
 //   read    { bytes } -> { message } | { refused: true }
-//   device  { name, seed, rebase?, forgets? } -> { key }    a log that writes, with its graph and sync;
-//                                        rebase: history's (how many steps an entry can undo)
+//   device  { name, seed, rebase?, forgets?, forks? } -> { key }    a log that writes, with its graph and sync;
+//                                        rebase: history's (how many steps an entry can undo);
+//                                        forks: the most bytes of steps its fork proofs hold
 //   relay   { name } -> {}               no key, no graph
 //   write   { device, node, part?, patches, when?, who? } -> { n, lamport }
 //   disk    { name, seed, log? } -> { key }    a log on the file store, no graph; log: initial hex
@@ -39,8 +40,9 @@
 //   inject  { from, to, message?, bytes? } -> {}
 //   live    { device, data } -> {}
 //   heard   { device } -> { heard }
+//   forks   { device } -> { forks }      each { device, n, hashes }: the forks it knows, one a device
 // Views: ["have", { device: n }], ["run", device, from, to], ["live", id, data], ["refused",
-// device, n].
+// device, n], ["fork", device, n].
 import { decode, encode, type Value } from "@ermine/encoding/cbor"
 import createEntry from "@ermine/graph/entry"
 import update from "@ermine/changeable/update"
@@ -110,7 +112,7 @@ function made(log: Log, relay: boolean, signer?: Signer): Device {
 	const tracked = new Proxy(log, {
 		get(t, k) {
 			const v = Reflect.get(t, k)
-			return k === "take" || k === "takePack" || k === "run"
+			return k === "take" || k === "takePack" || k === "run" || k === "fork"
 				? (...a: unknown[]) => track((v as (...a: unknown[]) => Promise<unknown>)(...a))
 				: v
 		},
@@ -124,6 +126,7 @@ async function createDevice(
 	seed: Uint8Array,
 	rebase?: number,
 	forgets?: boolean,
+	forks?: number,
 ): Promise<Device> {
 	const s = createScheduler()
 	const table = createTable((part, id) => places.onTableChange(part as Key, id))
@@ -137,7 +140,7 @@ async function createDevice(
 	s.onTrackingEnd((k) => places.release(k))
 	const scope = s.createRootScope({ actor: "harness" })
 	const run = <T>(f: () => T) => s.runWithScope(scope, f)
-	const log = createLog({ writes: true, seed })
+	const log = createLog({ writes: true, seed, forks })
 	const history = createHistory({ log, table, places, run, rebase, forgets })
 	await history.load()
 	const d = made(log, false, await createSigner(seed))
@@ -284,6 +287,15 @@ function messageIn(m: unknown[]): Message {
 			pack: pack((z as string[]).map(unhex)),
 		}
 	}
+	if (t === "fork") {
+		const [, , , , sb, pb] = m as [string, string, string, string[], string, string[]]
+		return {
+			t,
+			device: keyOf(x as string),
+			a: { sig: unhex(y as string), pack: pack((z as string[]).map(unhex)) },
+			b: { sig: unhex(sb), pack: pack(pb.map(unhex)) },
+		}
+	}
 	if (t === "live") return { t, id: x as string, data: unhex(y as string) }
 	if (t === "refused") return { t, device: keyOf(x as string), n: y as number }
 	throw new Error(`not a message: ${t}`)
@@ -292,6 +304,16 @@ function messageOut(m: Message): unknown[] {
 	if (m.t === "have") return [m.t, Object.entries(m.have)]
 	if (m.t === "run") return [m.t, m.device, hex(m.sig), unpack(m.pack).map(hex)]
 	if (m.t === "live") return [m.t, m.id, hex(m.data)]
+	if (m.t === "fork") {
+		return [
+			m.t,
+			m.device,
+			hex(m.a.sig),
+			unpack(m.a.pack).map(hex),
+			hex(m.b.sig),
+			unpack(m.b.pack).map(hex),
+		]
+	}
 	return [m.t, m.device, m.n]
 }
 function view(b: Uint8Array): unknown[] {
@@ -305,6 +327,7 @@ function view(b: Uint8Array): unknown[] {
 		return [m.t, nameOf(m.device), from, from + stepsIn(m.pack) - 1]
 	}
 	if (m.t === "live") return [m.t, m.id, hex(m.data)]
+	if (m.t === "fork") return [m.t, nameOf(m.device), firstOf(m.a.pack).n]
 	return [m.t, nameOf(m.device), m.n]
 }
 const haveOut = (h: Record<string, number>) =>
@@ -404,7 +427,7 @@ async function one(r: Request): Promise<Answer> {
 
 		case "device": {
 			if (devices.has(r.name)) throw new Error(`${r.name} is made`)
-			const d = await createDevice(unhex(r.seed), r.rebase, r.forgets)
+			const d = await createDevice(unhex(r.seed), r.rebase, r.forgets, r.forks)
 			devices.set(r.name, d)
 			return { key: d.log.device! }
 		}
@@ -526,6 +549,14 @@ async function one(r: Request): Promise<Answer> {
 			return {}
 		case "heard":
 			return { heard: device(r.device).heard.map(hex) }
+		case "forks":
+			return {
+				forks: device(r.device).log.forks().map((f) => ({
+					device: nameOf(f.device),
+					n: f.n,
+					hashes: f.hashes,
+				})),
+			}
 		default:
 			throw new Error(`unknown op ${r.op}`)
 	}

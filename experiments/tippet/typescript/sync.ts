@@ -1,8 +1,8 @@
 // Sync catches a log's steps up over links (WIRE.md). A link is anything that carries bytes both
 // ways (see carriers/). Each side says what it has and is sent what it lacks, a run at a time.
 import { decode, encode, type Value } from "@ermine/encoding/cbor"
-import type { Log } from "./log.ts"
-import { firstOf, pack, type Packed, stepsIn } from "./pack.ts"
+import type { Fork, Log } from "./log.ts"
+import { firstOf, pack, type Packed, stepsIn, unpack as unpackAll } from "./pack.ts"
 import { hex, key, unhex, whole } from "./step.ts"
 
 export type Link = {
@@ -20,13 +20,17 @@ type Linked = {
 	theirs: Map<string, number>
 	pushing: Map<string, boolean>
 	refused: Set<string>
+	tailed: Set<string>
+	proved: Set<string>
 	turn: Promise<void>
 	said?: number
 }
+export type Proof = { sig: Uint8Array; pack: Packed }
 export type Message =
 	| { t: "have"; have: Record<string, number> }
 	| { t: "run"; device: string; sig: Uint8Array; pack: Packed }
 	| { t: "refused"; device: string; n: number }
+	| { t: "fork"; device: string; a: Proof; b: Proof }
 	| { t: "live"; id: string; data: Uint8Array }
 
 const sized = (x: unknown, n: number) => x instanceof Uint8Array && x.length === n
@@ -50,6 +54,17 @@ export function read(b: Uint8Array): Message | undefined {
 	if (t === "run" && m.length === 4 && key(x) && sized(y, 64) && Array.isArray(z)) {
 		return { t, device: hex(x), sig: y, pack: z as Packed }
 	}
+	if (
+		t === "fork" && m.length === 6 && key(x) && sized(y, 64) && Array.isArray(z) &&
+		sized(m[4], 64) && Array.isArray(m[5])
+	) {
+		return {
+			t,
+			device: hex(x),
+			a: { sig: y, pack: z as Packed },
+			b: { sig: m[4], pack: m[5] as Packed },
+		}
+	}
 	if (t === "refused" && m.length === 3 && key(x) && whole(y)) return { t, device: hex(x), n: y }
 	if (t === "live" && m.length === 3 && sized(x, 8) && y instanceof Uint8Array) {
 		return { t, id: hex(x), data: y }
@@ -61,6 +76,8 @@ export function wire(m: Message): Uint8Array {
 		? [m.t, Object.entries(m.have).map(([d, n]) => [unhex(d), n])]
 		: m.t === "run"
 		? [m.t, unhex(m.device), m.sig, m.pack]
+		: m.t === "fork"
+		? [m.t, unhex(m.device), m.a.sig, m.a.pack, m.b.sig, m.b.pack]
 		: m.t === "refused"
 		? [m.t, unhex(m.device), m.n]
 		: [m.t, unhex(m.id), m.data]
@@ -98,6 +115,12 @@ export function createSync(o: { log: Log; relay?: boolean }): Sync {
 	}
 	const say = (l: Linked, m: Message) => send(l, wire(m))
 	const have = (): Message => ({ t: "have", have: log.have() })
+	const proof = (f: Fork): Message => ({
+		t: "fork",
+		device: f.device,
+		a: { sig: f.runs[0].sig, pack: pack(f.runs[0].steps) },
+		b: { sig: f.runs[1].sig, pack: pack(f.runs[1].steps) },
+	})
 
 	async function one(l: Linked, device: string): Promise<boolean> {
 		await l.link.wait?.()
@@ -129,6 +152,21 @@ export function createSync(o: { log: Log; relay?: boolean }): Sync {
 		l.turn = l.turn.then(turn)
 	}
 
+	// A run refused that the taker may hold another chain of: its own run from the step before
+	// the refused one, whole, so the other side can see where the two differ.
+	async function answer(l: Linked, device: string, why: string, p: Packed) {
+		if (
+			(why !== "chain" && why !== "signature") || l.tailed.has(device) ||
+			log.forks().some((f) => f.device === device)
+		) return
+		const at = firstOf(p).n - 1
+		if (at < 1 || at > log.count(device)) return
+		const b = await log.run(device, at)
+		if (!b || !links.has(l)) return
+		l.tailed.add(device)
+		say(l, { t: "run", device, sig: b.sig, pack: pack(b.steps) })
+	}
+
 	async function receive(l: Linked, bytes: Uint8Array) {
 		const m = read(bytes)
 		if (!m) return
@@ -143,6 +181,12 @@ export function createSync(o: { log: Log; relay?: boolean }): Sync {
 			l.theirs = new Map(Object.entries(m.have))
 			l.said = me === undefined ? 0 : m.have[me] ?? 0
 			for (const [d, n] of Object.entries(log.have())) if ((m.have[d] ?? 0) < n) push(l, d)
+			// proofs of devices they hold steps of, once
+			for (const f of log.forks()) {
+				if (f.device in m.have && !l.proved.has(f.device)) {
+					l.proved.add(f.device), say(l, proof(f))
+				}
+			}
 		} else if (m.t === "run") {
 			let last = 0
 			try {
@@ -153,7 +197,17 @@ export function createSync(o: { log: Log; relay?: boolean }): Sync {
 			if ("added" in r) {
 				l.theirs.set(m.device, Math.max(l.theirs.get(m.device) ?? 0, last))
 			} else if (r.refused === "gap") say(l, have())
-			else if (!many) say(l, { t: "refused", device: m.device, n: log.count(m.device) })
+			else if (!many) {
+				say(l, { t: "refused", device: m.device, n: log.count(m.device) })
+				await answer(l, m.device, r.refused, m.pack)
+			}
+		} else if (m.t === "fork") {
+			const open = (p: Proof) => ({ sig: p.sig, steps: unpackAll(p.pack) })
+			try {
+				await log.fork(m.device, open(m.a), open(m.b), l)
+			} catch {
+				// not a proof
+			}
 		} else if (m.t === "refused") {
 			if (!many && log.count(m.device)) l.refused.add(m.device)
 		} else {
@@ -164,6 +218,11 @@ export function createSync(o: { log: Log; relay?: boolean }): Sync {
 		}
 	}
 
+	log.onFork((f, from) => {
+		const m = wire(proof(f))
+		;(from as Linked | undefined)?.proved.add(f.device)
+		for (const l of links) if (l !== from) l.proved.add(f.device), send(l, m)
+	})
 	log.on((device, _, from) => {
 		for (const l of links) if (l !== from) push(l, device)
 	})
@@ -178,6 +237,8 @@ export function createSync(o: { log: Log; relay?: boolean }): Sync {
 				theirs,
 				pushing: new Map(),
 				refused: new Set(),
+				tailed: new Set(),
+				proved: new Set(),
 				turn: Promise.resolve(),
 			}
 			links.add(l)
