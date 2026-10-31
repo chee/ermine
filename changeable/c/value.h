@@ -40,9 +40,14 @@ struct op_value {
 			};
 			size_t bytes;
 			union {
-				int ascii;
+				size_t chars;
 				op_elements kind;
 			};
+			// A string's cache: the byte offset of a code point, so a splice near it walks only the
+			// distance. Only a hint (offset 0 at point 0 is always right); a change to the string resets it.
+			struct {
+				uint32_t code, byte;
+			} finger;
 		};
 	};
 };
@@ -60,6 +65,8 @@ op_value *op_str(const char *s);
 op_value *op_str_n(const char *s, size_t n);
 // s is malloc'd and becomes the value's.
 op_value *op_str_take(char *s, size_t n);
+// The same, when the string's code points are already counted.
+op_value *op_str_counted(char *s, size_t n, size_t chars);
 op_value *op_list(void);
 op_value *op_map(void);
 op_value *op_bytes(const void *data, size_t n);
