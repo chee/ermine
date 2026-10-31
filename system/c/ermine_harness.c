@@ -2284,7 +2284,10 @@ static void world_free(world_t *w) {
 	if (w == NULL) return;
 	world_t *was = W;
 	W = w;
-	for (size_t i = 0; i < w->nheld; i++) es_promise_release(w->held[i].promise);
+	for (size_t i = 0; i < w->nheld; i++) {
+		es_promise_release(w->held[i].promise);
+		if (w->held[i].now != NULL) op_free(w->held[i].now);
+	}
 	for (size_t i = 0; i < w->nspent; i++) es_promise_release(w->spent[i]);
 	free(w->spent);
 	if (w->e != NULL) es_free(w->e);
@@ -2399,8 +2402,18 @@ static es_out program_run(es_context *c, void *ctx) {
 	return es_out_of(v);
 }
 
+// whether a call's promise is held: a yield's value (now) lands one round per settle, as an async
+// generator's does, while a promise a call made goes on until none is held
+static int calls_held(void) {
+	for (size_t i = 0; i < W->nheld; i++)
+		if (W->held[i].now == NULL) return 1;
+	return 0;
+}
+
 static void settle_all(void) {
-	while (W->nheld > 0) {
+	int first = 1;
+	while (W->nheld > 0 && (first || calls_held())) {
+		first = 0;
 		held_t *batch = W->held;
 		size_t n = W->nheld;
 		W->held = NULL;

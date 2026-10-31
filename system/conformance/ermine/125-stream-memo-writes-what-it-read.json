@@ -1,0 +1,96 @@
+{
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/a",
+				1
+			],
+			"expect": {
+				"value": {
+					"path": [
+						"a"
+					],
+					"part": "value"
+				}
+			}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"createMemo",
+						"m",
+						{
+							"stream": [
+								{
+									"do": [
+										"yield",
+										[
+											"read",
+											"/a"
+										]
+									]
+								},
+								{
+									"do": [
+										"patch",
+										"/a",
+										[
+											{
+												"path": [],
+												"value": 5
+											}
+										]
+									]
+								},
+								{
+									"do": [
+										"yield",
+										2
+									]
+								}
+							]
+						},
+						null
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "settle",
+			"expect": {}
+		},
+		{
+			"op": "settle",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/code/p/m"
+			],
+			"expect": {
+				"value": 1
+			}
+		}
+	],
+	"title": "a stream memo that changes a node it read [chee 10-31: \"whatever solidjs2.0 does\"]: it is due again; the stream is closed when it runs again, and no value is pulled while it is due"
+}

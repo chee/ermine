@@ -1,0 +1,249 @@
+{
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": {
+				"actor": "test"
+			},
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"a": 1,
+				"z": 0
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "compute",
+			"name": "S",
+			"scope": "o",
+			"to": "S",
+			"f": {
+				"stream": [
+					{
+						"yield": {
+							"read": "a"
+						}
+					},
+					{
+						"yield": 2
+					},
+					{
+						"finally": {
+							"log": {
+								"read": "z"
+							}
+						}
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "W",
+			"scope": "o",
+			"to": "W",
+			"f": {
+				"if": [
+					{
+						"eq": [
+							{
+								"read": "S"
+							},
+							1
+						]
+					},
+					{
+						"write": [
+							"a",
+							7
+						]
+					},
+					null
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"key": "S",
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					0
+				]
+			}
+		},
+		{
+			"op": "moments",
+			"reads": true,
+			"expect": {
+				"moments": [
+					{
+						"due": "S",
+						"tick": 2
+					},
+					{
+						"due": "W",
+						"tick": 3
+					},
+					{
+						"starts": "S",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "S",
+						"run": 1,
+						"ended": "pending",
+						"reads": []
+					},
+					{
+						"starts": "W",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "W",
+						"run": 1,
+						"ended": "done",
+						"equal": false,
+						"reads": [
+							"S"
+						]
+					},
+					{
+						"due": "W",
+						"tick": 5,
+						"writer": "S"
+					},
+					{
+						"ends": "S",
+						"run": 1,
+						"ended": "done",
+						"equal": false,
+						"reads": [
+							"a"
+						]
+					},
+					{
+						"starts": "W",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"due": "S",
+						"tick": 6,
+						"writer": "W"
+					},
+					{
+						"ends": "W",
+						"run": 2,
+						"ended": "done",
+						"equal": false,
+						"reads": [
+							"S"
+						]
+					},
+					{
+						"starts": "S",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "S",
+						"run": 2,
+						"ended": "pending",
+						"reads": []
+					},
+					{
+						"ends": "S",
+						"run": 2,
+						"ended": "looping",
+						"equal": false,
+						"through": [
+							"S",
+							"W"
+						],
+						"reads": [
+							"a"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"z": 5
+			},
+			"expect": {
+				"tick": 8
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"reads": true,
+			"expect": {
+				"moments": [
+					{
+						"due": "W",
+						"tick": 9,
+						"writer": "S"
+					},
+					{
+						"ends": "S",
+						"run": 2,
+						"ended": "done",
+						"equal": false,
+						"reads": [
+							"a"
+						]
+					},
+					{
+						"starts": "W",
+						"run": 3,
+						"rank": 0
+					},
+					{
+						"ends": "W",
+						"run": 3,
+						"ended": "done",
+						"equal": false,
+						"reads": [
+							"S"
+						]
+					}
+				]
+			}
+		}
+	],
+	"title": "a stream closed by another's run [chee 10-31: \"whatever solidjs2.0 does\"]: its close runs with nothing open, so a read in its finally is no one's: the run that made it due does not track it"
+}

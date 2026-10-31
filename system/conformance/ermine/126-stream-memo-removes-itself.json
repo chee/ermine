@@ -1,0 +1,88 @@
+{
+	"steps": [
+		{
+			"op": "ermine",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/a",
+				1
+			],
+			"expect": {
+				"value": {
+					"path": [
+						"a"
+					],
+					"part": "value"
+				}
+			}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"createMemo",
+						"m",
+						{
+							"stream": [
+								{
+									"do": [
+										"yield",
+										[
+											"read",
+											"/a"
+										]
+									]
+								},
+								{
+									"do": [
+										"unplace",
+										"/code/p/m"
+									]
+								},
+								{
+									"do": [
+										"yield",
+										2
+									]
+								}
+							]
+						},
+						null
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "settle",
+			"expect": {}
+		},
+		{
+			"op": "settle",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"getStatus",
+				"/code/p/m"
+			],
+			"expect": {}
+		}
+	],
+	"title": "a stream memo that removes its own node [chee 10-31: \"whatever solidjs2.0 does\"]: it stops, its stream closed, nothing lands after"
+}

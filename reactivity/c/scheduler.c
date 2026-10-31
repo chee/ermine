@@ -123,6 +123,8 @@ struct sc_run {
 	size_t refs;
 	// Its promise has not landed yet.
 	bool waiting;
+	// The stream's next is running; a close asked meanwhile waits for it to return.
+	bool nexting, close_late;
 };
 
 typedef struct landed {
@@ -360,16 +362,44 @@ static sc_run *ran_ref(sc_run *r) {
 	return r;
 }
 
-static void quit_step(sc_run *r) {
-	if (r->has_step) {
-		r->has_step = false;
-		r->step.quit(r->step.data);
+// Closes what the run holds with nothing open (no scope, frame, writer, reading run, after-run).
+// A stream closed while its next runs is closed when next returns.
+static void quit_part(sc_run *r, bool streams) {
+	bool step = r->has_step, stream = streams && r->has_stream;
+	if (!step && !stream) return;
+	sc_step st = r->step;
+	sc_stream sm = r->stream;
+	r->has_step = false;
+	if (stream) r->has_stream = false;
+	r->waiting = false;
+	if (stream && r->nexting) {
+		r->close_late = true;
+		stream = false;
 	}
-	if (r->has_stream) {
-		r->has_stream = false;
-		r->stream.close(r->stream.data);
+	if (!step && !stream) return;
+	if (r->life->gone) {
+		if (step) st.quit(st.data);
+		if (stream) sm.close(sm.data);
+		return;
 	}
+	sc_scheduler *s = r->s;
+	sc_run *was = s->reading, *wasRunning = s->running, *waswriter = s->open_writer, *wasAfter = s->after;
+	sc_scope *wasopen = s->open;
+	ch_frame *wasframe = s->open_frame;
+	s->reading = s->running = s->open_writer = s->after = NULL;
+	s->open = NULL;
+	s->open_frame = NULL;
+	if (step) st.quit(st.data);
+	if (stream) sm.close(sm.data);
+	s->after = wasAfter;
+	s->reading = was;
+	s->running = wasRunning;
+	s->open = wasopen;
+	s->open_frame = wasframe;
+	s->open_writer = waswriter;
 }
+
+static void quit_step(sc_run *r) { quit_part(r, true); }
 
 static void ran_release(sc_run *r) {
 	if (--r->refs > 0) return;
@@ -944,7 +974,7 @@ static bool due(sc_scheduler *s, sc_scope *c, uint64_t t, sc_run *writer, bool o
 		c->looping = false;
 	}
 	if (od_has(s->order, &c->od)) return false;
-	if (c->ran) quit_step(c->ran);
+	if (c->ran) quit_part(c->ran, false);
 	od_set(s->order, &c->od, t);
 	return true;
 }
@@ -1247,12 +1277,22 @@ static void pull(sc_scheduler *s, sc_run *r) {
 	(void)s;
 	r->waiting = true;
 	pulling g = {r->stream, NULL};
+	ran_ref(r);
+	r->nexting = true;
 	sc_run_with_run(r, call_next, &g);
+	r->nexting = false;
+	if (r->close_late) {
+		r->close_late = false;
+		r->has_stream = true;
+		quit_step(r);
+	}
 	// The stream was let go while it ran.
-	if (!r->has_stream || g.p == NULL) return;
-	g.p->pull = true;
-	if (g.p->settled) deliver(g.p, ran_ref(r));
-	else VEC_PUSH(g.p->rs, g.p->nrs, g.p->caprs, ran_ref(r));
+	if (r->has_stream && g.p != NULL) {
+		g.p->pull = true;
+		if (g.p->settled) deliver(g.p, ran_ref(r));
+		else VEC_PUSH(g.p->rs, g.p->nrs, g.p->caprs, ran_ref(r));
+	}
+	ran_release(r);
 }
 
 static void discard(sc_scheduler *s, sc_out out) {
@@ -1303,7 +1343,6 @@ static void conclude(sc_scheduler *s, sc_run *r, sc_out out) {
 	} else if (out.kind == SC_STREAM) {
 		finish(s, r, SC_PENDED, -1, NULL, NULL, NULL, 0);
 		streaming(s, r, out.stream);
-		if (od_has(s->order, &c->od)) quit_step(r);
 	} else if (out.kind == SC_PAUSE) {
 		r->step = out.step;
 		r->has_step = true;
@@ -1364,7 +1403,7 @@ static void flow(sc_scheduler *s, sc_run *r, landed l) {
 			return;
 		}
 		result(s, r, l.value);
-		if (r->has_stream && c->state == ALIVE && c->ran == r) pull(s, r);
+		if (r->has_stream && c->state == ALIVE && c->ran == r && !od_has(s->order, &c->od)) pull(s, r);
 	}
 }
 
@@ -1663,6 +1702,8 @@ static void sweep(sc_scheduler *s) {
 void sc_pulse(sc_scheduler *s) {
 	if (s->pulsing) return;
 	s->pulsing = true;
+	sc_run *wasAfter = s->after;
+	s->after = NULL;
 	char *outer = s->thrown;
 	s->thrown = NULL;
 	char *failed = NULL;
@@ -1695,6 +1736,7 @@ void sc_pulse(sc_scheduler *s) {
 	if (failed) free(closing);
 	else failed = closing;
 	s->pulsing = false;
+	s->after = wasAfter;
 	cs_end(s->causes);
 	s->pulses++;
 	sweep(s);

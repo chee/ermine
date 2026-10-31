@@ -1,5 +1,5 @@
 {
-	"title": "a stream memo and effect [chee 10-31: \"we could allow an async iterator computer no?\", \"yield means a new value, a stream\", \"for the open question: whatever solidjs2.0 does\"; system: \"Memos and effects\"]: createMemo(name, async function* …): each value it yields is the memo's value in turn; until the first, its status is pending, waiting on \"a stream\"; a read between yields is the run's, so a change to it runs it again from the start. createEffect's acts on each value",
+	"title": "a stream memo and effect [chee 10-31: \"we could allow an async iterator computer no?\", \"yield means a new value, a stream\", \"for the open question: whatever solidjs2.0 does\"; system: \"Memos and effects\"]: createMemo(name, async function* …): each value it yields is the memo's value in turn; until the first, its status is pending, waiting on \"a stream\"; a read in it is the run's, so a change to it runs it again from the start. createEffect's acts on each value",
 	"steps": [
 		{
 			"op": "ermine",
