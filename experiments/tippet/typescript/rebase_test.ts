@@ -148,7 +148,7 @@ Deno.test("ids: a forgetting device takes a splice by ids as its range, as writt
 	assertEquals(f.history.failed, [])
 })
 
-Deno.test("ids: a splice into an array makes the texts under it new: both sides end the same", async () => {
+Deno.test("ids: a splice into an array leaves the texts under its items theirs: both sides end the same", async () => {
 	const w = await device(), r = await device()
 	w.put("doc", { arr: [{ t: "ab" }] })
 	w.edit("doc", [{ path: ["arr", 0, "t"], range: [1, 1], value: "X" }])

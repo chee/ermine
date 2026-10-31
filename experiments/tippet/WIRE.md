@@ -32,12 +32,17 @@ One kept write. Bytes: a cbor array.
   a writer with a graph says it always ([]: it held none). an old step, from before steps said, has
   none: it is read as on every step of its entry before it, in order of lamport, then device. what
   is made of it: `typescript/history.ts`, heads and versions
-- ids: array, one per patch, only after on: the elements a splice (a patch with a range, into a
-  string or an array) names, or null: by its range as written (a writer holding no ids, an old step,
-  anything else). each [after, gone] or [after, gone, before]:
+- ids: array, one per patch, only after on: the elements a patch names, or null: by its range and
+  path as written (a writer holding no ids, an old step, anything else). each [through], or, a
+  splice (a patch with a range, into a string or an array), [after, gone], [after, gone, before] or
+  [after, gone, before or null (none), through]:
   - after: the element it goes after, or null: the start
   - gone: array of [id, count], count whole from 1: the elements it takes away, count of them from
     id on (its seq or k on). one named more than once is taken away once
+  - through: array, one per whole in its path, in order (in [through], at least one): the element
+    of the array item that index named at the writer; this device's x above minus what the step
+    inserts. none: its path by place as written; a move's by place always (its ids passed over). a
+    writer says it, empty when its path has no whole, for each splice into an array it names
   - before: the element it goes before, the one right after after at the writer (gone ones too): an
     id; or true, after's own before (after not null). none: the end (an old step's too). a writer
     says it only for a splice that inserts
@@ -51,11 +56,16 @@ One kept write. Bytes: a cbor array.
     holds a device's steps from n = 1 on, so counts it
 
   a sequence's elements are counted from its first splice: those there since the step that made it
-  new are that step's, k their place. made new: by a put, a removal or a move at its path or above;
-  by a move out of or into it (an end with a range: the sequence it is in; at an index of an array:
-  that array); and, for those under an array, by a splice into the array (a path through an array is
-  by position, as written, so what is under it is new). a removal at an index of an array (a path,
-  no range) is a splice of that one element, by its place as written
+  new are that step's, k their place. a sequence under an array item goes with the item, wherever
+  it is. made new: by a put, a removal or a move at its path or above; by a move out of or into
+  it (an end with a range: the sequence it is in; at an index of an array: that array); and, for
+  those under an array, by a splice into the array with no through (by place as written, or ids
+  from before through). a removal at an index of an array (a path, no range) is a splice of that
+  one element: by place as written, or its through's last, taken away wherever it is now (gone
+  already: nothing); at an index of anything else, a removal at its path, as any
+
+  a path by through: each index the place now of the element named, among those not gone; one gone
+  (but a removal's last) or not there, or an index not into an array: the step doesn't apply
 
   applied in the entry's order (history): a splice by ids takes its gone elements away wherever they
   are now, then its first inserted one goes between after and before, among those put there since
@@ -87,14 +97,17 @@ One kept write. Bytes: a cbor array.
 Anything else is not a step: another length, another kind in a place, a key or hash not 32 bytes, n
 of 0, a number not whole, a patch with another field, a node array not one rest, an on item not as
 above (k of 0 or of n or more, a pair naming the step's own device, of another length or kind), ids
-not as above (not one per patch, on a patch without a range, an id of another shape or naming the
+not as above (not one per patch, but [through] on a patch without a range, a through of another
+count than its path's wholes, an empty [through], a through's x of this device at or below minus
+what its step inserts, a before of null without a through, an id of another shape or naming the
 step's own device, another's seq below 0, a number past 2^53 - 1 either way, an [x, k] with x of n
 or more, a [device, n, k] with n of 0, a count of 0, a before of true with a null after, another
 length), a NUL in node (its rest too) or part, or containers nested 1024 deep (cbor's most; the
 step's own array counts): a run message holds a step's patches one deeper.
 
 A peer from before on refuses a step that carries it (not a step): a run with one doesn't pass it.
-So does a peer from before ids, a step with ids, and one from before before, ids that say it.
+So does a peer from before ids, a step with ids, and one from before before or through, ids that
+say it.
 
 ids' shape is mine (10-30), not decided: per patch beside it, so a patch stays a changeable patch
 (squish packs it); an element its device and seq (diamond-types' agent and per-agent sequence
@@ -103,6 +116,20 @@ its device's chain alone, whatever the lamports, and a big paste moves no lampor
 written, so a step says no more than it did; one there since a step by that step's n, which no other
 step of its device has; lamport only sorts; this device's own as how far back from the step's seq,
 so typing alone (each after the one before) is one run in a pack.
+
+through is mine (10-31), not decided: an item by its element, as a splice names, so typing into an
+item survives an insert, a removal or Enter above it, and a splice into an array that says one
+leaves what is under its items as it was; beside the patch, so a patch stays a changeable patch
+(squish packs it); one per whole, so a reader knows which index each names; its own as how far back,
+in the pack shifted by what the run inserts, so typing into one item costs nothing a step after the
+first. steps without through go by place, as they did, and a splice into an array without one makes
+what is under it new, as it did (mine, 10-31, not decided): per step, the same on every
+reader, so a log from before through reads as it did, and a step with a through into an item an old
+splice made new names its elements as made new. the cost: an old splice ordered before a through's
+typing makes new what that typing names (passed over). this device's x above minus what the step
+inserts: an element of this device made by now, and the pack's shift stays within 2^53 - 1. a move
+goes by place: an edit into an item another moved, ordered after the move, names an element made new
+by it, and is passed over.
 
 before and FugueMax are mine (10-31), not decided: Weidner and Kleppmann's FugueMax ("The Art of the
 Fugue"), in its list form (Gentle's YjsMod: Yjs's origin left and right, its scan fixed), not a
@@ -233,8 +260,10 @@ A run's steps, small.
     column gave that device (from 0, may be negative), so typing by turns makes runs (mink's pick:
     two typing by turns, 38 bytes a step packed without it, 4 with). the column only when a step in
     it says on
-  - ids: the step's ids as written, or null for none. the column only when a step in it says ids (on
-    is there then too)
+  - ids: the step's ids as written, or null for none, but through's ids of this device: x as x less
+    what the steps before it in the pack insert (the whole first's too), [x, k] as x less how many
+    steps come before it (so typing into one item is one run; added back to unpack). the column
+    only when a step in it says ids (on is there then too)
 - columns: every later step's patches, in order, as below
 
 Unpack: for each step after step n - 1 (the receiver's) or the whole first, from the one before

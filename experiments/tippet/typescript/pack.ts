@@ -11,6 +11,7 @@ import {
 	hashStep,
 	hex,
 	idsOf,
+	made,
 	onOf,
 	own,
 	readOn,
@@ -56,6 +57,25 @@ function unruns<T>(rs: T[]): T[] {
 	}
 	return out
 }
+
+// through's own ids in the column (WIRE.md, pack): x less what the run's steps before it insert,
+// [x, k] less how many steps come before it, so typing into one item is one run; back: added
+const shift = (ids: Value, inserted: number, steps: number, back = false) =>
+	!Array.isArray(ids) ? ids : ids.map((x) => {
+		const t = Array.isArray(x) && (x.length === 1 || x.length === 4) ? x.at(-1) : undefined
+		if (!Array.isArray(t)) return x
+		const d = back ? -1 : 1
+		return [
+			...x.slice(0, -1),
+			t.map((i) =>
+				typeof i === "number"
+					? i - d * inserted
+					: Array.isArray(i) && i.length === 2 && typeof i[0] === "number"
+					? [i[0] - d * steps, i[1]]
+					: i
+			),
+		]
+	})
 
 const STEPS = 4096, PATCHES = 65536
 // the most bytes a run's steps make, all told (WIRE.md, runs)
@@ -139,8 +159,15 @@ export function pack(bytes: readonly Uint8Array[], prior?: Prior): Packed {
 				: null
 		)))
 	}
-	// ids as written: typing alone (each after the one before, its own) is one run
-	if (rest.some((s) => s.ids)) p.push(runs(rest.map((s) => (s.ids ?? null) as Value)))
+	// ids as written, through's own shifted: typing alone (each after the one before, its own) is
+	// one run
+	if (rest.some((s) => s.ids)) {
+		let inserted = prior ? 0 : made(s0)
+		p.push(runs(rest.map((s, i) => {
+			const x = s.ids ? shift(s.ids as Value[], inserted, prior ? i : i + 1) : null
+			return inserted += made(s), x
+		})))
+	}
 	return p
 }
 
@@ -186,6 +213,7 @@ export function unpack(p: unknown, prior?: Prior): Uint8Array[] {
 	}
 	if (!on.every((x) => x === null || Array.isArray(x))) throw new TypeError("not a pack")
 	const device = unhex(prev.device), last = new Map<string, number>()
+	let inserted = against ? 0 : made(prev as Step)
 	for (let i = 0; i < count.length; i++) {
 		const s: Step = {
 			device: prev.device,
@@ -210,11 +238,13 @@ export function unpack(p: unknown, prior?: Prior): Uint8Array[] {
 			s.on = readOn(prev.device, prev.n + 1, written)
 		}
 		if (ids[i] !== null) {
+			ids[i] = shift(ids[i] as Value, inserted, against ? i : i + 1, true)
 			if (!s.on || !idsOf(device, s.n, s.patches as unknown[])(ids[i])) {
 				throw new TypeError("not a pack")
 			}
 			s.ids = ids[i] as Value[]
 		}
+		inserted += made(s)
 		const b = encodeStep(s)
 		if ((bytes += b.length) > RUN) throw new RangeError("a run past its most bytes")
 		out.push(b)

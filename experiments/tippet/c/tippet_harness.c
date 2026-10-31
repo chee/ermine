@@ -265,16 +265,36 @@ static op_value *id_in(const op_value *x) {
 	return a;
 }
 
+// through as written: an array of ids
+static op_value *through_in(const op_value *t) {
+	if (!t || t->type != OP_LIST) return NULL;
+	op_value *a = op_list();
+	for (size_t j = 0; j < t->count; j++) {
+		op_value *id = id_in(t->items[j]);
+		if (!id) return op_free(a), NULL;
+		op_push(a, id);
+	}
+	return a;
+}
+
 static op_value *ids_in(const op_value *v) {
 	if (v->type != OP_LIST) return NULL;
 	op_value *out = op_list();
 	for (size_t i = 0; i < v->count; i++) {
 		const op_value *x = v->items[i], *after = x->type == OP_MAP ? op_get(x, "after") : NULL,
-			       *gone = x->type == OP_MAP ? op_get(x, "gone") : NULL;
+			       *gone = x->type == OP_MAP ? op_get(x, "gone") : NULL,
+			       *through = x->type == OP_MAP ? op_get(x, "through") : NULL;
 		if (x->type == OP_NULL) { op_push(out, op_null()); continue; }
+		op_value *t = through ? through_in(through) : NULL;
+		if (through && !t) return op_free(out), NULL;
+		if (!gone && t) {
+			op_value *one = op_list();
+			op_push(one, t), op_push(out, one);
+			continue;
+		}
 		op_value *a = op_list(), *g = op_list(), *id = NULL;
 		if (!after || !gone || gone->type != OP_LIST || (after->type != OP_NULL && !(id = id_in(after))))
-			return op_free(a), op_free(g), op_free(out), NULL;
+			return op_free(a), op_free(g), op_free(t), op_free(out), NULL;
 		op_push(a, id ? id : op_null()), op_push(a, g);
 		for (size_t j = 0; j < gone->count; j++) {
 			const op_value *pair = gone->items[j];
@@ -286,11 +306,13 @@ static op_value *ids_in(const op_value *v) {
 		}
 		const op_value *before = op_get(x, "before");
 		if (before && before->type == OP_BOOL && before->bool_) op_push(a, op_bool(1));
+		else if (before && before->type == OP_NULL) op_push(a, op_null());
 		else if (before) {
 			op_value *b = id_in(before);
-			if (!b) return op_free(a), op_free(out), NULL;
+			if (!b) return op_free(a), op_free(t), op_free(out), NULL;
 			op_push(a, b);
-		}
+		} else if (t) op_push(a, op_null());
+		if (t) op_push(a, t);
 		op_push(out, a);
 	}
 	return out;
@@ -381,6 +403,13 @@ static void ids_out(FILE *out, const tp_step *s) {
 		if (i) fputc(',', out);
 		if (tp_null(&in)) { fputs("null", out); continue; }
 		tp_array(&in, &items);
+		if (items == 1) {
+			uint64_t t;
+			tp_array(&in, &t), fputs("{\"through\":[", out);
+			for (uint64_t j = 0; j < t; j++) fputs(j ? "," : "", out), id_out(out, &in);
+			fputs("]}", out);
+			continue;
+		}
 		fputs("{\"after\":", out);
 		if (tp_null(&in)) fputs("null", out);
 		else id_out(out, &in);
@@ -393,8 +422,15 @@ static void ids_out(FILE *out, const tp_step *s) {
 			tp_whole(&in, &count), fprintf(out, ",%llu]", (unsigned long long)count);
 		}
 		fputc(']', out);
-		if (items == 3 && in.p < in.end && *in.p == 0xf5) in.p++, fputs(",\"before\":true", out);
-		else if (items == 3) fputs(",\"before\":", out), id_out(out, &in);
+		if (items > 2 && in.p < in.end && *in.p == 0xf5) in.p++, fputs(",\"before\":true", out);
+		else if (items > 2 && in.p < in.end && *in.p == 0xf6) in.p++;
+		else if (items > 2) fputs(",\"before\":", out), id_out(out, &in);
+		if (items == 4) {
+			uint64_t t;
+			tp_array(&in, &t), fputs(",\"through\":[", out);
+			for (uint64_t j = 0; j < t; j++) fputs(j ? "," : "", out), id_out(out, &in);
+			fputc(']', out);
+		}
 		fputc('}', out);
 	}
 	fputc(']', out);

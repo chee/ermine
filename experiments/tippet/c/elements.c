@@ -496,9 +496,9 @@ static int lists_room(const tp_mem *mem, el_state *st) {
 	return 0;
 }
 
-// the sequence at the patch's path, its elements made now: those there since the step that made it
-// new
-static int elements(work *w, const op_value *cur, const op_patch *p, tp_span path, el_list **out) {
+// the sequence at the target's path (path, its where: the key), its elements made now: those there
+// since the step that made it new
+static int elements(work *w, const op_value *cur, const op_target *place, tp_span path, el_list **out) {
 	const tp_mem *mem = w->c->mem;
 	el_state *st = w->st;
 	if ((*out = list_at(st, path))) return 0;
@@ -508,7 +508,7 @@ static int elements(work *w, const op_value *cur, const op_patch *p, tp_span pat
 		long m = prefix_of((tp_span){st->born[i].key, st->born[i].keyn}, path);
 		if (m > most) most = m, by = st->born[i].r;
 	}
-	size_t count = (size_t)units(at_path(cur, &p->place)), runs = (count + MOST - 1) / MOST;
+	size_t count = (size_t)units(at_path(cur, place)), runs = (count + MOST - 1) / MOST;
 	el_list *l = tp_alloc(mem, sizeof *l);
 	if (!l) return TP_NOMEM;
 	memset(l, 0, sizeof *l);
@@ -531,14 +531,14 @@ static int elements(work *w, const op_value *cur, const op_patch *p, tp_span pat
 	return 0;
 }
 
-// the sequences at the path and under it made new by this step (a put, a removal, a move there);
-// self 0: under it only (a splice into an array: a position under it now names another element)
+// the sequences at where and under it made new by this step (a put, a removal, a move there); self
+// 0: under it only (a splice into an array without a through)
 static int renew(work *w, tp_span prefix, int self) {
 	const tp_mem *mem = w->c->mem;
 	el_state *st = w->st;
 	size_t nl = 0, nb = 0;
-#define SELF(l) (!self && (l)->keyn == prefix.n && !memcmp((l)->key, prefix.p, prefix.n))
-	for (size_t i = 0; i < st->n; i++) nl += under(prefix, st->lists[i]->key, st->lists[i]->keyn) && !SELF(st->lists[i]);
+#define GOES(l) (under(prefix, (l)->key, (l)->keyn) && (self || (l)->keyn != prefix.n || memcmp((l)->key, prefix.p, prefix.n)))
+	for (size_t i = 0; i < st->n; i++) nl += GOES(st->lists[i]);
 	for (size_t i = 0; i < st->nborn; i++) nb += under(prefix, st->born[i].key, st->born[i].keyn);
 	el_list **rl = nl ? tp_alloc(mem, nl * sizeof *rl) : NULL;
 	el_born *rb = nb ? tp_alloc(mem, nb * sizeof *rb) : NULL;
@@ -557,10 +557,10 @@ static int renew(work *w, tp_span prefix, int self) {
 	}
 	size_t k = 0;
 	for (size_t i = 0; i < st->n; i++) {
-		if (under(prefix, st->lists[i]->key, st->lists[i]->keyn) && !SELF(st->lists[i])) rl[k++] = st->lists[i];
+		if (GOES(st->lists[i])) rl[k++] = st->lists[i];
 		else st->lists[i - k] = st->lists[i];
 	}
-#undef SELF
+#undef GOES
 	st->n -= nl, k = 0;
 	for (size_t i = 0; i < st->nborn; i++) {
 		if (under(prefix, st->born[i].key, st->born[i].keyn)) rb[k++] = st->born[i];
@@ -573,41 +573,88 @@ static int renew(work *w, tp_span prefix, int self) {
 	return 0;
 }
 
-// a target at an index of an array (no range): 1, and the array's path (the target's less its last
-// item) in b; 0 not; -1 no memory
-static int in_array(const op_value *cur, const op_target *t, tp_span path, tp_buf *b) {
+// b: a cbor array of n items, then items' bytes
+static void keyed(tp_buf *b, size_t n, const tp_buf *items) {
+	b->len = 0;
+	tp_put_head(b, 4, n), tp_put(b, items->p, items->len);
+}
+// an element as a where item: [device, c] or [device, n, k]
+static void put_id(tp_buf *b, const el_id *e) {
+	tp_put_head(b, 4, e->born ? 3 : 2), tp_put_head(b, 0, e->device), tp_put_head(b, 0, e->c);
+	if (e->born) tp_put_head(b, 0, e->k);
+}
+
+// a path's first upto items, its arrays' items found by the ids by names (NULL: none), wherever they
+// are now (one gone or not there: OP_RANGE), or by place as written. out (room for upto): the path
+// to apply; where: its key, each array item as its element; ids (room for upto, or NULL) those
+// elements, *found how many (-1: one not there)
+static int locate(work *w, const op_value *cur, const op_target *t, tp_span path, const el_id *by,
+	size_t upto, op_key *out, tp_buf *where, el_id *ids, long *found) {
+	const tp_mem *mem = w->c->mem;
+	tp_in in = {path.p, path.p + path.n};
+	uint64_t k;
+	tp_array(&in, &k);
+	tp_buf items = {NULL, 0, 0, (size_t)-1, mem, 0}, key = {NULL, 0, 0, (size_t)-1, mem, 0};
+	if (upto) memcpy(out, t->path, upto * sizeof *out);
+	*found = 0;
+	size_t x = 0;
+	int code = 0;
+	for (size_t i = 0; i < upto && !code; i++) {
+		const uint8_t *from = in.p;
+		tp_span item;
+		tp_skip(&in, &item);
+		if (out[i].type != OP_NUM_KEY) {
+			tp_put(&items, from, (size_t)(in.p - from));
+			continue;
+		}
+		const el_id *id = by ? &by[x++] : NULL;
+		op_target up = {out, i, 0, 0, 0};
+		const op_value *a = at_path(cur, &up);
+		el_id e = {0};
+		int has = 0;
+		if (a && a->type == OP_LIST) {
+			el_list *l;
+			keyed(&key, i, &items);
+			if ((code = tp_buf_why(&key)) || (code = elements(w, cur, &up, (tp_span){key.p, key.len}, &l))) break;
+			size_t j;
+			uint64_t o;
+			if (id) {
+				if (!find(l, id, &j, &o) || l->runs[j].gone) code = OP_RANGE;
+				else e = *id, has = 1, out[i].n = (long)(live_before(l, j) + (size_t)o);
+			} else if (out[i].n >= 0 && (size_t)out[i].n < l->count) {
+				j = live_at(l, (size_t)out[i].n, &o);
+				e = id_at(l, &l->runs[j], o), has = 1;
+			}
+		} else if (id) code = OP_RANGE;
+		if (has) put_id(&items, &e);
+		else tp_put(&items, from, (size_t)(in.p - from));
+		if (ids && has && *found >= 0) ids[(*found)++] = e;
+		else if (!has) *found = -1;
+	}
+	if (!code) keyed(where, upto, &items), code = tp_buf_why(&items) ? TP_NOMEM : tp_buf_why(where);
+	tp_buf_free(&items), tp_buf_free(&key);
+	return code;
+}
+
+// a target at an index of an array (no range): 1; else 0
+static int in_array(const op_value *cur, const op_target *t) {
 	if (t->has_range || !t->length || t->path[t->length - 1].type != OP_NUM_KEY) return 0;
 	op_target up = *t;
 	up.length--;
 	const op_value *a = at_path(cur, &up);
-	if (!a || a->type != OP_LIST) return 0;
-	tp_in in = {path.p, path.p + path.n};
-	uint64_t k;
-	tp_span item;
-	tp_array(&in, &k);
-	const uint8_t *from = in.p;
-	for (uint64_t i = 0; i + 1 < k; i++) tp_skip(&in, &item);
-	tp_put_head(b, 4, k - 1), tp_put(b, from, (size_t)(in.p - from));
-	return tp_buf_why(b) ? -1 : 1;
+	return a && a->type == OP_LIST;
 }
 
-// what a move makes new at one end: the sequence a range is in, or the array an index is in, or
-// what is at the path
-static int end(work *w, const op_value *cur, const op_target *t, tp_span path) {
-	tp_buf b = {NULL, 0, 0, (size_t)-1, w->c->mem, 0};
-	int r = in_array(cur, t, path, &b);
-	int code = r < 0 ? TP_NOMEM : renew(w, r ? (tp_span){b.p, b.len} : path, 1);
-	tp_buf_free(&b);
+// what a move makes new at one end, by place: the sequence a range is in, or the array an index is
+// in, or what is at the path
+static int end(work *w, const op_value *cur, const op_target *t, tp_span path, op_key *keys) {
+	tp_buf where = {NULL, 0, 0, (size_t)-1, w->c->mem, 0};
+	long found;
+	int code = locate(w, cur, t, path, NULL, t->length - (size_t)in_array(cur, t), keys, &where, NULL, &found);
+	if (!code) code = renew(w, (tp_span){where.p, where.len}, 1);
+	tp_buf_free(&where);
 	return code;
 }
-
-// a put, a removal or a move
-static int other(work *w, const op_value *cur, const op_patch *p, const tp_patch *tp) {
-	if (!p->has_move) return renew(w, tp->path, 1);
-	int code = end(w, cur, &p->place, tp->path);
-	return code ? code : end(w, cur, &p->move, move_path(tp->move));
-}
-
 
 // room for one more in a growing array of size each
 static int more(const tp_mem *mem, void **p, size_t n, size_t *room, size_t each) {
@@ -621,14 +668,14 @@ static int more(const tp_mem *mem, void **p, size_t n, size_t *room, size_t each
 
 // a splice, its inserted ones counted from c, by its ids (anchor) or its range, as the patches to
 // apply by position (*qs, *nq)
-static int splice(work *w, const op_value *cur, const op_patch *p, const tp_patch *tp, uint64_t c,
+static int splice(work *w, const op_value *cur, const op_patch *p, tp_span key, uint64_t c,
 	const el_anchor *anchor, int name, op_patch **qs, size_t *nq, size_t *qcap, el_anchor *named) {
 	const tp_mem *mem = w->c->mem;
 	// an insert of another kind than the sequence (a list into a text): doesn't apply, as apply refuses
 	const op_value *into = at_path(cur, &p->place);
 	if (p->has_value && (!p->value || p->value->type != into->type)) return OP_WRONG_KIND;
 	el_list *l;
-	int code = elements(w, cur, p, tp->path, &l);
+	int code = elements(w, cur, &p->place, key, &l);
 	if (code) return code;
 	uint64_t a = (uint64_t)p->place.from, b = (uint64_t)p->place.to, o;
 	long m = p->has_value ? units(p->value) : 0;
@@ -754,16 +801,75 @@ static int splice(work *w, const op_value *cur, const op_patch *p, const tp_patc
 		}
 		if (ngone) gone = g, roomgone = ngone;
 		if (!none) {
-			*named = (el_anchor){1, has_first, first, gone, ngone, !nowhere(&right), same_before, right};
+			*named = (el_anchor){1, has_first, first, gone, ngone, !nowhere(&right), same_before, right, NULL, 0, 0};
 			gone = NULL, roomgone = 0;
 		}
 	}
 	*qs = out, *nq = nout, *qcap = qroom, out = NULL;
-	// into an array: what is under it now is made new (a position names another element)
-	const op_value *seq = at_path(cur, &p->place);
-	if (seq && seq->type == OP_LIST) code = renew(w, tp->path, 0);
 done:
 	tp_free(mem, gone, roomgone * sizeof *gone), tp_free(mem, out, qroom * sizeof *out);
+	return code;
+}
+
+// a patch but a move, its path's array items found (by ids or by place): a splice, a removal at an
+// index of an array (a splice of that one) or a put. keys: room for its path; *qs (made) the
+// patches to apply; named (NULL: not naming) its ids
+static int patch(work *w, const op_value *cur, const op_patch *p, tp_span path, uint64_t c,
+	const el_anchor *given, op_key *keys, el_anchor *named, op_patch **qs, size_t *nq, size_t *qcap) {
+	const tp_mem *mem = w->c->mem;
+	const el_id *by = given && given->has_through ? given->through : NULL;
+	size_t len = p->place.length;
+	int one = !p->place.has_range && !p->has_value && len && p->place.path[len - 1].type == OP_NUM_KEY;
+	tp_buf where = {NULL, 0, 0, (size_t)-1, mem, 0};
+	el_id *ids = named ? tp_alloc(mem, (len ? len : 1) * sizeof *ids) : NULL;
+	el_anchor sp = {0};
+	long found = 0;
+	int list = 0, empty = 0;
+	if (named && !ids) return TP_NOMEM;
+	int code = locate(w, cur, &p->place, path, by, len - (size_t)one, keys, &where, ids, &found);
+	op_patch q = *p;
+	q.place.path = keys, q.place.length = len - (size_t)one;
+	const op_value *at = code ? NULL : at_path(cur, &q.place);
+	if (!code && one && at && at->type == OP_LIST) {
+		// by its id: taken away wherever it is now, once
+		el_gone g = {by ? by[given->nthrough - 1] : (el_id){0, 0, 0, 0}, 1};
+		el_anchor gone = {1, 0, {0, 0, 0, 0}, &g, 1, 0, 0, {0, 0, 0, 0}, NULL, 0, 0};
+		long k = p->place.path[len - 1].n;
+		q.place.has_range = 1, q.place.from = k, q.place.to = k + 1, list = 1;
+		code = splice(w, cur, &q, (tp_span){where.p, where.len}, c, by ? &gone : NULL, !!named, qs, nq, qcap,
+			named ? &sp : NULL);
+		if (!code && named && sp.named && found >= 0) ids[found++] = sp.gone[0].id;
+		else found = -1;
+	} else {
+		// not into an array: the whole path, as any
+		if (!code && one) code = locate(w, cur, &p->place, path, by, len, keys, &where, ids, &found);
+		q.place.length = len, at = code ? NULL : at_path(cur, &q.place);
+		if (!code && p->place.has_range && is_seq(at)) {
+			list = at->type == OP_LIST;
+			code = splice(w, cur, &q, (tp_span){where.p, where.len}, c, given && given->named ? given : NULL,
+				!!named, qs, nq, qcap, named);
+			// a splice into an array named says through, empty when its path has no whole
+			empty = list && named && named->named;
+		} else if (!code && !(code = renew(w, (tp_span){where.p, where.len}, 1))) {
+			if (!(*qs = tp_alloc(mem, sizeof **qs))) code = TP_NOMEM;
+			else **qs = q, *nq = 1, *qcap = 1;
+		}
+	}
+	// named only when all are, each made by a step
+	for (long i = 0; i < found; i++) {
+		if (ids[i].device == EL_NONE) found = -1;
+	}
+	if (!code && named && (found > 0 || (found == 0 && empty))) {
+		el_id *t = found ? tp_grow(mem, ids, (len ? len : 1) * sizeof *ids, (size_t)found * sizeof *ids) : NULL;
+		if (found && !t) code = TP_NOMEM;
+		else if (found) named->through = t, ids = NULL;
+		if (!code) named->nthrough = (size_t)found, named->has_through = 1;
+	}
+	// into an array without a through (by place, or from before through): what is under it new
+	int keeps = named ? named->has_through : given && given->has_through;
+	if (!code && list && !keeps) code = renew(w, (tp_span){where.p, where.len}, 0);
+	tp_free(mem, sp.gone, sp.ngone * sizeof *sp.gone);
+	tp_free(mem, ids, (len ? len : 1) * sizeof *ids), tp_buf_free(&where);
 	return code;
 }
 
@@ -861,9 +967,19 @@ int el_step(const el_ctx *c, el_state *st, op_value **value, const el_ref *ref, 
 	op_patch *out = NULL, *cat = NULL;
 	op_undo *us = NULL;
 	el_anchor *nm = NULL;
-	size_t total = 0;
+	size_t total = 0, room = 0, from = 0;
 	uint64_t made = 0; // the step's elements so far: the next is its seq + made
-	if (name && named && n && !(nm = tp_alloc(c->mem, n * sizeof *nm))) return TP_NOMEM;
+	for (size_t i = 0; i < n; i++) {
+		size_t m = ps[i].has_move && ps[i].move.length > ps[i].place.length ? ps[i].move.length : ps[i].place.length;
+		room += m;
+	}
+	// the paths as applied, each patch's from its own place in it
+	op_key *pool = tp_alloc(c->mem, (room ? room : 1) * sizeof *pool);
+	if (!pool) return TP_NOMEM;
+	if (name && named && n && !(nm = tp_alloc(c->mem, n * sizeof *nm))) {
+		tp_free(c->mem, pool, (room ? room : 1) * sizeof *pool);
+		return TP_NOMEM;
+	}
 	if (nm) memset(nm, 0, n * sizeof *nm);
 	tp_patch tp;
 	for (size_t i = 0; i < n && !code; i++) {
@@ -873,29 +989,21 @@ int el_step(const el_ctx *c, el_state *st, op_value **value, const el_ref *ref, 
 		}
 		uint64_t counter = ref->seq + made;
 		made += tp_patch_made(&tp);
-		if (keep && !keep[i]) continue;
 		const op_patch *p = &ps[i];
+		op_key *keys = pool + from;
+		from += p->has_move && p->move.length > p->place.length ? p->move.length : p->place.length;
+		if (keep && !keep[i]) continue;
 		op_patch *qs = (op_patch *)p, *made_qs = NULL;
 		size_t nq = 1, qcap = 0;
-		const el_anchor *anchor = !name && ids && ids[i].named ? &ids[i] : NULL;
-		tp_buf up = {NULL, 0, 0, (size_t)-1, c->mem, 0};
-		int listed = !p->has_move && !p->place.has_range && !p->has_value ? in_array(cur, &p->place, tp.path, &up) : 0;
-		if (p->has_move) code = other(&w, cur, p, &tp);
-		else if (p->place.has_range && is_seq(at_path(cur, &p->place))) {
-			code = splice(&w, cur, p, &tp, counter, anchor, name, &made_qs, &nq, &qcap, nm ? &nm[i] : NULL);
+		if (p->has_move) {
+			// by place
+			code = end(&w, cur, &p->place, tp.path, keys);
+			if (!code) code = end(&w, cur, &p->move, move_path(tp.move), keys);
+		} else {
+			code = patch(&w, cur, p, tp.path, counter, !name && ids ? &ids[i] : NULL, keys, nm ? &nm[i] : NULL,
+				&made_qs, &nq, &qcap);
 			if (!code) qs = made_qs;
-		} else if (listed < 0) code = TP_NOMEM;
-		else if (listed) {
-			// a removal at an index of an array: a splice of that one, by its place as written
-			op_patch q = *p;
-			tp_patch tq = tp;
-			long k = p->place.path[p->place.length - 1].n;
-			q.place.length--, q.place.has_range = 1, q.place.from = k, q.place.to = k + 1;
-			tq.path = (tp_span){up.p, up.len};
-			code = splice(&w, cur, &q, &tq, counter, NULL, 0, &made_qs, &nq, &qcap, NULL);
-			if (!code) qs = made_qs;
-		} else code = other(&w, cur, p, &tp);
-		tp_buf_free(&up);
+		}
 		for (size_t q = 0; q < nq && !code; q++) {
 			op_value *next = NULL;
 			size_t failed;
@@ -933,6 +1041,23 @@ int el_step(const el_ctx *c, el_state *st, op_value **value, const el_ref *ref, 
 		for (size_t i = 0; i < nus; i++) total += us[i].n;
 		if (total && !(cat = malloc(total * sizeof *cat))) code = TP_NOMEM;
 	}
+	// the patches as applied, their paths after them
+	op_patch *whole = NULL;
+	if (!code && applied && nout && !(whole = malloc(nout * sizeof *whole + room * sizeof *pool))) {
+		free(cat);
+		code = TP_NOMEM;
+	}
+	if (whole) {
+		op_key *k = (op_key *)(whole + nout);
+		uintptr_t lo = (uintptr_t)pool, hi = (uintptr_t)(pool + room);
+		if (room) memcpy(k, pool, room * sizeof *k);
+		for (size_t i = 0; i < nout; i++) {
+			whole[i] = out[i];
+			uintptr_t at = (uintptr_t)out[i].place.path;
+			if (at >= lo && at < hi) whole[i].place.path = k + (out[i].place.path - pool);
+		}
+	}
+	tp_free(c->mem, pool, (room ? room : 1) * sizeof *pool);
 	if (code) {
 		for (size_t i = 0; i < nus; i++) op_undo_free(&us[i]);
 		tp_free(c->mem, us, roomus * sizeof *us);
@@ -953,21 +1078,24 @@ int el_step(const el_ctx *c, el_state *st, op_value **value, const el_ref *ref, 
 	}
 	tp_free(c->mem, us, roomus * sizeof *us);
 	if (owned) op_free(*value), *value = cur;
-	if (applied) *applied = out, *napplied = nout;
-	else free(out);
+	free(out);
+	if (applied) *applied = whole, *napplied = nout;
 	if (named) *named = nm;
 	return 0;
 }
 
 void el_anchors_free(const tp_mem *mem, el_anchor *a, size_t n) {
 	if (!a) return;
-	for (size_t i = 0; i < n; i++) tp_free(mem, a[i].gone, a[i].ngone * sizeof *a[i].gone);
+	for (size_t i = 0; i < n; i++) {
+		tp_free(mem, a[i].gone, a[i].ngone * sizeof *a[i].gone);
+		tp_free(mem, a[i].through, a[i].nthrough * sizeof *a[i].through);
+	}
 	tp_free(mem, a, n * sizeof *a);
 }
 
 int el_named(const el_anchor *a, size_t n) {
 	for (size_t i = 0; a && i < n; i++) {
-		if (a[i].named) return 1;
+		if (a[i].named || a[i].has_through) return 1;
 	}
 	return 0;
 }
@@ -1010,11 +1138,13 @@ int el_read(const el_ctx *c, const tp_step *s, uint64_t seq, el_anchor **out) {
 	if (k) memset(a, 0, (size_t)k * sizeof *a);
 	int code = 0;
 	for (uint64_t i = 0; i < k && !code; i++) {
-		uint64_t two, g = 0;
+		uint64_t two, g = 0, t = 0;
 		if (tp_null(&in)) continue;
 		if (tp_array(&in, &two)) code = TP_NOTSTEP;
-		else if (!tp_null(&in)) code = read_id(c, &in, s, seq, (uint32_t)me, &a[i].after), a[i].has_after = 1;
-		if (!code && tp_array(&in, &g)) code = TP_NOTSTEP;
+		else if (two > 1 && !tp_null(&in)) {
+			code = read_id(c, &in, s, seq, (uint32_t)me, &a[i].after), a[i].has_after = 1;
+		}
+		if (!code && two > 1 && tp_array(&in, &g)) code = TP_NOTSTEP;
 		if (!code && g && !(a[i].gone = tp_alloc(c->mem, (size_t)g * sizeof *a[i].gone))) code = TP_NOMEM;
 		if (!code) a[i].ngone = (size_t)g;
 		for (uint64_t j = 0; j < g && !code; j++) {
@@ -1023,12 +1153,19 @@ int el_read(const el_ctx *c, const tp_step *s, uint64_t seq, el_anchor **out) {
 				tp_whole(&in, &a[i].gone[j].count))
 				code = TP_NOTSTEP;
 		}
-		if (!code && two == 3) {
+		if (!code && two > 2 && !tp_null(&in)) {
 			a[i].has_before = 1;
 			if (in.p < in.end && *in.p == 0xf5) in.p++, a[i].same = 1;
 			else code = read_id(c, &in, s, seq, (uint32_t)me, &a[i].before) ? TP_NOTSTEP : 0;
 		}
-		a[i].named = !code;
+		a[i].named = !code && two > 1;
+		// through: the last of one or four
+		if (!code && (two == 1 || two == 4) && tp_array(&in, &t)) code = TP_NOTSTEP;
+		if (!code && t && !(a[i].through = tp_alloc(c->mem, (size_t)t * sizeof *a[i].through))) code = TP_NOMEM;
+		if (!code) a[i].nthrough = (size_t)t, a[i].has_through = two == 1 || two == 4;
+		for (uint64_t j = 0; j < t && !code; j++) {
+			if (read_id(c, &in, s, seq, (uint32_t)me, &a[i].through[j])) code = TP_NOTSTEP;
+		}
 	}
 	if (code) return el_anchors_free(c->mem, a, (size_t)k), code;
 	*out = a;
@@ -1051,11 +1188,16 @@ void el_write(tp_buf *b, const el_ctx *c, const el_anchor *a, size_t count, uint
 	uint64_t seq) {
 	tp_put_head(b, 4, count);
 	for (size_t i = 0; i < count; i++) {
-		if (!a[i].named) {
+		if (!a[i].named && !a[i].has_through) {
 			tp_put(b, "\xf6", 1);
 			continue;
 		}
-		tp_put_head(b, 4, a[i].has_before ? 3 : 2);
+		if (!a[i].named) {
+			tp_put_head(b, 4, 1), tp_put_head(b, 4, a[i].nthrough);
+			for (size_t j = 0; j < a[i].nthrough; j++) write_id(b, c, &a[i].through[j], me, n, seq);
+			continue;
+		}
+		tp_put_head(b, 4, a[i].has_through ? 4 : a[i].has_before ? 3 : 2);
 		if (a[i].has_after) write_id(b, c, &a[i].after, me, n, seq);
 		else tp_put(b, "\xf6", 1);
 		tp_put_head(b, 4, a[i].ngone);
@@ -1065,6 +1207,9 @@ void el_write(tp_buf *b, const el_ctx *c, const el_anchor *a, size_t count, uint
 		}
 		if (a[i].has_before && a[i].same) tp_put(b, "\xf5", 1);
 		else if (a[i].has_before) write_id(b, c, &a[i].before, me, n, seq);
+		else if (a[i].has_through) tp_put(b, "\xf6", 1);
+		if (a[i].has_through) tp_put_head(b, 4, a[i].nthrough);
+		for (size_t j = 0; j < a[i].nthrough; j++) write_id(b, c, &a[i].through[j], me, n, seq);
 	}
 }
 
