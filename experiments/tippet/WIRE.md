@@ -34,10 +34,13 @@ One kept write. Bytes: a cbor array.
   is made of it: `typescript/history.ts`, heads and versions
 - ids: array, one per patch, only after on: the elements a splice (a patch with a range, into a
   string or an array) names, or null: by its range as written (a writer holding no ids, an old step,
-  anything else). each [after, gone]:
+  anything else). each [after, gone] or [after, gone, before]:
   - after: the element it goes after, or null: the start
   - gone: array of [id, count], count whole from 1: the elements it takes away, count of them from
     id on (its seq or k on). one named more than once is taken away once
+  - before: the element it goes before, the one right after after at the writer (gone ones too): an
+    id; or true, after's own before (after not null). none: the end (an old step's too). a writer
+    says it only for a splice that inserts
   - an element id: made by a step, its device and seq: the step's seq + i, the i-th element the step
     inserts (from 0, in patch order); or there since a step made its sequence new: that step's
     device and n, and k, its place then. written: this device's x, whole or negative, seq the step's
@@ -55,12 +58,30 @@ One kept write. Bytes: a cbor array.
   no range) is a splice of that one element, by its place as written
 
   applied in the entry's order (history): a splice by ids takes its gone elements away wherever they
-  are now, and goes after its after element, past any elements there that sort after its own first:
-  by the lamport of the step that made each, then device, then seq (one there since a step: that
-  step's lamport and device, before what the step inserts), so two at one place land the same
-  whatever came first. an element it names not there (this device's x past the step's seq too): the
-  step doesn't apply (passed over, as any). by range: as written, its inserted ones right after the
-  element before from. what is made of it: `typescript/elements.ts`
+  are now, then its first inserted one goes between after and before, among those put there since
+  (FugueMax's rule), the rest each right after the one before:
+
+      at = spot = right after after; scanning = no
+      loop:
+        unless scanning: spot = at
+        at before, or the end: stop
+        e = the element at at; a, b its after and before
+        a before ours: stop
+        a ours: b ours and e sorts below ours: stop
+                scanning = b before ours
+        at = the next element
+      it goes at spot
+
+  places as they are now, gone ones too; the start before all, the end after all; how a reader holds
+  elements (in runs, however cut) never changes where one goes. an element's after and before: its
+  splice's, but after the one before it when its splice put that one too; by range or with no
+  before, before the end; one there since a step, after the one before it (the first, the start),
+  before the end. sorts: by the lamport of the step that made it, then device, then seq (one there
+  since a step: that step's lamport and device, before what the step inserts), so two at one place
+  land the same whatever came first. an element it names not there (this device's x past the step's
+  seq too), or a before not after its after: the step doesn't apply (passed over, as any). by range:
+  as written, its inserted ones right after the element before from. what is made of it:
+  `typescript/elements.ts`
 - who: tstr, only when there is one
 
 Anything else is not a step: another length, another kind in a place, a key or hash not 32 bytes, n
@@ -68,12 +89,12 @@ of 0, a number not whole, a patch with another field, a node array not one rest,
 above (k of 0 or of n or more, a pair naming the step's own device, of another length or kind), ids
 not as above (not one per patch, on a patch without a range, an id of another shape or naming the
 step's own device, another's seq below 0, a number past 2^53 - 1 either way, an [x, k] with x of n
-or more, a [device, n, k] with n of 0, a count of 0), a NUL in node (its rest too) or part, or
-containers nested 1024 deep (cbor's most; the step's own array counts): a run message holds a step's
-patches one deeper.
+or more, a [device, n, k] with n of 0, a count of 0, a before of true with a null after, another
+length), a NUL in node (its rest too) or part, or containers nested 1024 deep (cbor's most; the
+step's own array counts): a run message holds a step's patches one deeper.
 
 A peer from before on refuses a step that carries it (not a step): a run with one doesn't pass it.
-So does a peer from before ids, a step with ids.
+So does a peer from before ids, a step with ids, and one from before before, ids that say it.
 
 ids' shape is mine (10-30), not decided: per patch beside it, so a patch stays a changeable patch
 (squish packs it); an element its device and seq (diamond-types' agent and per-agent sequence
@@ -82,6 +103,16 @@ its device's chain alone, whatever the lamports, and a big paste moves no lampor
 written, so a step says no more than it did; one there since a step by that step's n, which no other
 step of its device has; lamport only sorts; this device's own as how far back from the step's seq,
 so typing alone (each after the one before) is one run in a pack.
+
+before and FugueMax are mine (10-31), not decided: Weidner and Kleppmann's FugueMax ("The Art of the
+Fugue"), in its list form (Gentle's YjsMod: Yjs's origin left and right, its scan fixed), not a
+tree, so it works on the runs as held; a splice naming only after (RGA) interleaves two typing at
+one place backward or at the start, naming before too it doesn't, in any direction. with every
+before none (old steps) the scan is RGA's (each passed one sorting above, with its own), so old logs
+merge as they did. before none for the end, so typing at the end says no more than it did; true for
+after's own, so typing forward in the middle says 1 byte more a step; this device's last insert is 1
+byte already (x 1), so typing backward is 1 byte more. typing backward is one run held too, each
+element before the one after it.
 
 on's shape is mink's pick (10-26), not decided: after when, so an old step reads as it did; heads by
 device and n, as the log finds a step (its chain binds n to its bytes), not by hash; this device's

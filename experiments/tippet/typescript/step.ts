@@ -24,9 +24,10 @@ export type On = { device: string; n: number }
 // an element of a string or array: made by a step, c its number among its device's elements; or
 // there since a step made its sequence new, c that step's n, k its place
 export type Id = { device: string; c: number; k?: number }
-// a splice by ids: it goes after one element (null: the start) and takes these away, each an id
-// and how many from it, its c or k on
-export type Anchor = { after: Id | null; gone: readonly [Id, number][] }
+// a splice by ids: it goes after one element (null: the start) and before another (none: the end;
+// true: the one its after element goes before), and takes these away, each an id and how many from
+// it, its c or k on
+export type Anchor = { after: Id | null; gone: readonly [Id, number][]; before?: Id | true }
 
 const KEY = /^[0-9a-f]{64}$/
 
@@ -76,7 +77,15 @@ const writeId = (s: At, i: Id): Value =>
 		? [unhex(i.device), i.c]
 		: [unhex(i.device), i.c, i.k]
 export const writeIds = (s: At, ids: readonly (Anchor | null)[]): Value[] =>
-	ids.map((x) => x && [x.after && writeId(s, x.after), x.gone.map(([i, c]) => [writeId(s, i), c])])
+	ids.map((x) => {
+		if (!x) return null
+		const a: Value[] = [
+			x.after && writeId(s, x.after),
+			x.gone.map(([i, c]) => [writeId(s, i), c]),
+		]
+		if (x.before !== undefined) a.push(x.before === true ? true : writeId(s, x.before))
+		return a
+	})
 const readId = (s: At, i: unknown): Id => {
 	if (typeof i === "number") return { device: s.device, c: s.seq - i }
 	const a = i as [unknown, number, number?]
@@ -87,11 +96,13 @@ const readId = (s: At, i: unknown): Id => {
 export const readIds = (s: At, ids: readonly Value[]): (Anchor | null)[] =>
 	ids.map((x) => {
 		if (x === null) return null
-		const [after, gone] = x as [unknown, [unknown, number][]]
-		return {
+		const [after, gone, before] = x as [unknown, [unknown, number][], unknown?]
+		const a: Anchor = {
 			after: after === null ? null : readId(s, after),
 			gone: gone.map(([i, c]) => [readId(s, i), c] as [Id, number]),
 		}
+		if (before !== undefined) a.before = before === true ? true : readId(s, before)
+		return a
 	})
 
 export function encodeStep(s: Step): Uint8Array {
@@ -134,14 +145,16 @@ export const idOf = (device: Uint8Array, n: number) => (i: unknown) =>
 			? i.length === 2 && whole(i[0]) && i[0] < n && whole(i[1])
 			: key(i[0]) && !same(i[0], device) && whole(i[1]) &&
 				(i.length === 2 || (i.length === 3 && i[1] >= 1 && whole(i[2]))))
-// ids as written: one per patch, null or [after, gone], only on a patch with a range
+// ids as written: one per patch, null or [after, gone] or [after, gone, before], only on a patch
+// with a range; before true only with an after
 export const idsOf = (device: Uint8Array, n: number, patches: unknown[]) => (ids: unknown) => {
 	const id = idOf(device, n)
 	return Array.isArray(ids) && ids.length === patches.length &&
 		ids.every((x, i) =>
-			x === null || (Array.isArray(x) && x.length === 2 &&
+			x === null || (Array.isArray(x) && (x.length === 2 || x.length === 3) &&
 				(patches[i] as { range?: unknown }).range !== undefined &&
 				(x[0] === null || id(x[0])) && Array.isArray(x[1]) &&
+				(x.length === 2 || (x[2] === true ? x[0] !== null : id(x[2]))) &&
 				x[1].every((g) =>
 					Array.isArray(g) && g.length === 2 && id(g[0]) && whole(g[1]) && g[1] >= 1
 				))

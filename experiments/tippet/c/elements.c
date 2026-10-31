@@ -1,6 +1,6 @@
 // Elements (see elements.h). A sequence is a list of runs in order: elements one after another of
-// one device, numbered one on, their steps' lamports going on evenly, all gone or none, held as one
-// (typing is one run). With them how many are not gone, and a cursor (j, and live: how many before
+// one device, numbered one on (or one down), their steps' lamports going on evenly, all gone or none,
+// held as one (typing is one run, forward or back). With them how many are not gone, and a cursor (j, and live: how many before
 // runs[j] are not gone) that typing and edits near the last move from (an element is found near the
 // cursor, else from the first).
 #include "elements.h"
@@ -12,15 +12,36 @@
 enum { MADE, SPLICE, PUT };
 
 // a run's most elements
-#define MOST ((1u << 30) - 1)
+#define MOST ((1u << 29) - 1)
 
-// made: numbered c on, lamports lamport on by rate each; born (there since the list's step): places
-// c on
+// an element as a run holds it: made, its device and seq; born, its place (its step the list's); none,
+// the start or the end. device EL_NONE as ORG_NONE
+#define ORG_NONE ((1u << 30) - 1)
+typedef struct {
+	uint32_t device : 30, born : 1, none : 1;
+	uint32_t lo, hi;
+} org;
+
+// made: numbered c on (back: c down), lamports lamport on (back: down) by rate each; born (there
+// since the list's step): places c on. left: what the first goes after (back: each), right: what each
+// goes before (back: the last); none the start, the end
 typedef struct {
 	uint64_t c, lamport;
 	uint32_t device, rate;
-	uint32_t len : 30, gone : 1, born : 1;
+	uint32_t len : 29, gone : 1, born : 1, back : 1;
+	org left, right;
 } run;
+
+static const el_id NOWHERE = {EL_NONE, 2, 0, 0};
+static int nowhere(const el_id *i) { return i->born == 2; }
+static org org_of(const el_id *i) {
+	if (nowhere(i)) return (org){0, 0, 1, 0, 0};
+	uint64_t x = i->born ? i->k : i->c;
+	return (org){i->device == EL_NONE ? ORG_NONE : i->device, i->born, 0, (uint32_t)x, (uint32_t)(x >> 32)};
+}
+static int org_is(org a, org b) {
+	return a.none == b.none && (a.none || (a.device == b.device && a.born == b.born && a.lo == b.lo && a.hi == b.hi));
+}
 
 struct el_list {
 	uint8_t *key;
@@ -49,7 +70,24 @@ static int grow(const tp_mem *mem, el_list *l) {
 }
 
 static el_id id_at(const el_list *l, const run *r, uint64_t o) {
-	return r->born ? (el_id){r->device, 1, l->by.n, r->c + o} : (el_id){r->device, 0, r->c + o, 0};
+	return r->born ? (el_id){r->device, 1, l->by.n, r->c + o}
+		: (el_id){r->device, 0, r->back ? r->c - o : r->c + o, 0};
+}
+// the lowest id of r's [o, o + n)
+static el_id low(const el_list *l, const run *r, uint64_t o, uint64_t n) {
+	return id_at(l, r, r->back ? o + n - 1 : o);
+}
+static el_id id_of(const el_list *l, org g) {
+	if (g.none) return NOWHERE;
+	uint64_t x = (uint64_t)g.hi << 32 | g.lo;
+	uint32_t d = g.device == ORG_NONE ? EL_NONE : g.device;
+	return g.born ? (el_id){d, 1, l->by.n, x} : (el_id){d, 0, x, 0};
+}
+static el_id left_of(const el_list *l, const run *r, uint64_t o) {
+	return !r->back && o ? id_at(l, r, o - 1) : id_of(l, r->left);
+}
+static el_id right_of(const el_list *l, const run *r, uint64_t o) {
+	return r->back && o + 1 < r->len ? id_at(l, r, o + 1) : id_of(l, r->right);
 }
 static el_id plus(el_id i, uint64_t x) {
 	if (i.born) i.k += x;
@@ -63,7 +101,16 @@ static int same(const el_id *a, const el_id *b) {
 static long place(const el_list *l, const run *r, const el_id *id) {
 	if (r->device != id->device || r->born != id->born || (id->born && id->c != l->by.n)) return -1;
 	uint64_t x = id->born ? id->k : id->c;
+	if (r->back) return x <= r->c && r->c - x < r->len ? (long)(r->c - x) : -1;
 	return x >= r->c && x - r->c < r->len ? (long)(x - r->c) : -1;
+}
+// how many of the n ids from run j's place o on are there, one on; *p the first place of them
+static uint64_t span(const el_list *l, size_t j, uint64_t o, uint64_t n, uint64_t *p) {
+	const run *r = &l->runs[j];
+	uint64_t m = r->back ? o + 1 : r->len - o;
+	if (m > n) m = n;
+	*p = r->back ? o + 1 - m : o;
+	return m;
 }
 // an element's run and place in it: near the cursor first
 static int find(const el_list *l, const el_id *id, size_t *j, uint64_t *o) {
@@ -82,8 +129,8 @@ static int find(const el_list *l, const el_id *id, size_t *j, uint64_t *o) {
 }
 static int there(const el_list *l, const el_gone *g) {
 	size_t j;
-	uint64_t o;
-	for (uint64_t x = 0; x < g->count; x += l->runs[j].len - o) {
+	uint64_t o, p;
+	for (uint64_t x = 0; x < g->count; x += span(l, j, o, g->count - x, &p)) {
 		el_id id = plus(g->id, x);
 		if (!find(l, &id, &j, &o)) return 0;
 	}
@@ -113,30 +160,47 @@ static void edit(el_list *l, size_t j, size_t del, const run *ins, size_t nins) 
 	if (nins) memcpy(l->runs + j, ins, nins * sizeof *ins);
 	l->n = l->n + nins - del;
 }
-// runs[j - 1] and runs[j] as one, if they go on from each other: numbers one on, lamports evenly
+// runs[j - 1] and runs[j] as one, if they go on from each other: numbers one on (or one down), each
+// after (or before) the one before, lamports evenly
 static void join(el_list *l, size_t j) {
 	if (j == 0 || j >= l->n) return;
 	run a = l->runs[j - 1], b = l->runs[j];
-	if (a.device != b.device || a.born != b.born || a.gone != b.gone || a.c + a.len != b.c ||
-		(uint64_t)a.len + b.len > MOST)
-		return;
-	uint64_t rate = a.len > 1 ? a.rate : b.len > 1 ? b.rate : b.lamport - a.lamport;
-	if (b.lamport < a.lamport || rate > UINT32_MAX || b.lamport - a.lamport != rate * a.len ||
-		(b.len > 1 && b.rate != rate))
-		return;
-	a.len += b.len, a.rate = (uint32_t)rate;
+	if (a.device != b.device || a.born != b.born || a.gone != b.gone || (uint64_t)a.len + b.len > MOST) return;
+	el_id last = id_at(l, &a, a.len - 1), first = id_at(l, &b, 0);
+	int on = (a.len == 1 || !a.back) && (b.len == 1 || !b.back) && a.c + a.len == b.c &&
+		org_is(b.left, org_of(&last)) && org_is(a.right, b.right);
+	int down = !on && !a.born && (a.len == 1 || a.back) && (b.len == 1 || b.back) && a.c >= a.len &&
+		a.c - a.len == b.c && org_is(a.right, org_of(&first)) && org_is(a.left, b.left);
+	if ((!on && !down) || (on ? b.lamport < a.lamport : a.lamport < b.lamport)) return;
+	uint64_t step = on ? b.lamport - a.lamport : a.lamport - b.lamport;
+	uint64_t rate = a.len > 1 ? a.rate : b.len > 1 ? b.rate : step;
+	if (rate > UINT32_MAX || step != rate * a.len || (b.len > 1 && b.rate != rate)) return;
+	a.len += b.len, a.rate = (uint32_t)rate, a.back = (uint32_t)!!down;
+	if (down) a.right = b.right;
 	edit(l, j - 1, 2, &a, 1);
+}
+// run r's elements [o, o + n)
+static run part(const el_list *l, const run *r, uint64_t o, uint64_t n) {
+	run p = *r;
+	p.len = (uint32_t)n;
+	if (r->back) {
+		p.c = r->c - o, p.lamport = r->lamport - (uint64_t)r->rate * o;
+		el_id x = id_at(l, r, o + n);
+		if (o + n < r->len) p.right = org_of(&x);
+	} else {
+		p.c = r->c + o, p.lamport = r->lamport + (uint64_t)r->rate * o;
+		el_id x = id_at(l, r, o ? o - 1 : 0);
+		if (o) p.left = org_of(&x);
+	}
+	return p;
 }
 // run j's elements [o, o + n) a run of their own: its index
 static size_t cut(el_list *l, size_t j, uint64_t o, uint64_t n) {
 	run r = l->runs[j], parts[3];
 	size_t k = 0;
-	if (o) parts[k] = r, parts[k++].len = (uint32_t)o;
-	parts[k] = r, parts[k].c = r.c + o, parts[k].lamport = r.lamport + r.rate * o, parts[k++].len = (uint32_t)n;
-	if (o + n < r.len) {
-		parts[k] = r, parts[k].c = r.c + o + n, parts[k].lamport = r.lamport + r.rate * (o + n);
-		parts[k++].len = (uint32_t)(r.len - o - n);
-	}
+	if (o) parts[k++] = part(l, &r, 0, o);
+	parts[k++] = part(l, &r, o, n);
+	if (o + n < r.len) parts[k++] = part(l, &r, o + n, r.len - o - n);
 	edit(l, j, 1, parts, k);
 	return j + (o ? 1 : 0);
 }
@@ -221,10 +285,187 @@ static int devcmp(const el_ctx *c, uint32_t x, uint32_t y) {
 // (a born one before what its step inserts)
 static int sorts_after(const work *w, const el_list *l, size_t j, uint64_t o, uint64_t c) {
 	const run *r = &l->runs[j];
-	uint64_t at = r->born ? l->by.lamport : r->lamport + r->rate * o;
+	uint64_t at = r->born ? l->by.lamport : r->back ? r->lamport - (uint64_t)r->rate * o : r->lamport + (uint64_t)r->rate * o;
 	if (at != w->ref.lamport) return at > w->ref.lamport;
 	int d = devcmp(w->c, r->born ? l->by.device : r->device, w->ref.device);
-	return d ? d > 0 : !r->born && r->c + o > c;
+	return d ? d > 0 : !r->born && id_at(l, r, o).c > c;
+}
+
+typedef struct {
+	size_t j;
+	uint64_t o;
+} pos;
+static int ahead(pos a, pos b) { return a.j < b.j || (a.j == b.j && a.o < b.o); }
+static pos next_pos(const el_list *l, pos p) {
+	return p.o + 1 < l->runs[p.j].len ? (pos){p.j, p.o + 1} : (pos){p.j + 1, 0};
+}
+// the elements from a scan's start on, by id: their places. ends: a piece's first and last (where
+// an element's left and right mostly are), hashed; ranges: the rest, sorted when looked in
+typedef struct {
+	el_id id;
+	pos at;
+	int used;
+} tip;
+typedef struct {
+	el_id id; // the lowest
+	uint64_t n;
+	pos at;
+	int back;
+} range;
+typedef struct {
+	const tp_mem *mem;
+	tip *ends;
+	size_t nends, room;
+	range *ranges;
+	size_t nranges, roomranges;
+	int sorted;
+} seen;
+
+static uint64_t id_hash(const el_id *i) {
+	uint64_t h = ((uint64_t)i->device << 1 | i->born) * 0x9e3779b97f4a7c15u ^ i->c * 0xbf58476d1ce4e5b9u ^
+		i->k * 0x94d049bb133111ebu;
+	return h ^ h >> 31;
+}
+static int end_put(seen *s, const el_id *id, pos at) {
+	if (2 * (s->nends + 1) > s->room) {
+		size_t room = s->room ? 2 * s->room : 64;
+		tip *e = tp_alloc(s->mem, room * sizeof *e);
+		if (!e) return -1;
+		memset(e, 0, room * sizeof *e);
+		for (size_t i = 0; i < s->room; i++) {
+			if (!s->ends[i].used) continue;
+			size_t k = id_hash(&s->ends[i].id) & (room - 1);
+			while (e[k].used) k = (k + 1) & (room - 1);
+			e[k] = s->ends[i];
+		}
+		tp_free(s->mem, s->ends, s->room * sizeof *s->ends);
+		s->ends = e, s->room = room;
+	}
+	size_t k = id_hash(id) & (s->room - 1);
+	while (s->ends[k].used && !same(&s->ends[k].id, id)) k = (k + 1) & (s->room - 1);
+	if (!s->ends[k].used) s->nends++;
+	s->ends[k] = (tip){*id, at, 1};
+	return 0;
+}
+static int range_cmp(const void *x, const void *y) {
+	const el_id *a = &((const range *)x)->id, *b = &((const range *)y)->id;
+	if (a->device != b->device) return a->device < b->device ? -1 : 1;
+	if (a->born != b->born) return a->born < b->born ? -1 : 1;
+	uint64_t p = a->born ? a->k : a->c, q = b->born ? b->k : b->c;
+	if (a->c != b->c && a->born) return a->c < b->c ? -1 : 1;
+	return p < q ? -1 : p > q;
+}
+// run j's [o, o + n) seen
+static int see(seen *s, const el_list *l, size_t j, uint64_t o, uint64_t n) {
+	const run *r = &l->runs[j];
+	el_id first = id_at(l, r, o), last = id_at(l, r, o + n - 1);
+	if (end_put(s, &first, (pos){j, o}) || end_put(s, &last, (pos){j, o + n - 1})) return -1;
+	if (n < 3) return 0;
+	if (s->nranges == s->roomranges) {
+		size_t room = s->roomranges ? 2 * s->roomranges : 16;
+		range *g = tp_grow(s->mem, s->ranges, s->roomranges * sizeof *g, room * sizeof *g);
+		if (!g) return -1;
+		s->ranges = g, s->roomranges = room;
+	}
+	range g = {low(l, r, o, n), n, {j, o}, r->back};
+	if (s->nranges && range_cmp(&s->ranges[s->nranges - 1], &g) > 0) s->sorted = 0;
+	s->ranges[s->nranges++] = g;
+	return 0;
+}
+// where id is among those seen: 1, *at
+static int seen_at(seen *s, const el_id *id, pos *at) {
+	if (s->room) {
+		for (size_t k = id_hash(id) & (s->room - 1); s->ends[k].used; k = (k + 1) & (s->room - 1)) {
+			if (same(&s->ends[k].id, id)) return *at = s->ends[k].at, 1;
+		}
+	}
+	if (!s->nranges) return 0;
+	if (!s->sorted) qsort(s->ranges, s->nranges, sizeof *s->ranges, range_cmp), s->sorted = 1;
+	// the last whose lowest is id or below
+	size_t a = 0, b = s->nranges;
+	range probe = {*id, 0, {0, 0}, 0};
+	while (a < b) {
+		size_t m = (a + b) / 2;
+		if (range_cmp(&s->ranges[m], &probe) <= 0) a = m + 1;
+		else b = m;
+	}
+	if (!a) return 0;
+	const range *g = &s->ranges[a - 1];
+	if (g->id.device != id->device || g->id.born != id->born || (id->born && g->id.c != id->c)) return 0;
+	uint64_t x = id->born ? id->k : id->c, lo = g->id.born ? g->id.k : g->id.c;
+	if (x - lo >= g->n) return 0;
+	*at = (pos){g->at.j, g->at.o + (g->back ? g->n - 1 - (x - lo) : x - lo)};
+	return 1;
+}
+static void seen_free(seen *s) {
+	tp_free(s->mem, s->ends, s->room * sizeof *s->ends);
+	tp_free(s->mem, s->ranges, s->roomranges * sizeof *s->ranges);
+}
+
+// where an insert by ids, its first at seq c, goes, from i (right after its left) to its right (at
+// rp): past those inserted there meanwhile, as FugueMax (Gentle's YjsMod): by each one's own left and
+// right, then by sort key, greater first. those between are looked up by id as far as the scan has
+// looked, so it costs what lies between, at most. 0, *out; or TP_NOMEM
+static int scan(const work *w, const el_list *l, pos i, const el_id *left, const el_id *right, const pos *rp,
+	uint64_t c, pos *out) {
+	seen s = {w->c->mem, NULL, 0, 0, NULL, 0, 0, 1};
+#define AT(p) (rp && (p).j == rp->j && (p).o == rp->o)
+#define UPTO(p) ((rp && rp->j == (p).j ? rp->o : l->runs[(p).j].len) - (p).o)
+	// looked up so far: from i to far
+	pos far = i, spot = i, at;
+	int scanning = 0, code = 0;
+	for (;;) {
+		if (!scanning) spot = i;
+		if (i.j >= l->n || AT(i)) break;
+		while (!ahead(i, far)) {
+			uint64_t n = UPTO(far);
+			if (see(&s, l, far.j, far.o, n)) {
+				code = TP_NOMEM;
+				goto done;
+			}
+			far = far.o + n < l->runs[far.j].len ? (pos){far.j, far.o + n} : (pos){far.j + 1, 0};
+		}
+		const run *r = &l->runs[i.j];
+		el_id ol = left_of(l, r, i.o);
+		// its left against ours: before (-1), the same (0), passed (1)
+		int x = nowhere(&ol) ? (nowhere(left) ? 0 : -1)
+			: nowhere(left) ? 1
+			: same(&ol, left) ? 0
+			: seen_at(&s, &ol, &at) && ahead(at, i) ? 1 : -1;
+		if (x < 0) break;
+		int y = 1;
+		if (x == 0) {
+			// its right against ours: before (-1), the same (0), after (1)
+			el_id orr = right_of(l, r, i.o);
+			if (nowhere(&orr)) y = nowhere(right) ? 0 : 1;
+			else if (nowhere(right)) y = -1;
+			else if (same(&orr, right)) y = 0;
+			else {
+				int found;
+				while (!(found = seen_at(&s, &orr, &at)) && far.j < l->n && !AT(far)) {
+					uint64_t n = UPTO(far);
+					if (see(&s, l, far.j, far.o, n)) {
+						code = TP_NOMEM;
+						goto done;
+					}
+					far = far.o + n < l->runs[far.j].len ? (pos){far.j, far.o + n} : (pos){far.j + 1, 0};
+				}
+				y = found ? -1 : 1;
+			}
+			if (y == 0 && !sorts_after(w, l, i.j, i.o, c)) break;
+			scanning = y < 0;
+		}
+		// what is passed at once: a run's later elements, each after the one before (forward), or
+		// all after ours (back, once one is) and each before the next, nearer than ours
+		uint64_t up = UPTO(i), n = !r->back || x > 0 ? up : y < 0 && up > 1 ? up - 1 : 1;
+		i = i.o + n < r->len ? (pos){i.j, i.o + n} : (pos){i.j + 1, 0};
+	}
+	*out = spot;
+done:
+#undef AT
+#undef UPTO
+	seen_free(&s);
+	return code;
 }
 
 static int rec_room(work *w) {
@@ -281,7 +522,7 @@ static int elements(work *w, const op_value *cur, const op_patch *p, tp_span pat
 	memcpy(l->key, path.p, path.n);
 	for (size_t k = 0; k < count; k += MOST) {
 		uint32_t len = (uint32_t)(count - k < MOST ? count - k : MOST);
-		l->runs[l->n++] = (run){.c = k, .device = by.device, .len = len, .born = 1};
+		l->runs[l->n++] = (run){.c = k, .device = by.device, .len = len, .born = 1, .left = {.none = 1}, .right = {.none = 1}};
 	}
 	l->by = by, l->count = count;
 	st->lists[st->n++] = l;
@@ -396,15 +637,21 @@ static int splice(work *w, const op_value *cur, const op_patch *p, const tp_patc
 	const el_gone *names;
 	size_t nnames;
 	op_patch *out = NULL;
-	el_id first = {0};
+	el_id first = {0}, right = NOWHERE;
 	int has_first = 0;
 	// what it names: the element it goes after, and those it takes away, as runs
 	if (anchor) {
-		has_first = anchor->has_after, first = anchor->after;
+		has_first = anchor->has_after, first = anchor->after, j = 0, o = 0;
 		if (has_first && !find(l, &first, &j, &o)) return OP_RANGE;
 		for (size_t r = 0; r < anchor->ngone; r++) {
 			if (!there(l, &anchor->gone[r])) return OP_RANGE;
 		}
+		// its before: there, and after its after
+		if (anchor->has_before && anchor->same && !has_first) return OP_RANGE;
+		if (anchor->has_before && anchor->same) right = right_of(l, &l->runs[j], o);
+		else if (anchor->has_before) right = anchor->before;
+		pos f = {j, o}, at;
+		if (!nowhere(&right) && (!find(l, &right, &at.j, &at.o) || (has_first && !ahead(f, at)))) return OP_RANGE;
 		names = anchor->gone, nnames = anchor->ngone;
 	} else {
 		if (a > b || b > l->count) return OP_RANGE;
@@ -413,7 +660,7 @@ static int splice(work *w, const op_value *cur, const op_patch *p, const tp_patc
 			j = live_at(l, (size_t)x, &o);
 			const run *r = &l->runs[j];
 			uint64_t n = r->len - o < b - x ? r->len - o : b - x;
-			el_id i = id_at(l, r, o), next = ngone ? plus(gone[ngone - 1].id, gone[ngone - 1].count) : i;
+			el_id i = low(l, r, o, n), next = ngone ? plus(gone[ngone - 1].id, gone[ngone - 1].count) : i;
 			if (ngone && same(&next, &i)) gone[ngone - 1].count += n;
 			else if (more(mem, (void **)&gone, ngone, &roomgone, sizeof *gone)) {
 				code = TP_NOMEM;
@@ -436,7 +683,7 @@ static int splice(work *w, const op_value *cur, const op_patch *p, const tp_patc
 		for (uint64_t x = 0; x < names[r].count;) {
 			el_id id = plus(names[r].id, x);
 			find(l, &id, &j, &o);
-			uint64_t m = l->runs[j].len - o < names[r].count - x ? l->runs[j].len - o : names[r].count - x;
+			uint64_t m = span(l, j, o, names[r].count - x, &o);
 			x += m;
 			if (l->runs[j].gone) continue;
 			if (grow(mem, l) || more(mem, (void **)&REC.taken, REC.ntaken, &REC.roomtaken, sizeof *REC.taken) ||
@@ -456,16 +703,20 @@ static int splice(work *w, const op_value *cur, const op_patch *p, const tp_patc
 			}
 		}
 	}
-	// where the inserted go: after its element, past those that sort after it (by ids)
-	j = 0, o = 0;
-	if (has_first) {
-		find(l, &first, &j, &o);
-		if (++o == l->runs[j].len) j++, o = 0;
-	}
-	// (a run's sort keys only go up, so one that sorts after is passed whole)
+	// where the inserted go: right after its element; by ids, past those put there meanwhile
+	pos lp = {0, 0}, rp = {0, 0}, spot = {0, 0};
+	el_id left = has_first ? first : NOWHERE;
+	int same_before = 0;
+	if (has_first) find(l, &first, &lp.j, &lp.o), spot = next_pos(l, lp);
 	if (anchor) {
-		while (j < l->n && sorts_after(w, l, j, o, c)) j++, o = 0;
+		int has_rp = !nowhere(&right) && find(l, &right, &rp.j, &rp.o);
+		if ((code = scan(w, l, spot, &left, &right, has_rp ? &rp : NULL, c, &spot))) goto done;
+	} else if (name && m > 0 && spot.j < l->n) {
+		right = id_at(l, &l->runs[spot.j], spot.o);
+		el_id after_right = has_first ? right_of(l, &l->runs[lp.j], lp.o) : NOWHERE;
+		same_before = has_first && same(&after_right, &right);
 	}
+	j = spot.j, o = spot.o;
 	size_t to = live_before(l, j) + (j < l->n && !l->runs[j].gone ? (size_t)o : 0);
 	if (more(mem, (void **)&out, nout + 1, &qroom, sizeof *out)) {
 		code = TP_NOMEM;
@@ -477,7 +728,8 @@ static int splice(work *w, const op_value *cur, const op_patch *p, const tp_patc
 			goto done;
 		}
 		if (o) j = cut(l, j, o, l->runs[j].len - o);
-		run made = {.c = c, .lamport = w->ref.lamport, .device = w->ref.device, .len = (uint32_t)m};
+		run made = {.c = c, .lamport = w->ref.lamport, .device = w->ref.device, .len = (uint32_t)m,
+			.left = org_of(&left), .right = org_of(&right)};
 		edit(l, j, 0, &made, 1);
 		l->count += (size_t)m;
 		join(l, j + 1), join(l, j);
@@ -493,7 +745,7 @@ static int splice(work *w, const op_value *cur, const op_patch *p, const tp_patc
 #undef REC
 	if (name && named) {
 		// not named: one of them made by no step (no put made its sequence), so it goes by its range
-		int none = has_first && first.device == EL_NONE;
+		int none = (has_first && first.device == EL_NONE) || (!nowhere(&right) && !same_before && right.device == EL_NONE);
 		for (size_t r = 0; r < ngone; r++) none |= gone[r].id.device == EL_NONE;
 		el_gone *g = ngone ? tp_grow(mem, gone, roomgone * sizeof *g, ngone * sizeof *g) : NULL;
 		if (ngone && !g) {
@@ -502,7 +754,7 @@ static int splice(work *w, const op_value *cur, const op_patch *p, const tp_patc
 		}
 		if (ngone) gone = g, roomgone = ngone;
 		if (!none) {
-			*named = (el_anchor){1, has_first, first, gone, ngone};
+			*named = (el_anchor){1, has_first, first, gone, ngone, !nowhere(&right), same_before, right};
 			gone = NULL, roomgone = 0;
 		}
 	}
@@ -533,7 +785,7 @@ static void undo_rec(const tp_mem *mem, el_state *st, el_rec *r) {
 		for (uint64_t x = 0, m = r->splice.m; x < m;) {
 			el_id at = plus(id, x);
 			find(l, &at, &j, &o);
-			uint64_t n = l->runs[j].len - o < m - x ? l->runs[j].len - o : m - x;
+			uint64_t n = span(l, j, o, m - x, &o);
 			size_t i = cut(l, j, o, n);
 			edit(l, i, 1, NULL, 0);
 			l->count -= (size_t)n, x += n;
@@ -544,7 +796,7 @@ static void undo_rec(const tp_mem *mem, el_state *st, el_rec *r) {
 			for (uint64_t x = 0; x < taken->count;) {
 				el_id at = plus(taken->id, x);
 				find(l, &at, &j, &o);
-				uint64_t n = l->runs[j].len - o < taken->count - x ? l->runs[j].len - o : taken->count - x;
+				uint64_t n = span(l, j, o, taken->count - x, &o);
 				mark(l, j, o, n, 0), x += n;
 			}
 		}
@@ -771,6 +1023,11 @@ int el_read(const el_ctx *c, const tp_step *s, uint64_t seq, el_anchor **out) {
 				tp_whole(&in, &a[i].gone[j].count))
 				code = TP_NOTSTEP;
 		}
+		if (!code && two == 3) {
+			a[i].has_before = 1;
+			if (in.p < in.end && *in.p == 0xf5) in.p++, a[i].same = 1;
+			else code = read_id(c, &in, s, seq, (uint32_t)me, &a[i].before) ? TP_NOTSTEP : 0;
+		}
 		a[i].named = !code;
 	}
 	if (code) return el_anchors_free(c->mem, a, (size_t)k), code;
@@ -798,7 +1055,7 @@ void el_write(tp_buf *b, const el_ctx *c, const el_anchor *a, size_t count, uint
 			tp_put(b, "\xf6", 1);
 			continue;
 		}
-		tp_put_head(b, 4, 2);
+		tp_put_head(b, 4, a[i].has_before ? 3 : 2);
 		if (a[i].has_after) write_id(b, c, &a[i].after, me, n, seq);
 		else tp_put(b, "\xf6", 1);
 		tp_put_head(b, 4, a[i].ngone);
@@ -806,6 +1063,8 @@ void el_write(tp_buf *b, const el_ctx *c, const el_anchor *a, size_t count, uint
 			tp_put_head(b, 4, 2), write_id(b, c, &a[i].gone[j].id, me, n, seq);
 			tp_put_head(b, 0, a[i].gone[j].count);
 		}
+		if (a[i].has_before && a[i].same) tp_put(b, "\xf5", 1);
+		else if (a[i].has_before) write_id(b, c, &a[i].before, me, n, seq);
 	}
 }
 
