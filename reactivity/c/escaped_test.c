@@ -14,7 +14,7 @@
 		} \
 	} while (0)
 
-static op_value text = {.type = OP_STR, .str = "escaped", .bytes = 7, .ascii = 1};
+static op_value text = {.type = OP_STR, .str = "escaped", .bytes = 7, .chars = 7};
 static const sc_pair info[] = {{"test", &text}};
 static sc_scheduler *s;
 

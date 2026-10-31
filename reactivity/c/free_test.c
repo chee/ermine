@@ -14,7 +14,7 @@
 		} \
 	} while (0)
 
-static op_value text = {.type = OP_STR, .str = "free", .bytes = 4, .ascii = 1};
+static op_value text = {.type = OP_STR, .str = "free", .bytes = 4, .chars = 4};
 static const sc_pair info[] = {{"test", &text}};
 
 // What was freed, in order.
