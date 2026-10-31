@@ -98,6 +98,7 @@ typedef struct {
 	size_t nspent, capspent;
 	char *next, *pending;
 	long counter;
+	int uuid;
 	deny_t *deny;
 	size_t ndeny;
 	pr_policy *policy;
@@ -1132,10 +1133,35 @@ static int read_with(sys_t sys, const char *name, op_value *const *a, size_t n, 
 	*out = op_ref((op_value *)v);
 	return 0;
 }
+// A key that is { path, range: [a, b] } reads that span of the sequence at path.
+static int range_read(sys_t sys, const char *name, op_value *const *a, size_t n, op_value **out,
+	int (*f)(es_context *, es_target, const op_key *, size_t, int64_t, int64_t, op_value **)) {
+	CTX(name);
+	es_target x;
+	const op_key *key;
+	size_t nkey;
+	TRY(target_of(A(0), &x));
+	const op_value *r = op_get(A(1), "range");
+	TRY(keys_of(op_get(A(1), "path"), &key, &nkey));
+	if (r == NULL || r->type != OP_LIST || r->count != 2 || r->items[0]->type != OP_NUM ||
+		r->items[1]->type != OP_NUM) {
+		return fail("a range is [from, to]");
+	}
+	double lo = r->items[0]->num, hi = r->items[1]->num;
+	if (lo != (double)(int64_t)lo || hi != (double)(int64_t)hi || lo < 0 || hi < 0) {
+		return es_fail(ES_FAILED, "not-a-patch (patch 0)");
+	}
+	return f(c, x, key, nkey, (int64_t)lo, (int64_t)hi, out);
+}
+static int is_range(op_value *const *a, size_t n) {
+	return n > 1 && a[1] != NULL && a[1]->type == OP_MAP;
+}
 static int api_read(sys_t sys, op_value *const *a, size_t n, op_value **out) {
+	if (is_range(a, n)) return range_read(sys, "read", a, n, out, es_read_range);
 	return read_with(sys, "read", a, n, out, es_read);
 }
 static int api_read_attributes(sys_t sys, op_value *const *a, size_t n, op_value **out) {
+	if (is_range(a, n)) return range_read(sys, "readAttributes", a, n, out, es_read_attributes_range);
 	return read_with(sys, "readAttributes", a, n, out, es_read_attributes);
 }
 static int api_read_children(sys_t sys, op_value *const *a, size_t n, op_value **out) {
@@ -1795,25 +1821,37 @@ static int expr(sys_t sys, env_t *env, const op_value *e, op_value **out) {
 
 // --- the world's pieces ----------
 
-static char *world_id(void *ctx) {
+// the harness's own feature: ids "n1", ..., or the name a start gave; pulses held to run after a
+// request; the functions made. It is not shown in features
+#define HARNESS "harness"
+static int harness_id(void *ctx, const char *kind, es_id_next *next, char **out) {
 	(void)ctx;
+	(void)kind;
+	(void)next;
 	if (W->next != NULL) {
-		char *id = W->next;
+		*out = W->next;
 		W->next = NULL;
-		return id;
+		return 0;
 	}
 	char id[32];
 	snprintf(id, sizeof id, "n%ld", ++W->counter);
-	return es_dup(id);
+	*out = es_dup(id);
+	return 0;
 }
 static int world_user_activated(void *ctx) {
 	(void)ctx;
 	return W->event;
 }
-static void world_schedule(void *ctx, void (*f)(void *data), void *data) {
-	(void)ctx;
-	queued_t q = {f, data};
+static void run_ask(void *data) { es_run_pulse(data); }
+static void hold_pulse(es_pulse_ask *pulse) {
+	queued_t q = {run_ask, pulse};
 	ES_PUSH(W->queue, W->nqueue, W->capqueue, q);
+}
+static int harness_schedule(void *ctx, es_pulse_ask *pulse, es_schedule_next *next) {
+	(void)ctx;
+	(void)next;
+	hold_pulse(pulse);
+	return 0;
 }
 static void drain(void) {
 	while (W->head < W->nqueue) {
@@ -1822,14 +1860,24 @@ static void drain(void) {
 	}
 	W->head = W->nqueue = 0;
 }
-static void world_created(void *ctx, const es_created *made) {
+static int harness_created(void *ctx, const es_created *made, es_create_next *next) {
 	(void)ctx;
+	(void)next;
 	op_value *row = op_list();
 	op_push(row, op_str(strcmp(made->kind, "action") == 0 ? "method" : made->kind));
 	op_push(row, op_str(made->id));
 	op_push(row, op_str(made->process));
 	log_push("onCreateFunction", row);
+	return 0;
 }
+static int harness_setup(void *ctx, es_feature_api *f) {
+	(void)ctx;
+	TRY(es_on_schedule(f, harness_schedule, NULL));
+	TRY(es_on_create_function(f, harness_created, NULL));
+	if (!W->uuid) TRY(es_on_id(f, harness_id, NULL));
+	return 0;
+}
+static const es_feature harness_feature = {.name = HARNESS, .setup = harness_setup};
 
 static char *joined(const char *const *path, size_t n) {
 	size_t size = 1;
@@ -2000,6 +2048,59 @@ static int tf_record(void *ctx, const es_recorded *r, es_record_next *next) {
 	if (is_how(t, "onRecord", "drop")) return 0;
 	return es_next_record(next, r);
 }
+static int tf_id(void *ctx, const char *kind, es_id_next *next, char **out) {
+	tf_t *t = ctx;
+	say(t, "onId", kind, NULL, NULL);
+	if (is_how(t, "onId", "throw")) return boom(t);
+	if (is_how(t, "onId", "throw-process") && strcmp(kind, "process") == 0) return boom(t);
+	TRY(es_next_id(next, kind, out));
+	if (is_how(t, "onId", "wrap")) {
+		char *s = es_alloc(strlen(t->name) + strlen(*out) + 2);
+		sprintf(s, "%s-%s", t->name, *out);
+		free(*out);
+		*out = s;
+	}
+	return 0;
+}
+static int tf_schedule(void *ctx, es_pulse_ask *pulse, es_schedule_next *next) {
+	tf_t *t = ctx;
+	say(t, "onSchedule", NULL, NULL, NULL);
+	if (is_how(t, "onSchedule", "throw")) return boom(t);
+	if (is_how(t, "onSchedule", "later")) {
+		hold_pulse(pulse);
+		return 0;
+	}
+	return es_next_schedule(next, pulse);
+}
+static int tf_create_function(void *ctx, const es_created *made, es_create_next *next) {
+	tf_t *t = ctx;
+	say(t, "onCreateFunction", strcmp(made->kind, "action") == 0 ? "method" : made->kind, made->id, NULL);
+	if (is_how(t, "onCreateFunction", "throw")) return boom(t);
+	if (is_how(t, "onCreateFunction", "drop")) return 0;
+	return es_next_create_function(next, made);
+}
+// the code an onError hook is told, as the TypeScript fixture logs error.code: a failure carrying an
+// apply code (its message's first word) logs that code, as an ApplyError's code is
+static const char *error_code(int code) {
+	const char *m = es_thrown()->message;
+	if (code != ES_FAILED || m == NULL) return es_code_name(code);
+	for (int c = OP_NOT_A_PATCH; c <= OP_INTO_ITSELF; c++) {
+		const char *name = op_code_name(c);
+		size_t n = strlen(name);
+		if (strncmp(m, name, n) == 0 && (m[n] == 0 || m[n] == ' ')) return name;
+	}
+	return es_code_name(code);
+}
+static int tf_error(void *ctx, int code, const char *fn, es_error_next *next, int *out) {
+	tf_t *t = ctx;
+	say(t, "onError", fn, error_code(code), NULL);
+	if (is_how(t, "onError", "throw")) return boom(t);
+	if (is_how(t, "onError", "replace")) {
+		*out = es_fail_ermine(ES_GONE, "%s replaced it", t->name);
+		return 0;
+	}
+	return es_next_error(next, code, fn, out);
+}
 static int tf_pass(void *ctx, es_context *o, const es_write *w, es_write_next *next) {
 	(void)ctx;
 	return es_next_write(next, o, w);
@@ -2022,6 +2123,10 @@ static int tf_setup(void *ctx, es_feature_api *f) {
 	if (flag(t->spec, "onTeardown")) TRY(es_on_teardown(f, tf_teardown, t));
 	if (flag(t->spec, "onStatus")) TRY(es_on_status(f, tf_status, t));
 	if (flag(t->spec, "onRecord")) TRY(es_on_record(f, tf_record, t));
+	if (flag(t->spec, "onId")) TRY(es_on_id(f, tf_id, t));
+	if (flag(t->spec, "onSchedule")) TRY(es_on_schedule(f, tf_schedule, t));
+	if (flag(t->spec, "onCreateFunction")) TRY(es_on_create_function(f, tf_create_function, t));
+	if (flag(t->spec, "onError")) TRY(es_on_error(f, tf_error, t));
 	return 0;
 }
 
@@ -2087,7 +2192,8 @@ static int make(const op_value *r) {
 	w->info = (sc_pair){"actor", w->actor};
 	const op_value *features = field(r, "features"), *deny = field(r, "deny");
 	size_t nfeatures = features != NULL && features->type == OP_LIST ? features->count : 0;
-	const es_feature **list = owned_alloc((nfeatures + 1) * sizeof *list);
+	const es_feature **list = owned_alloc((nfeatures + 2) * sizeof *list);
+	w->uuid = flag(r, "uuid");
 	for (size_t i = 0; i < nfeatures; i++) TRY(feature_of(features->items[i], &list[i]));
 	if (deny != NULL && deny->type == OP_LIST) {
 		w->deny = owned_alloc((deny->count + 1) * sizeof *w->deny);
@@ -2103,11 +2209,10 @@ static int make(const op_value *r) {
 		}
 		w->policy = pr_call(deny_run, NULL);
 	}
-	es_options o = {.features = list, .nfeatures = nfeatures, .may = w->policy,
-		.schedule = world_schedule, .on_create_function = world_created, .root = "R",
+	list[nfeatures] = &harness_feature;
+	es_options o = {.features = list, .nfeatures = nfeatures + 1, .may = w->policy, .root = "R",
 		.info = &w->info, .ninfo = 1, .calls_never = strcmp(str_or(r, "calls"), "never") == 0,
 		.user_activated = world_user_activated};
-	if (!flag(r, "uuid")) o.id = world_id;
 	if (text(r, "at") != NULL) o.host.at = text(r, "at");
 	const op_value *args = field(r, "args");
 	if (args != NULL && args->type == OP_LIST) {
@@ -2520,13 +2625,31 @@ static int id_at(const op_value *path, const char **id) {
 	return 1;
 }
 
+// the features in the host's attributes, without the harness's
+static void hide_harness(op_value *attrs) {
+	if (attrs->type != OP_MAP) return;
+	for (size_t i = 0; i < attrs->count; i++) {
+		op_value *list = attrs->items[i];
+		if (strcmp(attrs->keys[i], ES_FEATURES_ATTRIBUTE) != 0 || list->type != OP_LIST) continue;
+		op_value *kept = op_list();
+		for (size_t k = 0; k < list->count; k++) {
+			const char *name = text(list->items[k], "name");
+			if (name == NULL || strcmp(name, HARNESS) != 0) op_push(kept, op_ref(list->items[k]));
+		}
+		op_set(attrs, ES_FEATURES_ATTRIBUTE, kept);
+		return;
+	}
+}
+
 static int op_features(op_value **res) {
 	TRY(es_alive(W->e));
 	size_t n;
 	const es_shown *shown = es_features(W->e, &n);
-	static const char *const hooks[] = {"onTable", "onRead", "onWrite", "onTeardown", "onRecord", "onStatus"};
+	static const char *const hooks[] = {"onTable", "onRead", "onWrite", "onTeardown", "onRecord", "onStatus",
+		"onId", "onSchedule", "onCreateFunction", "onError"};
 	op_value *list = op_list();
 	for (size_t i = 0; i < n; i++) {
+		if (strcmp(shown[i].name, HARNESS) == 0) continue;
 		op_value *m = op_map(), *hs = op_list();
 		op_set(m, "name", op_str(shown[i].name));
 		op_set(m, "needs", strs(shown[i].nneeds, (const char *const *)shown[i].needs));
@@ -2654,6 +2777,7 @@ static int answer(const op_value *r, op_value **res) {
 		*res = op_map();
 		op_set(*res, "id", op_str(e->node));
 		op_value *p = attrs != NULL ? plain(attrs->value) : NULL;
+		if (p != NULL) hide_harness(p);
 		if (p != NULL) op_set(*res, "attributes", p);
 		return 0;
 	}

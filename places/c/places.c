@@ -490,6 +490,38 @@ const op_value *pl_read(pl *l, tb_key part, tb_key id, const op_key *path, size_
 	return node != NULL ? pl_at(node->value, path, n, &l->s->scratch) : NULL;
 }
 
+int pl_read_range(pl *l, tb_key part, tb_key id, const op_key *path, size_t n, int64_t a, int64_t b,
+	op_value **out) {
+	*out = NULL;
+	if (!l->s->peeping) tell(l, pt_spot_of(l->s->paths, pair_key(l, part), paths_key(id), path, n, 0));
+	if (a < 0 || b < 0) return OP_NOT_A_PATCH;
+	// The path walks as pl_at does: nothing there is nothing, no error.
+	const nd_entry *node = tb_get(l->s->table, part, id);
+	const op_value *v = node != NULL ? pl_at(node->value, path, n, &l->s->scratch) : NULL;
+	if (v == NULL) return OP_OK;
+	if (a > b) return OP_RANGE;
+	if (v->type == OP_STR) {
+		size_t x, y;
+		if (!op_string_span(v, a, b, &x, &y)) return OP_RANGE;
+		char *s = malloc(y - x + 1);
+		if (s == NULL) abort();
+		memcpy(s, v->str + x, y - x);
+		s[y - x] = 0;
+		*out = op_str_counted(s, y - x, (size_t)(b - a));
+	} else if (v->type == OP_LIST) {
+		if ((uint64_t)b > v->count) return OP_RANGE;
+		op_value *r = op_list();
+		for (int64_t i = a; i < b; i++) op_push(r, op_ref(v->items[i]));
+		*out = r;
+	} else if (v->type == OP_BYTES || v->type == OP_TYPED) {
+		if ((uint64_t)b > op_length(v)) return OP_RANGE;
+		size_t z = v->type == OP_BYTES ? 1 : op_size(v->kind);
+		*out = v->type == OP_BYTES ? op_bytes(v->data + (size_t)a, (size_t)(b - a))
+					   : op_typed(v->kind, v->data + (size_t)a * z, (size_t)(b - a));
+	} else return OP_WRONG_KIND;
+	return OP_OK;
+}
+
 static const op_value a_map = {.type = OP_MAP};
 const op_value *pl_a_map(void) { return &a_map; }
 

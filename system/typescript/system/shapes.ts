@@ -14,6 +14,12 @@ export const SCOPE = "ermine.computer.scope"
 export const WAITING = "ermine.process.waiting"
 
 // One node a path reaches: its value, where it was found and a handle. A refused one has neither.
+// A path, or { path, range }: the span of the sequence there that a delete patch would take out.
+export type ReadKey = readonly Step[] | {
+	readonly path: readonly Step[]
+	readonly range: readonly [number, number]
+}
+
 export type Item = {
 	readonly value: unknown
 	readonly from: string
@@ -127,8 +133,8 @@ export type System = {
 	ensureNode: (path: string | Path, value?: unknown) => Node
 	createNode: (folder: string | Path, value?: unknown) => Node
 	ref: <T>(path: string | Path, make: () => T) => Node
-	read: (x: Target, key?: readonly Step[]) => unknown
-	readAttributes: (x: Target, key?: readonly Step[]) => unknown
+	read: (x: Target, key?: ReadKey) => unknown
+	readAttributes: (x: Target, key?: ReadKey) => unknown
 	readChildren: (x: Target) => Record<string, Node>
 	readAll: (x: Target, key?: readonly Step[]) => Version[]
 	readAllAttributes: (x: Target, key?: readonly Step[]) => Version[]

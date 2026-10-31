@@ -2,7 +2,7 @@
 // reference, and system/conformance/ermine/ holds both to it through the line protocol of
 // ermine_harness.ts (ermine_harness.c speaks it).
 //
-//   es_options o = {.id = ids, .may = policy};
+//   es_options o = {.may = policy};
 //   es_ermine *e;  es_create(&o, &e);
 //   es_started *s;  es_start(e, setup, ctx, es_text("/work/clock"), NULL, &s, &no);
 //   es_context *c = es_host_context(e);                       // process 0's
@@ -624,7 +624,10 @@ typedef struct {
 
 // --- features and their hooks (features.ts) ----------
 
-typedef enum { ES_ON_TABLE, ES_ON_READ, ES_ON_WRITE, ES_ON_TEARDOWN, ES_ON_RECORD, ES_ON_STATUS, ES_HOOKS } es_hook;
+typedef enum {
+	ES_ON_TABLE, ES_ON_READ, ES_ON_WRITE, ES_ON_TEARDOWN, ES_ON_RECORD, ES_ON_STATUS,
+	ES_ON_ID, ES_ON_SCHEDULE, ES_ON_CREATE_FUNCTION, ES_ON_ERROR, ES_HOOKS
+} es_hook;
 
 // A layer over the table places reads: the table it gives places, and where table events and
 // commits go. The raw table's events go to the first layer, and each layer's on to the next.
@@ -661,6 +664,20 @@ typedef struct {
 	const char *held;
 } es_recorded;
 
+// what onCreateFunction is told: kind ("memo", "effect", "action"), the computer (NULL for an action),
+// its node, and who made it (the process's id, or the host's node's)
+typedef struct {
+	const char *kind;
+	sc_computer *computer;
+	const es_node_data *node;
+	const char *id;
+	const char *process;
+} es_created;
+
+// The pulse an onSchedule hook is given: the one pulse asked for (one at a time, until it runs). Good
+// till es_free.
+typedef struct es_pulse_ask es_pulse_ask;
+
 // the continuation of a hook: what is after it in its chain, the base last. not calling it: what the
 // hook guards does not happen. each is called with the hook's own arguments, as given or changed
 typedef struct es_table_next es_table_next;
@@ -669,12 +686,25 @@ typedef struct es_write_next es_write_next;
 typedef struct es_teardown_next es_teardown_next;
 typedef struct es_record_next es_record_next;
 typedef struct es_status_next es_status_next;
+typedef struct es_id_next es_id_next;
+typedef struct es_schedule_next es_schedule_next;
+typedef struct es_create_next es_create_next;
+typedef struct es_error_next es_error_next;
 int es_next_table(es_table_next *next, const es_under *under, es_layer *out);
 int es_next_read(es_read_next *next, const es_reading *x, const es_versions *items, es_versions *out);
 int es_next_write(es_write_next *next, es_context *o, const es_write *w);
 int es_next_teardown(es_teardown_next *next, sc_scope *scope, const char *why);
 int es_next_record(es_record_next *next, const es_recorded *r);
 int es_next_status(es_status_next *next, const es_asked *x, const es_status *st, es_status *out);
+// *out: an id, new (the hook that does not pass next's on frees it)
+int es_next_id(es_id_next *next, const char *kind, char **out);
+int es_next_schedule(es_schedule_next *next, es_pulse_ask *pulse);
+int es_next_create_function(es_create_next *next, const es_created *made);
+// *out: the code to throw, as next gives it; es_thrown() is what goes with it
+int es_next_error(es_error_next *next, int code, const char *fn, int *out);
+// Runs the pulse asked for (the pulse is done after). A hook that did not call next runs it so, now
+// or later; one that runs it after es_close does nothing.
+void es_run_pulse(es_pulse_ask *pulse);
 
 // Hooks are middleware. Each returns 0 or a code (it threw). A code is rethrown as a FeatureError
 // naming the feature and hook, except ES_PENDING, ES_STOP, a FeatureError, and a code next gave,
@@ -688,6 +718,16 @@ typedef int (*es_on_teardown_fn)(void *ctx, sc_scope *scope, const char *why, es
 typedef int (*es_on_record_fn)(void *ctx, const es_recorded *r, es_record_next *next);
 typedef int (*es_on_status_fn)(void *ctx, const es_asked *x, const es_status *st,
 	es_status_next *next, es_status *out);
+// kind: "node" or "process". *out: the id, new (malloc'd), next's or the hook's own
+typedef int (*es_on_id_fn)(void *ctx, const char *kind, es_id_next *next, char **out);
+// Not calling next: the hook runs the pulse itself, with es_run_pulse. The base runs it at once (C
+// has no microtask).
+typedef int (*es_on_schedule_fn)(void *ctx, es_pulse_ask *pulse, es_schedule_next *next);
+typedef int (*es_on_create_function_fn)(void *ctx, const es_created *made, es_create_next *next);
+// code is an error ermine throws through fn (a function's name; NULL: none), its message in
+// es_thrown(). *out: the code thrown after it, as next gives it. To throw another, set it (es_fail_text
+// and the like) and give its code. The return value is for the hook itself failing, as the others'.
+typedef int (*es_on_error_fn)(void *ctx, int code, const char *fn, es_error_next *next, int *out);
 
 // What a feature acts with, in its setup and its hooks. Hooks can only be added in setup
 // (ES_SETUP_ONLY). Places, processes, contexts and handles exist after setup (ES_NOT_YET before).
@@ -703,6 +743,10 @@ int es_on_write(es_feature_api *f, es_on_write_fn fn, void *ctx);
 int es_on_teardown(es_feature_api *f, es_on_teardown_fn fn, void *ctx);
 int es_on_record(es_feature_api *f, es_on_record_fn fn, void *ctx);
 int es_on_status(es_feature_api *f, es_on_status_fn fn, void *ctx);
+int es_on_id(es_feature_api *f, es_on_id_fn fn, void *ctx);
+int es_on_schedule(es_feature_api *f, es_on_schedule_fn fn, void *ctx);
+int es_on_create_function(es_feature_api *f, es_on_create_function_fn fn, void *ctx);
+int es_on_error(es_feature_api *f, es_on_error_fn fn, void *ctx);
 int es_api_places(es_feature_api *f, pl **out);
 int es_api_processes(es_feature_api *f, pr **out);
 int es_api_get_process_context(es_feature_api *f, pr_process *process, es_context **out);
@@ -739,29 +783,13 @@ typedef struct {
 
 // --- the ermine ----------
 
-// what onCreateFunction is told: kind ("memo", "effect", "action"), the computer (NULL for an action),
-// its node, and who made it (the process's id, or the host's node's)
-typedef struct {
-	const char *kind;
-	sc_computer *computer;
-	const es_node_data *node;
-	const char *id;
-	const char *process;
-} es_created;
-
 typedef struct {
 	const es_feature *const *features;
 	size_t nfeatures;
 	sc_scheduler *scheduler;
-	char *(*id)(void *ctx);
-	void *id_ctx;
 	int64_t (*now)(void *ctx);
 	void *now_ctx;
 	const pr_policy *may;
-	void (*schedule)(void *ctx, void (*f)(void *data), void *data);
-	void *schedule_ctx;
-	void (*on_create_function)(void *ctx, const es_created *made);
-	void *on_create_function_ctx;
 	const char *root;
 	// the host's node: where it is placed (NULL: nowhere), the host's args
 	// (NULL: none)
@@ -797,10 +825,6 @@ struct es_ermine {
 	char *node;
 	sc_scope *host_scope;
 	es_context *host_context;
-	char *(*id)(void *ctx);
-	void *id_ctx;
-	void (*on_create_function)(void *ctx, const es_created *made);
-	void *on_create_function_ctx;
 	int (*user_activated)(void *ctx);
 	void *user_activated_ctx;
 	const ch_location *site;
@@ -926,6 +950,13 @@ int es_has_node(es_context *c, es_target x, int *out);
 int es_read(es_context *c, es_target x, const op_key *key, size_t nkey, const op_value **out);
 int es_read_attributes(es_context *c, es_target x, const op_key *key, size_t nkey,
 	const op_value **out);
+// The span [a, b) of the sequence at key (a string by code points, a list by items, a typed array or
+// bytes by elements): what the delete patch { key, range } would take out, in *out for the caller to
+// op_free (a copy; a list shares its items). It fails as that patch does: ES_FAILED, "<code> (patch 0)".
+int es_read_range(es_context *c, es_target x, const op_key *key, size_t nkey, int64_t a, int64_t b,
+	op_value **out);
+int es_read_attributes_range(es_context *c, es_target x, const op_key *key, size_t nkey, int64_t a,
+	int64_t b, op_value **out);
 int es_read_children(es_context *c, es_target x, es_children *out);
 int es_read_all(es_context *c, es_target x, const op_key *key, size_t nkey, es_versions *out);
 int es_read_all_attributes(es_context *c, es_target x, const op_key *key, size_t nkey,
@@ -1208,6 +1239,7 @@ int es_hook_read(es_ermine *e, const es_reading *x, const es_versions *items, es
 int es_hook_teardown(es_ermine *e, sc_scope *scope, const char *why,
 	void (*fn)(void *ctx, const char *why), void *ctx);
 int es_hook_status(es_ermine *e, const es_asked *x, const es_status *st, es_status *out);
+int es_hook_create_function(es_ermine *e, const es_created *made);
 int es_hook_record(es_ermine *e, const es_recorded *r,
 	void (*keep)(void *ctx, const es_recorded *r), void *ctx);
 // writes held back by onWrite, tracked: at (part, id); a node's status write; a stopped process's row. 1
@@ -1225,8 +1257,16 @@ const ch_location *es_enter(es_ermine *e, const ch_location *site);
 // when no call gave one): *locations, new, the caller's to op_free
 int es_outside(es_ermine *e, op_value **locations);
 int es_alive(es_ermine *e);
-void es_queue_pulse(es_ermine *e);
-char *es_new_id(es_ermine *e);
+// asks for a pulse: the onSchedule hooks, then it runs. The code is a hook failing (it asks no more)
+int es_queue_pulse(es_ermine *e);
+// a new id of kind "node" or "process", through the onId hooks
+int es_make_id(es_ermine *e, const char *kind, char **out);
+// runs the onError hooks over a code a public function is about to give (0, pending, stop and
+// taken pass as they are). The code to give. ES_GO wraps a function's work: a call inside a program
+// is its own, as a go() is in TypeScript
+int es_errored(es_ermine *e, int code, const char *fn);
+static inline int es_errored_by(es_ermine *e, const char *fn, int code) { return es_errored(e, code, fn); }
+#define ES_GO(e, fn, call) es_errored_by((e), (fn), (call))
 char *es_uuidv7(void);
 void es_drop(void *value, void *data);
 const char *es_why_of(es_ermine *e, const char *process);

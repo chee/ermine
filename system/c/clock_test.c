@@ -27,11 +27,15 @@ typedef struct {
 	char ids[64][16];
 	int n;
 } ids_t;
-static char *next_id(void *ctx) {
+static int next_id(void *ctx, const char *kind, es_id_next *next, char **out) {
 	ids_t *t = ctx;
+	(void)kind;
+	(void)next;
 	snprintf(t->ids[t->n], sizeof t->ids[0], "n%d", t->n);
-	return es_dup(t->ids[t->n++]);
+	*out = es_dup(t->ids[t->n++]);
+	return 0;
 }
+static int ids_setup(void *ctx, es_feature_api *f) { return es_on_id(f, next_id, ctx); }
 
 static es_out setup(es_context *c, void *ctx) {
 	(void)ctx;
@@ -59,7 +63,9 @@ static int times_are_the_clock(es_ermine *e, ids_t *t) {
 static void every_change_takes_the_clock(void) {
 	ids_t t = {0};
 	es_ermine *e = NULL;
-	CHECK(es_create(&(es_options){.id = next_id, .id_ctx = &t, .now = fixed}, &e) == 0);
+	es_feature ids = {.name = "ids", .setup = ids_setup, .ctx = &t};
+	const es_feature *list[] = {&ids};
+	CHECK(es_create(&(es_options){.features = list, .nfeatures = 1, .now = fixed}, &e) == 0);
 	es_context *host = es_host_context(e);
 	op_value *zero = op_num(0);
 	es_handle *h;

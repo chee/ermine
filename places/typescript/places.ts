@@ -8,7 +8,8 @@
 import type { ChangeHeader, Entry } from "@ermine/graph/entry"
 import { createCrow, type Crow } from "@ermine/crow"
 import { updateEntry } from "./crowify.ts"
-import type { Key as Step, Patch } from "@ermine/changeable/apply"
+import { ApplyError, type Key as Step, type Patch, type Span } from "@ermine/changeable/apply"
+import { walk } from "@ermine/changeable/walk-string"
 import type { Scheduler } from "@ermine/reactivity"
 import { createChangeHeader } from "./header.ts"
 import { keyorder } from "@ermine/changeable/keyorder"
@@ -113,6 +114,29 @@ export function at(v: unknown, path: readonly Step[]): unknown {
 		}
 	}
 	return v
+}
+
+const whole = (n: unknown) => Number.isInteger(n) && (n as number) >= 0
+
+// What the delete patch { path, range } would take out of what is at path, as the same kind and a
+// copy of its own (never a view): a string, a list, a typed array. The path walks as at does, so
+// nothing there is undefined; the range fails as that patch would, in apply's codes.
+export function sliceAt(v: unknown, path: readonly Step[], range: Span): unknown {
+	const fail = (code: "not-a-patch" | "range" | "wrong-kind"): never => {
+		throw new ApplyError(code)
+	}
+	if (!Array.isArray(range) || range.length !== 2 || !range.every(whole)) fail("not-a-patch")
+	const [a, b] = range
+	v = at(v, path)
+	if (v === undefined) return undefined
+	if (a > b) fail("range")
+	if (typeof v === "string") {
+		const at = walk(v, a, b)
+		return at ? v.slice(at[0], at[1]) : fail("range")
+	}
+	if (!Array.isArray(v) && !isTyped(v)) fail("wrong-kind")
+	if (b > (v as ArrayLike<unknown>).length) fail("range")
+	return (v as unknown[]).slice(a, b)
 }
 
 function child(children: Entry<unknown> | undefined, name: string): Id | undefined {
@@ -303,9 +327,10 @@ export function createPlaces(setup: Setup): Places {
 		tellAll(facts)
 	}
 
-	function readValue(part: Key, id: Id, path: readonly Step[] = []): unknown {
+	function readValue(part: Key, id: Id, path: readonly Step[] = [], range?: Span): unknown {
 		if (!peeping) tell(paths.spot(first(part), id, path))
-		return at(table.get(part, id)?.value, path)
+		const v = table.get(part, id)?.value
+		return range === undefined ? at(v, path) : sliceAt(v, path, range)
 	}
 
 	function readChange(part: Key, id: Id): ChangeHeader | undefined {
@@ -476,7 +501,7 @@ export type Places = {
 
 	readonly contributors: readonly Contributor[] | undefined
 
-	readValue: (part: Key, id: Id, path?: readonly Step[]) => unknown
+	readValue: (part: Key, id: Id, path?: readonly Step[], range?: Span) => unknown
 	readKeys: (part: Key, id: Id, path?: readonly Step[], ids?: boolean) => string[]
 	readChange: (part: Key, id: Id) => ChangeHeader | undefined
 	namesOf: (id: Id) => readonly Slot[]

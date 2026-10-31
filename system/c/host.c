@@ -135,6 +135,7 @@ int es_fail_ermine(int code, const char *fmt, ...) {
 
 static const char *const HOOK_NAMES[ES_HOOKS] = {
 	"onTable", "onRead", "onWrite", "onTeardown", "onRecord", "onStatus",
+	"onId", "onSchedule", "onCreateFunction", "onError",
 };
 
 static const char PART_PROCESS[] = PR_PART;
@@ -200,6 +201,10 @@ typedef struct {
 		es_on_teardown_fn teardown;
 		es_on_record_fn record;
 		es_on_status_fn status;
+		es_on_id_fn id;
+		es_on_schedule_fn schedule;
+		es_on_create_function_fn create_function;
+		es_on_error_fn error;
 	} fn;
 	void *ctx;
 } hook_rec;
@@ -262,8 +267,16 @@ typedef struct proc_rec {
 struct es_hosting {
 	int owns;
 	int adding, made, queued;
-	void (*schedule)(void *ctx, void (*f)(void *data), void *data);
-	void *schedule_ctx;
+	struct es_pulse_ask {
+		es_ermine *e;
+	} pulse;
+	// the process ids when no hook gives one
+	unsigned char boot[8];
+	unsigned long processes_made;
+	// onError hooks running: errors inside them go to no hook
+	int erroring;
+	// the next process's id, made by the hooks before pr_start asks for it
+	char *pid;
 	hook_list hooks[ES_HOOKS];
 	fapi **apis;
 	size_t napis, capapis;
@@ -421,7 +434,15 @@ char *es_uuidv7(void) {
 	return s;
 }
 
-char *es_new_id(es_ermine *e) { return e->id != NULL ? e->id(e->id_ctx) : es_uuidv7(); }
+static char *base_id(es_ermine *e, const char *kind) {
+	if (strcmp(kind, "process") != 0) return es_uuidv7();
+	hosting *h = host_of(e);
+	char *id = es_alloc(sizeof "proc:" + 16 + 1 + 20);
+	int at = sprintf(id, "proc:");
+	for (size_t i = 0; i < 8; i++) at += sprintf(id + at, "%02x", h->boot[i]);
+	sprintf(id + at, "-%lu", ++h->processes_made);
+	return id;
+}
 
 void es_drop(void *value, void *data) {
 	(void)data;
@@ -478,21 +499,29 @@ static void run_pulse(void *data) {
 	free(sc_escaped(e->scheduler));
 }
 
-void es_queue_pulse(es_ermine *e) {
+void es_run_pulse(es_pulse_ask *pulse) { run_pulse(pulse->e); }
+
+static int schedule_at(es_ermine *e, size_t i);
+
+int es_queue_pulse(es_ermine *e) {
 	hosting *h = host_of(e);
-	if (h->queued || e->closed) return;
+	if (h->queued || e->closed) return 0;
 	h->queued = 1;
-	if (h->schedule != NULL) h->schedule(h->schedule_ctx, run_pulse, e);
-	else run_pulse(e);
+	h->pulse.e = e;
+	int code = schedule_at(e, 0);
+	// a hook that failed ran nothing: ask again at the next write
+	if (code != 0) h->queued = 0;
+	return code;
 }
 
-static void settled(void *data) { es_queue_pulse(data); }
+// a listener has no code to give: a hook's failure stays in es_thrown()
+static void settled(void *data) { (void)es_queue_pulse(data); }
 static void pulse_ended(void *data) {
 	es_ermine *e = data;
 	if (e->places != NULL) pl_sweep(e->places);
 }
 
-int es_pulse(es_context *c) {
+static int pulse_body(es_context *c) {
 	es_ermine *e = c->ermine;
 	TRY(es_alive(e));
 	sc_pulse(e->scheduler);
@@ -503,6 +532,9 @@ int es_pulse(es_context *c) {
 		return code;
 	}
 	return 0;
+}
+int es_pulse(es_context *c) {
+	return ES_GO(c->ermine, "pulse", pulse_body(c));
 }
 
 
@@ -1036,6 +1068,125 @@ int es_hook_status(es_ermine *e, const es_asked *x, const es_status *st, es_stat
 }
 
 
+struct es_id_next {
+	es_ermine *e;
+	size_t i;
+	int passed;
+};
+
+static int id_at(es_ermine *e, size_t i, const char *kind, char **out) {
+	hook_list *l = &host_of(e)->hooks[ES_ON_ID];
+	*out = NULL;
+	if (i == l->n) {
+		*out = base_id(e, kind);
+		return 0;
+	}
+	hook_rec *r = &l->items[i];
+	es_id_next next = {e, i, 0};
+	int code = own(r->feature, "onId", r->fn.id(r->ctx, kind, &next, out), next.passed);
+	if (code == 0 && *out == NULL) code = es_fail_feature(r->feature, "onId", "gave no id");
+	return code;
+}
+
+int es_next_id(es_id_next *next, const char *kind, char **out) {
+	int code = id_at(next->e, next->i + 1, kind, out);
+	next->passed = code;
+	return code;
+}
+
+int es_make_id(es_ermine *e, const char *kind, char **out) { return id_at(e, 0, kind, out); }
+
+
+struct es_schedule_next {
+	es_ermine *e;
+	size_t i;
+	int passed;
+};
+
+static int schedule_at(es_ermine *e, size_t i) {
+	hosting *h = host_of(e);
+	hook_list *l = &h->hooks[ES_ON_SCHEDULE];
+	if (i == l->n) {
+		run_pulse(e);
+		return 0;
+	}
+	hook_rec *r = &l->items[i];
+	es_schedule_next next = {e, i, 0};
+	return own(r->feature, "onSchedule", r->fn.schedule(r->ctx, &h->pulse, &next), next.passed);
+}
+
+int es_next_schedule(es_schedule_next *next, es_pulse_ask *pulse) {
+	(void)pulse;
+	int code = schedule_at(next->e, next->i + 1);
+	next->passed = code;
+	return code;
+}
+
+struct es_create_next {
+	es_ermine *e;
+	size_t i;
+	int passed;
+};
+
+static int create_at(es_ermine *e, size_t i, const es_created *made) {
+	hook_list *l = &host_of(e)->hooks[ES_ON_CREATE_FUNCTION];
+	if (i == l->n) return 0;
+	hook_rec *r = &l->items[i];
+	es_create_next next = {e, i, 0};
+	return own(r->feature, "onCreateFunction", r->fn.create_function(r->ctx, made, &next), next.passed);
+}
+
+int es_next_create_function(es_create_next *next, const es_created *made) {
+	int code = create_at(next->e, next->i + 1, made);
+	next->passed = code;
+	return code;
+}
+
+int es_hook_create_function(es_ermine *e, const es_created *made) { return create_at(e, 0, made); }
+
+struct es_error_next {
+	es_ermine *e;
+	size_t i;
+	int passed;
+};
+
+static int error_at(es_ermine *e, size_t i, int code, const char *fn, int *out) {
+	hook_list *l = &host_of(e)->hooks[ES_ON_ERROR];
+	*out = code;
+	if (i == l->n) return 0;
+	hook_rec *r = &l->items[i];
+	es_error_next next = {e, i, 0};
+	return own(r->feature, "onError", r->fn.error(r->ctx, code, fn, &next, out), next.passed);
+}
+
+int es_next_error(es_error_next *next, int code, const char *fn, int *out) {
+	int c = error_at(next->e, next->i + 1, code, fn, out);
+	next->passed = c;
+	return c;
+}
+
+int es_errored(es_ermine *e, int code, const char *fn) {
+	hosting *h = host_of(e);
+	if (h->hooks[ES_ON_ERROR].n == 0 || h->erroring || code == 0 || code == ES_PENDING ||
+		code == ES_STOP || code == ES_TAKEN) {
+		return code;
+	}
+	int out;
+	h->erroring++;
+	int failed = error_at(e, 0, code, fn, &out);
+	h->erroring--;
+	return failed != 0 ? failed : out;
+}
+
+
+// the id of a new process: start_under made it with the hooks before pr_start asked
+static char *process_id(void *ctx) {
+	hosting *h = host_of(ctx);
+	char *id = h->pid;
+	h->pid = NULL;
+	return id;
+}
+
 static int add_hook(es_feature_api *f, es_hook kind, hook_rec rec) {
 	fapi *a = f->private_;
 	hosting *h = host_of(a->e);
@@ -1081,6 +1232,27 @@ int es_on_status(es_feature_api *f, es_on_status_fn fn, void *ctx) {
 	hook_rec r = {.ctx = ctx};
 	r.fn.status = fn;
 	return add_hook(f, ES_ON_STATUS, r);
+}
+
+int es_on_id(es_feature_api *f, es_on_id_fn fn, void *ctx) {
+	hook_rec r = {.ctx = ctx};
+	r.fn.id = fn;
+	return add_hook(f, ES_ON_ID, r);
+}
+int es_on_schedule(es_feature_api *f, es_on_schedule_fn fn, void *ctx) {
+	hook_rec r = {.ctx = ctx};
+	r.fn.schedule = fn;
+	return add_hook(f, ES_ON_SCHEDULE, r);
+}
+int es_on_create_function(es_feature_api *f, es_on_create_function_fn fn, void *ctx) {
+	hook_rec r = {.ctx = ctx};
+	r.fn.create_function = fn;
+	return add_hook(f, ES_ON_CREATE_FUNCTION, r);
+}
+int es_on_error(es_feature_api *f, es_on_error_fn fn, void *ctx) {
+	hook_rec r = {.ctx = ctx};
+	r.fn.error = fn;
+	return add_hook(f, ES_ON_ERROR, r);
 }
 
 int es_listened(es_feature_api *f, sc_listener *l) {
@@ -1531,16 +1703,11 @@ int es_create(const es_options *given, es_ermine **out) {
 	es_ermine *e = es_alloc(sizeof *e);
 	hosting *h = es_alloc(sizeof *h);
 	e->hosting = h;
-	e->id = o->id;
-	e->id_ctx = o->id_ctx;
 	e->may = o->may;
-	e->on_create_function = o->on_create_function;
-	e->on_create_function_ctx = o->on_create_function_ctx;
 	e->user_activated = o->user_activated;
 	e->user_activated_ctx = o->user_activated_ctx;
 	h->adding = 1;
-	h->schedule = o->schedule;
-	h->schedule_ctx = o->schedule_ctx;
+	PF_RANDOM(h->boot, sizeof h->boot);
 	int code = 0;
 
 	h->owns = o->scheduler == NULL;
@@ -1557,7 +1724,8 @@ int es_create(const es_options *given, es_ermine **out) {
 		e->front = top.front;
 	}
 
-	e->root = o->root != NULL ? es_dup(o->root) : es_new_id(e);
+	if (o->root != NULL) e->root = es_dup(o->root);
+	else if ((code = es_make_id(e, "node", &e->root)) != 0) goto fail;
 	e->places = pl_new();
 	e->paths = pt_new();
 	pr_processes_init(&h->rows_walk, tb_string(e->root));
@@ -1570,7 +1738,7 @@ int es_create(const es_options *given, es_ermine **out) {
 	h->tracking_first = sc_on_tracking_start(e->scheduler, pl_tracking, e->places);
 	h->crow = pl_crowify(e->scheduler, pl_crow(e->places), NULL, NULL);
 
-	e->node = es_new_id(e);
+	if ((code = es_make_id(e, "node", &e->node)) != 0) goto fail;
 	{
 		sc_pair *info = es_alloc((o->ninfo + 1) * sizeof *info);
 		for (size_t i = 0; i < o->ninfo; i++) info[i] = o->info[i];
@@ -1605,7 +1773,7 @@ int es_create(const es_options *given, es_ermine **out) {
 		sc_scope *owner = sc_create_scope(e->scheduler, &info, 1, e->host_scope);
 		e->processes = pr_new(&(pr_setup){.scheduler = e->scheduler, .table = e->table,
 			.places = e->places, .scopes = e->scopes, .commit = commit_changed, .commit_ctx = e,
-			.owner = owner, .id = o->id, .id_ctx = o->id_ctx,
+			.owner = owner, .id = process_id, .id_ctx = e,
 			.write = host_write, .write_ctx = e});
 	}
 	e->statuses = cst_new(&(cst_setup){.places = e->places, .table = e->table, .scheduler = e->scheduler,
@@ -1867,6 +2035,8 @@ static int start_under(es_ermine *e, es_program fn, void *ctx, const char *const
 	es_started **out, es_refused *refused, const ch_location *site) {
 	int child = starter != NULL;
 	hosting *h = host_of(e);
+	int failed = es_make_id(e, "process", &h->pid);
+	if (failed) return failed;
 	proc_rec *rec = es_alloc(sizeof *rec);
 	rec->e = e;
 	rec->fn = fn;
@@ -1943,7 +2113,7 @@ static int start_under(es_ermine *e, es_program fn, void *ctx, const char *const
 	return 0;
 }
 
-int es_start_at(es_ermine *e, es_program fn, void *ctx, es_at at, const es_start_options *o,
+static int start_run(es_ermine *e, es_program fn, void *ctx, es_at at, const es_start_options *o,
 	es_started **out, es_refused *refused, const ch_location *site) {
 	TRY(es_alive(e));
 	if (refused != NULL) *refused = (es_refused){0};
@@ -1974,7 +2144,7 @@ const void *es_pair_of(const sc_scope *o, const char *key) {
 	return ch_frame_get(sc_scope_frame((sc_scope *)o), key);
 }
 
-int es_start_in_at(es_context *c, es_program fn, void *ctx, es_at at, const es_start_options *o,
+static int start_in_run(es_context *c, es_program fn, void *ctx, es_at at, const es_start_options *o,
 	es_child *out, es_refused *refused, const ch_location *site) {
 	es_ermine *e = c->ermine;
 	*out = (es_child){0};
@@ -1995,7 +2165,8 @@ int es_start_in_at(es_context *c, es_program fn, void *ctx, es_at at, const es_s
 	int code = ask_starting(c, CP(path.names), path.n);
 	if (!code) {
 		code = start_under(e, fn, ctx, CP(path.names), path.n, o, own, c, out, NULL, refused, site);
-		es_queue_pulse(e);
+		int pulse = es_queue_pulse(e);
+		if (!code) code = pulse;
 	}
 	es_names_free(&path);
 	if (code == ES_TAKEN && refused != NULL && refused->refused != NULL) {
@@ -2288,4 +2459,13 @@ int es_calling(es_ermine *e, es_calling_view *out) {
 	if (es_alive(e)) return 0;
 	es_clear_thrown();
 	return es_calls_calling(e, sc_get_current_frame(e->scheduler), out);
+}
+
+int es_start_at(es_ermine *e, es_program fn, void *ctx, es_at at, const es_start_options *o,
+	es_started **out, es_refused *refused, const ch_location *site) {
+	return ES_GO(e, "start", start_run(e, fn, ctx, at, o, out, refused, site));
+}
+int es_start_in_at(es_context *c, es_program fn, void *ctx, es_at at, const es_start_options *o,
+	es_child *out, es_refused *refused, const ch_location *site) {
+	return ES_GO(c->ermine, "start", start_in_run(c, fn, ctx, at, o, out, refused, site));
 }

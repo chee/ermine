@@ -18,9 +18,10 @@ export type Options = {
 
 export type Code = "not-a-patch" | "no-key" | "range" | "wrong-kind" | "into-itself"
 
+// patch: which patch of a call failed; none when there was no patch (a read by range).
 export class ApplyError extends Error {
-	constructor(readonly code: Code, readonly patch: number) {
-		super(`${code} (patch ${patch})`)
+	constructor(readonly code: Code, readonly patch?: number) {
+		super(patch === undefined ? code : `${code} (patch ${patch})`)
 	}
 }
 

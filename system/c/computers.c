@@ -641,7 +641,9 @@ static int create(es_context *c, int memo, es_names *path, char **key, es_comput
 	struct es_computers *x = e->computers;
 	sc_scope *own = es_owner(c);
 	(void)site;
-	char *id = es_new_id(e);
+	char *id;
+	int failed = es_make_id(e, "node", &id);
+	if (failed) return failed;
 	placing p = {c, path->names, path->n, id, node_above(sc_scope_frame(own))};
 	int code = es_inside(c, place_node, &p);
 	if (code) {
@@ -684,15 +686,14 @@ static int create(es_context *c, int memo, es_names *path, char **key, es_comput
 	}
 	cst_give(e->statuses, m->c, tb_string(id));
 	if (e->runs != NULL) crn_give(e->runs, m->c, tb_string(id));
-	if (e->on_create_function != NULL) {
-		es_created made = {.kind = memo ? "memo" : "effect", .computer = m->c, .node = nd, .id = id,
-			.process = c->node};
-		e->on_create_function(e->on_create_function_ctx, &made);
-	}
-	es_queue_pulse(e);
+	es_created made = {.kind = memo ? "memo" : "effect", .computer = m->c, .node = nd, .id = id,
+		.process = c->node};
+	code = es_hook_create_function(e, &made);
+	int pulse = es_queue_pulse(e);
+	if (code == 0) code = pulse;
 	if (out != NULL) *out = es_handle_make(c, nd);
 	release(m);
-	return 0;
+	return code;
 }
 
 static int make(es_context *c, int memo, es_at name, es_compute f, es_act act, void *ctx,
@@ -724,7 +725,7 @@ static int make(es_context *c, int memo, es_at name, es_compute f, es_act act, v
 	} else {
 		set_code(m, f, act, ctx, o);
 		hold(m);
-		es_queue_pulse(e);
+		code = es_queue_pulse(e);
 		if (out != NULL) *out = es_handle_make(c, &nd);
 	}
 	free(key);
@@ -735,7 +736,7 @@ static int make(es_context *c, int memo, es_at name, es_compute f, es_act act, v
 int es_create_memo_at(es_context *c, es_at name, es_compute f, void *ctx,
 	const es_computed_options *o, es_handle **out, const ch_location *site) {
 	const ch_location *was = es_enter(c->ermine, site);
-	int code = make(c, 1, name, f, NULL, ctx, o, out, site);
+	int code = ES_GO(c->ermine, "createMemo", make(c, 1, name, f, NULL, ctx, o, out, site));
 	es_enter(c->ermine, was);
 	return code;
 }
@@ -743,7 +744,7 @@ int es_create_memo_at(es_context *c, es_at name, es_compute f, void *ctx,
 int es_create_effect_at(es_context *c, es_at name, es_compute f, es_act act, void *ctx,
 	const es_computed_options *o, es_handle **out, const ch_location *site) {
 	const ch_location *was = es_enter(c->ermine, site);
-	int code = make(c, 0, name, f, act, ctx, o, out, site);
+	int code = ES_GO(c->ermine, "createEffect", make(c, 0, name, f, act, ctx, o, out, site));
 	es_enter(c->ermine, was);
 	return code;
 }
@@ -1032,7 +1033,7 @@ static int own_status(es_context *c, const es_node_data *n, const char *id, cons
 
 int es_get_status(es_context *c, es_target x, es_status *out) { return es_get_status_of(c, x, NULL, out); }
 
-int es_get_status_of(es_context *c, es_target x, const char *key, es_status *out) {
+static int get_status_of(es_context *c, es_target x, const char *key, es_status *out) {
 	*out = (es_status){0};
 	es_node_data n = {0};
 	int code = es_node_of(c, x, &n);
@@ -1057,6 +1058,10 @@ int es_get_status_of(es_context *c, es_target x, const char *key, es_status *out
 	free(id);
 	es_node_data_free(&n);
 	return code;
+}
+
+int es_get_status_of(es_context *c, es_target x, const char *key, es_status *out) {
+	return ES_GO(c->ermine, "getStatus", get_status_of(c, x, key, out));
 }
 
 int es_latest_run(es_ermine *e, const char *id, const crn_run **out) {

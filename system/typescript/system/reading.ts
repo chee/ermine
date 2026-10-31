@@ -11,7 +11,7 @@ import { attributesOf, byId, handle, idOf, keyOf, nodeOf, viewOf } from "./addre
 import { mayRead, refused } from "./asking.ts"
 import { computerAt } from "./made.ts"
 import { here } from "./setting.ts"
-import type { Item, System } from "./shapes.ts"
+import type { Item, ReadKey, System } from "./shapes.ts"
 
 export const read: System["read"] = /* @__PURE__ */ marked(function read(x, key) {
 	return go(read, "read", false, readAs, x, key)
@@ -49,7 +49,10 @@ export const list: System["list"] = /* @__PURE__ */ marked(function list(x) {
 	return go(list, "list", false, listAs, x)
 })
 
-export function readAs(inner: Inner, x: Target, path: readonly Step[] = []): unknown {
+// A key is a path, or { path, range }: the span of the sequence there that a delete patch would take
+// out, a copy of its own.
+export function readAs(inner: Inner, x: Target, key: ReadKey = []): unknown {
+	const [path, range] = "path" in key ? [key.path, key.range] : [key, undefined]
 	const { base, calls, state, places, guarded } = here(inner)
 	const n = nodeOf(inner, x)
 	const id = idOf(inner, n)
@@ -63,13 +66,13 @@ export function readAs(inner: Inner, x: Target, path: readonly Step[] = []): unk
 	if (guarded) mayRead(inner, id, n.path, n.part, path)
 	if (state.peeping === 0) calls.read(n.part, id, path)
 	if (n.part === "value" && computerAt(base.made, id)?.memo) {
-		const v = places.readValue("value", id, path)
+		const v = places.readValue("value", id, path, range)
 		if (v === undefined && isPending(places, id)) {
 			throw PENDING
 		}
 		return v
 	}
-	return places.readValue(n.part, id, path)
+	return places.readValue(n.part, id, path, range)
 }
 
 function versions(inner: Inner, x: Target, path: readonly Step[] = []): Version[] {
@@ -204,7 +207,7 @@ export function peepAs<T>(inner: Inner, f: () => T): T {
 	}
 }
 
-export const readAttributesAs = (inner: Inner, x: Target, key?: readonly Step[]) =>
+export const readAttributesAs = (inner: Inner, x: Target, key?: ReadKey) =>
 	readAs(inner, attributesOf(inner, x), key)
 
 export const readAllAs = (inner: Inner, x: Target, key?: readonly Step[]) =>

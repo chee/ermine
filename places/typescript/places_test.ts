@@ -7,7 +7,9 @@ import { type Computer, createScheduler, SchedulerError } from "@ermine/reactivi
 import { type Told, trace } from "../../reactivity/typescript/scheduler_harness.ts"
 import { createPaths } from "@ermine/reactivity/paths"
 import { createTable, type Id, type Key } from "@ermine/graph/table"
-import { at, createPlaces, move, place, rename, unplace } from "./places.ts"
+import { at, createPlaces, move, place, rename, sliceAt, unplace } from "./places.ts"
+import { createCrow } from "@ermine/crow"
+import { updateEntry } from "./crowify.ts"
 import { get, list, lookup, members } from "./lib.ts"
 import { createChangeBase, createChangeHeader } from "./header.ts"
 
@@ -617,4 +619,62 @@ Deno.test("places: an entry taken out is told with a change made then, from the 
 	const at = a.change?.frame.info.locations
 	assert(at?.some((l) => l.file.endsWith("places_test.ts") && l.line === line), JSON.stringify(at))
 	assertEquals(b, { id: "b", change: undefined })
+})
+
+Deno.test("places: a range read gives what the delete patch would take out, as the same kind; nothing at the path is undefined", () => {
+	const { l, value } = world()
+	value("d", {
+		s: "a😀b😀c",
+		l: [1, { x: 2 }, 3],
+		i: new Int8Array([-1, 0, 7]),
+		b: new Uint8Array([1, 2, 3]),
+	})
+	assertEquals(l.readValue("value", "d", ["s"], [1, 4]), "😀b😀")
+	assertEquals(l.readValue("value", "d", ["l"], [1, 3]), [{ x: 2 }, 3])
+	assertEquals(l.readValue("value", "d", ["i"], [1, 3]), new Int8Array([0, 7]))
+	assertEquals(l.readValue("value", "d", ["b"], [0, 2]), new Uint8Array([1, 2]))
+	const code = (f: () => unknown) => {
+		try {
+			f()
+		} catch (e) {
+			return (e as { code?: string }).code
+		}
+	}
+	assertEquals(code(() => l.readValue("value", "d", ["s"], [0, 6])), "range")
+	assertEquals(code(() => l.readValue("value", "d", ["l"], [2, 1])), "range")
+	assertEquals(code(() => l.readValue("value", "d", [], [0, 1])), "wrong-kind")
+	// the path walks as a plain read does: nothing there is undefined
+	assertEquals(l.readValue("value", "d", ["s", "x"], [0, 1]), undefined)
+	assertEquals(l.readValue("value", "d", ["nope"], [0, 1]), undefined)
+	assertEquals(l.readValue("value", "none", [], [0, 1]), undefined)
+	assertEquals(code(() => l.readValue("value", "d", ["s"], [-1, 1])), "not-a-patch")
+})
+
+Deno.test("places: a slice never changes afterwards: copies, not views, whatever writes in place", () => {
+	const crow = createCrow()
+	const h = (): ChangeHeader => ({ frame: {}, actor: "t" } as unknown as ChangeHeader)
+	const entry = createEntry<unknown>(
+		{ l: [1, 2, 3, 4], i: new Int8Array([1, 2, 3, 4]) },
+		h(),
+	)
+	const write = (patches: Patch[]) => updateEntry(crow, entry, patches, h())
+	write([{ path: ["l"], range: [0, 0], value: [0] }])
+	write([{ path: ["i"], range: [0, 0], value: new Int8Array([0]) }])
+	const l = sliceAt(entry.value, ["l"], [1, 3]), i = sliceAt(entry.value, ["i"], [1, 3])
+	write([{ path: ["l"], range: [1, 2], value: [9, 9] }, { path: ["l"], range: [0, 1] }])
+	write([{ path: ["i"], range: [1, 2], value: new Int8Array([9, 9]) }])
+	assertEquals(l, [1, 2])
+	assertEquals(i, new Int8Array([1, 2]))
+})
+
+Deno.test("places: a range read depends on the value at its path, like a read of it", () => {
+	const { s, l, hosted, edit, value, watch } = world()
+	value("doc", { title: "hi", body: "abc" })
+	const title = watch(() => l.readValue("value", "doc", ["title"], [0, 1]))
+	const body = watch(() => l.readValue("value", "doc", ["body"], [1, 3]))
+	s.pulse()
+	hosted(() => edit("value", "doc", [{ path: ["body"], range: [3, 3], value: "d" }]))
+	s.pulse()
+	assertEquals([title.runs, title.value], [1, "h"])
+	assertEquals([body.runs, body.value], [2, "bc"])
 })

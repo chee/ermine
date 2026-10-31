@@ -49,6 +49,8 @@ enum {
 	OP_INTO_ITSELF,
 };
 const char *op_code_name(int code);
+// The bytes x..y of string s that code points a..b are; 0 if either end is past its end.
+int op_string_span(const op_value *s, int64_t a, int64_t b, size_t *x, size_t *y);
 
 typedef struct {
 	op_patch *patches;
