@@ -7,14 +7,20 @@
 
 #define EVERY 32
 #define BYTES 2048
-#define JUMP (1ull << 20)
+
+// where a device's steps' seqs go on evenly: steps n on each insert made, step n at seq, up to the
+// next
+typedef struct {
+	uint64_t n, seq, made;
+} seg;
 
 typedef struct {
 	uint8_t device[32];
 	uint64_t count;
 	uint8_t last[32];
 	uint64_t lamport, when;
-	uint64_t end; // the last lamport its newest step takes
+	seg *seqs;
+	size_t nseqs, roomseqs;
 } feed;
 
 struct tp_log {
@@ -40,7 +46,7 @@ tp_log *tp_log_new(const tp_log_options *o) {
 	log->mem = o->mem, log->store = o->store, log->limits = o->limits;
 	if (!log->limits.devices) log->limits.devices = 4096;
 	if (!log->limits.steps) log->limits.steps = 1 << 24;
-	if (!log->limits.step) log->limits.step = 1 << 20;
+	if (!log->limits.step) log->limits.step = TP_RUN;
 	if (o->seed) memcpy(log->seed, o->seed, 32), log->seeded = 1;
 	log->strict = o->strict, log->told = o->told, log->ctx = o->ctx;
 	log->scratch.mem = &log->mem, log->scratch.max = log->limits.step;
@@ -50,6 +56,9 @@ tp_log *tp_log_new(const tp_log_options *o) {
 void tp_log_free(tp_log *log) {
 	if (!log) return;
 	tp_mem mem = log->mem;
+	for (size_t i = 0; i < log->nfeeds; i++) {
+		tp_free(&mem, log->feeds[i].seqs, log->feeds[i].roomseqs * sizeof *log->feeds[i].seqs);
+	}
 	tp_free(&mem, log->feeds, log->feedroom * sizeof *log->feeds);
 	tp_buf_free(&log->scratch);
 	tp_store *st = log->store;
@@ -113,9 +122,9 @@ static int follows(const tp_step *s, uint64_t n, const uint8_t *before) {
 		(!before || !memcmp(s->before, before, 32));
 }
 
-// jump: refuse a step a jump past what was seen (taking, not loading)
+// *high: the highest lamport of the fresh steps
 static long chain(const tp_log *log, const uint8_t device[32], const tp_span *steps, size_t k,
-	uint8_t last[32], uint64_t *high, int jump) {
+	uint8_t last[32], uint64_t *high) {
 	const feed *f = find(log, device);
 	uint64_t held = f ? f->count : 0;
 	tp_step s;
@@ -124,22 +133,15 @@ static long chain(const tp_log *log, const uint8_t device[32], const tp_span *st
 	size_t skip = (size_t)(held + 1 - s.n), fresh = k > skip ? k - skip : 0;
 	if (held) memcpy(last, f->last, 32);
 	*high = 0;
-	// none a jump past what was seen and the lamports the steps before it take; and one that says on
-	// past the lamports its device's step before took (its counters never used twice)
-	uint64_t most = log->lamport + JUMP, before = held ? f->end : 0;
-	int jumps = 0, had = held > 0;
 	for (size_t i = 0; i < fresh; i++) {
 		const tp_span *b = &steps[skip + i];
 		if (tp_step_decode(b->p, b->n, &s) || memcmp(s.device, device, 32) ||
 			!follows(&s, held + 1 + i, held + i ? last : NULL))
 			return TP_CHAIN;
-		uint64_t end = tp_step_last(&s);
-		jumps |= s.lamport > most || (s.on.p && had && s.lamport <= before);
-		most += end - s.lamport + 1, before = end > before ? end : before, had = 1;
-		if (end > *high) *high = end;
+		if (s.lamport > *high) *high = s.lamport;
 		tp_step_hash(b->p, b->n, last);
 	}
-	return jump && jumps ? TP_LAMPORT : (long)fresh;
+	return (long)fresh;
 }
 
 static feed *fit(tp_log *log, const uint8_t device[32], size_t fresh, int *why) {
@@ -148,12 +150,63 @@ static feed *fit(tp_log *log, const uint8_t device[32], size_t fresh, int *why) 
 	return *why ? NULL : f;
 }
 
-static void keep(tp_log *log, feed *f, size_t fresh, const uint8_t last[32], uint64_t high, tp_span end) {
+static uint64_t seq_at(const feed *f, uint64_t n) {
+	size_t lo = 0, hi = f->nseqs;
+	while (lo < hi) {
+		size_t mid = (lo + hi) / 2;
+		if (f->seqs[mid].n <= n) lo = mid + 1;
+		else hi = mid;
+	}
+	const seg *g = lo ? &f->seqs[lo - 1] : NULL;
+	return g ? g->seq + g->made * (n - g->n) : 0;
+}
+static uint64_t made_of(tp_span b) {
 	tp_step s;
+	return tp_step_decode(b.p, b.n, &s) ? 0 : tp_step_made(&s);
+}
+// room for the segments steps (the next k of f's) add, before they are held
+static int seqs_room(tp_log *log, feed *f, const tp_span *steps, size_t k) {
+	size_t more = 0;
+	uint64_t last = f->nseqs ? f->seqs[f->nseqs - 1].made : UINT64_MAX;
+	for (size_t i = 0; i < k; i++) {
+		uint64_t m = made_of(steps[i]);
+		more += m != last, last = m;
+	}
+	if (f->nseqs + more <= f->roomseqs) return 0;
+	size_t room = f->roomseqs ? 2 * f->roomseqs : 4;
+	while (room < f->nseqs + more) room *= 2;
+	seg *p = tp_grow(&log->mem, f->seqs, f->roomseqs * sizeof *p, room * sizeof *p);
+	if (!p) return TP_NOMEM;
+	f->seqs = p, f->roomseqs = room;
+	return 0;
+}
+// steps, the next k of f's, held (room made)
+static void seqs_note(feed *f, const tp_span *steps, size_t k) {
+	for (size_t i = 0; i < k; i++) {
+		uint64_t m = made_of(steps[i]), n = f->count + 1 + i;
+		if (f->nseqs && f->seqs[f->nseqs - 1].made == m) continue;
+		seg g = {n, seq_at(f, n), m};
+		f->seqs[f->nseqs++] = g;
+	}
+}
+
+// steps: the fresh ones
+static void keep(tp_log *log, feed *f, const tp_span *steps, size_t fresh, const uint8_t last[32],
+	uint64_t high) {
+	tp_step s;
+	seqs_note(f, steps, fresh);
 	f->count += fresh;
 	memcpy(f->last, last, 32);
-	if (!tp_step_decode(end.p, end.n, &s)) f->lamport = s.lamport, f->when = s.when, f->end = tp_step_last(&s);
+	if (!tp_step_decode(steps[fresh - 1].p, steps[fresh - 1].n, &s)) f->lamport = s.lamport, f->when = s.when;
 	if (high > log->lamport) log->lamport = high;
+}
+
+int tp_log_seq(const tp_log *log, const uint8_t device[32], uint64_t n, uint64_t *seq) {
+	const feed *f = find(log, device);
+	*seq = 0;
+	if (n < 1 || n > (f ? f->count : 0) + 1) return TP_BOUND;
+	if (f) *seq = seq_at(f, n);
+	return 0;
 }
 
 int tp_log_prior(const tp_log *log, const uint8_t device[32], uint64_t n, tp_prior *p) {
@@ -265,15 +318,18 @@ int tp_log_write(tp_log *log, const tp_write *w, uint64_t *n, uint64_t *lamport)
 	if (tp_step_decode(bytes, length, &check)) return TP_NOTSTEP;
 	if (length > TP_RUN) return TP_BOUND;
 	// no run past TP_RUN: the open one closed first
+	tp_span one = {bytes, length};
+	if (seqs_room(log, f, &one, 1)) return TP_NOMEM;
 	if (log->loose && log->loose + length > TP_RUN) close_to(log, f->count);
 	tp_at at = {log->key.pub, s.n, s.n};
 	tp_store *st = log->store;
 	int why = st->open ? st->open(st->self, bytes, length, &at) : st->append(st->self, bytes, length, &at);
 	if (why) return why;
+	seqs_note(f, &one, 1);
 	f->count++;
 	tp_step_hash(bytes, length, f->last);
-	f->lamport = s.lamport, f->when = s.when, f->end = tp_step_last(&s);
-	log->lamport = f->end;
+	f->lamport = s.lamport, f->when = s.when;
+	log->lamport = s.lamport;
 	log->loose += length;
 	if (s.n - log->asked >= EVERY || log->loose >= BYTES) close_to(log, s.n);
 	*n = s.n, *lamport = s.lamport;
@@ -313,14 +369,17 @@ long tp_log_take(tp_log *log, const uint8_t device[32], const tp_span *steps, si
 	if (!n) return 0;
 	uint64_t held = tp_log_count(log, device), high;
 	uint8_t last[32];
-	long fresh = chain(log, device, steps, n, last, &high, 1);
+	long fresh = chain(log, device, steps, n, last, &high);
 	if (fresh <= 0) return fresh;
 	if (!tp_verify(device, last, 32, sig)) return TP_SIGNATURE;
 	int why;
 	feed *f = fit(log, device, (size_t)fresh, &why);
-	tp_buf b = {NULL, 0, 0, log->limits.step, &log->mem, 0};
+	if (f) why = seqs_room(log, f, steps + n - fresh, (size_t)fresh);
+	// the record: its steps packed, within this device's limit, and its head and prior
+	tp_buf b = {NULL, 0, 0, log->limits.step + TP_HEAD + TP_PRIOR, &log->mem, 0};
 	tp_prior prior;
 	int against = held && !tp_log_prior(log, device, held, &prior);
+	if (why) f = NULL;
 	if (f && ((size_t)fresh < n || !came.p)) why = message(log, device, sig, steps + n - fresh, (size_t)fresh, against ? &prior : NULL, &b);
 	else if (f) {
 		b.max = came.n + TP_PRIOR, recorded(&b, came.p, came.n, &prior), why = tp_buf_why(&b);
@@ -330,7 +389,7 @@ long tp_log_take(tp_log *log, const uint8_t device[32], const tp_span *steps, si
 	if (!why) why = log->store->append(log->store->self, b.p, b.len, &at);
 	tp_buf_free(&b);
 	if (why) return why;
-	keep(log, f, (size_t)fresh, last, high, steps[n - 1]);
+	keep(log, f, steps + n - fresh, (size_t)fresh, last, high);
 	tell(log, device, held + 1, (size_t)fresh);
 	return fresh;
 }
@@ -388,10 +447,11 @@ static int loaded(void *ctx, const uint8_t *r, size_t length, tp_at *at) {
 	uint8_t last[32];
 	int ok = !tp_step_decode(spans[0].p, spans[0].n, &s) && (run || own(log, s.device));
 	const uint8_t *device = run ? r + 7 : s.device;
-	long fresh = ok ? chain(log, device, spans, k, last, &high, 0) : -1;
+	long fresh = ok ? chain(log, device, spans, k, last, &high) : -1;
 	int why = 0;
 	feed *f = fresh > 0 ? fit(log, device, (size_t)fresh, &why) : NULL;
-	if (f) keep(log, f, (size_t)fresh, last, high, spans[k - 1]);
+	if (f && (why = seqs_room(log, f, spans + k - fresh, (size_t)fresh))) f = NULL;
+	if (f) keep(log, f, spans + k - fresh, (size_t)fresh, last, high);
 	ok = (run ? fresh >= 0 : fresh > 0) && !why;
 	if (ok) {
 		at->device = device, at->first = s.n, at->last = s.n + k - 1;

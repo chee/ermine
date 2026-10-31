@@ -11,12 +11,13 @@ import apply, { type Patch } from "@ermine/changeable/apply"
 import { decode, encode, type Value } from "@ermine/encoding/cbor"
 import type { Places } from "@ermine/places"
 import type { Key, Table } from "@ermine/graph/table"
-import { type Anchor, decodeStep, type On, same, type Step } from "./step.ts"
+import { decodeStep, type On, same, type Step, writeIds } from "./step.ts"
 import { fresh, type State, step as applyStep } from "./elements.ts"
 import type { Log } from "./log.ts"
 import type { Sync } from "./sync.ts"
 
-type Ref = [lamport: number, device: string, n: number]
+// seq: how many elements its device's steps before it insert (WIRE.md, ids)
+type Ref = [lamport: number, device: string, n: number, seq: number]
 type Own = State & { tail: { ref: Ref; undo: Patch[]; back: (() => void)[] }[]; all: boolean }
 export type Failed = { device: string; n: number; node: string; part: string; why: string }
 export type Version = {
@@ -33,7 +34,7 @@ const name = (part: string, node: string) => `${part}\0${node}`
 const covers = (s: Step, r: Ref) =>
 	s.on
 		? s.on.some((o) => o.device === r[1] && o.n === r[2])
-		: before(r, [s.lamport, s.device, s.n])
+		: before(r, [s.lamport, s.device, s.n, 0])
 const touched = (p: Patch) => p.move ? [p.path, p.move.path] : [p.path]
 const overlap = (a: readonly unknown[], b: readonly unknown[]) => {
 	for (let i = 0; i < a.length && i < b.length; i++) if (a[i] !== b[i]) return false
@@ -115,8 +116,8 @@ export function createHistory(o: {
 		frame: { info: { device: s.device, n: s.n, lamport: s.lamport }, parent: undefined },
 	})
 
-	function place(s: Step): boolean {
-		const k = name(s.part, s.node), ref: Ref = [s.lamport, s.device, s.n]
+	function place(s: Step, ref: Ref): boolean {
+		const k = name(s.part, s.node)
 		let refs = entries.get(k)
 		// an entry seen from its first step, a whole value: its own from nothing, every step in its tail
 		if (!refs) {
@@ -138,8 +139,8 @@ export function createHistory(o: {
 		for (const o of s.on) n.by.set(`${o.device} ${o.n}`, newer(n.by.get(`${o.device} ${o.n}`), r))
 	}
 
-	function head(s: Step, last: boolean) {
-		const k = name(s.part, s.node), ref: Ref = [s.lamport, s.device, s.n]
+	function head(s: Step, ref: Ref, last: boolean) {
+		const k = name(s.part, s.node)
 		if (o.forgets) return void (last && heads.set(k, [ref]))
 		const hs = (heads.get(k) ?? []).filter((h) => !covers(s, h))
 		if (last || !named(k, ref)) hs.push(ref)
@@ -229,7 +230,7 @@ export function createHistory(o: {
 				)
 				if (!keep.some(Boolean)) continue
 				try {
-					applyStep(st, s, { keep })
+					applyStep(st, { ...s, seq: refs[i][3] }, { keep })
 				} catch {
 				}
 			}
@@ -268,7 +269,7 @@ export function createHistory(o: {
 	function onto(mine: Own, r: Ref, s: Step): { applied: Patch[] } | { error: unknown } {
 		const undo: Patch[] = [], back: (() => void)[] = []
 		try {
-			const { applied } = applyStep(mine, s, { undo, back })
+			const { applied } = applyStep(mine, { ...s, seq: r[3] }, { undo, back })
 			mine.tail.push({ ref: r, undo, back }), trim(mine)
 			return { applied }
 		} catch (error) {
@@ -336,11 +337,12 @@ export function createHistory(o: {
 	const waiting = new Map<string, Ref[]>()
 	function land(steps: Step[]) {
 		for (const s of steps) {
-			const k = name(s.part, s.node), r: Ref = [s.lamport, s.device, s.n]
+			const k = name(s.part, s.node)
 			try {
-				const last = place(s)
+				const r: Ref = [s.lamport, s.device, s.n, log.seq(s.device, s.n)]
+				const last = place(s, r)
 				if (o.forgets && !last) continue
-				head(s, last)
+				head(s, r, last)
 				const mine = own.get(k)
 				if (!last || waiting.has(k)) waiting.set(k, [...waiting.get(k) ?? [], r])
 				else if (mine) {
@@ -395,14 +397,19 @@ export function createHistory(o: {
 				? undefined
 				: own.get(k) ?? (entries.get(k)?.length ? rebuild(k) : undefined)
 		const undo: Patch[] = [], back: (() => void)[] = []
-		let ids: (Anchor | null)[] | undefined
+		const n = me === undefined ? 0 : log.count(me) + 1
+		const at = { device: me ?? "", n, seq: me === undefined ? 0 : log.seq(me, n) }
+		let ids: Value[] | undefined
 		if (mine) {
 			try {
-				ids = applyStep(
-					mine,
-					{ device: me!, lamport: log.lamport + 1, patches },
-					{ undo, back, name: true },
-				).ids
+				ids = writeIds(
+					at,
+					applyStep(mine, { ...at, lamport: log.lamport + 1, patches }, {
+						undo,
+						back,
+						name: true,
+					}).ids,
+				)
 			} catch {
 				// not as the graph has it: its own value made again when next needed
 				own.delete(k)
@@ -427,8 +434,8 @@ export function createHistory(o: {
 			return tell()
 		}
 		broken.delete(k)
-		const last = place(s), r: Ref = [s.lamport, s.device, s.n]
-		head(s, last)
+		const r: Ref = [s.lamport, s.device, s.n, at.seq], last = place(s, r)
+		head(s, r, last)
 		// last always (one past the highest lamport seen). named: in its own value already
 		if (mine && ids) mine.tail.push({ ref: r, undo, back }), trim(mine)
 		else if (own.has(k)) onto(own.get(k)!, r, s)
@@ -472,6 +479,8 @@ export function createHistory(o: {
 				count = snap.count
 				quietly(() => {
 					for (const [part, node, v, refs, hs] of snap.entries) {
+						// a snapshot from before seq
+						for (const r of refs) r[3] ??= log.seq(r[1], r[2])
 						entries.set(name(part, node), refs), namers.delete(name(part, node))
 						own.delete(name(part, node))
 						const hd = hs ? hs.map((i) => refs[i]) : refs.slice(-1)
