@@ -145,7 +145,8 @@ uint64_t tp_step_made(const tp_step *s) {
 	return made;
 }
 
-// the ids: one per patch, null or [after, gone], only on a patch with a range
+// the ids: one per patch, null or [after, gone] or [after, gone, before], only on a patch with a range;
+// before true only with an after
 static int ids_item(tp_in *in, const tp_step *s, const uint8_t *device) {
 	uint64_t k, two, g;
 	size_t at = 0;
@@ -154,8 +155,9 @@ static int ids_item(tp_in *in, const tp_step *s, const uint8_t *device) {
 	for (uint64_t i = 0; i < k; i++) {
 		if (tp_patch_next(s->patches, &at, &p)) return -1;
 		if (tp_null(in)) continue;
-		if (!p.ranged || tp_array(in, &two) || two != 2) return -1;
-		if (!tp_null(in) && id_item(in, device, s->n)) return -1;
+		if (!p.ranged || tp_array(in, &two) || two < 2 || two > 3) return -1;
+		int after = !tp_null(in);
+		if (after && id_item(in, device, s->n)) return -1;
 		if (tp_array(in, &g)) return -1;
 		for (uint64_t j = 0; j < g; j++) {
 			uint64_t pair, count;
@@ -163,6 +165,10 @@ static int ids_item(tp_in *in, const tp_step *s, const uint8_t *device) {
 				count < 1)
 				return -1;
 		}
+		if (two == 3 && in->p < in->end && *in->p == 0xf5) {
+			if (!after) return -1;
+			in->p++;
+		} else if (two == 3 && id_item(in, device, s->n)) return -1;
 	}
 	return 0;
 }

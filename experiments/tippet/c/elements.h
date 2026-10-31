@@ -1,9 +1,8 @@
 // The elements of an entry's strings and arrays (see typescript/elements.ts, WIRE.md ids), held as
-// runs: elements one after another of one device, numbered one on, the lamports of the steps that made
-// them going on evenly, all gone or none. A sequence gets its elements at the first splice that
-// touches it. A splice by ids goes after its element and takes its gone elements away wherever they
-// are now; a splice by range goes as written. el_step applies a step's patches to a value by
-// position, all or none, with the elements, and gives what undoes both.
+// runs: elements one after another of one device, numbered one on (or one down), the lamports of the
+// steps that made them going on evenly, all gone or none. A sequence gets its elements at the first
+// splice that touches it. el_step applies a step's patches to a value by position, all or none, with
+// the elements, and gives what undoes both.
 // Memory goes through tp_mem; values are the graph's (malloc'd).
 #ifndef TIPPET_ELEMENTS_H
 #define TIPPET_ELEMENTS_H
@@ -41,12 +40,15 @@ typedef struct {
 	el_id id;
 	uint64_t count;
 } el_gone;
-// a splice's ids; named 0: by its range as written
+// a splice's ids; named 0: by its range as written. before: none (the end), the one its after goes
+// before (same), or an id
 typedef struct {
 	int named, has_after;
 	el_id after;
 	el_gone *gone;
 	size_t ngone;
+	int has_before, same;
+	el_id before;
 } el_anchor;
 
 typedef struct el_list el_list;
