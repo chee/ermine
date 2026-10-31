@@ -5,7 +5,7 @@
 import { assertEquals } from "@std/assert"
 import apply, { type Patch } from "@ermine/changeable/apply"
 import { fresh, type State, step } from "./elements.ts"
-import { type Anchor, type Id, readIds, writeIds } from "./step.ts"
+import { type Id, readIds, writeIds } from "./step.ts"
 import type { Value } from "@ermine/encoding/cbor"
 
 type S = {
@@ -36,7 +36,7 @@ function reference(steps: S[], chars: Map<string, string>) {
 	const at = (i: Id | null, none: number) => i ? doc.findIndex((x) => is(x.id, i)) : none
 	for (const s of [...steps].sort(order)) {
 		if (!s.ids) continue
-		const anchors = readIds(s, s.ids) as Anchor[]
+		const anchors = readIds(s, s.ids).map((x) => x!.splice!)
 		let c = s.seq
 		s.patches.forEach((p, q) => {
 			const a = anchors[q]

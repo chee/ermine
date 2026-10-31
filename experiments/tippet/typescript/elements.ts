@@ -2,8 +2,8 @@
 // another of one device, numbered one on (or, back, one down), the lamports of the steps that made
 // them going on evenly, all gone or none, each element after the one before it in the run (or, back,
 // before the one after it). A sequence gets its elements at the first splice that touches it.
-import apply, { type Patch, type Target } from "@ermine/changeable/apply"
-import { type Anchor, type At, type Id, inserts, readIds, type Step } from "./step.ts"
+import apply, { type Key as Index, type Patch, type Target } from "@ermine/changeable/apply"
+import { type Anchor, type At, type Id, inserts, type Named, readIds, type Step } from "./step.ts"
 
 // a step's place: lamport, device, n
 export type Ref = [lamport: number, device: string, n: number]
@@ -27,8 +27,9 @@ type Pos = [j: number, o: number]
 // a sequence's runs, the step its born ones are since, how many are not gone, a cursor (live: how
 // many before runs[j] are not gone)
 type List = { runs: Run[]; by: Ref; count: number; j: number; live: number }
-// an entry's value and its sequences' elements, by path; born: by path, the step that made what is
-// there new (a sequence under it is that step's until a splice touches it)
+// an entry's value and its sequences' elements, by where (a path, each array item as its element);
+// born: by where, the step that made what is there new (a sequence under it is that step's until a
+// splice touches it)
 export type State = { value: unknown; lists: Map<string, List>; born: Map<string, Ref> }
 
 export const fresh = (): State => ({ value: undefined, lists: new Map(), born: new Map() })
@@ -176,17 +177,17 @@ const there = (l: List, id: Id, n: number) => {
 
 // a step's patches applied to state in order, all or none: ids (when the step has them) made
 // positions. o.undo gets what undoes the value, o.back what undoes the elements (run newest
-// first). o.name: a write here, its splices named from the elements (their ids returned). o.keep:
-// false for a patch left out (its elements still counted). the patches as applied, by position,
-// returned for the graph
+// first). o.name: a write here, its splices and the array items its paths go through named from
+// the elements (returned). o.keep: false for a patch left out (its elements still counted). the
+// patches as applied, by position, returned for the graph
 export function step(
 	state: State,
 	s: Pick<Step, "device" | "n" | "lamport" | "patches" | "ids"> & At,
 	o: { undo?: Patch[]; back?: (() => void)[]; name?: boolean; keep?: readonly boolean[] } = {},
-): { applied: Patch[]; ids: (Anchor | null)[] } {
+): { applied: Patch[]; ids: (Named | null)[] } {
 	const { undo = [], back = [], name = false, keep } = o
 	const ref: Ref = [s.lamport, s.device, s.n]
-	const applied: Patch[] = [], ids: (Anchor | null)[] = []
+	const applied: Patch[] = [], ids: (Named | null)[] = []
 	const mine: Patch[][] = [], marks = back.length
 	const was = state.value
 	const named = name || !s.ids ? undefined : readIds(s, s.ids)
@@ -199,18 +200,12 @@ export function step(
 				ids.push(null)
 				continue
 			}
-			const anchor = named?.[i] ?? null
-			const listed = inArray(state.value, p)
 			const out = p.move
-				? (renew(state, ref, end(state.value, p), back),
-					renew(state, ref, end(state.value, p.move), back),
-					{ patches: [p], anchor: null })
-				: p.range && isSeq(at(state.value, p.path))
-				? splice(state, ref, c, p, anchor, back, name)
-				: listed && p.value === undefined
-				? { ...splice(state, ref, c, listed, null, back, false), anchor: null }
-				: (renew(state, ref, p.path, back), { patches: [p], anchor: null })
-			ids.push(out.anchor)
+				? (renew(state, ref, end(state, p, back), back),
+					renew(state, ref, end(state, p.move, back), back),
+					{ patches: [p], named: null })
+				: patch(state, ref, c, p, named?.[i] ?? null, back, name)
+			ids.push(out.named)
 			for (const q of out.patches) {
 				const u: Patch[] = []
 				state.value = apply(state.value, [q], { undo: u })
@@ -226,26 +221,111 @@ export function step(
 	return { applied, ids }
 }
 
-// a patch at an index of an array (no range): as a splice of that one, into the array
-function inArray(value: unknown, p: Target): Patch | undefined {
-	const k = p.path.at(-1)
-	if (p.range || typeof k !== "number" || !Array.isArray(at(value, p.path.slice(0, -1)))) return
-	return { path: p.path.slice(0, -1), range: [k, k + 1] }
+// a patch but a move, its path's array items found (by ids or by place): a splice, a removal at an
+// index of an array (a splice of that one) or a put
+function patch(
+	state: State,
+	ref: Ref,
+	c: number,
+	p: Patch,
+	given: Named | null,
+	back: (() => void)[],
+	name: boolean,
+): { patches: Patch[]; named: Named | null } {
+	const k = p.path.at(-1), by = given?.through
+	const one = !p.range && p.value === undefined && typeof k === "number"
+	let up = locate(state, p.path, by, back, one ? p.path.length - 1 : p.path.length)
+	// empty: an empty through too (a splice into an array whose path has no whole)
+	const through = (more: Id[], empty = false) => {
+		const t = name && up.ids ? [...up.ids, ...more] : undefined
+		return t && (t.length || empty) && !t.some((i) => i.device === "") ? t : undefined
+	}
+	if (one && Array.isArray(at(state.value, up.path))) {
+		// by its id: taken away wherever it is now, once
+		const q: Patch = { path: up.path, range: [k, k + 1] }
+		const gone = by ? { after: null, gone: [[by.at(-1)!, 1]] as [Id, number][] } : null
+		const out = splice(state, ref, c, q, up.where, gone, back, name)
+		const t = out.anchor && through([out.anchor.gone[0][0]])
+		if (!(name ? t : by)) renew(state, ref, up.where, back, false)
+		return { patches: out.patches, named: t ? { through: t } : null }
+	}
+	if (one) up = locate(state, p.path, by, back)
+	const q: Patch = up.path === p.path ? p : { ...p, path: up.path }
+	if (p.range && isSeq(at(state.value, up.path))) {
+		const list = Array.isArray(at(state.value, up.path))
+		const out = splice(state, ref, c, q, up.where, given?.splice ?? null, back, name)
+		const t = through([], !!out.anchor && list)
+		// into an array without a through (by place, or from before through): what is under it new
+		if (list && !(name ? t : by)) renew(state, ref, up.where, back, false)
+		return {
+			patches: out.patches,
+			named: out.anchor || t
+				? { ...(out.anchor && { splice: out.anchor }), ...(t && { through: t }) }
+				: null,
+		}
+	}
+	renew(state, ref, up.where, back)
+	const t = through([])
+	return { patches: [q], named: t ? { through: t } : null }
 }
-// what a move makes new at one end: the sequence a range is in, or the array an index is in, or
-// what is at the path
-const end = (value: unknown, t: Target) => inArray(value, t)?.path ?? t.path
 
-// the sequences at path and under it made new by this step (a put, a removal, a move there); self
-// false: under it only (a splice into an array: a position under it now names another element)
+// a path's first upto items, its arrays' items found by the ids by names, wherever they are now
+// (one gone or not there: it doesn't apply), or by place as written. path: to apply; where: its
+// key, each array item as its element; ids: those elements (none: one not there)
+function locate(
+	state: State,
+	path: readonly Index[],
+	by: readonly Id[] | undefined,
+	back: (() => void)[],
+	upto = path.length,
+) {
+	const out: Index[] = [], where: unknown[] = []
+	let ids: Id[] | undefined = [], v = state.value, x = 0, moved = upto < path.length
+	for (let i = 0; i < upto; i++) {
+		let k = path[i]
+		if (typeof k === "number") {
+			const id = by?.[x++]
+			let e: Id | undefined
+			if (Array.isArray(v)) {
+				const l = elements(state, out, where, back)
+				if (id) {
+					const f = find(l, id)
+					if (!f || l.runs[f[0]].gone) throw new RangeError("an element named is not there")
+					e = id, k = liveBefore(l, f[0]) + f[1], moved ||= k !== path[i]
+				} else if (k < l.count) {
+					const [j, o] = liveAt(l, k)
+					e = idAt(l, l.runs[j], o)
+				}
+			} else if (id) throw new RangeError("an element named is not there")
+			where.push(!e ? k : e.k === undefined ? [e.device, e.c] : [e.device, e.c, e.k])
+			if (e) ids?.push(e)
+			else ids = undefined
+		} else where.push(k)
+		out.push(k)
+		v = v !== null && typeof v === "object" ? (v as Record<string, unknown>)[k] : undefined
+	}
+	return { path: moved ? out : path, where, ids }
+}
+
+// what a move makes new at one end, by place: the sequence a range is in, or the array an index is
+// in, or what is at the path
+function end(state: State, t: Target, back: (() => void)[]) {
+	const k = t.path.at(-1), up = locate(state, t.path, undefined, back, t.path.length - 1)
+	return !t.range && typeof k === "number" && Array.isArray(at(state.value, up.path))
+		? up.where
+		: locate(state, t.path, undefined, back).where
+}
+
+// the sequences at where and under it made new by this step (a put, a removal, a move there); self
+// false: under it only (a splice into an array without a through)
 function renew(
 	state: State,
 	ref: Ref,
-	path: readonly unknown[],
+	where: readonly unknown[],
 	back: (() => void)[],
 	self = true,
 ) {
-	const prefix = keyOf(path)
+	const prefix = keyOf(where)
 	const lists = [...state.lists].filter(([k]) => under(k, prefix) && (self || k !== prefix))
 	const born = [...state.born].filter(([k]) => under(k, prefix))
 	for (const [k] of lists) state.lists.delete(k)
@@ -258,14 +338,19 @@ function renew(
 	})
 }
 
-// the elements of the sequence at path, made at the first splice: there since the step that made
-// it new
-function elements(state: State, path: readonly unknown[], back: (() => void)[]): List {
-	const key = keyOf(path)
+// the elements of the sequence at path (where, its key), made at the first splice: there since the
+// step that made it new
+function elements(
+	state: State,
+	path: readonly unknown[],
+	where: readonly unknown[],
+	back: (() => void)[],
+): List {
+	const key = keyOf(where)
 	const had = state.lists.get(key)
 	if (had) return had
 	let by: Ref | undefined
-	for (let n = path.length; n >= 0 && !by; n--) by = state.born.get(keyOf(path.slice(0, n)))
+	for (let n = where.length; n >= 0 && !by; n--) by = state.born.get(keyOf(where.slice(0, n)))
 	by ??= [0, "", 0]
 	const count = units(at(state.value, path))
 	const runs = count
@@ -295,6 +380,7 @@ function splice(
 	ref: Ref,
 	c: number,
 	p: Patch,
+	where: readonly unknown[],
 	anchor: Anchor | null,
 	back: (() => void)[],
 	name: boolean,
@@ -304,7 +390,7 @@ function splice(
 	if (p.value !== undefined && kind(p.value) !== kind(at(state.value, p.path))) {
 		throw new RangeError("wrong-kind")
 	}
-	const l = elements(state, p.path, back)
+	const l = elements(state, p.path, where, back)
 	const [a, b] = p.range!
 	const value = p.value, m = value === undefined ? 0 : units(value)
 	// what it names: the element it goes after, and those it takes away, as runs
@@ -390,7 +476,6 @@ function splice(
 		}
 		for (const [id, n] of taken.reverse()) each(l, id, n, (j, o, m) => mark(l, j, o, m, false))
 	})
-	if (Array.isArray(at(state.value, p.path))) renew(state, ref, p.path, back, false)
 	return { patches, anchor: name ? anchorOf(first, gone, before) : anchor }
 }
 

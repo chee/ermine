@@ -4,8 +4,8 @@
 // seeds,
 // a write's when is the request's or 1760000000, and the k-th random call gives k big-endian.
 //   encode  { step: { device, n, before, node, relative?, part, patches, lamport, when, on?, ids?, who? } } -> { bytes }
-//           ids: per patch null or { after: id | null, gone: [[id, count], …], before?: id | true },
-//           an id as written
+//           ids: per patch null or { after: id | null, gone: [[id, count], …], before?: id | true,
+//           through?: [id, …] } or { through: [id, …] }, an id as written
 //           (WIRE.md): this device's x or [x, k], another's [device, c] or [device, n, k]
 //   decode  { bytes } -> { step } | { refused: true }
 //   hash    { bytes } -> { hash }        blake3
@@ -231,11 +231,21 @@ function stepIn(s: Request, device?: string, before?: Uint8Array | null): Step {
 		type Written = number | (string | number)[]
 		const id = (i: Written): Value =>
 			Array.isArray(i) && typeof i[0] === "string" ? [unhex(keyOf(i[0])), ...i.slice(1)] : i
-		type In = { after: Written | null; gone: [Written, number][]; before?: Written | true }
+		type In = {
+			after?: Written | null
+			gone?: [Written, number][]
+			before?: Written | true
+			through?: Written[]
+		}
 		out.ids = (s.ids as (In | null)[]).map((x) => {
 			if (!x) return null
-			const a = [x.after === null ? null : id(x.after), x.gone.map(([i, c]) => [id(i), c])]
-			if (x.before !== undefined) a.push(x.before === true ? true : id(x.before))
+			const t = x.through?.map(id)
+			if (x.gone === undefined) return [t!]
+			const a = [x.after == null ? null : id(x.after), x.gone.map(([i, c]) => [id(i), c])]
+			if (x.before !== undefined || t) {
+				a.push(x.before === undefined ? null : x.before === true ? true : id(x.before))
+			}
+			if (t) a.push(t)
 			return a
 		})
 	}
@@ -259,11 +269,14 @@ function stepOut(s: Step) {
 		...(s.ids !== undefined && {
 			ids: s.ids.map((x) => {
 				if (x === null) return null
-				const [after, gone, before] = x as [Value, [Value, number][], Value?]
+				const w = x as Value[]
+				if (w.length === 1) return { through: (w[0] as Value[]).map(idOut) }
+				const [after, gone, before, through] = w as [Value, [Value, number][], Value?, Value[]?]
 				return {
 					after: idOut(after),
 					gone: gone.map(([i, c]) => [idOut(i), c]),
-					...(before !== undefined && { before: idOut(before) }),
+					...(before !== undefined && before !== null && { before: idOut(before) }),
+					...(through && { through: through.map(idOut) }),
 				}
 			}),
 		}),

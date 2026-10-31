@@ -146,17 +146,46 @@ uint64_t tp_step_made(const tp_step *s) {
 	return made;
 }
 
-// the ids: one per patch, null or [after, gone] or [after, gone, before], only on a patch with a range;
-// before true only with an after
+// the wholes in a path
+static uint64_t wholes(tp_span path) {
+	tp_in in = {path.p, path.p + path.n};
+	uint64_t k, n = 0;
+	tp_span item;
+	tp_array(&in, &k);
+	for (uint64_t i = 0; i < k; i++) n += *in.p >> 5 == 0, tp_skip(&in, &item);
+	return n;
+}
+// through: one id per whole in the path (one: at least one), this device's x above minus most (what
+// the step inserts)
+static int through(tp_in *in, const tp_patch *p, const uint8_t *device, uint64_t n, uint64_t most, int one) {
+	uint64_t t, w = wholes(p->path);
+	int64_t x;
+	if (tp_array(in, &t) || (one && !w) || t != w) return -1;
+	for (uint64_t i = 0; i < t; i++) {
+		tp_in at = *in;
+		if (id_item(in, device, n)) return -1;
+		if (*at.p >> 5 <= 1 && (tp_int(&at, &x), x <= 0 && (uint64_t)-x >= most)) return -1;
+	}
+	return 0;
+}
+
+// the ids: one per patch, null, [through], or [after, gone], [after, gone, before] or [after, gone,
+// before or null, through] only on a patch with a range; before true only with an after
 static int ids_item(tp_in *in, const tp_step *s, const uint8_t *device) {
 	uint64_t k, two, g;
 	size_t at = 0;
 	tp_patch p;
+	uint64_t most = tp_step_made(s);
 	if (tp_array(in, &k) || k != s->count) return -1;
 	for (uint64_t i = 0; i < k; i++) {
 		if (tp_patch_next(s->patches, &at, &p)) return -1;
 		if (tp_null(in)) continue;
-		if (!p.ranged || tp_array(in, &two) || two < 2 || two > 3) return -1;
+		if (tp_array(in, &two) || two < 1 || two > 4) return -1;
+		if (two == 1) {
+			if (through(in, &p, device, s->n, most, 1)) return -1;
+			continue;
+		}
+		if (!p.ranged) return -1;
 		int after = !tp_null(in);
 		if (after && id_item(in, device, s->n)) return -1;
 		if (tp_array(in, &g)) return -1;
@@ -166,10 +195,12 @@ static int ids_item(tp_in *in, const tp_step *s, const uint8_t *device) {
 				count < 1)
 				return -1;
 		}
-		if (two == 3 && in->p < in->end && *in->p == 0xf5) {
+		if (two > 2 && in->p < in->end && *in->p == 0xf5) {
 			if (!after) return -1;
 			in->p++;
-		} else if (two == 3 && id_item(in, device, s->n)) return -1;
+		} else if (two == 4 && in->p < in->end && *in->p == 0xf6) in->p++;
+		else if (two > 2 && id_item(in, device, s->n)) return -1;
+		if (two == 4 && through(in, &p, device, s->n, most, 0)) return -1;
 	}
 	return 0;
 }

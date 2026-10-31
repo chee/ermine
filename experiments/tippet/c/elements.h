@@ -40,8 +40,9 @@ typedef struct {
 	el_id id;
 	uint64_t count;
 } el_gone;
-// a splice's ids; named 0: by its range as written. before: none (the end), the one its after goes
-// before (same), or an id
+// a patch's ids; named 0: its splice by its range as written. before: none (the end), the one its
+// after goes before (same), or an id. through: the array items its path goes through (has_through
+// 0: by place)
 typedef struct {
 	int named, has_after;
 	el_id after;
@@ -49,6 +50,9 @@ typedef struct {
 	size_t ngone;
 	int has_before, same;
 	el_id before;
+	el_id *through;
+	size_t nthrough;
+	int has_through;
 } el_anchor;
 
 typedef struct el_list el_list;
@@ -100,10 +104,10 @@ void el_write(tp_buf *b, const el_ctx *c, const el_anchor *a, size_t count, uint
 	uint64_t seq);
 
 // patches (their cbor, and as op patches) applied to *value in order, all or none. keep: 0 for a
-// patch to leave out (NULL: all). ids: per patch (NULL: none). name: splices by range are named
-// from the elements instead (*named, one per patch). undo gets what undoes the value; back gets
-// what undoes the elements. *applied (the patches as applied, by position, sharing the paths and
-// values given) is malloc'd, the caller's to free. Returns 0, a tp
+// patch to leave out (NULL: all). ids: per patch (NULL: none). name: splices by range and the array
+// items paths go through are named from the elements instead (*named, one per patch). undo gets what undoes the value; back gets
+// what undoes the elements. *applied (the patches as applied, by position, sharing the values
+// given, their paths in it) is malloc'd, the caller's to free. Returns 0, a tp
 // code (below 0), or an op code.
 int el_step(const el_ctx *c, el_state *st, op_value **value, const el_ref *ref, tp_span patches,
 	const op_patch *ps, size_t n, const uint8_t *keep, const el_anchor *ids, int name,

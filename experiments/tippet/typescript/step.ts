@@ -16,7 +16,7 @@ export type Step = {
 	when: number
 	who?: string
 	on?: readonly On[]
-	// per patch: the elements a splice names, as written (WIRE.md, ids), or null: by its range
+	// per patch: the elements it names, as written (WIRE.md, ids), or null: by place
 	ids?: readonly Value[]
 }
 
@@ -28,6 +28,8 @@ export type Id = { device: string; c: number; k?: number }
 // true: the one its after element goes before), and takes these away, each an id and how many from
 // it, its c or k on
 export type Anchor = { after: Id | null; gone: readonly [Id, number][]; before?: Id | true }
+// what a patch names by ids: its splice, and through: the array items its path goes through
+export type Named = { splice?: Anchor; through?: readonly Id[] }
 
 const KEY = /^[0-9a-f]{64}$/
 
@@ -76,15 +78,19 @@ const writeId = (s: At, i: Id): Value =>
 		: i.k === undefined
 		? [unhex(i.device), i.c]
 		: [unhex(i.device), i.c, i.k]
-export const writeIds = (s: At, ids: readonly (Anchor | null)[]): Value[] =>
+export const writeIds = (s: At, ids: readonly (Named | null)[]): Value[] =>
 	ids.map((x) => {
-		if (!x) return null
-		const a: Value[] = [
-			x.after && writeId(s, x.after),
-			x.gone.map(([i, c]) => [writeId(s, i), c]),
+		const t = x?.through?.map((i) => writeId(s, i)), a = x?.splice
+		if (!a) return t ? [t] : null
+		const w: Value[] = [
+			a.after && writeId(s, a.after),
+			a.gone.map(([i, c]) => [writeId(s, i), c]),
 		]
-		if (x.before !== undefined) a.push(x.before === true ? true : writeId(s, x.before))
-		return a
+		if (a.before !== undefined || t) {
+			w.push(a.before === undefined ? null : a.before === true ? true : writeId(s, a.before))
+		}
+		if (t) w.push(t)
+		return w
 	})
 const readId = (s: At, i: unknown): Id => {
 	if (typeof i === "number") return { device: s.device, c: s.seq - i }
@@ -93,16 +99,25 @@ const readId = (s: At, i: unknown): Id => {
 	const d = hex(a[0] as Uint8Array)
 	return a.length === 2 ? { device: d, c: a[1] } : { device: d, c: a[1], k: a[2] }
 }
-export const readIds = (s: At, ids: readonly Value[]): (Anchor | null)[] =>
+export const readIds = (s: At, ids: readonly Value[]): (Named | null)[] =>
 	ids.map((x) => {
 		if (x === null) return null
-		const [after, gone, before] = x as [unknown, [unknown, number][], unknown?]
+		const w = x as unknown[]
+		if (w.length === 1) return { through: (w[0] as unknown[]).map((i) => readId(s, i)) }
+		const [after, gone, before, through] = w as [
+			unknown,
+			[unknown, number][],
+			unknown?,
+			unknown[]?,
+		]
 		const a: Anchor = {
 			after: after === null ? null : readId(s, after),
 			gone: gone.map(([i, c]) => [readId(s, i), c] as [Id, number]),
 		}
-		if (before !== undefined) a.before = before === true ? true : readId(s, before)
-		return a
+		if (before !== undefined && before !== null) {
+			a.before = before === true ? true : readId(s, before)
+		}
+		return through ? { splice: a, through: through.map((i) => readId(s, i)) } : { splice: a }
 	})
 
 export function encodeStep(s: Step): Uint8Array {
@@ -145,20 +160,30 @@ export const idOf = (device: Uint8Array, n: number) => (i: unknown) =>
 			? i.length === 2 && whole(i[0]) && i[0] < n && whole(i[1])
 			: key(i[0]) && !same(i[0], device) && whole(i[1]) &&
 				(i.length === 2 || (i.length === 3 && i[1] >= 1 && whole(i[2]))))
-// ids as written: one per patch, null or [after, gone] or [after, gone, before], only on a patch
-// with a range; before true only with an after
+// ids as written: one per patch, null, [through], or [after, gone], [after, gone, before] or
+// [after, gone, before or null, through] only on a patch with a range; before true only with an
+// after; through one id per whole in the patch's path ([through]: at least one), this device's x
+// above minus what the step inserts
 export const idsOf = (device: Uint8Array, n: number, patches: unknown[]) => (ids: unknown) => {
-	const id = idOf(device, n)
+	const id = idOf(device, n), most = patches.reduce((m: number, p) => m + inserts(p as Patch), 0)
 	return Array.isArray(ids) && ids.length === patches.length &&
-		ids.every((x, i) =>
-			x === null || (Array.isArray(x) && (x.length === 2 || x.length === 3) &&
-				(patches[i] as { range?: unknown }).range !== undefined &&
+		ids.every((x, i) => {
+			if (x === null) return true
+			const p = patches[i] as { path: unknown[]; range?: unknown }
+			const wholes = p.path.filter((k) => typeof k === "number").length
+			const through = (t: unknown) =>
+				Array.isArray(t) && t.length === wholes &&
+				t.every((i) => id(i) && (typeof i !== "number" || i > -most))
+			if (Array.isArray(x) && x.length === 1) return wholes > 0 && through(x[0])
+			return Array.isArray(x) && x.length >= 2 && x.length <= 4 && p.range !== undefined &&
 				(x[0] === null || id(x[0])) && Array.isArray(x[1]) &&
-				(x.length === 2 || (x[2] === true ? x[0] !== null : id(x[2]))) &&
+				(x.length === 2 ||
+					(x[2] === true ? x[0] !== null : x[2] === null ? x.length === 4 : id(x[2]))) &&
+				(x.length < 4 || through(x[3])) &&
 				x[1].every((g) =>
 					Array.isArray(g) && g.length === 2 && id(g[0]) && whole(g[1]) && g[1] >= 1
-				))
-		)
+				)
+		})
 }
 
 // node and part have no NUL, and nesting is at most cbor's DEPTH less one, since a run message
