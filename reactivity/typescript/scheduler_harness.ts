@@ -24,6 +24,8 @@
 //   {"op":"moments","reads"?:true,"returns"?:true,"pulses"?:true} -> {"moments":[..]}
 //   {"op":"forgotten"} / {"op":"started"} -> {"keys":[k...]}  untracked / first-tracked since asked
 //   {"op":"tick"} -> {"tick":t}     {"op":"current"} -> {"value":v}  what is open
+//   {"op":"carry","on":b}   first, if at all: whether code after an await goes on in its run
+//       (AsyncContext). On by default.
 //   {"op":"listener","on":l,"throw":s,"at"?:x}   throws s once the next time l is told (of x).
 //       l: "mark" (x a key), "starts", "returns", "ends", "acts" (x a computation), "forgotten",
 //       "started" (x a key), "settles", "pulsed". Else "unknown listener l".
@@ -52,6 +54,9 @@
 //       open, [k,e,c] by c.
 //   {"pending":null} PENDING    {"wait":[p]} / {"wait":[p,e]} a promise named p, e after the await
 //   {"steps":[e..]} a generator compute's body; {"yield":p} yields promise p    {"await":p}
+//   {"async":e} as a computation's whole code: an async function's, giving e's value
+//   {"stream":[e..]} an async generator: {"yield":e} gives e's value, a promise from e is awaited;
+//       a last {"finally":e} runs e in its finally
 //   {"run":e} e untracked in run(the computation)   {"in":[s,e]} e untracked in run(s)
 //   {"scope":[s,info,p?]} made under p, else the one open    {"within":[info,e]}
 //   {"current":null} {"scope":s,"info":{..},"writer"?:c}, or null
@@ -99,7 +104,8 @@ export function trace(
 		}),
 		s.onRunStart((c, n, rank) => f({ starts: c, run: n, rank })),
 		s.onRunEnd((c, n, ended, reads, more) => {
-			const t: Told = { ends: c, run: n, ended, reads }
+			// reads is borrowed for the call: a run that goes on reads more into it.
+			const t: Told = { ends: c, run: n, ended, reads: reads.slice() }
 			if (more.equal !== undefined) t.equal = more.equal
 			if ("error" in more) t.error = more.error
 			if (more.waits) t.waits = more.waits
@@ -190,36 +196,39 @@ function fire(on: string, at: () => string[]) {
 	armed = undefined
 	throw new Error(e)
 }
-const s = createScheduler()
-trace(s, (m) => {
-	moments.push(m)
-	if (pulsing && ++told > ENDLESS) throw new Error("endless")
-	if ("starts" in m) fire("starts", () => [nameOf(m.starts)])
-	else if ("ends" in m) fire("ends", () => [nameOf(m.ends)])
-	else if ("acts" in m) fire("acts", () => [nameOf(m.acts)])
-})
-s.onRunReturn((c, n) => {
-	moments.push({ returns: c, run: n })
-	fire("returns", () => [nameOf(c)])
-})
-s.onAfterPulse(() => {
-	moments.push({ pulsed: true })
-	fire("pulsed", () => [])
-})
-s.onTrackingEnd((key) => {
-	forgotten.push(key)
-	fire("forgotten", () => [key as string])
-})
-s.onTrackingStart((key) => {
-	started.push(key)
-	fire("started", () => [key as string])
-})
-s.onSettle(() => fire("settles", () => []))
 let tick = 0
-s.onMark((keys, _run, _due, t) => {
-	tick = t
-	fire("mark", () => keys as string[])
-})
+function listen(s: Scheduler): Scheduler {
+	trace(s, (m) => {
+		moments.push(m)
+		if (pulsing && ++told > ENDLESS) throw new Error("endless")
+		if ("starts" in m) fire("starts", () => [nameOf(m.starts)])
+		else if ("ends" in m) fire("ends", () => [nameOf(m.ends)])
+		else if ("acts" in m) fire("acts", () => [nameOf(m.acts)])
+	})
+	s.onRunReturn((c, n) => {
+		moments.push({ returns: c, run: n })
+		fire("returns", () => [nameOf(c)])
+	})
+	s.onAfterPulse(() => {
+		moments.push({ pulsed: true })
+		fire("pulsed", () => [])
+	})
+	s.onTrackingEnd((key) => {
+		forgotten.push(key)
+		fire("forgotten", () => [key as string])
+	})
+	s.onTrackingStart((key) => {
+		started.push(key)
+		fire("started", () => [key as string])
+	})
+	s.onSettle(() => fire("settles", () => []))
+	s.onMark((keys, _run, _due, t) => {
+		tick = t
+		fire("mark", () => keys as string[])
+	})
+	return s
+}
+let s = listen(createScheduler())
 
 // Names of computers being made are taken until named, so an early effect's run cannot reuse one.
 const naming = new Set<string>()
@@ -379,6 +388,26 @@ function evaluate(e: Json, ctx: Ctx): unknown {
 				return last
 			})()
 		}
+		case "stream": {
+			const list = a
+			const form = (x: Json, k: string) =>
+				x !== null && typeof x === "object" && !Array.isArray(x) && k in x
+			const last = list.at(-1)
+			const fin = form(last, "finally") ? (last as { finally: Json }).finally : undefined
+			return (async function* () {
+				try {
+					for (const x of fin === undefined ? list : list.slice(0, -1)) {
+						if (form(x, "yield")) yield evaluate((x as { yield: Json }).yield, ctx)
+						else {
+							const v = evaluate(x, ctx)
+							if (v instanceof Promise) await v
+						}
+					}
+				} finally {
+					if (fin !== undefined) evaluate(fin, ctx)
+				}
+			})()
+		}
 		case "await": {
 			const p = evaluate(arg, ctx) as string
 			const promise = made.get(p)
@@ -423,8 +452,15 @@ function evaluate(e: Json, ctx: Ctx): unknown {
 			const code = { f: a[1], act: a[2] }
 			const as = (c: Computer): As => ({
 				kind: "effect",
-				f: (previous) =>
-					evaluate(codes.get(c)!.f, { run: s.getRun(), self: c, previous: previous as Json }),
+				f: body(
+					code.f,
+					(previous) =>
+						evaluate(codes.get(c)!.f, {
+							run: s.getRun(),
+							self: c,
+							previous: previous as Json,
+						}),
+				),
 				effect: (value, previous) =>
 					void evaluate(codes.get(c)!.act, { self: c, value, previous }),
 				early: a[3] === true,
@@ -436,9 +472,10 @@ function evaluate(e: Json, ctx: Ctx): unknown {
 			const now = () => made ? codes.get(made)! : code
 			making(a[0] as string, () =>
 				s.createEffect(
-					(previous) =>
-						evaluate(now().f, { run: s.getRun(), self: self(), previous: previous as Json }),
-					(value, previous) => void evaluate(now().act, { self: self(), value, previous }),
+					body(code.f, (previous) =>
+						evaluate(now().f, { run: s.getRun(), self: self(), previous: previous as Json })),
+					(value, previous) =>
+						void evaluate(now().act, { self: self(), value, previous }),
 					undefined,
 					a[3] === true ? { early: true } : undefined,
 				), (c) => {
@@ -453,8 +490,15 @@ function evaluate(e: Json, ctx: Ctx): unknown {
 			const code = { f }
 			const as = (c: Computer): As => ({
 				kind: "compute",
-				f: (previous) =>
-					evaluate(codes.get(c)!.f, { run: s.getRun(), self: c, previous: previous as Json }),
+				f: body(
+					code.f,
+					(previous) =>
+						evaluate(codes.get(c)!.f, {
+							run: s.getRun(),
+							self: c,
+							previous: previous as Json,
+						}),
+				),
 				set: (v) => {
 					if (to === undefined) return
 					keep(to, v)
@@ -466,12 +510,12 @@ function evaluate(e: Json, ctx: Ctx): unknown {
 			let c: Computer
 			making(n, () =>
 				s.createComputer(
-					(previous) =>
+					body(code.f, (previous) =>
 						evaluate(codes.get(c)!.f, {
 							run: s.getRun(),
 							self: c,
 							previous: previous as Json,
-						}),
+						})),
 					(v) => {
 						if (to === undefined) return
 						keep(to, v)
@@ -485,6 +529,8 @@ function evaluate(e: Json, ctx: Ctx): unknown {
 		}
 		case "quote":
 			return arg
+		case "async":
+			return evaluate(arg, ctx)
 		default:
 			throw new Error(`unknown form ${form}`)
 	}
@@ -494,8 +540,17 @@ const json = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 
 // The run is taken at the start (getRun()) so a write after an await is still the run's.
 function program(r: Request, self: () => Scope) {
-	return (previous: unknown) =>
-		evaluate(r.f, { run: s.getRun(), self: self(), previous: previous as Json })
+	return body(
+		r.f,
+		(previous: unknown) =>
+			evaluate(r.f, { run: s.getRun(), self: self(), previous: previous as Json }),
+	)
+}
+
+// {"async":e} is an async function's code: only its code after an await goes on in its run.
+const isAsync = (e: Json) => e !== null && typeof e === "object" && "async" in e
+function body(code: Json, f: (previous: unknown) => unknown): (previous: unknown) => unknown {
+	return isAsync(code) ? async (previous) => await f(previous) : f
 }
 
 async function run(r: Request): Promise<Json> {
@@ -630,6 +685,9 @@ async function run(r: Request): Promise<Json> {
 		}
 		case "tick":
 			return { tick }
+		case "carry":
+			s = listen(createScheduler({ carry: r.on !== false }))
+			return {}
 		default:
 			throw new Error(`unknown op ${r.op}`)
 	}

@@ -1,0 +1,96 @@
+{
+	"title": "with carry (AsyncContext), a function that is not async but returns a promise is not carried: after its await nothing is open, and making a scope there is unscoped",
+	"steps": [
+		{
+			"op": "carry",
+			"on": true,
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "o",
+			"info": {
+				"actor": "notes"
+			},
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "c",
+			"scope": "o",
+			"f": {
+				"wait": [
+					"p",
+					{
+						"do": [
+							{
+								"log": {
+									"current": null
+								}
+							},
+							{
+								"scope": [
+									"k",
+									{
+										"why": "late"
+									}
+								]
+							}
+						]
+					}
+				]
+			},
+			"to": "c",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "resolve",
+			"promise": "p",
+			"value": null,
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					null
+				]
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 1
+					},
+					{
+						"starts": "c",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 1,
+						"ended": "pending"
+					},
+					{
+						"ends": "c",
+						"run": 1,
+						"ended": "failed",
+						"error": "unscoped"
+					}
+				]
+			}
+		}
+	]
+}

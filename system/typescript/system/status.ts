@@ -106,7 +106,7 @@ function ownStatus(inner: Inner, n: NodeData, id: Id, key?: string): Status {
 	if (m !== undefined && runN !== undefined && m.n === runN) {
 		for (const p of m.paths) waiting.push({ node: p })
 	}
-	if (computer.awaiting) waiting.push("a promise")
+	if (computer.awaiting) waiting.push(computer.awaiting)
 	if (waiting.length === 0) waiting.push("PENDING")
 	return { state: "pending", waiting, ...nOf }
 }

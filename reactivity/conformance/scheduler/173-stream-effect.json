@@ -1,0 +1,100 @@
+{
+	"title": "a stream effect [chee 10-31: \"we could allow an async iterator computer no?\", \"yield means a new value, a stream\", \"for the open question: whatever solidjs2.0 does\"]: it acts on each value its stream gives, in turn",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": {
+				"actor": "test"
+			},
+			"expect": {}
+		},
+		{
+			"op": "effect",
+			"name": "E",
+			"scope": "o",
+			"f": {
+				"stream": [
+					{
+						"yield": 1
+					},
+					{
+						"yield": 2
+					}
+				]
+			},
+			"act": {
+				"log": {
+					"given": "value"
+				}
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					1,
+					2
+				]
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "E",
+						"tick": 1
+					},
+					{
+						"starts": "E",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "E",
+						"run": 1,
+						"ended": "pending"
+					},
+					{
+						"ends": "E",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"acts": "E",
+						"run": 1
+					},
+					{
+						"ends": "E",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"acts": "E",
+						"run": 1
+					}
+				]
+			}
+		}
+	]
+}

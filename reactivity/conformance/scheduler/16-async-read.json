@@ -1,6 +1,7 @@
 {
-	"title": "a read after an await counts for nothing: the run is done with what it read, and a change to it reruns nothing",
+	"title": "without carry (no AsyncContext), a read after an await counts for nothing: the run is done with what it read, and a change to it reruns nothing",
 	"steps": [
+		{ "op": "carry", "on": false, "expect": {} },
 		{
 			"op": "root",
 			"name": "o",
@@ -21,12 +22,14 @@
 			"name": "c",
 			"scope": "o",
 			"f": {
-				"wait": [
-					"p",
-					{
-						"read": "a"
-					}
-				]
+				"async": {
+					"wait": [
+						"p",
+						{
+							"read": "a"
+						}
+					]
+				}
 			},
 			"to": "c",
 			"expect": {}

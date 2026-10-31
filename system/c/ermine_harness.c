@@ -54,6 +54,7 @@ typedef struct {
 	sys_t sys;
 	env_t *env;
 	const op_value *expr;
+	op_value *now; // a value already made: the promise settles with it
 } held_t;
 
 typedef struct {
@@ -508,6 +509,7 @@ static op_value *status_value(const es_status *st) {
 				break;
 			case ES_WAIT_PROMISE: x = op_str("a promise"); break;
 			case ES_WAIT_PENDING: x = op_str("PENDING"); break;
+			case ES_WAIT_STREAM: x = op_str("a stream"); break;
 			}
 			op_push(list, x);
 		}
@@ -670,6 +672,9 @@ typedef struct {
 	// a generator memo's steps (options.gen): run in order, a {do: ["yield", expr]} pausing on the
 	// promise expr gives, "as" what it settles with; then expr is its value
 	const op_value *gen;
+	// an async generator's steps (options.stream): ["yield", expr] gives expr's value (a promise
+	// is awaited first), other steps are calls
+	const op_value *stream;
 } comp_t;
 
 // a generator memo's run, from the step at
@@ -724,10 +729,47 @@ static es_out memo_gen_next(es_context *c, void *ctx, int ok, op_value *value, c
 	return memo_gen_go(g);
 }
 
+// an async generator's run: the step to go on from
+typedef struct {
+	comp_t *k;
+	env_t *inner;
+	size_t at;
+} comp_stream;
+
+static op_value *promised_now(op_value *v);
+
+static es_out comp_stream_next(es_context *c, void *ctx) {
+	(void)c;
+	comp_stream *g = ctx;
+	comp_t *k = g->k;
+	while (g->at < k->stream->count) {
+		const op_value *step = k->stream->items[g->at++];
+		const op_value *form = field(step, "do");
+		const char *as = text(step, "as");
+		op_value *v = NULL;
+		int yields = form != NULL && form->type == OP_LIST && form->count > 1 && is_str(form->items[0]) &&
+			strcmp(form->items[0]->str, "yield") == 0;
+		int code = yields ? expr(k->sys, g->inner, form->items[1], &v) : call_form(k->sys, g->inner, form, &v);
+		if (code != 0) return es_out_code(code);
+		if (yields) return es_out_of(v != NULL && es_promise_of(W->e, v) != NULL ? v : promised_now(v != NULL ? v : op_null()));
+		if (as != NULL) env_set(g->inner, as, v);
+		else op_free(v);
+	}
+	return (es_out){.kind = ES_OUT_DONE};
+}
+
+static void comp_stream_close(void *ctx) { free(ctx); }
+
 static es_out comp_compute(es_context *c, void *ctx, const op_value *previous) {
 	(void)c;
 	(void)previous;
 	comp_t *k = ctx;
+	if (k->stream != NULL) {
+		comp_stream *g = es_alloc(sizeof *g);
+		g->k = k;
+		g->inner = env_new(k->env);
+		return (es_out){.kind = ES_OUT_STREAM, .stream = {comp_stream_next, comp_stream_close, g}};
+	}
 	if (k->gen != NULL) {
 		memo_gen *g = es_alloc(sizeof *g);
 		g->k = k;
@@ -825,6 +867,8 @@ static int define(sys_t sys, env_t *env, const char *fn, const op_value *const *
 		k->expr = n > 2 ? raw[2] : NULL;
 		k->gen = field(options, "gen");
 		if (k->gen != NULL && k->gen->type != OP_LIST) k->gen = NULL;
+		k->stream = field(options, "stream");
+		if (k->stream != NULL && k->stream->type != OP_LIST) k->stream = NULL;
 		int json = strcmp(str_or(options, "equal"), "json") == 0;
 		es_computed_options o = {.equal = json ? comp_equal : NULL, .equal_ctx = k};
 		TRY(es_create_memo(c, name, comp_compute, k, &o, &h));
@@ -838,6 +882,8 @@ static int define(sys_t sys, env_t *env, const char *fn, const op_value *const *
 		k->caught = text(options, "caught");
 		k->cleanup = text(options, "cleanup");
 		k->returns = field(options, "returns");
+		k->stream = field(options, "stream");
+		if (k->stream != NULL && k->stream->type != OP_LIST) k->stream = NULL;
 		k->has_returns = field(options, "returns") != NULL;
 		TRY(es_create_effect(c, name, comp_compute, comp_act, k, &o, &h));
 	}
@@ -1031,7 +1077,14 @@ static es_out share_run(es_context *c, void *ctx, const op_value *const *args, s
 }
 
 static op_value *promised(sys_t sys, env_t *env, const op_value *e) {
-	held_t h = {es_promise_new(W->e), sys, env, e};
+	held_t h = {es_promise_new(W->e), sys, env, e, NULL};
+	ES_PUSH(W->held, W->nheld, W->capheld, h);
+	return es_promise_value(h.promise);
+}
+
+// a value made now, given at the next settle as a yield's is
+static op_value *promised_now(op_value *v) {
+	held_t h = {.promise = es_promise_new(W->e), .now = v};
 	ES_PUSH(W->held, W->nheld, W->capheld, h);
 	return es_promise_value(h.promise);
 }
@@ -2231,7 +2284,10 @@ static void world_free(world_t *w) {
 	if (w == NULL) return;
 	world_t *was = W;
 	W = w;
-	for (size_t i = 0; i < w->nheld; i++) es_promise_release(w->held[i].promise);
+	for (size_t i = 0; i < w->nheld; i++) {
+		es_promise_release(w->held[i].promise);
+		if (w->held[i].now != NULL) op_free(w->held[i].now);
+	}
 	for (size_t i = 0; i < w->nspent; i++) es_promise_release(w->spent[i]);
 	free(w->spent);
 	if (w->e != NULL) es_free(w->e);
@@ -2346,15 +2402,25 @@ static es_out program_run(es_context *c, void *ctx) {
 	return es_out_of(v);
 }
 
+// whether a call's promise is held: a yield's value (now) lands one round per settle, as an async
+// generator's does, while a promise a call made goes on until none is held
+static int calls_held(void) {
+	for (size_t i = 0; i < W->nheld; i++)
+		if (W->held[i].now == NULL) return 1;
+	return 0;
+}
+
 static void settle_all(void) {
-	while (W->nheld > 0) {
+	int first = 1;
+	while (W->nheld > 0 && (first || calls_held())) {
+		first = 0;
 		held_t *batch = W->held;
 		size_t n = W->nheld;
 		W->held = NULL;
 		W->nheld = W->capheld = 0;
 		for (size_t i = 0; i < n; i++) {
-			op_value *v = NULL;
-			int code = expr(batch[i].sys, batch[i].env, batch[i].expr, &v);
+			op_value *v = batch[i].now;
+			int code = v != NULL ? 0 : expr(batch[i].sys, batch[i].env, batch[i].expr, &v);
 			if (code != 0) {
 				const es_error *t = es_thrown();
 				es_promise_reject(batch[i].promise, code == ES_PENDING ? "PENDING" :

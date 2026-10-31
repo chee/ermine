@@ -1,0 +1,163 @@
+{
+	"title": "without carry (no AsyncContext), a stream [chee 10-31: \"we could allow an async iterator computer no?\", \"yield means a new value, a stream\", \"for the open question: whatever solidjs2.0 does\"]: its code between yields runs when the scheduler pulls the next value, in the run, so a read there is the run's on every host. A change to it makes the compute due; it runs again from the start",
+	"steps": [
+		{
+			"op": "carry",
+			"on": false,
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "o",
+			"info": {
+				"actor": "test"
+			},
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"a": 1
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "compute",
+			"name": "S",
+			"scope": "o",
+			"to": "S",
+			"f": {
+				"stream": [
+					{
+						"yield": 10
+					},
+					{
+						"yield": {
+							"read": "a"
+						}
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"key": "S",
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"a": 2
+			},
+			"expect": {
+				"tick": 5
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"key": "S",
+			"expect": {
+				"value": 2
+			}
+		},
+		{
+			"op": "moments",
+			"reads": true,
+			"expect": {
+				"moments": [
+					{
+						"due": "S",
+						"tick": 2
+					},
+					{
+						"starts": "S",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "S",
+						"run": 1,
+						"ended": "pending",
+						"reads": []
+					},
+					{
+						"ends": "S",
+						"run": 1,
+						"ended": "done",
+						"equal": false,
+						"reads": []
+					},
+					{
+						"ends": "S",
+						"run": 1,
+						"ended": "done",
+						"equal": false,
+						"reads": [
+							"a"
+						]
+					},
+					{
+						"due": "S",
+						"tick": 5
+					},
+					{
+						"starts": "S",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "S",
+						"run": 2,
+						"ended": "pending",
+						"reads": []
+					},
+					{
+						"ends": "S",
+						"run": 2,
+						"ended": "done",
+						"equal": false,
+						"reads": []
+					},
+					{
+						"ends": "S",
+						"run": 2,
+						"ended": "done",
+						"equal": false,
+						"reads": [
+							"a"
+						]
+					}
+				]
+			}
+		}
+	]
+}

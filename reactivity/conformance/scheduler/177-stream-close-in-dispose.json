@@ -1,0 +1,202 @@
+{
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": {
+				"actor": "test"
+			},
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"w": 0
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "compute",
+			"name": "Q",
+			"scope": "o",
+			"to": "Q",
+			"f": {
+				"read": "w"
+			},
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "P",
+			"scope": "o",
+			"to": "P",
+			"f": {
+				"if": [
+					{
+						"eq": [
+							{
+								"read": "S"
+							},
+							null
+						]
+					},
+					{
+						"compute": [
+							"S",
+							{
+								"stream": [
+									{
+										"yield": 1
+									},
+									{
+										"yield": 2
+									},
+									{
+										"finally": {
+											"do": [
+												{
+													"log": {
+														"current": null
+													}
+												},
+												{
+													"write": [
+														"w",
+														1,
+														"open"
+													]
+												}
+											]
+										}
+									}
+								]
+							},
+							"S"
+						]
+					},
+					null
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"key": "w",
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					null
+				]
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "Q",
+						"tick": 2
+					},
+					{
+						"due": "P",
+						"tick": 3
+					},
+					{
+						"starts": "Q",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "Q",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "P",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"due": "S",
+						"tick": 5,
+						"writer": "P"
+					},
+					{
+						"ends": "P",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "S",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "S",
+						"run": 1,
+						"ended": "pending"
+					},
+					{
+						"due": "P",
+						"tick": 7,
+						"writer": "S"
+					},
+					{
+						"ends": "S",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "P",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "P",
+						"run": 2,
+						"ended": "done",
+						"equal": true
+					},
+					{
+						"due": "Q",
+						"tick": 8
+					},
+					{
+						"starts": "Q",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "Q",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		}
+	],
+	"title": "a stream closed as its parent drops it [chee 10-31: \"whatever solidjs2.0 does\"]: its close runs with nothing open: no scope, no writer"
+}

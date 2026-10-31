@@ -5,7 +5,7 @@ import { type Inner, type Node, type NodeData, whole } from "../context.ts"
 import { go } from "../acting.ts"
 import { marked } from "../site.ts"
 import { handle } from "./addressing.ts"
-import { again, type Code, computerNode, ran, same } from "./made.ts"
+import { again, body, type Code, computerNode, ran, same } from "./made.ts"
 import { acting, insideOnly, notInAct, owner, teardown } from "./scopes.ts"
 import { here } from "./setting.ts"
 import type { System } from "./shapes.ts"
@@ -123,17 +123,23 @@ function makeComputer<T>(
 		own,
 		() =>
 			kind === "early"
-				? s.createEffect<T>(run, then, same(m), { early: true }, info)
+				? s.createEffect<T>(
+					body(m, run as never) as never,
+					then,
+					same(m),
+					{ early: true },
+					info,
+				)
 				: act === undefined
 				? s.createComputer<T>(
-					(previous) => ran(m, previous) as T,
+					body(m, (previous) => ran(m, previous)) as never,
 					set,
 					same(m),
 					undefined,
 					info,
 				)
 				: s.createEffect<T>(
-					(previous) => ran(m, previous) as T,
+					body(m, (previous) => ran(m, previous)) as never,
 					then,
 					same(m),
 					undefined,
