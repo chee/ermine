@@ -1,5 +1,5 @@
 {
-	"title": "a stream let go [chee 10-31: \"we could allow an async iterator computer no?\", \"yield means a new value, a stream\", \"for the open question: whatever solidjs2.0 does\"]: when its compute runs again its stream is closed at once (return()); a value it still yields is dropped. A stream waiting on a promise closes when it next yields (JavaScript's rule), so code after the await still runs",
+	"title": "a stream let go [chee 10-31: \"we could allow an async iterator computer no?\", \"yield means a new value, a stream\", \"for the open question: whatever solidjs2.0 does\"]: when its compute runs again its stream is closed at once (return(); its finally runs); a value it still yields is dropped. A stream waiting on a promise closes when it next yields (JavaScript's rule), so code after the await still runs",
 	"steps": [
 		{
 			"op": "root",
@@ -40,6 +40,11 @@
 					},
 					{
 						"yield": 99
+					},
+					{
+						"finally": {
+							"log": "closed"
+						}
 					}
 				]
 			},
@@ -94,7 +99,8 @@
 			"op": "log",
 			"expect": {
 				"log": [
-					"after"
+					"after",
+					"closed"
 				]
 			}
 		},

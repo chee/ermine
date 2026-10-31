@@ -357,3 +357,27 @@ Deno.test("@ermine/system: a memo's earlier promise settling late leaves it awai
 	assertEquals(state(), "done")
 	e.close()
 })
+
+Deno.test("@ermine/system: an async memo's read after an await is its run's (where AsyncContext is), so a change runs it again", async () => {
+	const tick = () => new Promise((r) => setTimeout(r, 5))
+	const e = createErmine({})
+	let runs = 0
+	e.within(() => ensureNode("/k", 0))
+	e.start(() => {
+		createMemo("m", async () => {
+			runs++
+			await tick()
+			return read("/k")
+		})
+	}, "/code/p")
+	await tick()
+	await tick()
+	e.within(() => pulse())
+	assertEquals(e.within(() => read("/code/p/m")), 0)
+	e.within(() => patch("/k", [{ path: [], value: 5 }]))
+	await tick()
+	await tick()
+	e.within(() => pulse())
+	assertEquals([runs, e.within(() => read("/code/p/m"))], [2, 5])
+	e.close()
+})

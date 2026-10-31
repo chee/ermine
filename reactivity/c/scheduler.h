@@ -86,7 +86,9 @@ typedef struct sc_step {
 // What gives a stream's values (SC_STREAM). next pulls the next value, with the run open as in
 // sc_run_with_run: it returns a promise the host settles with the value (sc_resolve), with
 // sc_resolve_done once the stream is over, or with sc_reject. close is called once, with nothing
-// open, when the scheduler is done with the stream: it ended, failed, or was let go.
+// open, when the scheduler is done with the stream: it ended, failed, gave pending, or was let go.
+// A pull settled with sc_resolve_pending ends the stream (close is called) and the run is pending;
+// what the stream gave before stands, and there is no further pull.
 typedef struct sc_stream {
 	sc_promise *(*next)(void *data);
 	void (*close)(void *data);

@@ -107,7 +107,9 @@ export function again(inner: Inner, own: Scope, path: Path, code: Code): Compute
 		if (!s.claim(m.c, undefined, !sameSource(m.code, code))) {
 			throw new PlacesError("already-there", path.join("/"))
 		}
+		const wasAsync = isAsync(m.code.f)
 		m.code = code
+		if (isAsync(code.f) !== wasAsync) m.c.f = body(m, m.c.f)
 		hold(inner, bin!, m)
 		return m
 	}
@@ -269,6 +271,18 @@ function watchedStream(m: Computed, source: AsyncIterable<unknown>, mine: () => 
 			}
 		},
 	}
+}
+
+const isAsync = (f: unknown) =>
+	(f as { [Symbol.toStringTag]?: string })[Symbol.toStringTag] === "AsyncFunction"
+
+// The computer's function: an async function's is async too, so the scheduler carries its run past
+// its awaits where it can.
+export function body(m: Computed, f: (previous: unknown) => unknown) {
+	const plain = (f as { plain?: typeof f }).plain ?? f
+	if (!isAsync(m.code.f)) return plain
+	const g = async (previous: unknown) => await plain(previous)
+	return Object.assign(g, { plain })
 }
 
 export const ran = (m: Computed, previous: unknown) => {

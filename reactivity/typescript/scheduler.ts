@@ -201,8 +201,10 @@ type Told<K extends keyof Scheduler> = Scheduler[K] extends (f: (...a: infer A) 
 
 class Stop {}
 
-const isAsync = (f: object) =>
-	(f as { [Symbol.toStringTag]?: string })[Symbol.toStringTag] === "AsyncFunction"
+const isAsync = (f: object) => {
+	const tag = (f as { [Symbol.toStringTag]?: string })[Symbol.toStringTag]
+	return tag === "AsyncFunction" || tag === "AsyncGeneratorFunction"
+}
 type Later = { get(): Ran | undefined; run<T>(r: Ran | undefined, f: () => T): T }
 function createLater(): Later | undefined {
 	type Store = { getStore(): Ran | undefined; run<T>(r: Ran | undefined, f: () => T): T }
@@ -871,7 +873,15 @@ export function createScheduler(options?: SchedulerOptions): Scheduler {
 		const wasOpen = open
 		open = { scope: c, frame: own.frame, by: own }
 		try {
-			value = later && isAsync(c.f) ? later.run(r, () => c.f(c.last?.value)) : c.f(c.last?.value)
+			// Plain code is let out of any run's context it is called in, so what it leaves for later
+			// is not that run's.
+			value = later === undefined
+				? c.f(c.last?.value)
+				: isAsync(c.f)
+				? later.run(r, () => c.f(c.last?.value))
+				: later.get()
+				? later.run(undefined, () => c.f(c.last?.value))
+				: c.f(c.last?.value)
 			if (isGen(value)) value = advance(value, undefined, false)
 		} catch (e) {
 			if (e === PENDING) value = PENDING
@@ -925,6 +935,7 @@ export function createScheduler(options?: SchedulerOptions): Scheduler {
 	}
 
 	// Each value the stream gives is the run's result in turn; the next is pulled once it is written.
+	// PENDING, given or thrown, ends it: the run is pending.
 	function streaming(r: Ran, source: AsyncIterable<unknown>) {
 		let it: Stream
 		try {
@@ -968,6 +979,7 @@ export function createScheduler(options?: SchedulerOptions): Scheduler {
 			if (r.stopped) return stop(r)
 			if ("error" in out) {
 				r.stream = undefined
+				if (out.error === PENDING) return finish(r, "pending")
 				return finish(r, "failed", { error: out.error })
 			}
 			const step = out.value as IteratorResult<unknown>
@@ -977,8 +989,11 @@ export function createScheduler(options?: SchedulerOptions): Scheduler {
 				return
 			}
 			r.streamed = true
-			if (step.value === PENDING) finish(r, "pending")
-			else result(r, step.value)
+			if (step.value === PENDING) {
+				letGo(r)
+				return finish(r, "pending")
+			}
+			result(r, step.value)
 			if (r.stream === it && c.state === "alive" && c.ran === r) pull(r, it)
 		} finally {
 			rethrow(outer)
@@ -1062,6 +1077,7 @@ export function createScheduler(options?: SchedulerOptions): Scheduler {
 		}
 		if (equal) return finish(r, "done", { equal })
 		if (c.kind === "effect") {
+			if (c.acting) unact(c)
 			const q = c.early ? earlies : acts
 			const a: Act = c.acting = { r, value: v, at: q.items.length }
 			q.items.push(a)
@@ -1240,8 +1256,9 @@ export function createScheduler(options?: SchedulerOptions): Scheduler {
 		holdFirst(effects.tell(c, a.r.n, failed ?? {}))
 	}
 
-	function pulse() {
+	function pulse(): void {
 		if (pulsing) return
+		if (later?.get()) return later.run(undefined, pulse)
 		pulsing = true
 		const outer = thrown
 		thrown = undefined

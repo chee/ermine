@@ -55,7 +55,8 @@
 //   {"pending":null} PENDING    {"wait":[p]} / {"wait":[p,e]} a promise named p, e after the await
 //   {"steps":[e..]} a generator compute's body; {"yield":p} yields promise p    {"await":p}
 //   {"async":e} as a computation's whole code: an async function's, giving e's value
-//   {"stream":[e..]} an async generator: {"yield":e} gives e's value, a promise from e is awaited
+//   {"stream":[e..]} an async generator: {"yield":e} gives e's value, a promise from e is awaited;
+//       a last {"finally":e} runs e in its finally
 //   {"run":e} e untracked in run(the computation)   {"in":[s,e]} e untracked in run(s)
 //   {"scope":[s,info,p?]} made under p, else the one open    {"within":[info,e]}
 //   {"current":null} {"scope":s,"info":{..},"writer"?:c}, or null
@@ -389,14 +390,21 @@ function evaluate(e: Json, ctx: Ctx): unknown {
 		}
 		case "stream": {
 			const list = a
+			const form = (x: Json, k: string) =>
+				x !== null && typeof x === "object" && !Array.isArray(x) && k in x
+			const last = list.at(-1)
+			const fin = form(last, "finally") ? (last as { finally: Json }).finally : undefined
 			return (async function* () {
-				for (const x of list) {
-					if (x !== null && typeof x === "object" && !Array.isArray(x) && "yield" in x) {
-						yield evaluate((x as { yield: Json }).yield, ctx)
-					} else {
-						const v = evaluate(x, ctx)
-						if (v instanceof Promise) await v
+				try {
+					for (const x of fin === undefined ? list : list.slice(0, -1)) {
+						if (form(x, "yield")) yield evaluate((x as { yield: Json }).yield, ctx)
+						else {
+							const v = evaluate(x, ctx)
+							if (v instanceof Promise) await v
+						}
 					}
+				} finally {
+					if (fin !== undefined) evaluate(fin, ctx)
 				}
 			})()
 		}
