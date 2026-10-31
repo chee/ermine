@@ -70,6 +70,9 @@ typedef struct {
 	size_t nborn, roomborn;
 } el_state;
 
+// st, empty, as after a put of the whole value by ref
+int el_seed(const tp_mem *mem, el_state *st, const el_ref *ref);
+
 // what undoes the elements of a step (or steps): newest last
 typedef struct {
 	int kind;
@@ -80,6 +83,7 @@ typedef struct {
 			uint64_t c, m;
 			el_gone *taken; // taken away, as runs
 			size_t ntaken, roomtaken;
+			el_ref was; // the list's newest splice before it
 		} splice;
 		struct {
 			el_born *born;
@@ -105,12 +109,13 @@ void el_write(tp_buf *b, const el_ctx *c, const el_anchor *a, size_t count, uint
 
 // patches (their cbor, and as op patches) applied to *value in order, all or none. keep: 0 for a
 // patch to leave out (NULL: all). ids: per patch (NULL: none). name: splices by range and the array
-// items paths go through are named from the elements instead (*named, one per patch). undo gets what undoes the value; back gets
-// what undoes the elements. *applied (the patches as applied, by position, sharing the values
-// given, their paths in it) is malloc'd, the caller's to free. Returns 0, a tp
-// code (below 0), or an op code.
+// items paths go through are named from the elements instead (*named, one per patch). late: steps
+// after it may be applied already; one whose effect needs them returns TP_LATE. undo gets what
+// undoes the value; back gets what undoes the elements. *applied (the patches as applied, by
+// position, sharing the values given, their paths in it) is malloc'd, the caller's to free.
+// Returns 0, a tp code (below 0), or an op code.
 int el_step(const el_ctx *c, el_state *st, op_value **value, const el_ref *ref, tp_span patches,
-	const op_patch *ps, size_t n, const uint8_t *keep, const el_anchor *ids, int name,
+	const op_patch *ps, size_t n, const uint8_t *keep, const el_anchor *ids, int name, int late,
 	op_undo *undo, el_back *back, op_patch **applied, size_t *napplied, el_anchor **named);
 
 // undoes back, newest first, and frees it

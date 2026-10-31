@@ -21,18 +21,54 @@ type Run = {
 	d: number
 	left: Id | null
 	right: Id | null
+	// its place among the list's runs, as a number that grows along them (edit)
+	lab: number
 }
 // a place in a list: a run and a place in it
 type Pos = [j: number, o: number]
 // a sequence's runs, the step its born ones are since, how many are not gone, a cursor (live: how
-// many before runs[j] are not gone)
-type List = { runs: Run[]; by: Ref; count: number; j: number; live: number }
+// many before runs[j] are not gone), the newest step that spliced it
+type List = {
+	runs: Run[]
+	by: Ref
+	count: number
+	j: number
+	live: number
+	last?: Ref
+	ix?: Ix[]
+}
+// the runs by their lowest id (device, born, number), sorted: made when a lookup walks far, kept up
+// to date by edit; a run's place is found by its lab
+type Ix = { d: string; b: boolean; lo: number; hi: number; run: Run }
 // an entry's value and its sequences' elements, by where (a path, each array item as its element);
 // born: by where, the step that made what is there new (a sequence under it is that step's until a
 // splice touches it)
 export type State = { value: unknown; lists: Map<string, List>; born: Map<string, Ref> }
 
 export const fresh = (): State => ({ value: undefined, lists: new Map(), born: new Map() })
+// a step applied after newer ones (late) whose effect needs what those did: it is worked out from them
+export class Late extends Error {
+	constructor() {
+		super("late: needs the steps after it")
+	}
+}
+const newer = (a: Ref | undefined, b: Ref) => !!a && (a[0] > b[0] || (a[0] === b[0] && a[1] > b[1]))
+// late: a step after ref made where or above it new
+function covered(state: State, where: readonly unknown[], ref: Ref) {
+	for (let n = 0; n <= where.length; n++) {
+		if (newer(state.born.get(keyOf(where.slice(0, n))), ref)) return true
+	}
+	return false
+}
+// late: a step after ref made new or spliced what is under where (self: or where)
+function touched(state: State, where: readonly unknown[], ref: Ref, self = true) {
+	const prefix = keyOf(where)
+	for (const [k, b] of state.born) if (under(k, prefix) && newer(b, ref)) return true
+	for (const [k, l] of state.lists) {
+		if (under(k, prefix) && (self || k !== prefix) && newer(l.last, ref)) return true
+	}
+	return false
+}
 // sort keys: lamport, device, number (a born one's -1)
 type Key = [lamport: number, device: string, c: number]
 const after = (a: Key, b: Key) =>
@@ -86,10 +122,51 @@ function find(l: List, id: Id): [number, number] | undefined {
 			if (o >= 0) return [j, o]
 		}
 	}
-	for (let j = 0; j < l.runs.length; j++) {
-		const o = place(l, l.runs[j], id)
-		if (o >= 0) return [j, o]
+	if (l.runs.length <= FAR) {
+		for (let j = 0; j < l.runs.length; j++) {
+			const o = place(l, l.runs[j], id)
+			if (o >= 0) return [j, o]
+		}
+		return
 	}
+	l.ix ??= l.runs.map(entry).sort(order)
+	const born = id.k !== undefined, x = born ? id.k! : id.c
+	if (born && id.c !== l.by[2]) return
+	const e = l.ix[below(l.ix, id.device, born, x) - 1]
+	if (e && e.d === id.device && e.b === born && x <= e.hi) {
+		const r = e.run
+		return [indexOf(l, r), r.back ? r.c - x : x - r.c]
+	}
+}
+// runs it takes to walk before the index is made
+const FAR = 32
+// where run r is, by its lab
+function indexOf(l: List, r: Run) {
+	let a = 0, b = l.runs.length
+	while (a < b) {
+		const m = (a + b) >> 1
+		if (l.runs[m].lab < r.lab) a = m + 1
+		else b = m
+	}
+	return a
+}
+const entry = (r: Run): Ix => ({
+	d: r.device,
+	b: r.born,
+	lo: r.back ? r.c - r.len + 1 : r.c,
+	hi: r.back ? r.c : r.c + r.len - 1,
+	run: r,
+})
+const order = (a: Ix, b: Ix) => a.d < b.d ? -1 : a.d > b.d ? 1 : +a.b - +b.b || a.lo - b.lo
+// how many entries sort at or before (d, b, x)
+function below(ix: Ix[], d: string, b: boolean, x: number) {
+	let lo = 0, hi = ix.length
+	while (lo < hi) {
+		const m = (lo + hi) >> 1, e = ix[m]
+		if (e.d < d || (e.d === d && (+e.b < +b || (e.b === b && e.lo <= x)))) lo = m + 1
+		else hi = m
+	}
+	return lo
 }
 
 // how many before runs[j] are not gone, the cursor moved there
@@ -111,8 +188,48 @@ function liveAt(l: List, a: number): [number, number] {
 // runs[j, j + del) for ins, the cursor at j
 function edit(l: List, j: number, del: number, ...ins: Run[]) {
 	liveBefore(l, j)
-	l.runs.splice(j, del, ...ins)
+	const ix = l.ix
+	if (ix) {
+		// an entry of a run taken out stays for one put in with the same lowest id
+		const out: Ix[] = []
+		for (const r of l.runs.slice(j, j + del)) {
+			const e = ix[below(ix, r.device, r.born, entry(r).lo) - 1]
+			out.push(e)
+		}
+		const used = new Set<Ix>()
+		for (const r of ins) {
+			const n = entry(r), e = ix[below(ix, n.d, n.b, n.lo) - 1]
+			if (e && out.includes(e) && !used.has(e) && e.d === n.d && e.b === n.b && e.lo === n.lo) {
+				e.hi = n.hi, e.run = r, used.add(e)
+			} else ix.splice(below(ix, n.d, n.b, n.lo), 0, n)
+		}
+		for (const e of out) if (!used.has(e)) ix.splice(below(ix, e.d, e.b, e.lo) - 1, 1)
+	}
+	const lo = j > 0 ? l.runs[j - 1].lab : 0
+	const hi = j + del < l.runs.length ? l.runs[j + del].lab : lo + (ins.length + 1) * GAP
+	const gap = Math.floor((hi - lo) / (ins.length + 1))
+	ins.forEach((r, i) => r.lab = lo + gap * (i + 1))
+	if (del === ins.length) ins.forEach((r, i) => l.runs[j + i] = r)
+	else l.runs.splice(j, del, ...ins)
+	if (gap < 8) relabel(l, j, j + ins.length)
 }
+// labs of the runs around [a, b) made even again, over as few as leave room between them
+function relabel(l: List, a: number, b: number) {
+	const n = l.runs.length
+	for (let k = 4;; k *= 2) {
+		const x = Math.max(0, a - k), y = Math.min(n, b + k)
+		const lo = x > 0 ? l.runs[x - 1].lab : 0
+		const hi = y < n ? l.runs[y].lab : lo + (y - x + 1) * GAP
+		const gap = Math.floor((hi - lo) / (y - x + 1))
+		if (gap >= 16 || (x === 0 && y === n)) {
+			const g = x === 0 && y === n ? GAP : gap
+			for (let i = x; i < y; i++) l.runs[i].lab = lo + g * (i - x + 1)
+			return
+		}
+	}
+}
+// the labs of runs are this far apart at first
+const GAP = 2 ** 20
 const is = (a: Id | null, b: Id | null) => a === b || (!!a && !!b && same(a, b))
 // runs[j - 1] and runs[j] as one, if they go on from each other: numbers one on (or one down), each
 // after (or before) the one before, lamports evenly
@@ -178,12 +295,19 @@ const there = (l: List, id: Id, n: number) => {
 // a step's patches applied to state in order, all or none: ids (when the step has them) made
 // positions. o.undo gets what undoes the value, o.back what undoes the elements (run newest
 // first). o.name: a write here, its splices and the array items its paths go through named from
-// the elements (returned). o.keep: false for a patch left out (its elements still counted). the
+// the elements (returned). o.keep: false for a patch left out (its elements still counted).
+// o.late: steps after it may be applied already; one whose effect needs them throws Late. the
 // patches as applied, by position, returned for the graph
 export function step(
 	state: State,
 	s: Pick<Step, "device" | "n" | "lamport" | "patches" | "ids"> & At,
-	o: { undo?: Patch[]; back?: (() => void)[]; name?: boolean; keep?: readonly boolean[] } = {},
+	o: {
+		undo?: Patch[]
+		back?: (() => void)[]
+		name?: boolean
+		keep?: readonly boolean[]
+		late?: boolean
+	} = {},
 ): { applied: Patch[]; ids: (Named | null)[] } {
 	const { undo = [], back = [], name = false, keep } = o
 	const ref: Ref = [s.lamport, s.device, s.n]
@@ -200,11 +324,12 @@ export function step(
 				ids.push(null)
 				continue
 			}
+			if (p.move && o.late) throw new Late()
 			const out = p.move
 				? (renew(state, ref, end(state, p, back), back),
 					renew(state, ref, end(state, p.move, back), back),
 					{ patches: [p], named: null })
-				: patch(state, ref, c, p, named?.[i] ?? null, back, name)
+				: patch(state, ref, c, p, named?.[i] ?? null, back, name, o.late)
 			ids.push(out.named)
 			for (const q of out.patches) {
 				const u: Patch[] = []
@@ -231,10 +356,13 @@ function patch(
 	given: Named | null,
 	back: (() => void)[],
 	name: boolean,
+	late = false,
 ): { patches: Patch[]; named: Named | null } {
 	const k = p.path.at(-1), by = given?.through
 	const one = !p.range && p.value === undefined && typeof k === "number"
-	let up = locate(state, p.path, by, back, one ? p.path.length - 1 : p.path.length)
+	const since = late ? ref : undefined
+	let up = locate(state, p.path, by, back, one ? p.path.length - 1 : p.path.length, since)
+	if (late && covered(state, up.where, ref)) throw new Late()
 	// empty: an empty through too (a splice into an array whose path has no whole)
 	const through = (more: Id[], empty = false) => {
 		const t = name && up.ids ? [...up.ids, ...more] : undefined
@@ -244,16 +372,19 @@ function patch(
 		// by its id: taken away wherever it is now, once
 		const q: Patch = { path: up.path, range: [k, k + 1] }
 		const gone = by ? { after: null, gone: [[by.at(-1)!, 1]] as [Id, number][] } : null
-		const out = splice(state, ref, c, q, up.where, gone, back, name)
+		if (late && !by && touched(state, up.where, ref, false)) throw new Late()
+		const out = splice(state, ref, c, q, up.where, gone, back, name, since)
 		const t = out.anchor && through([out.anchor.gone[0][0]])
 		if (!(name ? t : by)) renew(state, ref, up.where, back, false)
 		return { patches: out.patches, named: t ? { through: t } : null }
 	}
-	if (one) up = locate(state, p.path, by, back)
+	if (one) up = locate(state, p.path, by, back, p.path.length, since)
+	if (one && late && covered(state, up.where, ref)) throw new Late()
 	const q: Patch = up.path === p.path ? p : { ...p, path: up.path }
 	if (p.range && isSeq(at(state.value, up.path))) {
 		const list = Array.isArray(at(state.value, up.path))
-		const out = splice(state, ref, c, q, up.where, given?.splice ?? null, back, name)
+		if (late && list && !by && touched(state, up.where, ref, false)) throw new Late()
+		const out = splice(state, ref, c, q, up.where, given?.splice ?? null, back, name, since)
 		const t = through([], !!out.anchor && list)
 		// into an array without a through (by place, or from before through): what is under it new
 		if (list && !(name ? t : by)) renew(state, ref, up.where, back, false)
@@ -264,20 +395,23 @@ function patch(
 				: null,
 		}
 	}
+	if (late && touched(state, up.where, ref)) throw new Late()
 	renew(state, ref, up.where, back)
 	const t = through([])
 	return { patches: [q], named: t ? { through: t } : null }
 }
 
 // a path's first upto items, its arrays' items found by the ids by names, wherever they are now
-// (one gone or not there: it doesn't apply), or by place as written. path: to apply; where: its
-// key, each array item as its element; ids: those elements (none: one not there)
+// (one gone or not there: it doesn't apply), or by place as written (since: by a late step, an
+// array spliced after it throws Late). path: to apply; where: its key, each array item as its
+// element; ids: those elements (none: one not there)
 function locate(
 	state: State,
 	path: readonly Index[],
 	by: readonly Id[] | undefined,
 	back: (() => void)[],
 	upto = path.length,
+	since?: Ref,
 ) {
 	const out: Index[] = [], where: unknown[] = []
 	let ids: Id[] | undefined = [], v = state.value, x = 0, moved = upto < path.length
@@ -292,7 +426,8 @@ function locate(
 					const f = find(l, id)
 					if (!f || l.runs[f[0]].gone) throw new RangeError("an element named is not there")
 					e = id, k = liveBefore(l, f[0]) + f[1], moved ||= k !== path[i]
-				} else if (k < l.count) {
+				} else if (since && newer(l.last, since)) throw new Late()
+				else if (k < l.count) {
 					const [j, o] = liveAt(l, k)
 					e = idAt(l, l.runs[j], o)
 				}
@@ -365,6 +500,7 @@ function elements(
 			d: 0,
 			left: null,
 			right: null,
+			lab: GAP,
 		}]
 		: []
 	const l: List = { runs, by, count, j: 0, live: 0 }
@@ -384,6 +520,7 @@ function splice(
 	anchor: Anchor | null,
 	back: (() => void)[],
 	name: boolean,
+	since?: Ref,
 ): { patches: Patch[]; anchor: Anchor | null } {
 	// an insert of another kind than the sequence (a list into a text): doesn't apply, as apply refuses
 	const kind = (v: unknown) => typeof v === "string" ? "text" : Array.isArray(v) ? "list" : "other"
@@ -391,6 +528,11 @@ function splice(
 		throw new RangeError("wrong-kind")
 	}
 	const l = elements(state, p.path, where, back)
+	// by its range, late: only as it was, unspliced since
+	if (since && !anchor && newer(l.last, since)) throw new Late()
+	const was = l.last
+	if (!newer(was, ref)) l.last = ref
+	back.push(() => void (l.last = was))
 	const [a, b] = p.range!
 	const value = p.value, m = value === undefined ? 0 : units(value)
 	// what it names: the element it goes after, and those it takes away, as runs
@@ -459,6 +601,7 @@ function splice(
 			d: 0,
 			left: first,
 			right,
+			lab: 0,
 		})
 		l.count += m
 		join(l, j + 1), join(l, j)

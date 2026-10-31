@@ -1,0 +1,1349 @@
+{
+	"title": "forgets and keeping readers: a string made of many runs (typed at both ends), then all taken away by ids in one step: each run found by its id, the same on every reader (an index by id once a list has many runs)",
+	"steps": [
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "device",
+			"name": "k",
+			"seed": "0404040404040404040404040404040404040404040404040404040404040404",
+			"rebase": 0,
+			"expect": {
+				"key": "ca93ac1705187071d67b83c7ff0efe8108e8ec4530575d7726879333dbdabe7c"
+			}
+		},
+		{
+			"op": "device",
+			"name": "f",
+			"seed": "0606060606060606060606060606060606060606060606060606060606060606",
+			"forgets": true,
+			"expect": {
+				"key": "8a875fff1eb38451577acd5afee405456568dd7c89e090863a0557bc7af49f17"
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "doc",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"t": ""
+					}
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "doc",
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						3,
+						3
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						5,
+						5
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						7,
+						7
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						9,
+						9
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						11,
+						11
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						13,
+						13
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						15,
+						15
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						17,
+						17
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						19,
+						19
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						21,
+						21
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						23,
+						23
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						25,
+						25
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						27,
+						27
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						29,
+						29
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						31,
+						31
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						33,
+						33
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						35,
+						35
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						37,
+						37
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						39,
+						39
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						41,
+						41
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						43,
+						43
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						45,
+						45
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						47,
+						47
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						49,
+						49
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						51,
+						51
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						53,
+						53
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						55,
+						55
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						57,
+						57
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						59,
+						59
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						61,
+						61
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						63,
+						63
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						65,
+						65
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						67,
+						67
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						69,
+						69
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						71,
+						71
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						73,
+						73
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						75,
+						75
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						77,
+						77
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						79,
+						79
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						81,
+						81
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						83,
+						83
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						85,
+						85
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						87,
+						87
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						89,
+						89
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						91,
+						91
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						93,
+						93
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						95,
+						95
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						97,
+						97
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						99,
+						99
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						101,
+						101
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						103,
+						103
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						105,
+						105
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						107,
+						107
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						109,
+						109
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						111,
+						111
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						113,
+						113
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						115,
+						115
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						117,
+						117
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						119,
+						119
+					],
+					"value": "y"
+				}
+			],
+			"expect": {
+				"n": 2,
+				"lamport": 2
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "k",
+			"of": "a",
+			"at": 1,
+			"expect": {
+				"added": 2
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "f",
+			"of": "a",
+			"at": 1,
+			"expect": {
+				"added": 2
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "doc",
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						120
+					]
+				}
+			],
+			"expect": {
+				"n": 3,
+				"lamport": 3
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "k",
+			"of": "a",
+			"at": 3,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "f",
+			"of": "a",
+			"at": 3,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "value",
+			"device": "a",
+			"node": "doc",
+			"expect": {
+				"value": {
+					"t": ""
+				}
+			}
+		},
+		{
+			"op": "value",
+			"device": "k",
+			"node": "doc",
+			"expect": {
+				"value": {
+					"t": ""
+				}
+			}
+		},
+		{
+			"op": "value",
+			"device": "f",
+			"node": "doc",
+			"expect": {
+				"value": {
+					"t": ""
+				}
+			}
+		}
+	]
+}

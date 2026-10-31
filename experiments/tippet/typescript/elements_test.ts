@@ -179,3 +179,28 @@ Deno.test("elements: where an insert goes never hangs on its runs (FugueMax, one
 		ds.forEach((d, i) => assertEquals(d.st.value, want, `seed ${run}: device ${i}, late steps`))
 	}
 })
+
+const A = "01".repeat(32), B = "02".repeat(32)
+Deno.test("elements: one gone span over many runs is found run by run in no time (an index by id)", () => {
+	const P = 40000, state = fresh()
+	const put: Patch = { path: [], value: { t: "" } }
+	step(state, { device: A, n: 1, lamport: 1, seq: 0, patches: [put] })
+	const prepend: Patch[] = Array.from(
+		{ length: P },
+		() => ({ path: ["t"], range: [0, 0], value: "x" }),
+	)
+	step(state, { device: A, n: 2, lamport: 2, seq: 0, patches: prepend })
+	assertEquals((state.value as { t: string }).t.length, P)
+	const gone: Patch = { path: ["t"], range: [0, 0] }
+	const began = performance.now()
+	step(state, {
+		device: B,
+		n: 1,
+		lamport: 3,
+		seq: 0,
+		patches: [gone],
+		ids: [[null, [[[new Uint8Array(32).fill(1), 0], P]]]],
+	})
+	assertEquals((state.value as { t: string }).t, "")
+	assertEquals(performance.now() - began < 1500, true)
+})
