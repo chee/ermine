@@ -1,5 +1,5 @@
 {
-	"title": "a stream whose scope is disposed [chee 10-31: \"we could allow an async iterator computer no?\", \"yield means a new value, a stream\", \"for the open question: whatever solidjs2.0 does\"]: it is closed; what it yields after lands nowhere",
+	"title": "a stream whose scope is disposed [chee 10-31: \"we could allow an async iterator computer no?\", \"yield means a new value, a stream\", \"for the open question: whatever solidjs2.0 does\"]: it is closed (its finally runs once it reaches its next yield, JavaScript's rule); what it yields after lands nowhere",
 	"steps": [
 		{
 			"op": "root",
@@ -35,6 +35,11 @@
 					},
 					{
 						"yield": 2
+					},
+					{
+						"finally": {
+							"log": "closed"
+						}
 					}
 				]
 			},
@@ -59,6 +64,12 @@
 			"op": "dispose",
 			"scope": "q",
 			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": []
+			}
 		},
 		{
 			"op": "resolve",
@@ -101,6 +112,14 @@
 						"ended": "done",
 						"equal": false
 					}
+				]
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					"closed"
 				]
 			}
 		}

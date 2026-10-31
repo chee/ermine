@@ -340,7 +340,8 @@ static void strm_ended(strm *k) {
 
 static void pulled(void *ctx, int ok, const op_value *value, const char *error) {
 	bridge *b = ctx;
-	if (!ok && b->first) strm_ended(b->stream);
+	// the stream may be closed (and freed) by now; it clears its bridges' pointer when it goes
+	if (!ok && b->first && b->stream != NULL) strm_ended(b->stream);
 	b->settled = 1;
 	if (ok) sc_resolve(b->sp, op_ref((op_value *)value));
 	else sc_reject(b->sp, es_dup(error != NULL ? error : "error"));
@@ -370,6 +371,18 @@ static sc_promise *strm_next(void *data) {
 	} else if (r.kind == ES_OUT_FAILED) {
 		if (b->first) strm_ended(k);
 		sc_reject(b->sp, r.error != NULL ? r.error : es_dup("error"));
+	} else if (r.kind == ES_OUT_PENDING) {
+		if (b->first) strm_ended(k);
+		sc_resolve_pending(b->sp);
+	} else if (r.kind == ES_OUT_PAUSE || r.kind == ES_OUT_STREAM) {
+		if (r.kind == ES_OUT_PAUSE) {
+			op_free(r.value);
+			r.step.quit(r.step.ctx);
+		} else {
+			r.stream.close(r.stream.ctx);
+		}
+		if (b->first) strm_ended(k);
+		sc_reject(b->sp, es_dup("a stream gave a pause or a stream"));
 	} else {
 		if (b->first) strm_ended(k);
 		sc_resolve_done(b->sp);
@@ -381,6 +394,8 @@ static sc_promise *strm_next(void *data) {
 static void strm_close(void *data) {
 	strm *k = data;
 	strm_ended(k);
+	for (size_t i = 0; i < k->x->nbridges; i++)
+		if (k->x->bridges[i]->stream == k) k->x->bridges[i]->stream = NULL;
 	k->s.close(k->s.ctx);
 	free(k->id);
 	free(k);

@@ -327,6 +327,38 @@ Deno.test("without carry, in runWith(run, f) after an await the run is open and 
 	assertEquals(ends(c).map((m) => m.ended), ["pending", "done", "pending"])
 })
 
+Deno.test("with carry, a plain computer run in a pulse made from an async run's code after its await does not inherit that run", async () => {
+	const s = createScheduler()
+	const root = s.createRootScope({ name: "root" })
+	let open!: () => void
+	const gate = new Promise<void>((r) => open = r)
+	let seen: unknown = "unset"
+	const a = s.runWithScope(root, () =>
+		s.createComputer(async () => {
+			await gate
+			s.mark(["k"], s.getRun())
+			s.pulse()
+			await new Promise(() => {})
+		}, () => {}))
+	s.runWithScope(root, () =>
+		s.createComputer(() => {
+			s.track("k")
+			return Promise.resolve().then(() => {
+				seen = s.getCurrentScope()
+				s.track("z")
+			})
+		}, () => {}))
+	s.pulse()
+	open()
+	await new Promise((r) => setTimeout(r, 0))
+	assertEquals(seen, undefined)
+	let again = false
+	s.onRunStart((c) => void (c === a && (again = true)))
+	s.mark(["z"])
+	s.pulse()
+	assertEquals(again, false)
+})
+
 Deno.test("runWith(run, f) for a run that has landed has nothing open", async () => {
 	const { s, at, get } = setup({ carry: false })
 	let run: Run | undefined

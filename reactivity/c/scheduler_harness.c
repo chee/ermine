@@ -8,7 +8,9 @@
 //
 // {"stream":[e..]} is an async generator (SC_STREAM): {"yield":e} gives e's value, and an element
 // giving a promise waits for it. After a wait its code runs through sc_run_with_run like async's,
-// and one closed while waiting goes on to its next yield, then stops, as JavaScript's does.
+// and one closed while waiting goes on to its next yield, then stops, as JavaScript's does. A last
+// {"finally":e} runs e once, when the body ends or throws or is closed (a closed one waiting goes on
+// to its next yield first). Yielding or throwing {"pending":null} settles the pull as pending.
 //
 // {"async":e} as a computation's whole code marks it an async function's. After its await, e runs
 // through sc_run_with_run (the harness's AsyncContext) unless {"op":"carry","on":false} was said.
@@ -931,12 +933,12 @@ static sc_out stepper_next(void *data, bool settled, void *value, char *error) {
 // end, or a throw. over: nothing more to give. held: waiting on a promise (giving: to yield what it
 // settles with). closed: the scheduler is done with it.
 typedef struct streamer {
-	const op_value *list;
-	size_t i;
+	const op_value *list, *fin;
+	size_t i, n;
 	ctx c;
 	sc_run *run;
 	sc_promise *pull;
-	bool over, held, giving, closed;
+	bool over, held, giving, closed, finned;
 } streamer;
 static streamer **streamers;
 static size_t nstreamers, capstreamers;
@@ -947,6 +949,14 @@ static val make_stream(const op_value *list, const ctx *c) {
 	if (!is(list, OP_LIST)) return thrown(copyString("stream of a non-list"));
 	streamer *t = allocate(sizeof *t);
 	t->list = list;
+	t->n = list->count;
+	if (t->n > 0) {
+		const op_value *x = list->items[t->n - 1];
+		if (is(x, OP_MAP) && x->count > 0 && strcmp(x->keys[0], "finally") == 0) {
+			t->fin = x->items[0];
+			t->n--;
+		}
+	}
 	t->c = *c;
 	t->c.run = NULL;
 	PUSH(streamers, nstreamers, capstreamers, t);
@@ -959,9 +969,16 @@ static waiting *waiting_on(const sc_promise *p) {
 	return NULL;
 }
 
+// The body's finally, once: when it ends, throws, or is closed (at a yield, or on reaching one).
+static void stream_finally(streamer *t) {
+	if (t->fin == NULL || t->finned) return;
+	t->finned = true;
+	release(evaluate(t->fin, &t->c));
+}
+
 static void stream_go(streamer *t) {
 	sc_promise *pull = t->pull;
-	while (t->i < t->list->count) {
+	while (t->i < t->n) {
 		const op_value *x = t->list->items[t->i++];
 		bool giving = is(x, OP_MAP) && x->count > 0 && strcmp(x->keys[0], "yield") == 0;
 		val v = evaluate(giving ? x->items[0] : x, &t->c);
@@ -976,21 +993,25 @@ static void stream_go(streamer *t) {
 		if (v.k == V_THROW || v.k == V_STOP) {
 			t->over = true;
 			sc_reject(pull, v.k == V_THROW ? v.err : copyString("stopped"));
+			stream_finally(t);
 			return;
 		}
 		if (v.k == V_PENDS || (v.k == V_PENDING && giving)) {
 			t->over = v.k == V_PENDS;
 			sc_resolve_pending(pull);
+			if (t->over || t->closed) stream_finally(t);
 			return;
 		}
 		if (giving) {
 			sc_resolve(pull, v.j ? v.j : op_null());
+			if (t->closed) stream_finally(t);
 			return;
 		}
 		release(v);
 	}
 	t->over = true;
 	sc_resolve_done(pull);
+	stream_finally(t);
 }
 
 static void stream_later(void *data) { stream_go(data); }
@@ -1001,8 +1022,10 @@ static void stream_wake(streamer *t, op_value *value, char *error) {
 	if (error != NULL) {
 		t->over = true;
 		sc_reject(t->pull, error);
+		stream_finally(t);
 	} else if (t->giving) {
 		sc_resolve(t->pull, value ? value : op_null());
+		if (t->closed) stream_finally(t);
 	} else {
 		op_free(value);
 		if (carrying && t->run != NULL) sc_run_with_run(t->run, stream_later, t);
@@ -1024,7 +1047,11 @@ static sc_promise *stream_next(void *data) {
 	return p;
 }
 
-static void stream_close(void *data) { ((streamer *)data)->closed = true; }
+static void stream_close(void *data) {
+	streamer *t = data;
+	t->closed = true;
+	if (!t->held) stream_finally(t);
+}
 
 static sc_stream stream_of(streamer *t) { return (sc_stream){stream_next, stream_close, t}; }
 

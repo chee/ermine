@@ -1128,6 +1128,7 @@ static void result(sc_scheduler *s, sc_run *r, void *v) {
 	}
 	if (c->kind == EFFECT) {
 		if (!equal) {
+			if (c->acting) unact(s, c);
 			act *a = xalloc(sizeof *a);
 			a->r = ran_ref(r);
 			a->value = v;
@@ -1357,8 +1358,12 @@ static void flow(sc_scheduler *s, sc_run *r, landed l) {
 		if (none) result(s, r, NULL);
 	} else {
 		r->streamed = true;
-		if (l.kind == SC_PENDING) finish(s, r, SC_PENDED, -1, NULL, NULL, NULL, 0);
-		else result(s, r, l.value);
+		if (l.kind == SC_PENDING) {
+			quit_step(r);
+			finish(s, r, SC_PENDED, -1, NULL, NULL, NULL, 0);
+			return;
+		}
+		result(s, r, l.value);
 		if (r->has_stream && c->state == ALIVE && c->ran == r) pull(s, r);
 	}
 }

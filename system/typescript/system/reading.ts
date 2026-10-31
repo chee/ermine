@@ -175,12 +175,12 @@ const handlesFor = (inner: Inner, v: unknown) =>
 
 // The path the reader waits on: a computer's, else a setup's. Anyone else's is not kept.
 function waitFor(inner: Inner, path: Path) {
-	const { base, s, runs } = here(inner)
+	const { base, s } = here(inner)
 	const run = s.getRun()
 	const computer = run?.computer.info.node as Id | undefined
 	if (computer === undefined && !base.setting.has(inner.node)) return
 	const key = computer ?? inner.node
-	const n = computer === undefined ? undefined : (runs.read(computer)?.n ?? 0) + 1
+	const n = computer === undefined ? undefined : run!.n
 	let m = base.missing.get(key)
 	if (m === undefined || m.n !== n) {
 		m = n === undefined ? { paths: [], keys: new Set() } : { n, paths: [], keys: new Set() }

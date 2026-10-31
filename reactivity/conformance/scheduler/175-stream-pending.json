@@ -1,0 +1,151 @@
+{
+	"title": "PENDING from a stream [chee 10-31: \"we could allow an async iterator computer no?\", \"yield means a new value, a stream\", \"for the open question: whatever solidjs2.0 does\"]: given or thrown, it ends the stream (closed, its finally runs) and the run is pending, as a compute that throws PENDING is; what it gave before stands",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": {
+				"actor": "test"
+			},
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "S",
+			"scope": "o",
+			"to": "S",
+			"f": {
+				"stream": [
+					{
+						"yield": 1
+					},
+					{
+						"throw": {
+							"pending": null
+						}
+					},
+					{
+						"finally": {
+							"log": "S closed"
+						}
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "Y",
+			"scope": "o",
+			"to": "Y",
+			"f": {
+				"stream": [
+					{
+						"yield": {
+							"pending": null
+						}
+					},
+					{
+						"yield": 2
+					},
+					{
+						"finally": {
+							"log": "Y closed"
+						}
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"key": "S",
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "get",
+			"key": "Y",
+			"expect": {
+				"value": null
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					"S closed",
+					"Y closed"
+				]
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "S",
+						"tick": 1
+					},
+					{
+						"due": "Y",
+						"tick": 2
+					},
+					{
+						"starts": "S",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "S",
+						"run": 1,
+						"ended": "pending"
+					},
+					{
+						"starts": "Y",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "Y",
+						"run": 1,
+						"ended": "pending"
+					},
+					{
+						"ends": "S",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"ends": "Y",
+						"run": 1,
+						"ended": "pending"
+					},
+					{
+						"ends": "S",
+						"run": 1,
+						"ended": "pending"
+					}
+				]
+			}
+		}
+	]
+}

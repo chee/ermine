@@ -275,8 +275,9 @@ typedef struct es_step {
 } es_step;
 // A compute may give ES_OUT_STREAM (an async generator): each value next gives is the run's result
 // in turn, and the next is pulled once that is written. next runs with the run open and gives a
-// value (a promise is awaited first), a failure, or ES_OUT_DONE once the stream is over. close is
-// called once, when the computer is done with the stream.
+// value (a promise is awaited first), a failure, or ES_OUT_DONE once the stream is over. Giving
+// ES_OUT_PENDING ends the stream and the run is pending (what it gave before stands); giving a
+// pause or a stream fails the pull. close is called once, when the computer is done with the stream.
 typedef struct es_stream {
 	struct es_out (*next)(struct es_context *c, void *ctx);
 	void (*close)(void *ctx);
