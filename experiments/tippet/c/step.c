@@ -20,6 +20,7 @@ const char *tp_why(int code) {
 		case TP_SIGNATURE: return "signature";
 		case TP_BEFORE: return "before";
 		case TP_FORK: return "fork";
+		case TP_LATE: return "late: needs the steps after it";
 		default: return "unknown";
 	}
 }

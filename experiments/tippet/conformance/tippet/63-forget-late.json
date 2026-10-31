@@ -1,0 +1,1370 @@
+{
+	"title": "forgets: a late step on a forgetting device, its elements held, the value the graph's, beside rebase 0 and 256: a put at a key below a newer put there loses (the entry worked out again from the log), one at another key goes in as is; a whole put below typing under it is worked out again from the log (\"zz\", as on every peer); a splice naming elements of a put not yet held fails, and applies once the put lands (aYb); a move landing late is worked out again from the log; typing into an item by its id, landing after a newer move made the array new, does not apply as is and is worked out again from the log: 一 in the item, as on every peer; a move then an insert, in order, each goes in as on every peer",
+	"steps": [
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "device",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"expect": {
+				"key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
+		},
+		{
+			"op": "device",
+			"name": "c",
+			"seed": "0303030303030303030303030303030303030303030303030303030303030303",
+			"expect": {
+				"key": "ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1"
+			}
+		},
+		{
+			"op": "device",
+			"name": "k",
+			"seed": "0404040404040404040404040404040404040404040404040404040404040404",
+			"rebase": 0,
+			"expect": {
+				"key": "ca93ac1705187071d67b83c7ff0efe8108e8ec4530575d7726879333dbdabe7c"
+			}
+		},
+		{
+			"op": "device",
+			"name": "m",
+			"seed": "0505050505050505050505050505050505050505050505050505050505050505",
+			"rebase": 256,
+			"expect": {
+				"key": "6e7a1cdd29b0b78fd13af4c5598feff4ef2a97166e3ca6f2e4fbfccd80505bf1"
+			}
+		},
+		{
+			"op": "device",
+			"name": "f",
+			"seed": "0606060606060606060606060606060606060606060606060606060606060606",
+			"forgets": true,
+			"expect": {
+				"key": "8a875fff1eb38451577acd5afee405456568dd7c89e090863a0557bc7af49f17"
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "map",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"x": 0
+					}
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "b",
+			"of": "a",
+			"at": 1,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "c",
+			"of": "a",
+			"at": 1,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "b",
+			"node": "bump",
+			"patches": [
+				{
+					"path": [],
+					"value": 1
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 2
+			}
+		},
+		{
+			"op": "write",
+			"device": "b",
+			"node": "map",
+			"patches": [
+				{
+					"path": [
+						"x"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"n": 2,
+				"lamport": 3
+			}
+		},
+		{
+			"op": "write",
+			"device": "c",
+			"node": "map",
+			"patches": [
+				{
+					"path": [
+						"x"
+					],
+					"value": 2
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 2
+			}
+		},
+		{
+			"op": "write",
+			"device": "c",
+			"node": "map",
+			"patches": [
+				{
+					"path": [
+						"y"
+					],
+					"value": 3
+				}
+			],
+			"expect": {
+				"n": 2,
+				"lamport": 3
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "map",
+			"patches": [
+				{
+					"path": [
+						"w"
+					],
+					"value": 4
+				}
+			],
+			"expect": {
+				"n": 2,
+				"lamport": 2
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "k",
+			"of": "a",
+			"at": 1,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "b",
+			"to": "k",
+			"of": "b",
+			"at": 1,
+			"expect": {
+				"added": 2
+			}
+		},
+		{
+			"op": "pass",
+			"from": "c",
+			"to": "k",
+			"of": "c",
+			"at": 1,
+			"expect": {
+				"added": 2
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "k",
+			"of": "a",
+			"at": 2,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "value",
+			"device": "k",
+			"node": "map",
+			"expect": {
+				"value": {
+					"x": 1,
+					"w": 4,
+					"y": 3
+				}
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "m",
+			"of": "a",
+			"at": 1,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "b",
+			"to": "m",
+			"of": "b",
+			"at": 1,
+			"expect": {
+				"added": 2
+			}
+		},
+		{
+			"op": "pass",
+			"from": "c",
+			"to": "m",
+			"of": "c",
+			"at": 1,
+			"expect": {
+				"added": 2
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "m",
+			"of": "a",
+			"at": 2,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "value",
+			"device": "m",
+			"node": "map",
+			"expect": {
+				"value": {
+					"x": 1,
+					"w": 4,
+					"y": 3
+				}
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "f",
+			"of": "a",
+			"at": 1,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "b",
+			"to": "f",
+			"of": "b",
+			"at": 1,
+			"expect": {
+				"added": 2
+			}
+		},
+		{
+			"op": "pass",
+			"from": "c",
+			"to": "f",
+			"of": "c",
+			"at": 1,
+			"expect": {
+				"added": 2
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "f",
+			"of": "a",
+			"at": 2,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "value",
+			"device": "f",
+			"node": "map",
+			"expect": {
+				"value": {
+					"x": 1,
+					"y": 3,
+					"w": 4
+				}
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "note",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"t": "ab"
+					}
+				}
+			],
+			"expect": {
+				"n": 3,
+				"lamport": 3
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "b",
+			"of": "a",
+			"at": 2,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "b",
+			"of": "a",
+			"at": 3,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "c",
+			"to": "b",
+			"of": "c",
+			"at": 1,
+			"expect": {
+				"added": 2
+			}
+		},
+		{
+			"op": "write",
+			"device": "b",
+			"node": "bump",
+			"patches": [
+				{
+					"path": [],
+					"value": 0
+				}
+			],
+			"expect": {
+				"n": 3,
+				"lamport": 4
+			}
+		},
+		{
+			"op": "write",
+			"device": "b",
+			"node": "note",
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						2,
+						2
+					],
+					"value": "X"
+				}
+			],
+			"expect": {
+				"n": 4,
+				"lamport": 5
+			}
+		},
+		{
+			"op": "write",
+			"device": "c",
+			"node": "note",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"t": "zz"
+					}
+				}
+			],
+			"expect": {
+				"n": 3,
+				"lamport": 4
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "k",
+			"of": "a",
+			"at": 3,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "b",
+			"to": "k",
+			"of": "b",
+			"at": 3,
+			"expect": {
+				"added": 2
+			}
+		},
+		{
+			"op": "pass",
+			"from": "c",
+			"to": "k",
+			"of": "c",
+			"at": 3,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "value",
+			"device": "k",
+			"node": "note",
+			"expect": {
+				"value": {
+					"t": "zz"
+				}
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "m",
+			"of": "a",
+			"at": 3,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "b",
+			"to": "m",
+			"of": "b",
+			"at": 3,
+			"expect": {
+				"added": 2
+			}
+		},
+		{
+			"op": "pass",
+			"from": "c",
+			"to": "m",
+			"of": "c",
+			"at": 3,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "value",
+			"device": "m",
+			"node": "note",
+			"expect": {
+				"value": {
+					"t": "zz"
+				}
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "f",
+			"of": "a",
+			"at": 3,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "b",
+			"to": "f",
+			"of": "b",
+			"at": 3,
+			"expect": {
+				"added": 2
+			}
+		},
+		{
+			"op": "pass",
+			"from": "c",
+			"to": "f",
+			"of": "c",
+			"at": 3,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "value",
+			"device": "f",
+			"node": "note",
+			"expect": {
+				"value": {
+					"t": "zz"
+				}
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "dep",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"t": "ab"
+					}
+				}
+			],
+			"expect": {
+				"n": 4,
+				"lamport": 4
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "b",
+			"of": "a",
+			"at": 4,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "b",
+			"node": "dep",
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": "Y"
+				}
+			],
+			"expect": {
+				"n": 5,
+				"lamport": 6
+			}
+		},
+		{
+			"op": "pass",
+			"from": "b",
+			"to": "k",
+			"of": "b",
+			"at": 5,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "value",
+			"device": "k",
+			"node": "dep",
+			"expect": {}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "k",
+			"of": "a",
+			"at": 4,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "value",
+			"device": "k",
+			"node": "dep",
+			"expect": {
+				"value": {
+					"t": "aYb"
+				}
+			}
+		},
+		{
+			"op": "pass",
+			"from": "b",
+			"to": "m",
+			"of": "b",
+			"at": 5,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "value",
+			"device": "m",
+			"node": "dep",
+			"expect": {}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "m",
+			"of": "a",
+			"at": 4,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "value",
+			"device": "m",
+			"node": "dep",
+			"expect": {
+				"value": {
+					"t": "aYb"
+				}
+			}
+		},
+		{
+			"op": "pass",
+			"from": "b",
+			"to": "f",
+			"of": "b",
+			"at": 5,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "value",
+			"device": "f",
+			"node": "dep",
+			"expect": {}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "f",
+			"of": "a",
+			"at": 4,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "value",
+			"device": "f",
+			"node": "dep",
+			"expect": {
+				"value": {
+					"t": "aYb"
+				}
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "list",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"arr": [
+							"p",
+							"q",
+							"r"
+						]
+					}
+				}
+			],
+			"expect": {
+				"n": 5,
+				"lamport": 5
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "b",
+			"of": "a",
+			"at": 5,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "c",
+			"of": "a",
+			"at": 2,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "c",
+			"of": "a",
+			"at": 3,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "c",
+			"of": "a",
+			"at": 4,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "c",
+			"of": "a",
+			"at": 5,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "b",
+			"node": "bump",
+			"patches": [
+				{
+					"path": [],
+					"value": 2
+				}
+			],
+			"expect": {
+				"n": 6,
+				"lamport": 7
+			}
+		},
+		{
+			"op": "write",
+			"device": "b",
+			"node": "list",
+			"patches": [
+				{
+					"path": [
+						"arr"
+					],
+					"range": [
+						3,
+						3
+					],
+					"value": [
+						"s"
+					]
+				}
+			],
+			"expect": {
+				"n": 7,
+				"lamport": 8
+			}
+		},
+		{
+			"op": "write",
+			"device": "c",
+			"node": "list",
+			"patches": [
+				{
+					"path": [
+						"arr"
+					],
+					"range": [
+						0,
+						0
+					],
+					"move": {
+						"path": [
+							"arr",
+							2
+						]
+					}
+				}
+			],
+			"expect": {
+				"n": 4,
+				"lamport": 6
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "k",
+			"of": "a",
+			"at": 5,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "b",
+			"to": "k",
+			"of": "b",
+			"at": 6,
+			"expect": {
+				"added": 2
+			}
+		},
+		{
+			"op": "pass",
+			"from": "c",
+			"to": "k",
+			"of": "c",
+			"at": 4,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "value",
+			"device": "k",
+			"node": "list",
+			"expect": {
+				"value": {
+					"arr": [
+						"r",
+						"p",
+						"q"
+					]
+				}
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "m",
+			"of": "a",
+			"at": 5,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "b",
+			"to": "m",
+			"of": "b",
+			"at": 6,
+			"expect": {
+				"added": 2
+			}
+		},
+		{
+			"op": "pass",
+			"from": "c",
+			"to": "m",
+			"of": "c",
+			"at": 4,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "value",
+			"device": "m",
+			"node": "list",
+			"expect": {
+				"value": {
+					"arr": [
+						"r",
+						"p",
+						"q"
+					]
+				}
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "f",
+			"of": "a",
+			"at": 5,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "b",
+			"to": "f",
+			"of": "b",
+			"at": 6,
+			"expect": {
+				"added": 2
+			}
+		},
+		{
+			"op": "pass",
+			"from": "c",
+			"to": "f",
+			"of": "c",
+			"at": 4,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "value",
+			"device": "f",
+			"node": "list",
+			"expect": {
+				"value": {
+					"arr": [
+						"r",
+						"p",
+						"q"
+					]
+				}
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "item",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"arr": [
+							{
+								"t": ""
+							}
+						]
+					}
+				}
+			],
+			"expect": {
+				"n": 6,
+				"lamport": 6
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "b",
+			"of": "a",
+			"at": 6,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "b",
+			"node": "item",
+			"patches": [
+				{
+					"path": [
+						"arr",
+						0,
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "一"
+				}
+			],
+			"expect": {
+				"n": 8,
+				"lamport": 9
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "bump",
+			"patches": [
+				{
+					"path": [],
+					"value": 3
+				}
+			],
+			"expect": {
+				"n": 7,
+				"lamport": 7
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "bump",
+			"patches": [
+				{
+					"path": [],
+					"value": 4
+				}
+			],
+			"expect": {
+				"n": 8,
+				"lamport": 8
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "item",
+			"patches": [
+				{
+					"path": [
+						"arr"
+					],
+					"range": [
+						0,
+						0
+					],
+					"move": {
+						"path": [
+							"arr",
+							0
+						]
+					}
+				}
+			],
+			"expect": {
+				"n": 9,
+				"lamport": 9
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "k",
+			"of": "a",
+			"at": 6,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "k",
+			"of": "a",
+			"at": 7,
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "pass",
+			"from": "b",
+			"to": "k",
+			"of": "b",
+			"at": 8,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "value",
+			"device": "k",
+			"node": "item",
+			"expect": {
+				"value": {
+					"arr": [
+						{
+							"t": "一"
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "m",
+			"of": "a",
+			"at": 6,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "m",
+			"of": "a",
+			"at": 7,
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "pass",
+			"from": "b",
+			"to": "m",
+			"of": "b",
+			"at": 8,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "value",
+			"device": "m",
+			"node": "item",
+			"expect": {
+				"value": {
+					"arr": [
+						{
+							"t": "一"
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "f",
+			"of": "a",
+			"at": 6,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "f",
+			"of": "a",
+			"at": 7,
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "pass",
+			"from": "b",
+			"to": "f",
+			"of": "b",
+			"at": 8,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "value",
+			"device": "f",
+			"node": "item",
+			"expect": {
+				"value": {
+					"arr": [
+						{
+							"t": "一"
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "write",
+			"device": "b",
+			"node": "moved",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"arr": [
+							{
+								"t": ""
+							}
+						]
+					}
+				}
+			],
+			"expect": {
+				"n": 9,
+				"lamport": 10
+			}
+		},
+		{
+			"op": "write",
+			"device": "b",
+			"node": "moved",
+			"patches": [
+				{
+					"path": [
+						"arr"
+					],
+					"range": [
+						0,
+						0
+					],
+					"move": {
+						"path": [
+							"arr",
+							0
+						]
+					}
+				}
+			],
+			"expect": {
+				"n": 10,
+				"lamport": 11
+			}
+		},
+		{
+			"op": "write",
+			"device": "b",
+			"node": "moved",
+			"patches": [
+				{
+					"path": [
+						"arr"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": [
+						{
+							"t": "一"
+						}
+					]
+				}
+			],
+			"expect": {
+				"n": 11,
+				"lamport": 12
+			}
+		},
+		{
+			"op": "pass",
+			"from": "b",
+			"to": "k",
+			"of": "b",
+			"at": 9,
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "value",
+			"device": "k",
+			"node": "moved",
+			"expect": {
+				"value": {
+					"arr": [
+						{
+							"t": "一"
+						},
+						{
+							"t": ""
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "pass",
+			"from": "b",
+			"to": "m",
+			"of": "b",
+			"at": 9,
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "value",
+			"device": "m",
+			"node": "moved",
+			"expect": {
+				"value": {
+					"arr": [
+						{
+							"t": "一"
+						},
+						{
+							"t": ""
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "pass",
+			"from": "b",
+			"to": "f",
+			"of": "b",
+			"at": 9,
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "value",
+			"device": "f",
+			"node": "moved",
+			"expect": {
+				"value": {
+					"arr": [
+						{
+							"t": "一"
+						},
+						{
+							"t": ""
+						}
+					]
+				}
+			}
+		}
+	]
+}

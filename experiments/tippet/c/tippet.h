@@ -36,6 +36,7 @@ enum {
 	TP_SIGNATURE = -14,
 	TP_BEFORE = -15,
 	TP_FORK = -16,
+	TP_LATE = -17, // a late step needs the steps after it
 };
 const char *tp_why(int code);
 

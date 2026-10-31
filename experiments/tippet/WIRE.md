@@ -92,6 +92,33 @@ One kept write. Bytes: a cbor array.
   seq too), or a before not after its after: the step doesn't apply (passed over, as any). by range:
   as written, its inserted ones right after the element before from. what is made of it:
   `typescript/elements.ts`
+
+  a reader that forgets: holds per entry its sequences' elements, per path the newest step that made
+  it new, per sequence its newest splice, the place of its newest step that is one put of the whole
+  value, and the graph's value (no steps, no second value). it ends at the same value as a reader
+  that holds every step.
+
+  a late step (ordered before a step applied) on a reader that forgets:
+  - goes in as it is, unless a step after it made new a path at or above where it goes; it is a
+    move; it is a put, or a splice into an array without a through, and a step after it made new or
+    spliced a sequence under that path (a put: or at it); it goes by place (a range, or an index in
+    its path no through names) into a sequence a step after it spliced.
+  - passed over, as applied: one put of the whole value, when a step ordered after it is one put of
+    the whole value and no failed step of its entry is ordered after it (overwritten, as in order;
+    nothing read, nothing failed).
+  - else the entry is worked out again from every step of it the log holds, once the run landing is
+    in: so too a late step that doesn't apply as it is, one that applies in an entry with a failed
+    step ordered after it, and a step by ids into an entry not seen from its first step (after a
+    load), late or not, which also leaves the entry's elements held (a device's own writes name ids
+    again).
+  - after a cut (the log has let go any device's first step): no entry is worked out again. a late
+    step needing that fails (late, and the steps after it let go); a step by ids into an entry not
+    seen from its first step fails (its elements let go with the steps before it), a step by
+    ranges alone going in as written; when a failed step of an entry is ordered after a late one,
+    the failed steps of its entry are tried again as they are, on that reader alone: its value can
+    differ from then on.
+
+  what is made of it: `typescript/history.ts`
 - who: tstr, only when there is one
 
 Anything else is not a step: another length, another kind in a place, a key or hash not 32 bytes, n
@@ -130,6 +157,15 @@ typing makes new what that typing names (passed over). this device's x above min
 inserts: an element of this device made by now, and the pack's shift stays within 2^53 - 1. a move
 goes by place: an edit into an item another moved, ordered after the move, names an element made new
 by it, and is passed over.
+
+forgets is mine (10-31), not decided: a late splice by ids commutes (FugueMax), so it needs only the
+elements; a put needs only to know nothing after it is at, above or under it (last writer wins by
+path); the rest is rare (old steps, moves, a late put under newer edits), so the log is read for it.
+a late put of the whole value under a newer one is passed over, since two devices putting at once is
+the commonest write, and the loser is simply overwritten; narrow, so that a reader that holds every
+step and one that forgets list the same failures. elements cost a forgetting device about 56 bytes a
+run in C, typing one run, and 32 more a run in a sequence of more than 32 runs (its index); the log
+it reads is what it has not let go.
 
 before and FugueMax are mine (10-31), not decided: Weidner and Kleppmann's FugueMax ("The Art of the
 Fugue"), in its list form (Gentle's YjsMod: Yjs's origin left and right, its scan fixed), not a

@@ -803,10 +803,12 @@ static void edit(tp_log *log, const uint8_t *p, size_t n) {
 	tp_log_write(log, &w, &s, &l);
 }
 
-static uint64_t forget;
+static uint64_t forget, fetches;
+static const uint8_t *only; // forget only this device's
 static long (*held)(void *self, const uint8_t device[32], uint64_t n, uint8_t *out, size_t cap);
 static long forgetful(void *self, const uint8_t device[32], uint64_t n, uint8_t *out, size_t cap) {
-	return n <= forget ? -1 : held(self, device, n, out, cap);
+	fetches++;
+	return n <= forget && (!only || !memcmp(device, only, 32)) ? -1 : held(self, device, n, out, cap);
 }
 static void kept_open(void *self) { (void)self; }
 
@@ -1037,11 +1039,117 @@ static void forgetting(const char *dir) {
 		}
 		printf("  forgetting doc {x: %lld, y: %lld}, keeping {x: %lld, y: %lld}\n", (long long)field(&v[0], "x"),
 			(long long)field(&v[0], "y"), (long long)field(&v[1], "x"), (long long)field(&v[1], "y"));
-		CHECK(field(&v[0], "x") == 0 && field(&v[0], "y") == 1 && failures(&v[0]) == 0);
+		CHECK(field(&v[0], "x") == 1 && field(&v[0], "y") == 1 && failures(&v[0]) == 0);
 		CHECK(field(&v[1], "x") == 1 && field(&v[1], "y") == 1);
 		dev_free(&v[0]), dev_free(&v[1]);
 		tp_log_free(w1), tp_log_free(w2);
 		forgets = 0;
+	}
+	{
+		// a put below a newer whole put: the entry worked out again from the log; with a step of it
+		// let go, passed over
+		run r1, r2, r3;
+		tp_log *w1 = writer(70, 0, NULL), *w2 = writer(71, 0, NULL), *w3 = writer(72, 0, NULL);
+		edit(w2, x0, sizeof x0), edit(w2, x1, sizeof x1), run_of(w2, 1, &r2);
+		tp_log_take(w1, r2.device, r2.spans, r2.n, r2.sig, (tp_span){NULL, 0});
+		edit(w1, x0, sizeof x0), run_of(w1, 1, &r1);
+		tp_log_take(w3, r1.device, r1.spans, r1.n, r1.sig, (tp_span){NULL, 0});
+		edit(w3, y1, sizeof y1), run_of(w3, 1, &r3);
+		size_t lost[2];
+		int64_t y[2];
+		for (int i = 0; i < 2; i++) {
+			tp_store *st = tp_memory_store(&mem, 1 << 20);
+			void (*shut)(void *self) = st->close;
+			held = st->get, st->get = forgetful, st->close = kept_open;
+			forgets = 1;
+			dev v;
+			dev_make(&v, st, (uint8_t)(73 + i));
+			tp_log_take(v.log, r1.device, r1.spans, r1.n, r1.sig, (tp_span){NULL, 0});
+			tp_log_take(v.log, r3.device, r3.spans, r3.n, r3.sig, (tp_span){NULL, 0});
+			if (i) only = r3.device, forget = 1;
+			tp_log_take(v.log, r2.device, r2.spans, r2.n, r2.sig, (tp_span){NULL, 0});
+			lost[i] = failures(&v), y[i] = field(&v, "y");
+			forget = 0, only = NULL, forgets = 0;
+			dev_free(&v);
+			shut(st->self);
+		}
+		printf("  a late put: from the log y %lld, %zu failed; a step let go y %lld, %zu failed\n",
+			(long long)y[0], lost[0], (long long)y[1], lost[1]);
+		CHECK(y[0] == 1 && lost[0] == 0 && y[1] == 1 && lost[1] == 1);
+		tp_log_free(w1), tp_log_free(w2), tp_log_free(w3);
+	}
+	{
+		// a late step after a reload (the entry's elements are not known): worked out again from the log;
+		// with its runs let go, passed over and told
+		char rd[512];
+		snprintf(rd, sizeof rd, "%s/reload", dir);
+		tp_log *wa = writer(80, 0, NULL), *wb = writer(81, 0, NULL);
+		int swap = memcmp(tp_log_device(wa), tp_log_device(wb), 32) < 0;
+		tp_log *lo = swap ? wa : wb, *hi = swap ? wb : wa;
+		run base, top, late;
+		edit(hi, x0, sizeof x0), run_of(hi, 1, &base);
+		tp_log_take(lo, base.device, base.spans, base.n, base.sig, (tp_span){NULL, 0});
+		edit(hi, y1, sizeof y1), run_of(hi, 2, &top);
+		edit(lo, x1, sizeof x1), run_of(lo, 1, &late);
+		for (int cut = 0; cut < 2; cut++) {
+			dev v;
+			forgets = 1;
+			dev_make(&v, tp_file_store(&mem, rd, 1 << 20), (uint8_t)(82 + cut));
+			tp_log_take(v.log, base.device, base.spans, base.n, base.sig, (tp_span){NULL, 0});
+			tp_log_take(v.log, top.device, top.spans, top.n, top.sig, (tp_span){NULL, 0});
+			tp_history_snapshot(v.history);
+			if (cut) tp_log_drop(v.log, base.device, 2);
+			dev_free(&v);
+			dev_make(&v, tp_file_store(&mem, rd, 1 << 20), (uint8_t)(82 + cut));
+			tp_log_take(v.log, late.device, late.spans, late.n, late.sig, (tp_span){NULL, 0});
+			printf("  a late step after a reload, %s: doc {x: %lld, y: %lld}, %zu failed\n", cut ? "runs let go" : "runs held",
+				(long long)field(&v, "x"), (long long)field(&v, "y"), failures(&v));
+			if (cut) CHECK(field(&v, "x") == 0 && field(&v, "y") == 1 && failures(&v) == 1);
+			else CHECK(field(&v, "x") == 1 && field(&v, "y") == 1 && failures(&v) == 0);
+			forgets = 0;
+			dev_free(&v);
+			wipe(rd);
+		}
+		tp_log_free(wa), tp_log_free(wb);
+	}
+	{
+		// a late step into an entry with a step that fails for good, many steps in the log: none of the
+		// log read
+		tp_log *wa = writer(86, 0, NULL), *wb = writer(87, 0, NULL), *wc = writer(88, 300, NULL), *wo = writer(89, 0, NULL);
+		int swap = memcmp(tp_log_device(wa), tp_log_device(wb), 32) < 0;
+		tp_log *lo = swap ? wa : wb, *hi = swap ? wb : wa;
+		static const uint8_t bad[] = {0x81, 0xa2, 0x64, 'p', 'a', 't', 'h', 0x82, 0x61, 'q', 0x61, 'z', 0x65, 'v', 'a', 'l', 'u', 'e', 1};
+		run base, filler, fails, step;
+		edit(hi, x0, sizeof x0), run_of(hi, 1, &base);
+		tp_log_take(lo, base.device, base.spans, base.n, base.sig, (tp_span){NULL, 0});
+		run_of(wc, 1, &filler);
+		edit(wo, bad, sizeof bad), run_of(wo, 1, &fails);
+		tp_store *st = tp_memory_store(&mem, 1 << 20);
+		void (*shut)(void *self) = st->close;
+		held = st->get, st->get = forgetful, st->close = kept_open;
+		forgets = 1;
+		dev v;
+		dev_make(&v, st, 90);
+		tp_log_take(v.log, base.device, base.spans, base.n, base.sig, (tp_span){NULL, 0});
+		tp_log_take(v.log, filler.device, filler.spans, filler.n, filler.sig, (tp_span){NULL, 0});
+		tp_log_take(v.log, fails.device, fails.spans, fails.n, fails.sig, (tp_span){NULL, 0});
+		size_t was = failures(&v);
+		fetches = 0;
+		for (uint64_t i = 2; i < 22; i++) {
+			edit(hi, y1, sizeof y1), run_of(hi, i, &step);
+			edit(lo, x1, sizeof x1);
+			run late;
+			run_of(lo, i - 1, &late);
+			tp_log_take(v.log, step.device, step.spans, step.n, step.sig, (tp_span){NULL, 0});
+			tp_log_take(v.log, late.device, late.spans, late.n, late.sig, (tp_span){NULL, 0});
+		}
+		printf("  20 late steps into an entry with a failed step, 300 other steps: %llu reads of the log, %zu failed\n",
+			(unsigned long long)fetches, failures(&v));
+		CHECK(was == 1 && failures(&v) == 1 && fetches < 200 && field(&v, "x") == 1 && field(&v, "y") == 1);
+		forgets = 0, fetches = 0;
+		dev_free(&v);
+		shut(st->self);
+		tp_log_free(wa), tp_log_free(wb), tp_log_free(wc), tp_log_free(wo);
 	}
 }
 
@@ -1407,6 +1515,114 @@ static void seqs(void) {
 	}
 }
 
+// ---- x. a forgetting device after a reload; a late put of the whole value
+
+// s typed at i into node t of d, as a person writes
+static void typing(dev *d, unsigned i, const char *s) {
+	typed *t = calloc(1, sizeof *t);
+	t->d = d, t->value = op_str(s);
+	t->patch.place.has_range = 1, t->patch.place.from = t->patch.place.to = i;
+	t->patch.has_value = 1, t->patch.value = t->value;
+	sc_run_with_scope(d->scope, type_f, t);
+}
+
+static void reloads(const char *dir) {
+	printf("x. a forgetting device after a reload; a late put of the whole value\n");
+	static const uint8_t whole[] = {0x81, 0xa2, 0x64, 'p', 'a', 't', 'h', 0x80, 0x65, 'v', 'a', 'l', 'u', 'e', 0x60};
+	char rd[512];
+	snprintf(rd, sizeof rd, "%s/reloads", dir);
+	mkdir(rd, 0777);
+	for (int cut = 0; cut < 2; cut++) {
+		// a types hello, b types X at 0; the device takes both and reloads; a types Y after the o, not
+		// having seen X: by its ids it lands after X; with runs let go it is failed, not put in by range
+		tp_log *w = writer(110, 0, NULL);
+		put_at(w, "t", whole, sizeof whole);
+		dev a, b, v;
+		forgets = 0;
+		dev_make(&a, tp_memory_store(&mem, 1 << 20), 111), dev_make(&b, tp_memory_store(&mem, 1 << 20), 112);
+		take_all(a.log, w), take_all(b.log, w);
+		typing(&a, 0, "hello");
+		take_all(b.log, a.log);
+		forgets = 1;
+		dev_make(&v, tp_file_store(&mem, rd, 1 << 20), 113);
+		take_all(v.log, w), take_all(v.log, a.log);
+		typing(&b, 0, "X");
+		take_all(v.log, b.log);
+		tp_history_snapshot(v.history);
+		if (cut) {
+			tp_log_drop(v.log, tp_log_device(w), 1);
+			tp_log_drop(v.log, tp_log_device(a.log), 1);
+			tp_log_drop(v.log, tp_log_device(b.log), 1);
+		}
+		dev_free(&v);
+		dev_make(&v, tp_file_store(&mem, rd, 1 << 20), 113);
+		put_at(a.log, "bump", whole, sizeof whole);
+		typing(&a, 5, "Y");
+		take_all(v.log, a.log);
+		forgets = 0;
+		printf("  a step by ids landing last after a reload, %s: t %s, %zu failed\n", cut ? "runs let go" : "runs held",
+			text(&v, "t"), failures(&v));
+		if (cut) CHECK(!strcmp(text(&v, "t"), "Xhello") && failures(&v) == 1);
+		else CHECK(!strcmp(text(&v, "t"), "XhelloY") && failures(&v) == 0);
+		dev_free(&v), dev_free(&a), dev_free(&b);
+		tp_log_free(w);
+		wipe(rd);
+	}
+	{
+		// after a reload the device's own typing names ids
+		tp_log *w = writer(114, 0, NULL);
+		put_at(w, "t", whole, sizeof whole);
+		dev v;
+		forgets = 1;
+		dev_make(&v, tp_file_store(&mem, rd, 1 << 20), 115);
+		take_all(v.log, w);
+		typing(&v, 0, "ab");
+		tp_history_snapshot(v.history);
+		dev_free(&v);
+		dev_make(&v, tp_file_store(&mem, rd, 1 << 20), 115);
+		typing(&v, 2, "!");
+		uint8_t bytes[1 << 10];
+		tp_step st;
+		long n = tp_log_step(v.log, tp_log_device(v.log), 2, bytes, sizeof bytes);
+		int named = n > 0 && !tp_step_decode(bytes, (size_t)n, &st) && st.ids.p;
+		printf("  the first write after a reload %s ids\n", named ? "names" : "does not name");
+		CHECK(named);
+		forgets = 0;
+		dev_free(&v);
+		tp_log_free(w);
+		wipe(rd);
+	}
+	{
+		// two devices put the whole value at once, the lower ordered first: it is overwritten on every
+		// device, so a forgetting one passes it over, reading none of the log and failing nothing
+		static const uint8_t two[] = {0x81, 0xa2, 0x64, 'p', 'a', 't', 'h', 0x80, 0x65, 'v', 'a', 'l', 'u', 'e', 0xa1, 0x61, 'x', 2};
+		tp_log *wa = writer(116, 0, NULL), *wb = writer(117, 0, NULL), *wc = writer(118, 300, NULL);
+		int swap = memcmp(tp_log_device(wa), tp_log_device(wb), 32) < 0;
+		tp_log *lo = swap ? wa : wb, *hi = swap ? wb : wa;
+		tp_store *st = tp_memory_store(&mem, 1 << 20);
+		void (*shut)(void *self) = st->close;
+		held = st->get, st->get = forgetful, st->close = kept_open;
+		forgets = 1;
+		dev v;
+		dev_make(&v, st, 119);
+		edit(hi, x0, sizeof x0);
+		take_all(lo, hi), take_all(v.log, hi), take_all(v.log, wc);
+		fetches = 0;
+		for (int i = 0; i < 5; i++) {
+			edit(hi, x0, sizeof x0), edit(lo, two, sizeof two);
+			take_all(v.log, hi), take_all(v.log, lo);
+			take_all(lo, hi), take_all(hi, lo);
+		}
+		printf("  5 late puts of the whole value under newer ones, 300 other steps: %llu reads of the log, x %lld, %zu failed\n",
+			(unsigned long long)fetches, (long long)field(&v, "x"), failures(&v));
+		CHECK(fetches < 20 && field(&v, "x") == 0 && failures(&v) == 0);
+		forgets = 0, fetches = 0;
+		dev_free(&v);
+		shut(st->self);
+		tp_log_free(wa), tp_log_free(wb), tp_log_free(wc);
+	}
+}
+
 int main(int argc, char **argv) {
 	if (argc != 2) return fprintf(stderr, "usage: check-c-review dir\n"), 2;
 	setvbuf(stdout, NULL, _IONBF, 0);
@@ -1428,6 +1644,7 @@ int main(int argc, char **argv) {
 	if (!only || strchr(only, 'a')) actor(), printf("  heap now %zu\n", H.now);
 	if (!only || strchr(only, 'm')) long_run(argv[1]), printf("  heap now %zu\n", H.now);
 	if (!only || strchr(only, 's')) seqs(), printf("  heap now %zu\n", H.now);
+	if (!only || strchr(only, 'x')) reloads(argv[1]), printf("  heap now %zu\n", H.now);
 	rmdir(argv[1]);
 	CHECK(H.now == 0);
 	printf("check-c-review: %s, %d failed\n", failed ? "FAIL" : "ok", failed);

@@ -3,8 +3,10 @@
 // lamport, then device, a splice by ids where its writer meant (elements.ts); a step that lands
 // earlier makes the entry be worked out again, undone back to it when it can be (rebase).
 // versions(node, part) lists the merge, then each head's own value (at most the 16 newest heads).
-// forget(sync) is a try-out: it snapshots and lets go the runs that have passed on, and a late step
-// is then skipped rather than merged in.
+// forgets: a device that holds, per entry, only its newest step and its elements, the value being
+// the graph's; a late step goes into them as is, or, when what it does needs the steps after it,
+// the entry is worked out again from the log. forget(sync) snapshots and lets go the runs that have
+// passed on; after that a late step needing them is passed over.
 import createEntry, { type ChangeHeader } from "@ermine/graph/entry"
 import update from "@ermine/changeable/update"
 import apply, { type Patch } from "@ermine/changeable/apply"
@@ -12,7 +14,7 @@ import { decode, encode, type Value } from "@ermine/encoding/cbor"
 import type { Places } from "@ermine/places"
 import type { Key, Table } from "@ermine/graph/table"
 import { decodeStep, type On, same, type Step, writeIds } from "./step.ts"
-import { fresh, type State, step as applyStep } from "./elements.ts"
+import { fresh, Late, type State, step as applyStep } from "./elements.ts"
 import type { Log } from "./log.ts"
 import type { Sync } from "./sync.ts"
 
@@ -44,6 +46,7 @@ const whole = (s: Step) => {
 	const p = s.patches[0]
 	return p !== undefined && p.path.length === 0 && !p.range && !p.move
 }
+const puts = (s: Step) => s.patches.length === 1 && whole(s) && s.patches[0].value !== undefined
 const bytesOf = (v: unknown) => {
 	try {
 		return v === undefined ? new Uint8Array() : encode(v as Value)
@@ -79,6 +82,7 @@ export function createHistory(o: {
 	places: Pick<Places, "commit" | "watchAll">
 	kept?: (node: string, part: string) => boolean
 	run?: <T>(f: () => T) => T
+	// per entry its elements only, the value the graph's (WIRE.md, ids: a reader that forgets)
 	forgets?: boolean
 	// how many of each entry's newest steps keep the patches that undo them (256): a step landing
 	// among them is worked in by undoing back to it, not from the first step. 0: always from the first
@@ -96,7 +100,8 @@ export function createHistory(o: {
 	// per entry, the value its steps make as history worked it out (the graph's, but for a write here
 	// that made no step) and its strings' and arrays' elements (elements.ts), and its newest steps
 	// (rebase) in the order applied, each with what undoes it; all: those are every step in it. none:
-	// not known (after a load: made again from the first step when needed). forgets: none at all
+	// not known (after a load: made again from the first step when needed). forgets: its elements
+	// only, the value the graph's, from the entry's first step seen
 	const window = o.forgets ? 0 : o.rebase ?? 256
 	const own = new Map<string, Own>()
 	const failed: Failed[] = []
@@ -106,9 +111,29 @@ export function createHistory(o: {
 	const changed: (() => void)[] = []
 	const tell = () => changed.forEach((f) => f())
 
+	// forgets: each failed step's place, and per entry the newest of them: a late step before it may
+	// let it apply, one after it can't
+	// forgets: per entry the place of its newest step that is one put of the whole value
+	const top = new Map<string, Ref>()
+	const failedAt = new WeakMap<Failed, Ref>()
+	const worst = new Map<string, Ref>()
 	function fail(s: Step, e: unknown) {
-		failed.push({ device: s.device, n: s.n, node: s.node, part: s.part, why: String(e) })
+		const f: Failed = { device: s.device, n: s.n, node: s.node, part: s.part, why: String(e) }
+		failed.push(f)
+		if (o.forgets) {
+			const k = name(s.part, s.node), r: Ref = [s.lamport, s.device, s.n, 0], w = worst.get(k)
+			failedAt.set(f, r)
+			if (!w || before(w, r)) worst.set(k, r)
+		}
 		tell()
+	}
+	// forgets: worst again, after failed steps of entry k went
+	function refail(k: string) {
+		worst.delete(k)
+		for (const f of failed) {
+			const r = failedAt.get(f), w = worst.get(k)
+			if (r && name(f.part, f.node) === k && (!w || before(w, r))) worst.set(k, r)
+		}
 	}
 	const header = (s: Step): ChangeHeader => ({
 		time: s.when,
@@ -122,9 +147,12 @@ export function createHistory(o: {
 		// an entry seen from its first step, a whole value: its own from nothing, every step in its tail
 		if (!refs) {
 			entries.set(k, refs = [])
-			if (!o.forgets && whole(s)) own.set(k, { ...fresh(), tail: [], all: true })
+			if (o.forgets || whole(s)) own.set(k, { ...fresh(), tail: [], all: true })
 		}
-		if (o.forgets) return refs[0] && before(ref, refs[0]) ? false : (refs[0] = ref, true)
+		if (o.forgets) {
+			if (puts(s) && !(top.get(k) && before(ref, top.get(k)!))) top.set(k, ref)
+			return refs[0] && before(ref, refs[0]) ? false : (refs[0] = ref, true)
+		}
 		let i = refs.length
 		while (i > 0 && before(ref, refs[i - 1])) i--
 		refs.splice(i, 0, ref)
@@ -328,7 +356,122 @@ export function createHistory(o: {
 			value === undefined ? { path: [] } : { path: [], value },
 		])
 		if (fixed.size) {
-			failed.splice(0, failed.length, ...failed.filter((f) => !fixed.has(f))), tell()
+			failed.splice(0, failed.length, ...failed.filter((f) => !fixed.has(f)))
+			if (o.forgets) refail(k)
+			tell()
+		}
+	}
+
+	// forgets: a step into an entry's elements, late or not, its value the graph's. a late one needing
+	// the steps after it, or not applying, or applied into an entry with failed steps (one might need
+	// it): the entry worked out again from the log once it is quiet (anew); once the log let steps go,
+	// one needing them passed over, the failed tried again as they are. an entry not seen from its
+	// first step (after a load): a step by its ranges when last, as written
+	const graph = (k: string) => {
+		const [part, node] = k.split("\0")
+		return table.get(part as Key, node)?.value
+	}
+	function into(k: string, s: Step, r: Ref, last: boolean, again = true) {
+		const mine = own.get(k)
+		// one put of the whole value, a newer one ordered after it: overwritten, as in order
+		const t = top.get(k), bad = worst.get(k)
+		if (!last && puts(s) && t && before(r, t) && !(bad && before(r, bad))) return
+		if (waiting.has(k)) return void waiting.get(k)!.push(r)
+		if (!mine) {
+			// not seen from its first step (after a load): a step by ids needs the log's elements
+			if (last && !s.ids?.some(Boolean)) return void write(s, s.patches)
+			if (!cut) return void waiting.set(k, [r])
+			return void fail(
+				s,
+				last
+					? "its elements let go with the steps before it"
+					: "late, and the steps after it let go",
+			)
+		}
+		mine.value = graph(k)
+		try {
+			const { applied } = applyStep(mine, { ...s, seq: r[3] }, { late: !last })
+			write(s, applied)
+			mine.value = graph(k)
+		} catch (e) {
+			mine.value = graph(k)
+			if (!last && !cut) return void waiting.set(k, [r])
+			return void fail(s, e instanceof Late ? "late, and the steps after it let go" : e)
+		}
+		const w = worst.get(k)
+		if (last || !again || !w || !before(r, w)) return
+		if (!cut) return void waiting.set(k, [r])
+		for (const f of failed.filter((f) => name(f.part, f.node) === k)) {
+			let t: Step
+			try {
+				t = decodeStep(log.step(f.device, f.n))
+			} catch {
+				continue
+			}
+			const i = failed.indexOf(f)
+			if (i < 0) continue
+			failed.splice(i, 1)
+			into(k, t, [t.lamport, t.device, t.n, log.seq(t.device, t.n)], false, false)
+		}
+		refail(k)
+		tell()
+	}
+	// forgets: the entry's steps the log holds, in order, applied again from nothing, its value
+	// written whole; none let go. scan: the log read once for all the entries of a catch-up
+	let cut = false
+	function scan(keys: Set<string>) {
+		const out = new Map<string, Ref[]>()
+		for (const d of Object.keys(log.have())) {
+			for (let n = 1; n <= log.count(d); n++) {
+				let bytes: Uint8Array
+				try {
+					bytes = log.step(d, n)
+				} catch {
+					cut = true
+					return
+				}
+				try {
+					const t = decodeStep(bytes), k = name(t.part, t.node)
+					if (keys.has(k)) out.set(k, [...out.get(k) ?? [], [t.lamport, d, n, log.seq(d, n)]])
+				} catch {
+					// not a step
+				}
+			}
+		}
+		return out
+	}
+	// forgets: an entry's elements made again from the log, none let go (else none): its tail empty,
+	// its value the graph's once the write being named is in
+	function found(k: string) {
+		const refs = cut ? undefined : scan(new Set([k]))?.get(k)
+		if (!refs) return
+		const was = entries.get(k)!
+		refs.sort((a, b) => before(a, b) ? -1 : 1)
+		entries.set(k, refs)
+		try {
+			const mine = rebuild(k)
+			mine.tail = [], mine.all = false
+			return mine
+		} finally {
+			entries.set(k, was)
+		}
+	}
+	function anew(k: string, early: Ref[], refs: Ref[] = []) {
+		// some let go: each as it comes
+		if (cut) {
+			for (const r of early.sort((a, b) => before(a, b) ? -1 : 1)) {
+				into(k, decodeStep(log.step(r[1], r[2])), r, !before(r, entries.get(k)![0]))
+			}
+			return
+		}
+		refs.sort((a, b) => before(a, b) ? -1 : 1)
+		entries.set(k, refs), own.delete(k)
+		try {
+			rework(k, [refs[0]])
+		} finally {
+			entries.set(k, refs.slice(-1))
+			const mine = own.get(k)
+			if (mine) mine.value = graph(k), mine.tail = [], mine.all = false
 		}
 	}
 
@@ -341,8 +484,11 @@ export function createHistory(o: {
 			try {
 				const r: Ref = [s.lamport, s.device, s.n, log.seq(s.device, s.n)]
 				const last = place(s, r)
-				if (o.forgets && !last) continue
 				head(s, r, last)
+				if (o.forgets) {
+					into(k, s, r, last)
+					continue
+				}
 				const mine = own.get(k)
 				if (!last || waiting.has(k)) waiting.set(k, [...waiting.get(k) ?? [], r])
 				else if (mine) {
@@ -350,7 +496,7 @@ export function createHistory(o: {
 					const out = onto(mine, r, s)
 					if ("applied" in out) write(s, out.applied)
 					else fail(s, out.error)
-				} else if (s.ids?.some(Boolean) && !o.forgets) rework(k, [r])
+				} else if (s.ids?.some(Boolean)) rework(k, [r])
 				else write(s, s.patches)
 			} catch (e) {
 				fail(s, e)
@@ -360,9 +506,11 @@ export function createHistory(o: {
 	function flush() {
 		const all = [...waiting]
 		waiting.clear()
+		const found = o.forgets && !cut && all.length ? scan(new Set(all.map(([k]) => k))) : undefined
 		for (const [k, early] of all) {
 			try {
-				rework(k, early)
+				if (o.forgets) anew(k, early, found?.get(k))
+				else rework(k, early)
 			} catch (e) {
 				fail(decodeStep(log.step(early[0][1], early[0][2])), e)
 			}
@@ -393,9 +541,9 @@ export function createHistory(o: {
 		// its splices named by ids from the entry's own elements, applied there (as the graph has it);
 		// none known, or not applying there: by their ranges
 		const me = log.device,
-			mine = me === undefined || o.forgets || broken.has(k)
+			mine = me === undefined || broken.has(k)
 				? undefined
-				: own.get(k) ?? (entries.get(k)?.length ? rebuild(k) : undefined)
+				: own.get(k) ?? (entries.get(k)?.length ? o.forgets ? found(k) : rebuild(k) : undefined)
 		const undo: Patch[] = [], back: (() => void)[] = []
 		const n = me === undefined ? 0 : log.count(me) + 1
 		const at = { device: me ?? "", n, seq: me === undefined ? 0 : log.seq(me, n) }
@@ -439,6 +587,7 @@ export function createHistory(o: {
 		// last always (one past the highest lamport seen). named: in its own value already
 		if (mine && ids) mine.tail.push({ ref: r, undo, back }), trim(mine)
 		else if (own.has(k)) onto(own.get(k)!, r, s)
+		if (o.forgets && own.has(k)) own.get(k)!.value = graph(k)
 	})
 	const unlisten = log.on((device, steps) => {
 		if (device !== log.device) land(steps)
@@ -461,11 +610,11 @@ export function createHistory(o: {
 			const held = log.have()
 			await snapshot()
 			const passed = sync.passed()
-			log.drop(
-				Object.fromEntries(
-					Object.entries(held).map(([d, n]) => [d, Math.min(n, passed[d] ?? 0)]),
-				),
+			const drop = Object.entries(held).map(([d, n]) =>
+				[d, Math.min(n, passed[d] ?? 0)] as const
 			)
+			cut ||= drop.some(([, n]) => n > 0)
+			log.drop(Object.fromEntries(drop))
 		},
 
 		async load() {
