@@ -139,7 +139,8 @@ static inline int fz_wtf8(const op_value *v) {
 	if (v == NULL) return 1;
 	if (v->type == OP_STR) {
 		const unsigned char *u = (const unsigned char *)v->str;
-		int all = 1, high = 0;
+		int high = 0;
+		size_t chars = 0;
 		for (size_t i = 0; i < v->bytes;) {
 			unsigned c = u[i], n = c < 0x80 ? 1 : c >= 0xC2 && c < 0xE0 ? 2 : c >= 0xE0 && c < 0xF0 ? 3 : c >= 0xF0 && c < 0xF5 ? 4 : 0;
 			if (n == 0 || i + n > v->bytes) return 0;
@@ -151,10 +152,10 @@ static inline int fz_wtf8(const op_value *v) {
 			if ((n == 3 && cp < 0x800) || (n == 4 && (cp < 0x10000 || cp > 0x10FFFF))) return 0;
 			if (high && cp >= 0xDC00 && cp < 0xE000) return 0;
 			high = cp >= 0xD800 && cp < 0xDC00;
-			all &= n == 1;
 			i += n;
+			chars++;
 		}
-		return !v->ascii || all;
+		return chars == v->chars;
 	}
 	if (v->type == OP_LIST || v->type == OP_MAP || v->type == OP_STAND)
 		for (size_t i = 0; i < v->count; i++)
