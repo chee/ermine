@@ -96,8 +96,8 @@ int main(int argc, char **argv) {
 		w.patches.n = (size_t)patches(ps, i % 24);
 		CHECK(!tp_log_write(a, &w, &n, &lamport) && n == (uint64_t)i && lamport == (uint64_t)i);
 	}
-	CHECK(!tp_log_run(a, tp_log_device(a), 1, &end, sig) && end == 21);
-	CHECK(!tp_log_run(a, tp_log_device(a), 22, &end2, sig2) && end2 == 40);
+	CHECK(!tp_log_run(a, tp_log_device(a), 1, &end, sig) && end == 20);
+	CHECK(!tp_log_run(a, tp_log_device(a), 21, &end2, sig2) && end2 == 40);
 	uint8_t device[32];
 	memcpy(device, tp_log_device(a), 32);
 	tp_log_free(a);
@@ -105,7 +105,7 @@ int main(int argc, char **argv) {
 	a = open_log(&mem, dir, seed);
 	CHECK(a && !tp_log_load(a));
 	CHECK(tp_log_count(a, device) == 40 && tp_log_lamport(a) == 40);
-	CHECK(!tp_log_run(a, device, 2, &end, to) && end == 21 && !memcmp(to, sig, 64));
+	CHECK(!tp_log_run(a, device, 2, &end, to) && end == 20 && !memcmp(to, sig, 64));
 	CHECK(!tp_log_run(a, device, 40, &end, to) && end == 40 && !memcmp(to, sig2, 64));
 	w.patches.n = (size_t)patches(ps, 7);
 	CHECK(!tp_log_write(a, &w, &n, &lamport) && n == 41 && lamport == 41);
@@ -127,21 +127,21 @@ int main(int argc, char **argv) {
 	snprintf(relaydir, sizeof relaydir, "%s/relay", dir);
 	tp_log *r = open_log(&mem, relaydir, NULL);
 	CHECK(r && !tp_log_load(r) && !tp_log_device(r));
-	tp_span steps[21];
-	uint8_t bytes[21][128];
-	CHECK(!tp_log_run(a, device, 1, &end, sig) && end == 21);
-	for (int i = 0; i < 21; i++) {
+	tp_span steps[20];
+	uint8_t bytes[20][128];
+	CHECK(!tp_log_run(a, device, 1, &end, sig) && end == 20);
+	for (int i = 0; i < 20; i++) {
 		long length = tp_log_step(a, device, (uint64_t)i + 1, bytes[i], sizeof bytes[i]);
 		CHECK(length > 0 && length <= 128);
 		steps[i] = (tp_span){bytes[i], (size_t)length};
 	}
-	CHECK(tp_log_take(r, device, steps, 21, sig, (tp_span){NULL, 0}) == 21);
-	CHECK(tp_log_take(r, device, steps, 21, sig, (tp_span){NULL, 0}) == 0);
+	CHECK(tp_log_take(r, device, steps, 20, sig, (tp_span){NULL, 0}) == 20);
+	CHECK(tp_log_take(r, device, steps, 20, sig, (tp_span){NULL, 0}) == 0);
 	tp_log_free(r);
 	r = open_log(&mem, relaydir, NULL);
-	CHECK(r && !tp_log_load(r) && tp_log_count(r, device) == 21 && tp_log_devices(r) == 1);
+	CHECK(r && !tp_log_load(r) && tp_log_count(r, device) == 20 && tp_log_devices(r) == 1);
 	uint64_t have = 0;
-	CHECK(tp_log_have(r, 0, &have) && have == 21);
+	CHECK(tp_log_have(r, 0, &have) && have == 20);
 	tp_log_free(r);
 	tp_log_free(a);
 

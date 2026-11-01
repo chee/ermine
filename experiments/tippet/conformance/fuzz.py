@@ -19,7 +19,7 @@
 # each harness 'name:rebase=command'; run from the repository's root. a few dozen seeds a kind;
 # jump (a paste past 2^20 characters) is slow, so it runs few. --out DIR: each repro's protocol
 # lines as DIR/<kind>-<seed>-<oracle>.jsonl, whole. --gaps: a write to another node before some
-# keystrokes (a gap in lamports, so typing is cut into runs) and, in race, runs passed part way
+# keystrokes and, in race, runs passed part way
 # between bursts, so they land late and are worked in again, and one typing on from the end of
 # another's burst taken part way (after an element in the middle of the other's run).
 import json, os, queue, random, re, subprocess, sys, tempfile, threading, time

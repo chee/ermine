@@ -1,5 +1,5 @@
 {
-	"title": "seq: an element is its device and its number among the elements its device's steps insert, counted along the device's chain from its first step (old steps too), so no two are alike whatever the lamports; a step takes one lamport. steps sharing a lamport are taken; this device's own are written as how far back from the step's seq; an old step's inserts are numbered as any, and a step after names them; a step far past what is held is taken",
+	"title": "seq: an element is its device and its number among the elements its device's steps insert, written in each step and one more than the step before it has and inserts, so no two are alike; a step takes one lamport. steps sharing a lamport are taken; this device's own are written as how far back from the step's seq; a step far past what is held is taken",
 	"steps": [
 		{
 			"op": "device",
@@ -147,126 +147,6 @@
 		},
 		{
 			"op": "device",
-			"name": "o",
-			"seed": "0303030303030303030303030303030303030303030303030303030303030303",
-			"expect": {
-				"key": "ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1"
-			}
-		},
-		{
-			"op": "take",
-			"device": "o",
-			"run": {
-				"device": "m",
-				"steps": [
-					{
-						"n": 1,
-						"node": "t",
-						"part": "value",
-						"patches": [
-							{
-								"path": [],
-								"value": "ab"
-							}
-						],
-						"lamport": 1,
-						"when": 0
-					},
-					{
-						"n": 2,
-						"node": "t",
-						"part": "value",
-						"patches": [
-							{
-								"path": [],
-								"range": [
-									0,
-									0
-								],
-								"value": "zzzy"
-							}
-						],
-						"lamport": 2,
-						"when": 0
-					},
-					{
-						"n": 3,
-						"node": "t",
-						"part": "value",
-						"patches": [
-							{
-								"path": [],
-								"range": [
-									6,
-									6
-								],
-								"value": "x"
-							}
-						],
-						"lamport": 2,
-						"when": 0
-					},
-					{
-						"n": 4,
-						"node": "t",
-						"part": "value",
-						"patches": [
-							{
-								"path": [],
-								"range": [
-									3,
-									4
-								]
-							}
-						],
-						"lamport": 3,
-						"when": 0
-					},
-					{
-						"n": 5,
-						"node": "t",
-						"part": "value",
-						"patches": [
-							{
-								"path": [],
-								"range": [
-									6,
-									6
-								],
-								"value": "!"
-							}
-						],
-						"lamport": 4,
-						"when": 0,
-						"on": [
-							[
-								"m",
-								4
-							]
-						],
-						"ids": [
-							{
-								"after": 1,
-								"gone": []
-							}
-						]
-					}
-				]
-			},
-			"expect": {
-				"added": 5
-			}
-		},
-		{
-			"op": "value",
-			"device": "o",
-			"node": "t",
-			"expect": {
-				"value": "zzzabx!"
-			}
-		},
-		{
-			"op": "device",
 			"name": "j",
 			"seed": "0404040404040404040404040404040404040404040404040404040404040404",
 			"expect": {
@@ -307,7 +187,13 @@
 							}
 						],
 						"lamport": 1048576,
-						"when": 0
+						"when": 0,
+						"ids": [
+							{
+								"after": null,
+								"gone": []
+							}
+						]
 					},
 					{
 						"n": 3,
@@ -324,7 +210,13 @@
 							}
 						],
 						"lamport": 1099511627776,
-						"when": 0
+						"when": 0,
+						"ids": [
+							{
+								"after": null,
+								"gone": []
+							}
+						]
 					}
 				]
 			},

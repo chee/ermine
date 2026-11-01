@@ -1,6 +1,6 @@
 // The elements of an entry's strings and arrays (see typescript/elements.ts, WIRE.md ids), held as
-// runs: elements one after another of one device, numbered one on (or one down), the lamports of the
-// steps that made them going on evenly, all gone or none. A sequence gets its elements at the first
+// runs: elements one after another of one device, numbered one on (or one down), all gone or none.
+// A sequence gets its elements at the first
 // splice that touches it. el_step applies a step's patches to a value by position, all or none, with
 // the elements, and gives what undoes both.
 // Memory goes through tp_mem; values are the graph's (malloc'd).
@@ -99,8 +99,8 @@ typedef struct {
 	size_t n, room;
 } el_back;
 
-// a step's ids read (one per patch), seq its seq; free with el_anchors_free
-int el_read(const el_ctx *c, const tp_step *s, uint64_t seq, el_anchor **out);
+// a step's ids read (one per patch); free with el_anchors_free
+int el_read(const el_ctx *c, const tp_step *s, el_anchor **out);
 void el_anchors_free(const tp_mem *mem, el_anchor *a, size_t n);
 int el_named(const el_anchor *a, size_t n);
 // ids as written, by step n of device me, its seq seq
@@ -108,14 +108,14 @@ void el_write(tp_buf *b, const el_ctx *c, const el_anchor *a, size_t count, uint
 	uint64_t seq);
 
 // patches (their cbor, and as op patches) applied to *value in order, all or none. keep: 0 for a
-// patch to leave out (NULL: all). ids: per patch (NULL: none). name: splices by range and the array
-// items paths go through are named from the elements instead (*named, one per patch). late: steps
+// patch to leave out (NULL: all). ids: per patch (NULL: none, a write here: its splices by range and
+// the array items its paths go through are named from the elements, *named, one per patch). late: steps
 // after it may be applied already; one whose effect needs them returns TP_LATE. undo gets what
 // undoes the value; back gets what undoes the elements. *applied (the patches as applied, by
 // position, sharing the values given, their paths in it) is malloc'd, the caller's to free.
 // Returns 0, a tp code (below 0), or an op code.
 int el_step(const el_ctx *c, el_state *st, op_value **value, const el_ref *ref, tp_span patches,
-	const op_patch *ps, size_t n, const uint8_t *keep, const el_anchor *ids, int name, int late,
+	const op_patch *ps, size_t n, const uint8_t *keep, const el_anchor *ids, int late,
 	op_undo *undo, el_back *back, op_patch **applied, size_t *napplied, el_anchor **named);
 
 // undoes back, newest first, and frees it
@@ -123,5 +123,8 @@ void el_back_undo(const tp_mem *mem, el_state *st, el_back *back);
 // frees back without undoing
 void el_back_free(const tp_mem *mem, el_back *back);
 void el_state_free(const tp_mem *mem, el_state *st);
+// st's elements as cbor, for a snapshot (the value is the graph's), and st, empty, made from it
+void el_save(tp_buf *b, const el_ctx *c, const el_state *st);
+int el_load(const el_ctx *c, el_state *st, tp_span bytes);
 
 #endif

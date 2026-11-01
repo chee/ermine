@@ -1,0 +1,321 @@
+{
+	"title": "a write the entry's elements can't name (two updates before one commit, so the step has only the second): the graph's whole value goes as one put instead, the host told in unkept, and later typing names elements again; on keeping and forgetting devices alike",
+	"steps": [
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101"
+		},
+		{
+			"op": "device",
+			"name": "k",
+			"seed": "0404040404040404040404040404040404040404040404040404040404040404",
+			"rebase": 0
+		},
+		{
+			"op": "device",
+			"name": "f",
+			"seed": "0606060606060606060606060606060606060606060606060606060606060606",
+			"forgets": true
+		},
+		{
+			"op": "device",
+			"name": "p",
+			"seed": "0808080808080808080808080808080808080808080808080808080808080808"
+		},
+		{
+			"op": "device",
+			"name": "q",
+			"seed": "0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a"
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "doc",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"s": "hello"
+					}
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "k",
+			"of": "a",
+			"at": 1,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "f",
+			"of": "a",
+			"at": 1,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "k",
+			"node": "doc",
+			"first": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						5,
+						5
+					],
+					"value": "1"
+				}
+			],
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						6,
+						6
+					],
+					"value": "2"
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 2,
+				"unkept": true
+			}
+		},
+		{
+			"op": "value",
+			"device": "k",
+			"node": "doc",
+			"expect": {
+				"value": {
+					"s": "hello12"
+				}
+			}
+		},
+		{
+			"op": "write",
+			"device": "k",
+			"node": "doc",
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "X"
+				}
+			],
+			"expect": {
+				"n": 2,
+				"lamport": 3
+			}
+		},
+		{
+			"op": "write",
+			"device": "k",
+			"node": "doc",
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": "Y"
+				}
+			],
+			"expect": {
+				"n": 3,
+				"lamport": 4
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "p",
+			"of": "a",
+			"at": 1,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "k",
+			"to": "p",
+			"of": "k",
+			"at": 1,
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "value",
+			"device": "p",
+			"node": "doc",
+			"expect": {
+				"value": {
+					"s": "XYhello12"
+				}
+			}
+		},
+		{
+			"op": "value",
+			"device": "k",
+			"node": "doc",
+			"expect": {
+				"value": {
+					"s": "XYhello12"
+				}
+			}
+		},
+		{
+			"op": "write",
+			"device": "f",
+			"node": "doc",
+			"first": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						5,
+						5
+					],
+					"value": "1"
+				}
+			],
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						6,
+						6
+					],
+					"value": "2"
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 2,
+				"unkept": true
+			}
+		},
+		{
+			"op": "value",
+			"device": "f",
+			"node": "doc",
+			"expect": {
+				"value": {
+					"s": "hello12"
+				}
+			}
+		},
+		{
+			"op": "write",
+			"device": "f",
+			"node": "doc",
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "X"
+				}
+			],
+			"expect": {
+				"n": 2,
+				"lamport": 3
+			}
+		},
+		{
+			"op": "write",
+			"device": "f",
+			"node": "doc",
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": "Y"
+				}
+			],
+			"expect": {
+				"n": 3,
+				"lamport": 4
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "q",
+			"of": "a",
+			"at": 1,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "f",
+			"to": "q",
+			"of": "f",
+			"at": 1,
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "value",
+			"device": "q",
+			"node": "doc",
+			"expect": {
+				"value": {
+					"s": "XYhello12"
+				}
+			}
+		},
+		{
+			"op": "value",
+			"device": "f",
+			"node": "doc",
+			"expect": {
+				"value": {
+					"s": "XYhello12"
+				}
+			}
+		}
+	]
+}

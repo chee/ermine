@@ -3,7 +3,7 @@
 	"steps": [
 		{
 			"op": "decode",
-			"bytes": "8858208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c01f6637069676576616c756581a26470617468806576616c7565010100",
+			"bytes": "8b58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c01f6637069676576616c756581a26470617468806576616c7565010100008081f6",
 			"expect": {
 				"step": {
 					"device": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
@@ -18,7 +18,12 @@
 						}
 					],
 					"lamport": 1,
-					"when": 0
+					"when": 0,
+					"seq": 0,
+					"on": [],
+					"ids": [
+						null
+					]
 				}
 			}
 		},
@@ -122,7 +127,7 @@
 		},
 		{
 			"op": "decode",
-			"bytes": "8858208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c01f6637069676576616c756581a26470617468806576616c756501011b001fffffffffffff",
+			"bytes": "8b58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c01f6637069676576616c756581a26470617468806576616c756501011b001fffffffffffff008081f6",
 			"expect": {
 				"step": {
 					"device": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
@@ -137,7 +142,12 @@
 						}
 					],
 					"lamport": 1,
-					"when": 9007199254740991
+					"when": 9007199254740991,
+					"seq": 0,
+					"on": [],
+					"ids": [
+						null
+					]
 				}
 			}
 		},

@@ -47,6 +47,17 @@ async function device(o: { store?: Store; forgets?: boolean } = {}) {
 		value: (id: string) => table.get("value", id)?.value,
 		put: (id: string, v: unknown) =>
 			run(() => table.sub("value", id, createEntry(v, createChangeHeader(s)))),
+		twice: (
+			id: string,
+			one: { path: string[]; range: [number, number]; value: string }[],
+			two: typeof one,
+		) =>
+			run(() => {
+				const e = table.get("value", id)!
+				update(e, one, createChangeHeader(s))
+				update(e, two, createChangeHeader(s))
+				places.commit([e])
+			}),
 		patch: (
 			id: string,
 			patches: { path: string[]; range?: [number, number]; value?: unknown }[],
@@ -194,7 +205,7 @@ function reads(d: Device) {
 const put = (w: Log, node: string, path: (string | number)[], value: unknown) =>
 	w.write({ node, part: "value", patches: [{ path, value }], when: 0 })
 
-Deno.test("forgets: a late step after a reload is worked out from the log, or failed once it has let go; never dropped", async () => {
+Deno.test("forgets: a late step after a reload goes in as it is, the log held or let go; never dropped", async () => {
 	const w1 = createLog({ writes: true }), w2 = createLog({ writes: true })
 	await w1.load(), await w2.load()
 	put(w1, "pig", [], { a: 1 })
@@ -213,15 +224,8 @@ Deno.test("forgets: a late step after a reload is worked out from the log, or fa
 		await d.log.close()
 		const again = await device({ store: fileStore(dir), forgets: true })
 		await again.log.take((await w1.run(w1.device!, 2))!)
-		if (let_go) {
-			assertEquals(again.value("pig"), { a: 1, b: 2 })
-			assertEquals(again.history.failed.map((f) => f.why), [
-				"late, and the steps after it let go",
-			])
-		} else {
-			assertEquals(again.value("pig"), { a: 1, b: 2, c: 3 })
-			assertEquals(again.history.failed, [])
-		}
+		assertEquals(again.value("pig"), { a: 1, b: 2, c: 3 })
+		assertEquals(again.history.failed, [])
 		await again.log.close()
 		await Deno.remove(dir, { recursive: true })
 	}
@@ -299,12 +303,9 @@ Deno.test("forgets: after a reload a step by ids that lands last goes in by its 
 	await Deno.remove(dir, { recursive: true })
 })
 
-Deno.test("forgets: after a reload with runs let go a step by ids that lands last is failed, not put in by its range", async () => {
+Deno.test("forgets: after a reload with runs let go a step by ids that lands last goes in by its ids, its snapshot holding the elements", async () => {
 	const { g, dir } = await typed(true)
-	assertEquals(g.value("doc"), { s: "Xhello" })
-	assertEquals(g.history.failed.map((f) => f.why), [
-		"its elements let go with the steps before it",
-	])
+	assertEquals([g.value("doc"), g.history.failed], [{ s: "XhelloY" }, []])
 	await g.log.close()
 	await Deno.remove(dir, { recursive: true })
 })
@@ -345,4 +346,48 @@ Deno.test("forgets: a late put of the whole value under a newer one is passed ov
 	assertEquals([r.value("pig"), r.history.failed], [{ n: 5, by: "hi" }, []])
 	assertEquals([keeper.value("pig"), keeper.history.failed], [{ n: 5, by: "hi" }, []])
 	assertEquals(seen.n, 0)
+})
+
+Deno.test("forgets: a late put of the whole value under a newer one is passed over after a reload too", async () => {
+	const [wa, wb] = [0, 1].map(() => createLog({ writes: true }))
+	for (const w of [wa, wb]) await w.load()
+	const [lo, hi] = [wa, wb].sort((x, y) => x.device! < y.device! ? -1 : 1)
+	put(hi, "pig", [], { n: 0 })
+	await lo.take(await last(hi))
+	put(lo, "pig", [], { n: 1, by: "lo" }), put(hi, "pig", [], { n: 1, by: "hi" })
+	const dir = await Deno.makeTempDir()
+	let r = await device({ store: fileStore(dir), forgets: true })
+	await all(r, hi)
+	await r.history.forget({ passed: () => r.log.have() })
+	await r.log.saved()
+	await r.log.close()
+	r = await device({ store: fileStore(dir), forgets: true })
+	await all(r, lo)
+	await tick(100)
+	assertEquals([r.value("pig"), r.history.failed], [{ n: 1, by: "hi" }, []])
+	await r.log.close()
+	await Deno.remove(dir, { recursive: true })
+})
+
+Deno.test("forgets: a write its elements can't name goes as the graph's whole value, and later typing names elements again", async () => {
+	for (const forgets of [false, true]) {
+		const a = createLog({ writes: true }), f = await device({ forgets }), r = await device()
+		await a.load()
+		put(a, "doc", [], { s: "hello" })
+		await all(f, a), await all(r, a)
+		f.twice("doc", [{ path: ["s"], range: [5, 5], value: "1" }], [{
+			path: ["s"],
+			range: [6, 6],
+			value: "2",
+		}])
+		assertEquals(f.history.unkept.length, 1)
+		f.patch("doc", [{ path: ["s"], range: [0, 0], value: "X" }])
+		f.patch("doc", [{ path: ["s"], range: [0, 0], value: "Y" }])
+		assertEquals(f.value("doc"), { s: "YXhello12" })
+		assertEquals(f.log.count(f.log.device!), 3)
+		await all(r, f.log)
+		await tick()
+		assertEquals([r.value("doc"), r.history.failed], [{ s: "YXhello12" }, []])
+		assertEquals(f.history.unkept.length, 1)
+	}
 })

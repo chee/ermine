@@ -248,7 +248,7 @@ Deno.test("a late step is worked in when the log goes quiet, even when the last 
 	const forged = a.log.take({ ...r, device: "ab".repeat(32) })
 	assertEquals(await late, { added: 2 })
 	assert("refused" in await forged)
-	// b's splice sorts first, a's after it: worked out again
-	assertEquals(a.value("doc"), { t: "ab" })
+	// two at one place sort by device, the greater first: worked out again
+	assertEquals(a.value("doc"), { t: dev > a.log.device! ? "ba" : "ab" })
 	assertEquals(a.history.failed, [])
 })

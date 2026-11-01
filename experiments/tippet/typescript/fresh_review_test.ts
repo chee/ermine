@@ -61,6 +61,9 @@ async function steps(lamports: number[], patches: (i: number) => Patch[]) {
 			patches: patches(i),
 			lamport,
 			when: 0,
+			seq: 0,
+			on: [],
+			ids: (patches(i)).map(() => null),
 		})
 		before = hashStep(b)
 		return b

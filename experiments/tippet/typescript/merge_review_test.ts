@@ -45,6 +45,9 @@ async function step(
 		patches,
 		lamport,
 		when: 0,
+		seq: 0,
+		on: [],
+		ids: patches.map(() => null),
 	}
 	const bytes = encodeStep(s)
 	chains.set(w.device, hashStep(bytes))

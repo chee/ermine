@@ -123,7 +123,6 @@ void hh_finish(void) {
 	}
 }
 
-
 static void hex(FILE *out, const uint8_t *b, size_t n) {
 	fputc('"', out);
 	for (size_t i = 0; i < n; i++) fprintf(out, "%02x", b[i]);
@@ -311,14 +310,16 @@ static op_value *ids_in(const op_value *v) {
 			op_value *b = id_in(before);
 			if (!b) return op_free(a), op_free(t), op_free(out), NULL;
 			op_push(a, b);
-		} else if (t) op_push(a, op_null());
-		if (t) op_push(a, t);
+		} else op_push(a, op_null());
+		op_push(a, t ? t : op_list());
 		op_push(out, a);
 	}
 	return out;
 }
 
-static size_t stepin(const op_value *s, const uint8_t *device, const uint8_t *before, uint8_t **out) {
+// next: the seq a step without one has, and after it the one the step after has (NULL: 0)
+static size_t stepin(const op_value *s, const uint8_t *device, const uint8_t *before, uint64_t *next,
+	uint8_t **out) {
 	const char *d = hh_str(s, "device"), *b = hh_str(s, "before");
 	const op_value *bv = op_get(s, "before");
 	const uint8_t *key = d ? keyof(d) : device;
@@ -328,13 +329,21 @@ static size_t stepin(const op_value *s, const uint8_t *device, const uint8_t *be
 	op_push(a, op_bytes(key, 32));
 	op_push(a, op_ref(op_get(s, "n")));
 	op_push(a, b ? op_bytes(bb, strlen(b) / 2) : bv || !before ? op_null() : op_bytes(before, 32));
-	const char *fields[] = {"node", "part", "patches", "lamport", "when", "on", "ids", "who"};
+	const char *fields[] = {"node", "part", "patches", "lamport", "when", "seq", "on", "ids", "who"};
 	const op_value *rel = op_get(s, "relative");
-	for (int i = 0; i < 8; i++) {
+	for (int i = 0; i < 9; i++) {
 		op_value *v = op_get(s, fields[i]);
 		if (i == 5) {
+			if (v) op_push(a, op_ref(v));
+			else op_push(a, op_int(next ? (int64_t)*next : 0));
+			continue;
+		}
+		if (i == 6) {
 			int64_t n, m;
-			if (!v) continue;
+			if (!v) {
+				op_push(a, op_list());
+				continue;
+			}
 			if (v->type != OP_LIST || !whole(op_get(s, "n"), &n)) return op_free(a), 0;
 			op_value *on = op_list();
 			for (size_t j = 0; j < v->count; j++) {
@@ -352,8 +361,14 @@ static size_t stepin(const op_value *s, const uint8_t *device, const uint8_t *be
 			op_push(a, on);
 			continue;
 		}
-		if (i == 6) {
-			if (!v) continue;
+		if (i == 7) {
+			if (!v) {
+				const op_value *ps = op_get(s, "patches");
+				op_value *nulls = op_list();
+				for (size_t j = 0; ps && j < ps->count; j++) op_push(nulls, op_null());
+				op_push(a, nulls);
+				continue;
+			}
 			op_value *ids = ids_in(v);
 			if (!ids) return op_free(a), 0;
 			op_push(a, ids);
@@ -370,6 +385,9 @@ static size_t stepin(const op_value *s, const uint8_t *device, const uint8_t *be
 	}
 	size_t n = encode(a, out);
 	op_free(a);
+	tp_step made;
+	if (next && n && !tp_step_decode(*out, n, &made)) *next = made.seq + tp_step_made(&made);
+	else if (next) *next = 0;
 	return n;
 }
 
@@ -457,7 +475,6 @@ static long spans(const op_value *list, tp_span **out) {
 	*out = s;
 	return (long)list->count;
 }
-
 
 static size_t message(const op_value *m, uint8_t **out) {
 	CborOut o = {NULL, 0, 0, true};
@@ -623,7 +640,6 @@ static int readout(FILE *out, const uint8_t *b, size_t n) {
 	return 0;
 }
 
-
 static tp_span stepof(const tp_log *log, const uint8_t *key, uint64_t n) {
 	long length = tp_log_step(log, key, n, NULL, 0);
 	if (length < 0) hh_fail("a step held is not in the store");
@@ -728,10 +744,15 @@ static void take(const op_value *r, FILE *out) {
 	if (!key || !list || list->type != OP_LIST || !list->count) { hh_error(out, "not a run"); return; }
 	tp_span *s = hh_take(list->count * sizeof *s);
 	uint8_t before[32];
+	uint64_t next = 0;
 	for (size_t i = 0; i < list->count; i++) {
 		const op_value *v = list->items[i];
 		uint8_t *b;
-		long n = v->type == OP_STR ? unhex(v->str, &b) : (long)stepin(v, key, i ? before : NULL, &b);
+		long n = v->type == OP_STR ? unhex(v->str, &b) : (long)stepin(v, key, i ? before : NULL, &next, &b);
+		if (v->type == OP_STR) {
+			tp_step made;
+			next = n > 0 && !tp_step_decode(b, (size_t)n, &made) ? made.seq + tp_step_made(&made) : 0;
+		}
 		if (n <= 0) { hh_error(out, "not a step"); return; }
 		s[i] = (tp_span){b, (size_t)n};
 		tp_step_hash(b, (size_t)n, before);
@@ -766,7 +787,6 @@ static void pass(const op_value *r, FILE *out) {
 	taken(out, tp_log_take(to->log, key, s, n, sig, (tp_span){NULL, 0}));
 }
 
-
 static void let_go(void *line) {
 	hh_line **dead = realloc(w.dead, (w.ndead + 1) * sizeof *dead);
 	if (!dead) hh_fail("out of memory");
@@ -776,8 +796,8 @@ static void let_go(void *line) {
 typedef struct {
 	device *d;
 	const char *node, *part, *error;
-	op_patch *patches;
-	size_t n;
+	op_patch *patches, *first;
+	size_t n, nfirst;
 	ch_header header;
 	hh_line *line;
 } host_write;
@@ -789,7 +809,8 @@ static void write_f(void *data) {
 	nd_entry *e = tb_get(d->table, part, id);
 	if (e) {
 		size_t failed;
-		int code = nd_update(e, x->patches, x->n, x->header, &failed);
+		int code = x->nfirst ? nd_update(e, x->first, x->nfirst, x->header, &failed) : 0;
+		if (!code) code = nd_update(e, x->patches, x->n, x->header, &failed);
 		if (code) {
 			x->error = op_code_name(code);
 			return;
@@ -821,21 +842,30 @@ static void written(const op_value *r, FILE *out) {
 	if (!patches || patches->type != OP_LIST || !hh_str(r, "node")) { hh_error(out, "not a write"); return; }
 	if (op_get(r, "when") && !whole(op_get(r, "when"), &when)) { hh_error(out, "not a when"); return; }
 	host_write x = {d, hh_str(r, "node"), hh_str(r, "part") ? hh_str(r, "part") : "value", NULL,
-		hh_take((patches->count + 1) * sizeof *x.patches), patches->count, {0}, hh_retain()};
+		hh_take((patches->count + 1) * sizeof *x.patches), NULL, patches->count, 0, {0}, hh_retain()};
 	for (size_t i = 0; i < x.n; i++) hh_patch(patches->items[i], &x.patches[i]);
+	const op_value *first = op_get(r, "first");
+	if (first && first->type == OP_LIST) {
+		x.first = hh_take((first->count + 1) * sizeof *x.first), x.nfirst = first->count;
+		for (size_t i = 0; i < x.nfirst; i++) hh_patch(first->items[i], &x.first[i]);
+	}
 	const op_value *who = op_get(r, "who");
 	x.header = (ch_header){.has_time = 1, .time = when, .actor = who && who->type == OP_STR ? who : NULL};
 	tp_failed f;
 	size_t unkept = tp_history_unkept(d->history, 0, &f);
+	const uint8_t *was = tp_log_device(d->log);
+	uint64_t held = was ? tp_log_count(d->log, was) : 0;
 	inside(d, write_f, &x);
 	if (x.line) let_go(x.line);
 	if (x.error) { hh_error(out, "%s", x.error); return; }
-	if (tp_history_unkept(d->history, unkept, &f) > unkept) { hh_error(out, "not kept: %s", f.why); return; }
+	int lost = tp_history_unkept(d->history, unkept, &f) > unkept;
+	if (lost && (!was || tp_log_count(d->log, was) == held)) { hh_error(out, "not kept: %s", f.why); return; }
 	const uint8_t *me = tp_log_device(d->log);
 	tp_step s;
 	tp_span bytes = stepof(d->log, me, tp_log_count(d->log, me));
 	if (tp_step_decode(bytes.p, bytes.n, &s)) hh_fail("a step held is not one");
-	fprintf(out, "{\"n\":%llu,\"lamport\":%llu}", (unsigned long long)s.n, (unsigned long long)s.lamport);
+	fprintf(out, "{\"n\":%llu,\"lamport\":%llu%s}", (unsigned long long)s.n, (unsigned long long)s.lamport,
+		lost ? ",\"unkept\":true" : "");
 }
 
 static void versions(const op_value *r, FILE *out) {
@@ -872,7 +902,6 @@ static void value(const op_value *r, FILE *out) {
 	if (!e || !e->value) { fputs("{}", out); return; }
 	fputs("{\"value\":", out), op_json_write(out, e->value), fputc('}', out);
 }
-
 
 static side *side_of(const char *from, const char *to) {
 	for (size_t i = 0; from && to && i < w.nsides; i++) {
@@ -1018,7 +1047,6 @@ static void inject(const op_value *r, FILE *out) {
 	hear(from, to, b, (size_t)n);
 	fputs("{}", out);
 }
-
 
 static int on_disk(device *d) {
 	tp_store *store = tp_file_store(&w.mem, d->dir, MAX);
@@ -1178,15 +1206,17 @@ static void write_disk(device *d, const op_value *r, FILE *out) {
 	}
 	size_t np = encode(revived, &ps);
 	const char *node = hh_str(r, "node"), *part = hh_str(r, "part") ? hh_str(r, "part") : "value";
+	uint8_t nulls[24] = {0x80 + patches->count}, none[1] = {0x80};
+	if (patches->count > 23) { hh_error(out, "a write of at most 23 patches"); return; }
+	memset(nulls + 1, 0xf6, patches->count);
 	tp_write x = {{(const uint8_t *)node, strlen(node)}, {(const uint8_t *)part, strlen(part)}, {ps, np},
 		{who && who->type == OP_STR ? (const uint8_t *)who->str : NULL, who && who->type == OP_STR ? who->bytes : 0},
-		(uint64_t)when, {NULL, 0}, {NULL, 0}};
+		(uint64_t)when, {none, 1}, {nulls, 1 + patches->count}};
 	uint64_t n, lamport;
 	int why = tp_log_write(d->log, &x, &n, &lamport);
 	if (why) { hh_error(out, "%s", tp_why(why)); return; }
 	fprintf(out, "{\"n\":%llu,\"lamport\":%llu}", (unsigned long long)n, (unsigned long long)lamport);
 }
-
 
 void hh_answer(const op_value *r, FILE *out) {
 	const char *op = hh_str(r, "op");
@@ -1196,7 +1226,7 @@ void hh_answer(const op_value *r, FILE *out) {
 	bury();
 	if (!strcmp(op, "encode")) {
 		const op_value *s = op_get(r, "step");
-		size_t length = s ? stepin(s, NULL, NULL, &b) : 0;
+		size_t length = s ? stepin(s, NULL, NULL, NULL, &b) : 0;
 		if (!length) { hh_error(out, "not a device"); return; }
 		fputs("{\"bytes\":", out), hex(out, b, length), fputc('}', out);
 	} else if (!strcmp(op, "decode")) {
@@ -1210,17 +1240,17 @@ void hh_answer(const op_value *r, FILE *out) {
 		fputs(",\"before\":", out);
 		if (s.before) hex(out, s.before, 32);
 		else fputs("null", out);
-		const char *fields[] = {"", "", "", "node", "part", "patches", "lamport", "when", "who", "who"};
+		const char *fields[] = {"", "", "", "node", "part", "patches", "lamport", "when", "seq", "", "", "who"};
 		for (size_t i = 3; i < a->count; i++) {
-			if (i == 9 && s.ids.p) {
+			if (i == 10) {
 				ids_out(out, &s);
 				continue;
 			}
-			if (i == 9 + !!s.ids.p && s.who.p) {
+			if (i == 11 && s.who.p) {
 				fputs(",\"who\":", out), op_json_write(out, a->items[i]);
 				continue;
 			}
-			if (i == 8 && s.on.p) {
+			if (i == 9) {
 				size_t at = 0, k = 0;
 				const uint8_t *d;
 				uint64_t m;
