@@ -1,4 +1,5 @@
 // Tests edit against an oracle: apply(base, edit(base, recipe)) equals the recipe run on a clone.
+// deno-lint-ignore-file no-explicit-any
 import { assertEquals, assertNotStrictEquals, assertStrictEquals, assertThrows } from "@std/assert"
 import apply, { type Patch } from "./apply.ts"
 import edit, { type Helpers, nothing } from "./edit.ts"
@@ -14,6 +15,7 @@ Deno.test("a deep field set is one patch at its path", () => {
 })
 
 Deno.test("a key set to what it is makes nothing", () => {
+	// deno-lint-ignore no-self-assign
 	assertEquals(run({ a: 1, l: [1] }, (d) => void (d.a = 1, d.l[0] = 1, d.l = d.l)), [])
 })
 
@@ -199,7 +201,7 @@ Deno.test("splice: the root string, and a deep string after a change above it", 
 		}),
 		[{ path: [], range: [0, 1], value: "J" }, { path: [], range: [4, 5] }],
 	)
-	assertThrows(() => run(1, (n, { splice }) => void splice("x", 0, 0)), TypeError)
+	assertThrows(() => run(1, (_, { splice }) => void splice("x", 0, 0)), TypeError)
 	const base = { l: [{ s: "ab" }, { s: "cd" }] }
 	const patches = run(base, (d, { splice }) => {
 		const second = d.l[1]

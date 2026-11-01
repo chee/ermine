@@ -205,7 +205,7 @@ Deno.test("10. a send tried again is taken once", async () => {
 	assertEquals(got, [one, two])
 })
 
-Deno.test("9. an http client that can't send closes past 1 MB held", async () => {
+Deno.test("9. an http client that can't send closes past 1 MB held", () => {
 	const l = Deno.listen({ port: 0 }), port = (l.addr as Deno.NetAddr).port
 	l.close()
 	const link = poll(`http://localhost:${port}/t`)

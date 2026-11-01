@@ -46,7 +46,6 @@ import {
 	s,
 	scope,
 	spotted,
-	table,
 	where,
 	write,
 } from "./world_harness.ts"

@@ -143,6 +143,7 @@ export function createSync(o: { log: Log; relay?: boolean }): Sync {
 			try {
 				more = await one(l, device)
 			} catch {
+				// a failed turn: more stays false
 			}
 			if (more || l.pushing.get(device)) {
 				l.pushing.set(device, false)
@@ -192,6 +193,7 @@ export function createSync(o: { log: Log; relay?: boolean }): Sync {
 			try {
 				last = firstOf(m.pack).n + stepsIn(m.pack) - 1
 			} catch {
+				// an unreadable pack: last stays 0
 			}
 			const r = await log.takePack({ ...m, message: bytes }, l)
 			if ("added" in r) {

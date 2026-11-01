@@ -316,6 +316,7 @@ export function createLog(
 			try {
 				t(device, c.steps, from)
 			} catch {
+				// one listener throwing doesn't stop the others
 			}
 		}
 	}

@@ -75,7 +75,7 @@ row("append to a list of 10k, a burst", ways(list, append), 2000)
 row("append to a list of 10k, read between", ways(list, append, true), 2000)
 
 const text = () => ({ body: "x".repeat(10000) })
-const type = (i: number): Patch[] => [{ path: ["body"], range: [5000, 5000], value: "a" }]
+const type = (_: number): Patch[] => [{ path: ["body"], range: [5000, 5000], value: "a" }]
 row("typing into a 10k string, a burst", ways(text, type), 2000)
 
 const floats = () => ({ samples: new Float64Array(10000) })

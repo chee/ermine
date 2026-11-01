@@ -15,6 +15,7 @@ function framed(conn: Deno.Conn): Link {
 		try {
 			conn.close()
 		} catch {
+			// already closed
 		}
 		for (const f of closes) f()
 	}
@@ -37,6 +38,7 @@ function framed(conn: Deno.Conn): Link {
 				on!(bytes)
 			}
 		} catch {
+			// a broken connection ends the link, as a closed one does
 		}
 		end()
 	}
@@ -69,6 +71,7 @@ export function listen(path: string, onLink: (link: Link) => void): { close(): v
 				onLink(link)
 			}
 		} catch {
+			// the listener closed
 		}
 	})()
 	return {
@@ -76,11 +79,13 @@ export function listen(path: string, onLink: (link: Link) => void): { close(): v
 			try {
 				listener.close()
 			} catch {
+				// already closed
 			}
 			for (const l of links) l.close!()
 			try {
 				Deno.removeSync(path)
 			} catch {
+				// already gone
 			}
 		},
 	}

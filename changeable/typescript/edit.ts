@@ -15,6 +15,7 @@
 // - Assigning a draft somewhere puts a snapshot of its value at that moment, not an alias.
 // - Using a draft after edit returns throws.
 // - A recipe may return a value instead; it replaces the whole root.
+// deno-lint-ignore-file no-explicit-any
 import type { Key, Patch } from "./apply.ts"
 import { isTyped, type Typed } from "@ermine/changeable/kinds"
 import { walk } from "@ermine/changeable/walk-string"

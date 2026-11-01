@@ -90,6 +90,7 @@ export function createGalaxy(o: { dir: string; at?: string; idle?: number; most?
 		try {
 			n = decodeURIComponent(parts[0])
 		} catch {
+			// not percent-encoded: n stays "", not a room
 		}
 		if (["", ".", ".."].includes(n) || n.includes("/")) {
 			return new Response("not a room", { status: 400 })

@@ -35,7 +35,7 @@ export function createActionAs(
 	// deno-lint-ignore no-explicit-any
 	fn: (...args: any[]) => unknown,
 ): Node {
-	const { base, parts, methods, places, inside, resolve, ask } = here(inner)
+	const { parts, methods, places, inside, resolve, ask } = here(inner)
 	const own = owner(inner)
 	notInAct(own, "createAction")
 	if (Object.prototype.toString.call(fn) === "[object AsyncGeneratorFunction]") {

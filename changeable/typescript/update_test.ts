@@ -1,6 +1,6 @@
 import { assertEquals, assertStrictEquals, assertThrows } from "@std/assert"
 import apply, { ApplyError, type Patch } from "@ermine/changeable/apply"
-import { type Changeable, type ChangeHeader } from "@ermine/changeable"
+import type { Changeable, ChangeHeader } from "@ermine/changeable"
 import update from "./update.ts"
 
 // A changeable of this value and change (no change given: the time now, in whole seconds).

@@ -4,7 +4,6 @@ import { createPlaces, type Path, type Places, PlacesError } from "@ermine/place
 import { get, list, lookup, members } from "@ermine/places/lib"
 import { createPaths } from "@ermine/reactivity/paths"
 import { type Computer, createScheduler, type Scope } from "@ermine/reactivity"
-import { createTable } from "@ermine/graph/table"
 import { rand } from "../../conformance/typescript/gen.ts"
 import { createWorld, show } from "./world_harness.ts"
 

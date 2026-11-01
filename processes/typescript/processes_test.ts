@@ -1,4 +1,4 @@
-import { assert, assertEquals, assertThrows } from "@std/assert"
+import { assertEquals, assertThrows } from "@std/assert"
 import createEntry from "@ermine/graph/entry"
 import { type Computer, createScheduler } from "@ermine/reactivity"
 import { createPaths } from "@ermine/reactivity/paths"
