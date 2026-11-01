@@ -2137,7 +2137,7 @@
       "npm:cbor-x@^1.6.6"
     ],
     "members": {
-      "core/encoding": {
+      "lib/blake3": {
         "dependencies": [
           "npm:@noble/hashes@1.8.0"
         ]

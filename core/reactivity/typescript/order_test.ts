@@ -2,7 +2,7 @@
 // one, lowest rank then earliest due.
 import { assert, assertEquals } from "@std/assert"
 import { createOrder, type Ordered } from "./order.ts"
-import { rand } from "../../../conformance/typescript/gen.ts"
+import { rand } from "../../../meta/conformance/typescript/gen.ts"
 
 interface P extends Ordered<P> {}
 

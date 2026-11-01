@@ -45,10 +45,10 @@ import {
 	type Where,
 } from "./places.ts"
 
-import type { Answer, Request } from "../../../conformance/typescript/harness.ts"
-import { toJson } from "../../../conformance/typescript/form.ts"
+import type { Answer, Request } from "../../../meta/conformance/typescript/harness.ts"
+import { toJson } from "../../../meta/conformance/typescript/form.ts"
 import { createChangeHeader } from "./header.ts"
-import { show } from "../../../conformance/typescript/frames.ts"
+import { show } from "../../../meta/conformance/typescript/frames.ts"
 type Json = unknown
 
 let moments: Told[] = []

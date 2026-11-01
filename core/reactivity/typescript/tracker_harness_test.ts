@@ -1,8 +1,8 @@
 // Tests the tracker against the model (tracker_model.ts) on the harness named by HARNESS
 // (default tracker_harness.ts).
 import { assertEquals } from "@std/assert"
-import { ask, command } from "../../../conformance/typescript/ask.ts"
-import { rand } from "../../../conformance/typescript/rand.ts"
+import { ask, command } from "../../../meta/conformance/typescript/ask.ts"
+import { rand } from "../../../meta/conformance/typescript/rand.ts"
 import { createModel } from "./tracker_model.ts"
 
 type Request = { op: string; from?: string; to?: string; of?: string }

@@ -49,8 +49,8 @@ import {
 	where,
 	write,
 } from "./world_harness.ts"
-import { revive } from "../../../conformance/typescript/form.ts"
-import { type Request, serve } from "../../../conformance/typescript/harness.ts"
+import { revive } from "../../../meta/conformance/typescript/form.ts"
+import { type Request, serve } from "../../../meta/conformance/typescript/harness.ts"
 import { get, list, lookup, members } from "./lib.ts"
 
 type Json = unknown

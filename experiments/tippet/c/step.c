@@ -1,7 +1,7 @@
 // A step is one kept write as it travels (../WIRE.md), read in place and never encoded twice.
 #include <string.h>
 
-#include "../../../core/encoding/c/blake3/blake3.h"
+#include "../../../lib/blake3/c/blake3/blake3.h"
 #include "wire.h"
 
 const char *tp_why(int code) {

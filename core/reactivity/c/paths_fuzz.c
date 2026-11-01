@@ -7,7 +7,7 @@
 //   marks by pt_marks; pt_event gives every spot of the key;
 // - pt_held_of counts the keys, spots and steps the model has.
 #include "paths.h"
-#include "../../changeable/c/fuzz_values.h"
+#include "../../../lib/changeable/c/fuzz_values.h"
 
 #include <stdio.h>
 

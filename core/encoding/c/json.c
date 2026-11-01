@@ -1,7 +1,7 @@
 // json.c: the JSON value, equality and code point helpers. See json.h.
 
 #include "json.h"
-#include "../../changeable/c/whole.h"
+#include "../../../lib/changeable/c/whole.h"
 
 #include <ctype.h>
 #include <errno.h>

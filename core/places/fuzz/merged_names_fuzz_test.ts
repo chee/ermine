@@ -1,10 +1,10 @@
 // Differential: the TypeScript and C places harnesses must merge contributors' names alike. SEEDS=n, SEED=n; skipped without make core/places/c/places-harness.
 import { assert, assertEquals } from "@std/assert"
-import { ask, command } from "../../../conformance/typescript/ask.ts"
-import { line } from "../../../conformance/typescript/form.ts"
-import type { Answer, Request } from "../../../conformance/typescript/harness.ts"
+import { ask, command } from "../../../meta/conformance/typescript/ask.ts"
+import { line } from "../../../meta/conformance/typescript/form.ts"
+import type { Answer, Request } from "../../../meta/conformance/typescript/harness.ts"
 import { keyorder } from "@ermine/changeable/keyorder"
-import { rand } from "../../../conformance/typescript/gen.ts"
+import { rand } from "../../../meta/conformance/typescript/gen.ts"
 
 const SEEDS = Number(Deno.env.get("SEEDS") ?? 40)
 const STEPS = 6

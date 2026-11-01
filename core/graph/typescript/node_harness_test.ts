@@ -1,9 +1,9 @@
-// Beyond its scenarios (conformance/run.ts), the node suite checks that an unknown op is an
+// Beyond its scenarios (meta/conformance/run.ts), the node suite checks that an unknown op is an
 // error and the harness goes on, and runs a fuzzer against a model. Uses HARNESS, else
 // node_harness.ts.
 import { assert, assertEquals } from "@std/assert"
-import { ask, command } from "../../../conformance/typescript/ask.ts"
-import { rand } from "../../../conformance/typescript/rand.ts"
+import { ask, command } from "../../../meta/conformance/typescript/ask.ts"
+import { rand } from "../../../meta/conformance/typescript/rand.ts"
 
 type Site = { file: string; line: number; column?: number; function?: string; external: boolean }
 type Change = Record<string, unknown>

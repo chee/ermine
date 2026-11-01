@@ -18,10 +18,10 @@ mkdir -p "$out"
 own="wire step pack sign log store store_file sync http"
 # on the graph: C11
 graph="history elements"
-reused="core/encoding/ed25519/c/ed25519 core/encoding/ed25519/c/sha2 core/encoding/c/cbor core/encoding/c/json core/encoding/c/blake3/blake3 core/encoding/c/blake3/blake3_dispatch core/encoding/c/blake3/blake3_portable"
+reused="lib/ed25519/c/ed25519 lib/ed25519/c/sha2 core/encoding/c/cbor core/encoding/c/json lib/blake3/c/blake3/blake3 lib/blake3/c/blake3/blake3_dispatch lib/blake3/c/blake3/blake3_portable"
 # the graph: table, node, op, places, scheduler (the root Makefile's places_src, but its harnesses)
-places="core/places/c/places core/crow/c/crow core/places/c/crowify system/processes/c/status core/graph/c/table core/graph/c/node core/graph/c/update core/changeable/c/value core/changeable/c/frame core/changeable/c/apply core/changeable/c/invert core/reactivity/c/paths core/reactivity/c/scheduler core/reactivity/c/order core/reactivity/c/rank core/reactivity/c/causes core/changeable/c/ptrmap core/reactivity/c/tracker"
-harness="conformance/c/harness conformance/c/protocol_harness core/changeable/c/json"
+places="core/places/c/places lib/crow/c/crow core/places/c/crowify runtime/processes/c/status core/graph/c/table core/graph/c/node core/graph/c/update lib/changeable/c/value lib/changeable/c/frame lib/changeable/c/apply lib/changeable/c/invert core/reactivity/c/paths core/reactivity/c/scheduler core/reactivity/c/order core/reactivity/c/rank core/reactivity/c/causes lib/changeable/c/ptrmap core/reactivity/c/tracker"
+harness="meta/conformance/c/harness meta/conformance/c/protocol_harness lib/changeable/c/json"
 STRICT="-std=c99 -Wall -Wextra -Wpedantic -Werror"
 LOOSE="-std=c11 -Wall -Wextra -Wpedantic"
 BLAKE3="-DBLAKE3_NO_SSE2 -DBLAKE3_NO_SSE41 -DBLAKE3_NO_AVX2 -DBLAKE3_NO_AVX512 -DBLAKE3_USE_NEON=0"
@@ -67,7 +67,7 @@ link() {
 	case "$main" in
 		*harness*) $CC $opt -o "$here/$bin" $objs "$mainobj" ;;
 		catchup* | check_c_review*) $CC $opt -o "$here/$bin" $(echo "$objs" | tr ' ' '\n' | grep -v -e conformance_c_) "$mainobj" ;;
-		*) $CC $opt -o "$here/$bin" $(echo "$objs" | tr ' ' '\n' | grep -vE 'conformance_c_|/core_(op|node|table|scheduler|crow|places|protect)_|history|elements') "$mainobj" ;;
+		*) $CC $opt -o "$here/$bin" $(echo "$objs" | tr ' ' '\n' | grep -vE 'conformance_c_|history|elements') "$mainobj" ;;
 	esac
 }
 

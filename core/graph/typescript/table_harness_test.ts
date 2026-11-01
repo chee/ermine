@@ -1,8 +1,8 @@
 // The table on the harness HARNESS names (default table_harness.ts): the unknown op, and a seeded
-// fuzzer that checks every answer against a plain model. conformance/run.ts runs the scenarios.
+// fuzzer that checks every answer against a plain model. meta/conformance/run.ts runs the scenarios.
 import { assert, assertEquals } from "@std/assert"
-import { ask as send, command } from "../../../conformance/typescript/ask.ts"
-import { rand } from "../../../conformance/typescript/rand.ts"
+import { ask as send, command } from "../../../meta/conformance/typescript/ask.ts"
+import { rand } from "../../../meta/conformance/typescript/rand.ts"
 
 // deno-lint-ignore no-explicit-any
 type Request = Record<string, any>

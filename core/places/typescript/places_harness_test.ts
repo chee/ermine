@@ -1,8 +1,8 @@
-// Checks the places harness (HARNESS, else the TypeScript adapter) besides conformance/run.ts.
+// Checks the places harness (HARNESS, else the TypeScript adapter) besides meta/conformance/run.ts.
 import { assert, assertEquals } from "@std/assert"
-import { ask, command, reference } from "../../../conformance/typescript/ask.ts"
-import type { Request } from "../../../conformance/typescript/harness.ts"
-import { rand } from "../../../conformance/typescript/rand.ts"
+import { ask, command, reference } from "../../../meta/conformance/typescript/ask.ts"
+import type { Request } from "../../../meta/conformance/typescript/harness.ts"
+import { rand } from "../../../meta/conformance/typescript/rand.ts"
 
 Deno.test("an unknown op, or a malformed request, is an error, and the harness goes on", async () => {
 	const answers = await ask(command("places"), [

@@ -8,7 +8,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "../../changeable/c/apply.h"
+#include "../../../lib/changeable/c/apply.h"
 
 // A source or an id: a string (compared by content, copied) or a symbol (the caller's token,
 // compared by address; symbol is non-NULL and string is not read).

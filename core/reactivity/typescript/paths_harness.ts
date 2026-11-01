@@ -1,4 +1,4 @@
-// Paths (paths.ts) on the line protocol (conformance/typescript/harness.ts); HARNESS names
+// Paths (paths.ts) on the line protocol (meta/conformance/typescript/harness.ts); HARNESS names
 // another implementation that speaks it.
 // source, id: a string, or {"symbol": name}. path: whole numbers 0 <= n < 1e15 and strings; 1 and "1"
 // differ. patch: {path, range?: [a, b], value?, move?: {path, range?}}. A spot in an answer is its
@@ -14,7 +14,7 @@
 // Order within mark: the change spot first, then each patch's places in turn, each walking down
 // its path from the key's top (see paths.ts).
 import { createPaths, type Key, marks, type Patch, type Spot } from "./paths.ts"
-import { type Answer, type Request, serve } from "../../../conformance/typescript/harness.ts"
+import { type Answer, type Request, serve } from "../../../meta/conformance/typescript/harness.ts"
 
 const paths = createPaths<never>()
 const symbols = new Map<string, symbol>()

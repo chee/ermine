@@ -10,7 +10,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "../../changeable/c/ptrmap.h"
+#include "../../../lib/changeable/c/ptrmap.h"
 
 typedef struct od_item od_item;
 struct od_item {

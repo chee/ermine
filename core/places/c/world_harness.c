@@ -1,7 +1,7 @@
 // The harnesses' shared world (world_harness.h).
 #define _POSIX_C_SOURCE 200809L
 #include "world_harness.h"
-#include "../../../conformance/c/protocol_harness.h"
+#include "../../../meta/conformance/c/protocol_harness.h"
 
 #include <math.h>
 #include <stdarg.h>

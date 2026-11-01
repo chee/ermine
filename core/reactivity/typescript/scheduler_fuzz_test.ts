@@ -5,7 +5,7 @@ import { assert, assertEquals } from "@std/assert"
 import { type Computer, createScheduler, type Run, type Scope } from "./scheduler.ts"
 import { type Told, trace } from "./scheduler_harness.ts"
 import type { Link, Node } from "./tracker.ts"
-import { rand } from "../../../conformance/typescript/gen.ts"
+import { rand } from "../../../meta/conformance/typescript/gen.ts"
 
 const under = (o: Scope) => {
 	let n = 0

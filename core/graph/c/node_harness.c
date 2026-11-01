@@ -2,8 +2,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "../../../conformance/c/harness.h"
-#include "../../../conformance/c/protocol_harness.h"
+#include "../../../meta/conformance/c/harness.h"
+#include "../../../meta/conformance/c/protocol_harness.h"
 
 // A header with a frame that is no list of objects is answered with an error (returns 1).
 static int bad_header(const op_value *request, FILE *out) {

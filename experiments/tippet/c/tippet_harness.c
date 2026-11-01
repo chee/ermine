@@ -1,4 +1,4 @@
-// Tippet in C on the line protocol (conformance/c/harness.h), the same ops as
+// Tippet in C on the line protocol (meta/conformance/c/harness.h), the same ops as
 // typescript/tippet_harness.ts, one process per scenario. With TIPPET_HEAP set, the library's peak
 // memory and what is left at the end go to stderr.
 #define _POSIX_C_SOURCE 200809L
@@ -9,8 +9,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "../../../conformance/c/harness.h"
-#include "../../../conformance/c/protocol_harness.h"
+#include "../../../meta/conformance/c/harness.h"
+#include "../../../meta/conformance/c/protocol_harness.h"
 #include "../../../core/encoding/c/cbor.h"
 #include "history.h"
 #include "store.h"

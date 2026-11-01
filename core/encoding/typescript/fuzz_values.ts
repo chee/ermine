@@ -1,7 +1,7 @@
 // What the cbor fuzz tests share (cbor_fuzz_test.ts): seeded random values of every kind, value
 // equality, non-canonical rewrites of an encoding, and bytes near one. A seed is a run.
 import { decode, Stand, type Value } from "./cbor.ts"
-import { line, toJson } from "../../../conformance/typescript/form.ts"
+import { line, toJson } from "../../../meta/conformance/typescript/form.ts"
 
 export function rand(seed: number) {
 	let x = seed * 2654435761 >>> 0 || 1

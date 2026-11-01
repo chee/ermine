@@ -2,7 +2,7 @@
 // Separate from json.c so code that never reads or writes text doesn't link it.
 
 #include "json_text.h"
-#include "../../changeable/c/whole.h"
+#include "../../../lib/changeable/c/whole.h"
 
 #include <ctype.h>
 #include <errno.h>

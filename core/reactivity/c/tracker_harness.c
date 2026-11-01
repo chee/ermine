@@ -6,7 +6,7 @@
 #include <string.h>
 
 #include "tracker.h"
-#include "../../../conformance/c/harness.h"
+#include "../../../meta/conformance/c/harness.h"
 
 typedef struct {
 	char *name;

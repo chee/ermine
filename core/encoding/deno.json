@@ -2,12 +2,7 @@
 	"name": "@ermine/encoding",
 	"version": "0.0.0-arctic-hare.0",
 	"license": "AGPL-3.0-or-later",
-	"imports": {
-		"@noble/hashes/": "npm:/@noble/hashes@1.8.0/"
-	},
 	"exports": {
-		"./cbor": "./typescript/cbor.ts",
-		"./blake3": "./blake3/typescript/blake3.ts",
-		"./ed25519": "./ed25519/typescript/ed25519.ts"
+		"./cbor": "./typescript/cbor.ts"
 	}
 }

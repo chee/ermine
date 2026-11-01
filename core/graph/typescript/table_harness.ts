@@ -37,7 +37,7 @@
 // Anything not understood (unknown or missing op, missing field, bad key or node): { error: why },
 // why being any text. The next line is answered as usual.
 import { createTable, type Event, type Id, TableError } from "./table.ts"
-import { type Answer, type Request, serve } from "../../../conformance/typescript/harness.ts"
+import { type Answer, type Request, serve } from "../../../meta/conformance/typescript/harness.ts"
 import type { Entry } from "@ermine/graph/entry"
 
 // The table checks no name and no shape, so here any key is a table name and any entry goes.

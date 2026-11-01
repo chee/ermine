@@ -1,4 +1,4 @@
-# ermine changes (changes/README): after core passes on main, a release pull request while changes/
+# ermine changes (meta/changes/README): after core passes on main, a release pull request while changes/
 # has changes, deno publish when it has none
 
 name: changes

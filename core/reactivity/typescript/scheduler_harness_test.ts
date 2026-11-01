@@ -2,8 +2,8 @@
 // HARNESS (default scheduler_harness.ts).
 // deno-lint-ignore-file no-explicit-any
 import { assert, assertEquals } from "@std/assert"
-import { ask, command } from "../../../conformance/typescript/ask.ts"
-import { rand } from "../../../conformance/typescript/rand.ts"
+import { ask, command } from "../../../meta/conformance/typescript/ask.ts"
+import { rand } from "../../../meta/conformance/typescript/rand.ts"
 
 type Request = { op: string; [k: string]: any }
 type Answer = Record<string, any>

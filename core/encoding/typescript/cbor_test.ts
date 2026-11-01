@@ -387,7 +387,7 @@ Deno.test("cbor: round trips", () => {
 	}
 })
 
-// the shared vectors: each a value in its JSON form (conformance/typescript/form.ts) and its encoding in hex,
+// the shared vectors: each a value in its JSON form (meta/conformance/typescript/form.ts) and its encoding in hex,
 // bytes in hex that no value encodes as, or a JSON form that is no value
 
 const TYPED: { [kind: string]: new (xs: never[]) => ArrayBufferView } = {

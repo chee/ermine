@@ -3,12 +3,12 @@
 //
 // { op: "entry", value?, header? } → { entry: { value?, change } }
 //   value: any JSON (null is a value; absent means none), with typed arrays and bytes in the JSON
-//   form of conformance/typescript/form.ts. header: the change header as given, never an op.
+//   form of meta/conformance/typescript/form.ts. header: the change header as given, never an op.
 //   entry has no value key when there is none. change has the header's fields as given (time,
 //   actor, reader, frame, op) and any other field dropped, with the time now (whole seconds since
 //   1970) when none was given. A time of -0 is 0; time is a whole number (0 and negatives stay);
 //   actor is any JSON, null too; reader is a string; frame is a list of infos, innermost first
-//   (conformance/typescript/frames.ts), each an object, with its locations (what began outside
+//   (meta/conformance/typescript/frames.ts), each an object, with its locations (what began outside
 //   the graph) a list of { file, line, column?, function?, external } in plain JSON.
 //   The value comes back as it was read: -0 stays, and NUL and lone surrogates stay in strings
 //   and keys. A typed array's elements are as its kind holds them (float32 rounded, an integer
@@ -24,9 +24,9 @@
 //   no form), at any depth, in any table. Nothing is made.
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/graph/entry"
 import createNode from "@ermine/graph/node"
-import { type Request, serve } from "../../../conformance/typescript/harness.ts"
-import { revive, toJson } from "../../../conformance/typescript/form.ts"
-import { fromList, toList } from "../../../conformance/typescript/frames.ts"
+import { type Request, serve } from "../../../meta/conformance/typescript/harness.ts"
+import { revive, toJson } from "../../../meta/conformance/typescript/form.ts"
+import { fromList, toList } from "../../../meta/conformance/typescript/frames.ts"
 
 // The header as given, with its frame (a list of infos) made into frames.
 const checked = (h: ChangeHeader | undefined) => {

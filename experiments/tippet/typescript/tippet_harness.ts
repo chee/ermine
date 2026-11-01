@@ -1,4 +1,4 @@
-// Tippet (WIRE.md) on the line protocol (conformance/typescript/harness.ts), one process per
+// Tippet (WIRE.md) on the line protocol (meta/conformance/typescript/harness.ts), one process per
 // scenario.
 // Bytes are lowercase hex; a device is named by its 64-hex key. Deterministic: keys come from
 // seeds,
@@ -55,8 +55,8 @@ import { createScheduler } from "@ermine/reactivity"
 import { createPaths } from "@ermine/reactivity/paths"
 import { createTable, type Key, type Table } from "@ermine/graph/table"
 import { children, createPlaces } from "@ermine/places"
-import { revive, toJson } from "../../../conformance/typescript/form.ts"
-import { type Answer, type Request, serve } from "../../../conformance/typescript/harness.ts"
+import { revive, toJson } from "../../../meta/conformance/typescript/form.ts"
+import { type Answer, type Request, serve } from "../../../meta/conformance/typescript/harness.ts"
 import { createLog, isRun, type Log, type Store } from "./log.ts"
 import { fileStore } from "./store_file.ts"
 import { createHistory } from "./history.ts"

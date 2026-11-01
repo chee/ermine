@@ -1,7 +1,7 @@
 // A step is one kept write as it travels (WIRE.md, step), and is its bytes: encodeStep makes them,
 // decodeStep reads them back and throws on anything that isn't a step, hashStep names them.
 import { decode, encode, type Value } from "@ermine/encoding/cbor"
-import { blake3 } from "@ermine/encoding/blake3"
+import { blake3 } from "@ermine/blake3"
 import type { Patch } from "@ermine/changeable/apply"
 
 export type Step = {
