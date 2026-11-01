@@ -387,12 +387,6 @@ async function loops(seed: number, reach: Loops) {
 	let runs = 0
 	const s = createScheduler()
 	const due = new Set<Computer>()
-	// A mark made while c or a scope under it is open (its last act's cleanups) is left out; tests
-	// 34 and 48 pin that it acts then.
-	const inside = (c: Computer) => {
-		for (let o = s.getCurrentScope(); o !== undefined; o = o.parent) if (o === c) return true
-		return false
-	}
 	s.onMark((_keys, _run, now) => {
 		for (const c of now) due.add(c)
 	})
@@ -476,7 +470,6 @@ async function loops(seed: number, reach: Loops) {
 			}, () => called(c, "set"))
 		} else if (p.kind === 2) {
 			c = s.createComputer(() => {
-				const writer = s.getRun()
 				called(c, "f")
 				const v = sum(s.track, ins)
 				s.registerTeardown(s.getCurrentScope()!, () => {
@@ -490,7 +483,6 @@ async function loops(seed: number, reach: Loops) {
 			})
 		} else if (p.kind === 3) {
 			c = s.createEffect(() => {
-				const writer = s.getRun()
 				called(c, "f")
 				s.createScope({ why: "test" })
 				return sum(s.track, ins)
@@ -517,7 +509,6 @@ async function loops(seed: number, reach: Loops) {
 			})
 		} else if (p.kind === 5) {
 			c = s.createComputer(() => {
-				const writer = s.getRun()
 				called(c, "f")
 				if (make(c, p.makes!)) reach.made++
 				return sum(s.track, ins)

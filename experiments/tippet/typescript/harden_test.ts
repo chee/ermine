@@ -367,7 +367,7 @@ Deno.test("13. a step the store can't read back takes nothing else with it: each
 	a.edit("doc", [{ path: ["t"], range: [0, 0], value: "x" }])
 	a.edit("doc", [{ path: ["t"], range: [1, 1], value: "y" }])
 	const inner = createMemoryStore()
-	let bad: string | undefined
+	let bad: string | undefined = undefined
 	const store: Store = {
 		...inner,
 		get(d, n) {

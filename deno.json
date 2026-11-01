@@ -30,7 +30,33 @@
 	"fmt": {
 		"lineWidth": 100,
 		"semiColons": false,
-		"useTabs": true
+		"useTabs": true,
+		"exclude": [
+			"changeable/conformance/apply/02-keys.json",
+			"changeable/conformance/apply/05-lone-surrogates.json",
+			"changeable/conformance/apply/18-typing.json",
+			"changeable/conformance/apply/25-frozen-batches.json",
+			"changeable/conformance/invert/05-lone-surrogates.json",
+			"changeable/conformance/invert/16-back-and-forth.json",
+			"changeable/conformance/invert/19-frozen-batches.json",
+			"changeable/conformance/invert/21-moves-back-edges.json",
+			"changeable/conformance/squish/25-lone-surrogates.json",
+			"changeable/conformance/squish/33-fouled-places.json",
+			"changeable/conformance/squish/35-encode-values.json",
+			"changeable/conformance/squish/37-same-meaning.json",
+			"changeable/conformance/squish/41-whole-put-clears-fouling.json",
+			"changeable/conformance/squish/42-fouling-moves-with-its-place.json",
+			"changeable/conformance/update/29-lone-surrogates.json",
+			"encoding/conformance/cbor/old.json",
+			"encoding/conformance/cbor/vectors.json",
+			"graph/conformance/node/14-value-edges.json",
+			"graph/conformance/node/15-node-edges.json",
+			"graph/conformance/table/20-odd-keys.json",
+			"places/conformance/places/44-merged-names-lone-surrogates.json",
+			"reactivity/conformance/paths/32-odd-keys.json",
+			"reactivity/conformance/scheduler/101-keys-any-string.json",
+			"reactivity/conformance/tracker/35-names.json"
+		]
 	},
 	"exclude": [
 		"dist",

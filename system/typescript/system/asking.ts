@@ -3,7 +3,7 @@ import { Refusal } from "@ermine/processes/guard"
 import type { Target as Aimed } from "@ermine/protect"
 import type { Key } from "@ermine/graph/table"
 import type { Inner, Step, Target } from "../context.ts"
-import { aimed, idOf, nodeOf } from "./addressing.ts"
+import { aimed, nodeOf } from "./addressing.ts"
 import { here } from "./setting.ts"
 
 export function mayRead(

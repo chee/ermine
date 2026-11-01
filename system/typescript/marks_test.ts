@@ -174,7 +174,6 @@ Deno.test("marks: start asks as the starter for the stop() too: whoever calls it
 		return blocked ? no("denied") : yes
 	}
 	let stopIt: (() => void) | undefined
-	let starter: unknown
 	const e = createErmine({ features: [manual], may })
 	e.within(() => ensureNode("/code/child", () => {}))
 	e.within(() => ensureNode("/work", 0))
@@ -187,7 +186,7 @@ Deno.test("marks: start asks as the starter for the stop() too: whoever calls it
 	)
 	const p = e.start(programAt(e, "/code/p"), "/code/p")
 	assert(!("refused" in p))
-	starter = p.process.id
+	const starter = p.process.id
 	assertEquals(whos.splice(0), [starter])
 	// a stop() from the host (nothing open) is asked as p, not as the host
 	blocked = true

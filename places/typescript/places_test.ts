@@ -6,7 +6,7 @@ import type { Patch } from "@ermine/changeable/apply"
 import {
 	type Computer,
 	createScheduler,
-	SchedulerError,
+	type SchedulerError,
 	type SchedulerOptions,
 } from "@ermine/reactivity"
 import { type Told, trace } from "../../reactivity/typescript/scheduler_harness.ts"
@@ -107,7 +107,7 @@ Deno.test("places: a read of what isn't there, then something placed there: it r
 })
 
 Deno.test("places: a sibling renamed in a folder: a walker of another name doesn't rerun", () => {
-	const { s, l, places, hosted, kids, watch, walk, kid } = world()
+	const { s, l, hosted, kids, watch, walk, kid } = world()
 	kids("R", { a: "A", b: "B" })
 	const a = watch(() => walk(["a"]))
 	const c = watch(() => walk(["c"]))
@@ -163,7 +163,7 @@ Deno.test("places: a node added where a walk stopped (a table event): the reader
 })
 
 Deno.test("places: one children node under two keys, written through one: both readers rerun", () => {
-	const { s, l, table, places, hosted, kids, watch, walk, kid } = world()
+	const { s, l, table, hosted, kids, watch, walk, kid } = world()
 	kids("R", { p: "P", q: "Q" })
 	hosted(() => {
 		const k = createEntry({}, createChangeHeader(s))
@@ -245,7 +245,7 @@ Deno.test("places: a lookup then a read: a closer one with the same apple reruns
 })
 
 Deno.test("places: a move between two folders reports both nodes", () => {
-	const { s, l, places, hosted, kids, watch, walk, kid } = world()
+	const { s, l, hosted, kids, watch, walk, kid } = world()
 	kids("R", { a: "A", b: "B" })
 	kids("A", { x: "X" })
 	kids("B", {})
@@ -453,7 +453,7 @@ Deno.test("places: members at a path rerun on a new name there; the level above 
 })
 
 Deno.test("places: a header's frame is the scope open's own, the write's extra a frame on top; the first actor and reader; the time now, the locations of the call", () => {
-	const { s, l } = world()
+	const { s } = world()
 	const chee = s.createRootScope({ actor: "chee", reader: "juno", why: "test" })
 	const save = s.createScope({ cause: "x", why: "again" }, chee)
 	const h = s.runWithScope(save, () => createChangeHeader(s, { extra: { then: "y" } }))
@@ -475,7 +475,7 @@ Deno.test("places: a header's frame is the scope open's own, the write's extra a
 })
 
 Deno.test("places: a write's actor is the nearest: a scope or extra naming one wins over the scopes above", () => {
-	const { s, l, notes } = world()
+	const { s, notes } = world()
 	const forged = s.runWithScope(
 		notes,
 		() => s.runWithScope(s.createScope({ actor: "chee" }), () => createChangeHeader(s)),
@@ -491,7 +491,7 @@ Deno.test("places: a write's actor is the nearest: a scope or extra naming one w
 })
 
 Deno.test("places: nothing open: a write is unscoped and nothing changes; a read counts for nothing", () => {
-	const { s, l, table, places, kids, value, watch, kid } = world()
+	const { s, l, table, kids, value, watch, kid } = world()
 	kids("R", {})
 	value("A", "one")
 	const w = watch(() => 0)
@@ -603,7 +603,7 @@ Deno.test("places: eachEntryChange gives a fact at every key a written entry is 
 })
 
 Deno.test("places: a watchAll that writes lands in the writer's run: a pipe's readers are due by it", () => {
-	const { s, l, kids, value, edit, hosted, notes, moments } = world()
+	const { s, l, kids, value, edit, notes, moments } = world()
 	kids("R", { a: "A", b: "B" })
 	value("A", 1)
 	value("B", 2)

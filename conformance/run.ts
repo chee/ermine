@@ -16,6 +16,7 @@
 //   allow       extra deno flags for the TypeScript harness (native: --allow-ffi)
 //   noLinkAttrs operating systems whose links hold no extended attribute (expected attrs and id dropped)
 //   make        targets built (make -s, from the repo root) before the suite runs
+// deno-lint-ignore-file no-explicit-any
 import { assert, assertEquals } from "@std/assert"
 import { ask, command, type Options, type Suite, suites } from "./typescript/ask.ts"
 import { line } from "./typescript/form.ts"

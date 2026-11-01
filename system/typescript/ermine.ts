@@ -45,14 +45,7 @@ import {
 	processIds,
 	type Refused,
 } from "@ermine/processes/start"
-import {
-	createScheduler,
-	type Frame,
-	type Info,
-	PENDING,
-	type Scheduler,
-	type Scope,
-} from "@ermine/reactivity"
+import { createScheduler, type Info, PENDING, type Scheduler, type Scope } from "@ermine/reactivity"
 import { isPromise } from "@ermine/reactivity/helpers"
 import { createPaths } from "@ermine/reactivity/paths"
 import { createTable, type Key, type Table, type Tables } from "@ermine/graph/table"
@@ -91,7 +84,7 @@ import { computerAt } from "./system/made.ts"
 import { putStatus, setKey } from "./system/status.ts"
 import { callAbove } from "./system/scopes.ts"
 import { attach, innerOf } from "./system/setting.ts"
-import { type ChangeView, type Held, type Status, type System, WAITING } from "./system/shapes.ts"
+import { type ChangeView, type Held, type Status, WAITING } from "./system/shapes.ts"
 
 export { ErmineError, FeatureError } from "./features.ts"
 export type {
@@ -620,7 +613,7 @@ export function createErmine(options: Options = {}): Ermine {
 
 		const started: Process[] = []
 
-		function stop(process: Process, why: Why = "ended") {
+		const stop = (process: Process, why: Why = "ended") => {
 			whys.set(process.id, why)
 			try {
 				processes!.stop(process)
@@ -644,13 +637,13 @@ export function createErmine(options: Options = {}): Ermine {
 			if (process !== undefined) stop(process)
 		}
 
-		function start(
+		const start = (
 			fn: () => unknown,
 			at: string | Path,
 			o: StartOptions = {},
 			under?: Scope,
 			cut?: unknown,
-		): Started | (Refused & { held?: { process: Id; feature: string } }) {
+		): Started | (Refused & { held?: { process: Id; feature: string } }) => {
 			alive()
 			if (typeof fn !== "function") {
 				throw errored(
@@ -785,7 +778,7 @@ export function createErmine(options: Options = {}): Ermine {
 		}
 
 		// Every step runs even if an earlier one threw; the first error is thrown at the end.
-		function close() {
+		const close = () => {
 			if (closed) return
 			let first: { e: unknown } | undefined
 			const step = (f: () => void) => {

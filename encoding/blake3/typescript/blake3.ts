@@ -1,5 +1,5 @@
 // blake3, one-shot: a tiny wasm build and the noble js one, chosen with use()
-import { blake3 as noble } from "npm:@noble/hashes@1.8.0/blake3"
+import { blake3 as noble } from "@noble/hashes/blake3"
 import { bytes } from "./wasm.ts"
 
 type Exports = {

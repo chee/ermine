@@ -75,7 +75,7 @@ Deno.test("review: three devices, every arrival order, one value", async () => {
 	for (const rest of orders([by, axy, cx])) {
 		const r = await receiver()
 		for (const o of [base, ...rest]) {
-			assertEquals((await r.log.take(o)).hasOwnProperty("added"), true)
+			assertEquals(Object.hasOwn(await r.log.take(o), "added"), true)
 		}
 		const v = JSON.stringify(r.value("pig"))
 		results.set(v, [...(results.get(v) ?? []), rest.map((o) => o.name).join(" → ")])

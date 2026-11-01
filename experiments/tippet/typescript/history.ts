@@ -242,6 +242,7 @@ export function createHistory(o: {
 				try {
 					applyStep(st, s, { keep })
 				} catch {
+					// a step that doesn't apply without the other side's patches: left out
 				}
 			}
 			const value = st.value

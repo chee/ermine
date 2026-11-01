@@ -5,7 +5,6 @@ import { Refused, transform } from "./transform.ts"
 
 const T = (code: string, id = "/src/p.ts", options = {}) =>
 	transform(code, id, { module: "ermine:site/0", ...options })
-const body = (code: string) => T(code)!.code.replace(/^import \{[^}]*\} from "ermine:site\/0";/, "")
 
 Deno.test("transform: a named import's calls, aliased too, each its own site; nested arguments too", () => {
 	const out = T(`import { patch, read as r } from "@ermine/system"

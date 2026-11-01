@@ -1,5 +1,6 @@
 // A fork of cabbages 0.2.10 (MIT, ~/soft/chee/cabbages), for mutate_bench.ts only. It applies
 // apply.ts's patches in place, copies nothing, and does not undo anything when a patch fails.
+// deno-lint-ignore-file no-explicit-any
 import type { Key, Patch } from "../apply.ts"
 import { unit } from "@ermine/changeable/walk-string"
 

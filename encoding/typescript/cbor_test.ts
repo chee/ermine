@@ -444,6 +444,7 @@ Deno.test("cbor: agrees with cbor/conformance/vectors.json", async () => {
 				fromJson(v.form)
 				disagree.push(`${JSON.stringify(v.form)}: a value, the vector says none (${v.refused})`)
 			} catch {
+				// refused, as the vector says
 			}
 		} else if (has("value") || has("json")) {
 			const value = fromJson(has("value") ? v.value : v.json)
@@ -466,6 +467,7 @@ Deno.test("cbor: agrees with cbor/conformance/vectors.json", async () => {
 				decode(unhex(want))
 				disagree.push(`${name}: decodes, the vector says it is no encoding`)
 			} catch {
+				// refused, as the vector says
 			}
 		}
 	}
@@ -538,7 +540,8 @@ Deno.test("cbor: live still refuses what is not a live value", () => {
 	const a: Value[] = []
 	a.push(a)
 	for (let i = 0; i < 70; i++) a.push(a)
-	let deep: Value = [], n: Value = deep
+	const deep: Value = []
+	let n: Value = deep
 	for (let i = 0; i < 70; i++) n = (n as Value[])[0] = [] as Value[]
 	;(n as Value[]).push(deep)
 	for (

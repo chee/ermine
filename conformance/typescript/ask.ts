@@ -1,5 +1,4 @@
 // Finds a suite and runs a harness on requests; set HARNESS to test another implementation (such as C).
-// deno-lint-ignore-file no-explicit-any
 import { line } from "./form.ts"
 import { read } from "./json.ts"
 import type { Answer, Request } from "./harness.ts"

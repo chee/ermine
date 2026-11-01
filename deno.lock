@@ -2139,6 +2139,11 @@
           "npm:magic-string@0.30.21",
           "npm:unplugin@3.4.0"
         ]
+      },
+      "encoding": {
+        "dependencies": [
+          "npm:@noble/hashes@1.8.0"
+        ]
       }
     }
   }
