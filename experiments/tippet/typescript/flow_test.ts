@@ -141,7 +141,7 @@ Deno.test("9. on a broadcast, a have is answered with this device's own steps al
 
 Deno.test("3. an http catch-up past 8 MB finishes on one link, in batches of 64 KB at most", async () => {
 	const w = await writer()
-	for (let i = 0; i < 200; i++) put(w, "z".repeat(50_000), `n${i}`)
+	for (let i = 0; i < 5600; i++) put(w, "z".repeat(1_500), `n${i}`)
 	const server = createSync({ log: w })
 	let made = 0, biggest = 0
 	const http = httpLinks((l) => {
@@ -156,7 +156,7 @@ Deno.test("3. an http catch-up past 8 MB finishes on one link, in batches of 64 
 	link.onClose!(() => closed = true)
 	createSync({ log: c }).link(link)
 	try {
-		await until(() => c.count(w.device!) === 200, 15_000)
+		await until(() => c.count(w.device!) === 5600, 15_000)
 	} finally {
 		link.close!(), http.close()
 		await srv.shutdown()

@@ -96,7 +96,7 @@
 			"of": "a",
 			"at": 1,
 			"expect": {
-				"added": 2
+				"added": 4
 			}
 		},
 		{
@@ -106,7 +106,7 @@
 			"of": "a",
 			"at": 3,
 			"expect": {
-				"added": 2
+				"added": 0
 			}
 		},
 		{

@@ -56,6 +56,13 @@ typedef struct {
 	char *dir;
 	tp_store *store;
 	uint8_t seed[32];
+	struct {
+		uint8_t device[32];
+		uint64_t n;
+		char why[16];
+		int taker;
+	} *refusals;
+	size_t nrefusals;
 } device;
 
 typedef struct {
@@ -103,6 +110,7 @@ void hh_finish(void) {
 			op_free((op_value *)d->info.value);
 		}
 		for (size_t k = 0; k < d->nheard; k++) free((void *)d->heard[k].p);
+		free(d->refusals);
 		if (d->dir) {
 			DIR *in = opendir(d->dir);
 			struct dirent *e;
@@ -537,9 +545,11 @@ static size_t message(const op_value *m, uint8_t **out) {
 		cborPutHead(&o, 4, 3), cborPutText(&o, t, 4), cborPutBytes(&o, b, (size_t)n);
 		ok = (n = unhex(y->str, &b)) >= 0;
 		if (ok) cborPutBytes(&o, b, (size_t)n);
-	} else if (!strcmp(t, "refused") && x && y && x->type == OP_STR && (key = keyof(x->str))) {
-		cborPutHead(&o, 4, 3), cborPutText(&o, t, 7), cborPutBytes(&o, key, 32);
+	} else if (!strcmp(t, "refused") && x && y && x->type == OP_STR && (key = keyof(x->str)) &&
+		(!z || z->type == OP_STR)) {
+		cborPutHead(&o, 4, z ? 4 : 3), cborPutText(&o, t, 7), cborPutBytes(&o, key, 32);
 		ok = put(&o, y);
+		if (ok && z) cborPutText(&o, z->str, strlen(z->str));
 	} else {
 		ok = 0;
 	}
@@ -627,9 +637,12 @@ static int readout(FILE *out, const uint8_t *b, size_t n) {
 		fputs("]}", out);
 		return 1;
 	}
-	if (is(t, "refused") && m->count == 3 && sized(x, 32) && counted_whole(y)) {
+	if (is(t, "refused") && (m->count == 3 || (m->count == 4 && z->type == OP_STR)) && sized(x, 32) &&
+		counted_whole(y)) {
 		fputs("{\"message\":[\"refused\",", out);
-		hex(out, x->data, 32), fputc(',', out), op_json_write(out, y), fputs("]}", out);
+		hex(out, x->data, 32), fputc(',', out), op_json_write(out, y);
+		if (m->count == 4) fputc(',', out), op_json_write(out, z);
+		fputs("]}", out);
 		return 1;
 	}
 	if (is(t, "live") && m->count == 3 && sized(x, 8) && sized(y, 0)) {
@@ -684,7 +697,18 @@ static void drop_value(void *value, void *data) {
 	op_free(value);
 }
 
-static device *made(const char *name, const uint8_t *seed, long rebase, int forgets, size_t forks, FILE *out) {
+static void refused(void *ctx, const uint8_t key[32], uint64_t n, const char *why, int taker) {
+	device *d = ctx;
+	void *grown = realloc(d->refusals, (d->nrefusals + 1) * sizeof *d->refusals);
+	if (!grown) hh_fail("out of memory");
+	d->refusals = grown;
+	memcpy(d->refusals[d->nrefusals].device, key, 32), d->refusals[d->nrefusals].n = n;
+	snprintf(d->refusals[d->nrefusals].why, sizeof d->refusals[0].why, "%s", why);
+	d->refusals[d->nrefusals++].taker = taker;
+}
+
+static device *made(const char *name, const uint8_t *seed, long rebase, int forgets, size_t forks,
+	size_t max, FILE *out) {
 	if (named(name)) return hh_error(out, "%s is made", name), NULL;
 	device *d = calloc(1, sizeof *d);
 	device **grown = realloc(w.devices, (w.count + 1) * sizeof *grown);
@@ -717,7 +741,7 @@ static device *made(const char *name, const uint8_t *seed, long rebase, int forg
 		if (!(d->history = tp_history_new(&ho))) hh_fail("out of memory");
 		tp_history_load(d->history);
 	}
-	tp_sync_options so = {w.mem, log, !seed, heard, random_, d, 0, MAX};
+	tp_sync_options so = {w.mem, log, !seed, heard, random_, d, 0, max ? max : MAX, refused};
 	if (!(d->sync = tp_sync_new(&so))) hh_fail("out of memory");
 	return d;
 }
@@ -998,8 +1022,12 @@ static void view(FILE *out, const uint8_t *b, size_t n) {
 		tp_bytes(&in, 8, &x), tp_bytes(&in, 0, &y);
 		fputs("[\"live\",", out), hex(out, x.p, 8), fputc(',', out), hex(out, y.p, y.n), fputc(']', out);
 	} else if (tp_is(t, "refused")) {
+		int parts = (int)k;
+		tp_span why;
 		tp_bytes(&in, 32, &x), tp_whole(&in, &num);
-		fputs("[\"refused\",", out), nameof(out, x.p), fprintf(out, ",%llu]", (unsigned long long)num);
+		fputs("[\"refused\",", out), nameof(out, x.p), fprintf(out, ",%llu", (unsigned long long)num);
+		if (parts == 4 && !tp_text(&in, &why)) fprintf(out, ",\"%.*s\"", (int)why.n, (const char *)why.p);
+		fputs("]", out);
 	} else {
 		goto none;
 	}
@@ -1059,7 +1087,7 @@ static int on_disk(device *d) {
 		return why;
 	}
 	d->log = log, d->store = store;
-	tp_sync_options so = {w.mem, log, 0, heard, random_, d, 0, MAX};
+	tp_sync_options so = {w.mem, log, 0, heard, random_, d, 0, MAX, refused};
 	if (!(d->sync = tp_sync_new(&so))) hh_fail("out of memory");
 	return 0;
 }
@@ -1319,10 +1347,11 @@ void hh_answer(const op_value *r, FILE *out) {
 		int64_t rebase = 0;
 		if (op_get(r, "rebase")) op_as_int64(op_get(r, "rebase"), &rebase);
 		const op_value *fg = op_get(r, "forgets"), *fk = op_get(r, "forks");
-		int64_t fkn = 0;
+		int64_t fkn = 0, maxn = 0;
 		if (fk && !op_as_int64(fk, &fkn)) fkn = 0;
+		if (op_get(r, "max") && !op_as_int64(op_get(r, "max"), &maxn)) maxn = 0;
 		device *d = made(hh_str(r, "name") ? hh_str(r, "name") : "", seed, (long)rebase,
-			fg && fg->type == OP_BOOL && fg->bool_, fkn > 0 ? (size_t)fkn : 0, out);
+			fg && fg->type == OP_BOOL && fg->bool_, fkn > 0 ? (size_t)fkn : 0, maxn > 0 ? (size_t)maxn : 0, out);
 		if (d) fputs("{\"key\":", out), hex(out, tp_log_device(d->log), 32), fputc('}', out);
 	} else if (!strcmp(op, "disk")) {
 		disk(r, out);
@@ -1338,7 +1367,7 @@ void hh_answer(const op_value *r, FILE *out) {
 	} else if (!strcmp(op, "files")) {
 		files(r, out);
 	} else if (!strcmp(op, "relay")) {
-		if (made(hh_str(r, "name") ? hh_str(r, "name") : "", NULL, 0, 0, 0, out)) fputs("{}", out);
+		if (made(hh_str(r, "name") ? hh_str(r, "name") : "", NULL, 0, 0, 0, 0, out)) fputs("{}", out);
 	} else if (!strcmp(op, "write")) {
 		written(r, out);
 	} else if (!strcmp(op, "value")) {
@@ -1360,6 +1389,17 @@ void hh_answer(const op_value *r, FILE *out) {
 		int why = tp_sync_live(d->sync, b, (size_t)n);
 		if (why) { hh_error(out, "%s", tp_why(why)); return; }
 		fputs("{}", out);
+	} else if (!strcmp(op, "refusals")) {
+		device *d = which(r, "device", out);
+		if (!d) return;
+		fputs("{\"refusals\":[", out);
+		for (size_t i = 0; i < d->nrefusals; i++) {
+			if (i) fputc(',', out);
+			fputs("{\"device\":", out), nameof(out, d->refusals[i].device);
+			fprintf(out, ",\"n\":%llu,\"why\":\"%s\",\"taker\":%s}", (unsigned long long)d->refusals[i].n,
+				d->refusals[i].why, d->refusals[i].taker ? "true" : "false");
+		}
+		fputs("]}", out);
 	} else if (!strcmp(op, "forks")) {
 		device *d = which(r, "device", out);
 		if (!d) return;
@@ -1391,6 +1431,17 @@ void hh_answer(const op_value *r, FILE *out) {
 			const uint8_t *key = tp_log_have(d->log, i, &have);
 			if (i) fputc(',', out);
 			nameof(out, key), fprintf(out, ":%llu", (unsigned long long)have);
+		}
+		fputs("}}", out);
+	} else if (!strcmp(op, "passed")) {
+		device *d = which(r, "device", out);
+		if (!d) return;
+		fputs("{\"passed\":{", out);
+		for (size_t i = 0; i < tp_log_devices(d->log); i++) {
+			uint64_t have;
+			const uint8_t *key = tp_log_have(d->log, i, &have);
+			if (i) fputc(',', out);
+			nameof(out, key), fprintf(out, ":%llu", (unsigned long long)tp_sync_passed(d->sync, key));
 		}
 		fputs("}}", out);
 	} else if (!strcmp(op, "count") || !strcmp(op, "steps")) {

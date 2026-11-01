@@ -105,7 +105,7 @@ static tp_log *writer(void) {
 static messages typed(tp_log *log) {
 	tp_mem mem = {plain, NULL};
 	messages m = {NULL, NULL, 0};
-	tp_sync_options so = {mem, log, 0, NULL, NULL, NULL, 0, 0};
+	tp_sync_options so = {mem, log, 0, NULL, NULL, NULL, 0, 0, NULL};
 	tp_sync *sync = tp_sync_new(&so);
 	tp_link *l = tp_sync_link(sync, queued, &m, 0);
 	tp_sync_receive(sync, l, (const uint8_t *)"\x82\x64have\x80", 7);
@@ -209,7 +209,7 @@ static void bench(tp_log *w, const messages *m, int file, int forgets) {
 	tp_log_load(log);
 	tp_history_options ho = {mem[2], log, table, places, NULL, inside, &d, forgets, 0};
 	d.history = tp_history_new(&ho);
-	tp_sync_options so = {mem[3], log, 0, NULL, NULL, NULL, 0, 0};
+	tp_sync_options so = {mem[3], log, 0, NULL, NULL, NULL, 0, 0, NULL};
 	d.sync = tp_sync_new(&so);
 	messages dropped = {NULL, NULL, 0};
 	tp_link *l = tp_sync_link(d.sync, queued, &dropped, 0);
@@ -240,7 +240,7 @@ static void bench(tp_log *w, const messages *m, int file, int forgets) {
 		graph, most, in_use() - before);
 
 	tp_mem wmem = {plain, NULL};
-	tp_sync_options wo = {wmem, w, 0, NULL, NULL, NULL, 0, 0};
+	tp_sync_options wo = {wmem, w, 0, NULL, NULL, NULL, 0, 0, NULL};
 	tp_sync *ws = tp_sync_new(&wo);
 	messages to_w = {NULL, NULL, 0}, to_d = {NULL, NULL, 0};
 	tp_link *dl = tp_sync_link(d.sync, queued, &to_w, 0), *wl = tp_sync_link(ws, queued, &to_d, 0);

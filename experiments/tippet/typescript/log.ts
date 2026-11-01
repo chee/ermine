@@ -14,7 +14,17 @@ import {
 	unhex,
 } from "./step.ts"
 import { createSigner, type Signer, verify } from "./sign.ts"
-import { firstOf, pack, type Packed, type Prior, priorOf, RUN, stepsIn, unpack } from "./pack.ts"
+import {
+	Bound,
+	firstOf,
+	pack,
+	type Packed,
+	type Prior,
+	priorOf,
+	RUN,
+	stepsIn,
+	unpack,
+} from "./pack.ts"
 
 export type Run = { device: string; steps: Uint8Array[]; sig: Uint8Array; message?: Uint8Array }
 
@@ -177,7 +187,9 @@ export function createMemoryStore(): Store {
 	}
 }
 
-const EVERY = 32, BYTES = 2048
+const EVERY = 32
+// a run closes before a step takes its steps' bytes past this (WIRE.md, runs)
+export const CLOSE = 2 ** 14
 
 // next: the seq the next step has
 type Feed = {
@@ -236,6 +248,7 @@ export type Log = {
 	takePack(
 		m: { device: string; sig: Uint8Array; pack: Packed; message?: Uint8Array },
 		from?: unknown,
+		max?: number,
 	): Promise<Taken>
 	load(): Promise<Uint8Array | undefined>
 	snapshot: (bytes: Uint8Array) => Promise<unknown>
@@ -327,11 +340,14 @@ export function createLog(
 		asked = Math.max(asked, n)
 		const p = signing.then(async () => {
 			for (let first = closed + 1; first <= n; first = closed + 1) {
-				const last = Math.min(n, first + EVERY - 1)
-				const steps = Array.from(
-					{ length: last - first + 1 },
-					(_, i) => store.get(device, first + i),
-				)
+				const steps: Uint8Array[] = []
+				let bytes = 0
+				for (let i = first; i <= Math.min(n, first + EVERY - 1); i++) {
+					const b = store.get(device, i)
+					if (steps.length && bytes + b.length > CLOSE) break
+					steps.push(b), bytes += b.length
+				}
+				const last = first + steps.length - 1
 				const sig = await me!.sign(hashStep(steps[steps.length - 1]))
 				const prior = prior_(device, first - 1)
 				save(record(device, sig, pack(steps, prior), prior), [device, first, last])
@@ -546,11 +562,11 @@ export function createLog(
 			const bytes = encodeStep(step)
 			decodeStep(bytes)
 			if (bytes.length > RUN) throw new RangeError("a step past a run's most bytes")
-			// no run past RUN: the open one closed first
-			if (loose && loose + bytes.length > RUN) close(n - 1).catch(() => {})
+			// the open run closed first when this step would take it past the close
+			if (loose && loose + bytes.length > CLOSE) close(n - 1).catch(() => {})
 			add(me.device, bytes, { steps: [step], last: hashStep(bytes) }, undefined, true)
 			loose += bytes.length
-			if (n - asked >= EVERY || loose >= BYTES) close(n).catch(() => {})
+			if (n - asked >= EVERY) close(n).catch(() => {})
 			return step
 		},
 
@@ -570,6 +586,7 @@ export function createLog(
 		takePack(
 			m: { device: string; sig: Uint8Array; pack: Packed; message?: Uint8Array },
 			from?: unknown,
+			max?: number,
 		): Promise<Taken> {
 			return serial(() => {
 				let steps
@@ -581,9 +598,10 @@ export function createLog(
 					const prior = first.prior ? prior_(m.device, first.n - 1) : undefined
 					if (first.prior && !prior) return held ? { added: 0 } : { refused: "before" }
 					try {
-						steps = unpack(m.pack, prior)
+						steps = unpack(m.pack, prior, max)
 					} catch (e) {
 						if (held) return { added: 0 }
+						if (e instanceof Bound) return { refused: "bound" }
 						throw e
 					}
 				} catch {

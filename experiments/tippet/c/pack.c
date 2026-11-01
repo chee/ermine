@@ -149,7 +149,63 @@ static uint64_t *last_of(seen *last, size_t *count, const uint8_t *device) {
 	return &last[(*count)++].n;
 }
 
-static int on_column(tp_buf *b, tp_span on, seen *last, size_t *count, int back) {
+// The keys a pack's on and ids name by table index (../WIRE.md, pack): a byte string of one byte.
+// add: a key not in the table goes in while there is room, else it stays whole.
+#define DEVICES 256
+typedef struct {
+	const uint8_t *key[DEVICES];
+	size_t n;
+	int add;
+} devtab;
+
+static void dev_put(tp_buf *b, devtab *t, const uint8_t *key) {
+	size_t i = 0;
+	while (i < t->n && memcmp(t->key[i], key, 32)) i++;
+	if (i == t->n && t->add && t->n < DEVICES) t->key[t->n++] = key;
+	if (i < t->n) {
+		uint8_t at = (uint8_t)i;
+		tp_put_head(b, 2, 1), tp_put(b, &at, 1);
+	} else tp_put_head(b, 2, 32), tp_put(b, key, 32);
+}
+
+// A key as the pack has it: a table index or whole. 32 bytes of it, or -1.
+static int dev_get(const devtab *t, tp_span s, const uint8_t **key) {
+	if (s.n == 32) return *key = s.p, 0;
+	if (s.n != 1 || s.p[0] >= t->n) return -1;
+	return *key = t->key[s.p[0]], 0;
+}
+
+// Copies an ids value, each key in it by the table (back: out of it).
+static int ids_walk(tp_buf *b, tp_in *in, devtab *t, int back, int depth) {
+	if (in->p >= in->end) return -1;
+	int major = *in->p >> 5;
+	if (major == 4) {
+		uint64_t k;
+		if (depth > 8 || tp_array(in, &k)) return -1;
+		tp_put_head(b, 4, k);
+		for (uint64_t i = 0; i < k; i++) {
+			if (ids_walk(b, in, t, back, depth + 1)) return -1;
+		}
+		return 0;
+	}
+	if (major == 2) {
+		tp_span s;
+		const uint8_t *key;
+		if (tp_bytes(in, 0, &s)) return -1;
+		if (back) {
+			if (dev_get(t, s, &key)) return -1;
+			tp_put_head(b, 2, 32), tp_put(b, key, 32);
+		} else if (s.n != 32) return -1;
+		else dev_put(b, t, s.p);
+		return 0;
+	}
+	tp_span s;
+	if (tp_skip(in, &s)) return -1;
+	tp_put(b, s.p, s.n);
+	return 0;
+}
+
+static int on_column(tp_buf *b, tp_span on, seen *last, size_t *count, int back, devtab *t) {
 	tp_in in = {on.p, on.p + on.n};
 	uint64_t k, two, n;
 	int64_t d;
@@ -162,14 +218,17 @@ static int on_column(tp_buf *b, tp_span on, seen *last, size_t *count, int back)
 			tp_put_head(b, 0, n);
 			continue;
 		}
-		if (tp_array(&in, &two) || two != 2 || tp_bytes(&in, 32, &key)) return -1;
+		if (tp_array(&in, &two) || two != 2 || tp_bytes(&in, back ? 0 : 32, &key)) return -1;
+		if (back && dev_get(t, key, &key.p)) return -1;
 		uint64_t *was = last_of(last, count, key.p);
 		if (back ? tp_int(&in, &d) : tp_whole(&in, &n)) return -1;
 		if (back && (d < 0 ? (uint64_t)-d > *was : (uint64_t)d > TP_WHOLE - *was)) return -1;
 		if (back) n = d < 0 ? *was - (uint64_t)-d : *was + (uint64_t)d;
 		else d = (int64_t)n - (int64_t)*was;
 		*was = n;
-		tp_put_head(b, 4, 2), tp_put_head(b, 2, 32), tp_put(b, key.p, 32);
+		tp_put_head(b, 4, 2);
+		if (back) tp_put_head(b, 2, 32), tp_put(b, key.p, 32);
+		else dev_put(b, t, key.p);
 		if (back) tp_put_head(b, 0, n);
 		else tp_put_int(b, d);
 	}
@@ -180,9 +239,16 @@ int tp_pack(const tp_mem *mem, const tp_span *bytes, size_t n, size_t max, tp_sp
 	return tp_pack_after(mem, NULL, bytes, n, max, pack);
 }
 
-int tp_pack_after(const tp_mem *mem, const tp_prior *prior, const tp_span *bytes, size_t n, size_t max,
-	tp_span *pack) {
+static int pack_one(const tp_mem *mem, const tp_prior *prior, const tp_span *bytes, size_t n, size_t max,
+	tp_span *pack, int use, size_t *named) {
 	int why = 0;
+	pack->p = NULL, pack->n = 0;
+	*named = 0;
+	devtab *dev = tp_alloc(mem, sizeof *dev);
+	if (!dev) return TP_NOMEM;
+	dev->n = 0, dev->add = use;
+	size_t *idstarts = NULL;
+	tp_buf idb = {NULL, 0, 0, max, mem, 0};
 	size_t patches = 0, npaths = 0, slots = 16, values = 0, moves = 0;
 	tp_step *steps = NULL;
 	patched *ps = NULL;
@@ -254,7 +320,7 @@ int tp_pack_after(const tp_mem *mem, const tp_prior *prior, const tp_span *bytes
 		size_t j = 0;
 		for (size_t i = prior ? 0 : 1; i < n; i++, j++) {
 			starts[j] = onb.len;
-			if (on_column(&onb, steps[i].on, last, &nlast, 0)) {
+			if (on_column(&onb, steps[i].on, last, &nlast, 0, dev)) {
 				why = TP_NOTSTEP;
 				goto done;
 			}
@@ -264,13 +330,27 @@ int tp_pack_after(const tp_mem *mem, const tp_prior *prior, const tp_span *bytes
 		for (size_t i = 0; i < j; i++) ons[i] = (tp_span){onb.p + starts[i], starts[i + 1] - starts[i]};
 	}
 	idss = tp_alloc(mem, n * sizeof *idss);
-	if (!idss) {
+	idstarts = tp_alloc(mem, (n + 1) * sizeof *idstarts);
+	if (!idss || !idstarts) {
 		why = TP_NOMEM;
 		goto done;
 	}
-	for (size_t i = prior ? 0 : 1; i < n; i++) idss[prior ? i : i - 1] = steps[i].ids;
+	{
+		size_t j = 0;
+		for (size_t i = prior ? 0 : 1; i < n; i++, j++) {
+			tp_in in = {steps[i].ids.p, steps[i].ids.p + steps[i].ids.n};
+			idstarts[j] = idb.len;
+			if (ids_walk(&idb, &in, dev, 0, 0) || in.p != in.end) {
+				why = TP_NOTSTEP;
+				goto done;
+			}
+		}
+		idstarts[j] = idb.len;
+		if ((why = tp_buf_why(&idb))) goto done;
+		for (size_t i = 0; i < j; i++) idss[i] = (tp_span){idb.p + idstarts[i], idstarts[i + 1] - idstarts[i]};
+	}
 	packing k = {steps, n, patches, ps, prior, ons, idss};
-	tp_put_head(&b, 4, 10);
+	tp_put_head(&b, 4, 10 + (dev->n > 0));
 	if (prior) tp_put_head(&b, 0, steps[0].n);
 	else tp_put_head(&b, 2, bytes[0].n), tp_put(&b, bytes[0].p, bytes[0].n);
 	for (int c = LAMPORT; c <= COUNT; c++) runs(&b, &k, c);
@@ -285,8 +365,16 @@ int tp_pack_after(const tp_mem *mem, const tp_prior *prior, const tp_span *bytes
 	tp_put_text(&b, "value"), items(&b, &k, VALUE, values);
 	runs(&b, &k, ON);
 	runs(&b, &k, IDS);
+	if (dev->n) {
+		tp_put_head(&b, 4, dev->n);
+		for (size_t i = 0; i < dev->n; i++) tp_put_head(&b, 2, 32), tp_put(&b, dev->key[i], 32);
+	}
+	*named = dev->n;
 	why = tp_buf_why(&b);
 done:
+	tp_free(mem, dev, sizeof *dev);
+	tp_free(mem, idstarts, (n + 1) * sizeof *idstarts);
+	tp_buf_free(&idb);
 	tp_free(mem, steps, n * sizeof *steps);
 	tp_free(mem, ps, (patches ? patches : 1) * sizeof *ps);
 	tp_free(mem, paths, (patches ? patches : 1) * sizeof *paths);
@@ -305,6 +393,24 @@ done:
 		return TP_NOMEM;
 	}
 	pack->p = p, pack->n = b.len;
+	return 0;
+}
+
+// With a devices table when that is shorter.
+int tp_pack_after(const tp_mem *mem, const tp_prior *prior, const tp_span *bytes, size_t n, size_t max,
+	tp_span *pack) {
+	size_t named;
+	int why = pack_one(mem, prior, bytes, n, max, pack, 1, &named);
+	if (!why && !named) return 0;
+	tp_span whole;
+	size_t none;
+	if (pack_one(mem, prior, bytes, n, max, &whole, 0, &none)) return why;
+	if (why || whole.n <= pack->n) {
+		if (!why) tp_span_free(mem, pack);
+		*pack = whole;
+		return 0;
+	}
+	tp_span_free(mem, &whole);
 	return 0;
 }
 enum { K_INT, K_TEXT, K_WHO, K_WHOLE, K_SHAPE, K_INDEX, K_NODE, K_ON };
@@ -384,7 +490,7 @@ int tp_pack_first(tp_span pack, uint64_t *n, int *after) {
 	uint64_t k;
 	tp_span first;
 	tp_step s;
-	if (tp_array(&in, &k) || k != 10) return TP_NOTSTEP;
+	if (tp_array(&in, &k) || (k != 10 && k != 11)) return TP_NOTSTEP;
 	*after = in.p < in.end && *in.p >> 5 == 0;
 	if (*after) return tp_whole(&in, n) || *n < 2 ? TP_NOTSTEP : 0;
 	if (tp_bytes(&in, 0, &first) || tp_step_decode(first.p, first.n, &s)) return TP_NOTSTEP;
@@ -396,7 +502,7 @@ size_t tp_pack_count(tp_span pack) {
 	tp_in in = {pack.p, pack.p + pack.n};
 	uint64_t k, n, count, all = 0;
 	int64_t v;
-	if (tp_array(&in, &k) || k != 10 || in.p >= in.end) return 0;
+	if (tp_array(&in, &k) || (k != 10 && k != 11) || in.p >= in.end) return 0;
 	int after = *in.p >> 5 == 0;
 	if (tp_skip(&in, NULL) || tp_array(&in, &k) || k % 2) return 0;
 	for (uint64_t i = 0; i < k; i += 2) {
@@ -418,7 +524,8 @@ int tp_unpack_after(const tp_mem *mem, tp_span pack, size_t max, const tp_prior 
 	static const char *const names[7] = {"paths", "path", "shape", "from", "size", "value", "move"};
 	uint64_t k, steps, patches, n, sums[3] = {0}, counted[3] = {0};
 	memset(out, 0, sizeof *out);
-	if (!tp_canonical(pack.p, pack.n) || tp_array(&in, &k) || k != 10) return TP_NOTSTEP;
+	if (!tp_canonical(pack.p, pack.n) || tp_array(&in, &k) || (k != 10 && k != 11)) return TP_NOTSTEP;
+	size_t width = (size_t)k;
 	int after = in.p < in.end && *in.p >> 5 == 0;
 	if (after ? tp_whole(&in, &n0) || n0 < 2 : tp_bytes(&in, 0, &first)) return TP_NOTSTEP;
 	for (int i = 0; i < 6; i++) tp_skip(&in, &col[i]);
@@ -434,6 +541,8 @@ int tp_unpack_after(const tp_mem *mem, tp_span pack, size_t max, const tp_prior 
 		if (!map[j].p) return TP_NOTSTEP;
 	}
 	if (tp_skip(&in, &ons) || tp_skip(&in, &idss)) return TP_NOTSTEP;
+	tp_span devspan = {0};
+	if (width == 11 && tp_skip(&in, &devspan)) return TP_NOTSTEP;
 	tp_in paths = {map[0].p, map[0].p + map[0].n}, values = {map[5].p, map[5].p + map[5].n},
 	      moves = {map[6].p, map[6].p + map[6].n};
 	uint64_t npaths, nvalues, nmoves;
@@ -470,14 +579,36 @@ int tp_unpack_after(const tp_mem *mem, tp_span pack, size_t max, const tp_prior 
 	int why = 0;
 	size_t room = (size_t)npaths ? (size_t)npaths : 1;
 	tp_span *path = tp_alloc(mem, room * sizeof *path);
-	size_t nlast = 0, most = ons.n / 34 + 1;
+	size_t nlast = 0, most = ons.n / 34 + 1 + DEVICES;
 	seen *lasts = tp_alloc(mem, most * sizeof *lasts);
+	devtab *dev = tp_alloc(mem, sizeof *dev);
 	tp_buf b = {NULL, 0, 0, max, mem, 0};
 	out->room = (size_t)steps + 2 - (size_t)after;
 	out->at = tp_alloc(mem, out->room * sizeof *out->at);
-	if (!path || !out->at || !lasts) {
+	if (!path || !out->at || !lasts || !dev) {
 		why = TP_NOMEM;
 		goto done;
+	}
+	dev->n = 0, dev->add = 0;
+	if (width == 11) {
+		tp_in d = {devspan.p, devspan.p + devspan.n};
+		uint64_t m;
+		tp_span key;
+		if (tp_array(&d, &m) || m < 1 || m > DEVICES) {
+			why = TP_NOTSTEP;
+			goto done;
+		}
+		for (uint64_t i = 0; i < m; i++) {
+			if (tp_bytes(&d, 32, &key)) {
+				why = TP_NOTSTEP;
+				goto done;
+			}
+			dev->key[dev->n++] = key.p;
+		}
+		if (d.p != d.end) {
+			why = TP_NOTSTEP;
+			goto done;
+		}
 	}
 	for (uint64_t i = 0; i < npaths; i++) path[i] = one(&paths);
 	cursor lamport = at(col[0]), when = at(col[1]), node = at(col[2]), part = at(col[3]),
@@ -535,11 +666,17 @@ int tp_unpack_after(const tp_mem *mem, tp_span pack, size_t max, const tp_prior 
 			break;
 		}
 		tp_put_head(&b, 0, next);
-		if (on_column(&b, on.span, lasts, &nlast, 1)) {
+		if (on_column(&b, on.span, lasts, &nlast, 1, dev)) {
 			why = TP_NOTSTEP;
 			break;
 		}
-		tp_put(&b, ids.span.p, ids.span.n);
+		{
+			tp_in iin = {ids.span.p, ids.span.p + ids.span.n};
+			if (ids_walk(&b, &iin, dev, 1, 0) || iin.p != iin.end) {
+				why = TP_NOTSTEP;
+				break;
+			}
+		}
 		if (hasname) tp_put(&b, who.span.p, who.span.n);
 		if (!why && !(why = tp_buf_why(&b))) {
 			out->at[j + 1] = b.len;
@@ -553,6 +690,8 @@ int tp_unpack_after(const tp_mem *mem, tp_span pack, size_t max, const tp_prior 
 done:
 	tp_free(mem, path, room * sizeof *path);
 	tp_free(mem, lasts, most * sizeof *lasts);
+	tp_free(mem, dev, sizeof *dev);
+	if (!why) why = tp_buf_why(&b);
 	if (why) {
 		tp_buf_free(&b);
 		tp_free(mem, out->at, out->room * sizeof *out->at);

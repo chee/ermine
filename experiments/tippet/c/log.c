@@ -6,7 +6,6 @@
 #include "wire.h"
 
 #define EVERY 32
-#define BYTES 2048
 
 typedef struct {
 	uint8_t device[32];
@@ -252,13 +251,28 @@ static int close_run(tp_log *log, uint64_t first, uint64_t last) {
 	return why;
 }
 
+// the last step of the run from first, through n: at most EVERY steps and TP_CLOSE bytes (one step alone
+// may be more)
+static int run_end(tp_log *log, uint64_t first, uint64_t n, uint64_t *last) {
+	size_t bytes = 0;
+	*last = first;
+	for (uint64_t i = first; i <= n && i < first + EVERY; i++) {
+		long k = tp_log_step(log, log->key.pub, i, NULL, 0);
+		if (k < 0) return TP_STORE;
+		if (i > first && bytes + (size_t)k > TP_CLOSE) break;
+		bytes += (size_t)k, *last = i;
+	}
+	return 0;
+}
+
 static int close_to(tp_log *log, uint64_t n) {
 	if (n == tp_log_count(log, log->key.pub)) log->loose = 0;
 	if (n > log->asked) log->asked = n;
 	int why = 0;
 	while (!why && log->closed < n) {
-		uint64_t first = log->closed + 1;
-		why = close_run(log, first, n - first < EVERY ? n : first + EVERY - 1);
+		uint64_t first = log->closed + 1, last;
+		why = run_end(log, first, n, &last);
+		if (!why) why = close_run(log, first, last);
 	}
 	return why;
 }
@@ -300,8 +314,8 @@ int tp_log_write(tp_log *log, const tp_write *w, uint64_t *n, uint64_t *lamport)
 	tp_step check;
 	if (tp_step_decode(bytes, length, &check)) return TP_NOTSTEP;
 	if (length > TP_RUN) return TP_BOUND;
-	// no run past TP_RUN: the open one closed first
-	if (log->loose && log->loose + length > TP_RUN) close_to(log, f->count);
+	// the open run closed first when this step would take it past the close
+	if (log->loose && log->loose + length > TP_CLOSE) close_to(log, f->count);
 	tp_at at = {log->key.pub, s.n, s.n};
 	tp_store *st = log->store;
 	int why = st->open ? st->open(st->self, bytes, length, &at) : st->append(st->self, bytes, length, &at);
@@ -311,7 +325,7 @@ int tp_log_write(tp_log *log, const tp_write *w, uint64_t *n, uint64_t *lamport)
 	f->lamport = s.lamport, f->when = s.when, f->next = s.seq + tp_step_made(&s);
 	log->lamport = s.lamport;
 	log->loose += length;
-	if (s.n - log->asked >= EVERY || log->loose >= BYTES) close_to(log, s.n);
+	if (s.n - log->asked >= EVERY) close_to(log, s.n);
 	*n = s.n, *lamport = s.lamport;
 	tell(log, log->key.pub, s.n, 1);
 	return 0;

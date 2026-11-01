@@ -11,6 +11,7 @@ import {
 	hashStep,
 	hex,
 	idsOf,
+	key,
 	made,
 	onOf,
 	own,
@@ -32,7 +33,12 @@ export type Packed = [
 	columns: Columns,
 	on: Value[],
 	ids: Value[],
+	devices?: Uint8Array[],
 ]
+
+// devices: the keys named in on and ids, each a table index (a byte string of one byte) in the
+// pack; a key past DEVICES stays whole (WIRE.md, pack)
+export const DEVICES = 256
 
 const alike = (a: unknown, b: unknown) =>
 	a === b ||
@@ -58,9 +64,14 @@ function unruns<T>(rs: T[]): T[] {
 	return out
 }
 
+const bad = (): never => {
+	throw new TypeError("not a pack")
+}
 const STEPS = 4096, PATCHES = 65536
 // the most bytes a run's steps make, all told (WIRE.md, runs)
 export const RUN = 2 ** 24
+// a run's steps made past the most a taker takes (RUN, or less)
+export class Bound extends RangeError {}
 
 function length(rs: unknown): number {
 	if (!Array.isArray(rs) || rs.length % 2) return -1
@@ -124,7 +135,15 @@ export function firstOf(p: Packed): { n: number; prior: boolean } {
 export const stepsIn = (p: Packed) =>
 	(typeof p[0] === "number" ? 0 : 1) + (p[1] as number[]).reduce((k, x, i) => i % 2 ? k + x : k, 0)
 
+// with a devices table when that is shorter
 export function pack(bytes: readonly Uint8Array[], prior?: Prior): Packed {
+	const named = build(bytes, prior, true)
+	if (named.length === 10) return named
+	const whole = build(bytes, prior, false)
+	return encode(whole as Value).length <= encode(named as Value).length ? whole : named
+}
+
+function build(bytes: readonly Uint8Array[], prior: Prior | undefined, table: boolean): Packed {
 	const steps = bytes.map(decodeStep), s0 = steps[0]
 	if (prior && (prior.device !== s0.device || prior.n !== s0.n - 1)) {
 		throw new RangeError("not the step before")
@@ -139,15 +158,27 @@ export function pack(bytes: readonly Uint8Array[], prior?: Prior): Packed {
 	}
 	// Another device's n counts from the last this column gave it, so typing by turns makes runs.
 	const last = new Map<string, number>()
+	const seen = new Map<string, number>(), devices: Uint8Array[] = []
+	const ref = (d: Uint8Array): Uint8Array => {
+		const k = hex(d)
+		let i = seen.get(k)
+		if (i === undefined) {
+			if (!table || devices.length >= DEVICES) return d
+			seen.set(k, i = devices.length), devices.push(d)
+		}
+		return Uint8Array.of(i)
+	}
+	const named = (v: Value): Value =>
+		v instanceof Uint8Array ? ref(v) : Array.isArray(v) ? v.map(named) : v
 	const on = runs(rest.map((s) =>
 		(writtenOn(s) as Value[]).map((o) => {
 			if (typeof o === "number") return o
 			const [d, n] = o as [Uint8Array, number], k = hex(d), was = last.get(k) ?? 0
-			return last.set(k, n), [d, n - was]
+			return last.set(k, n), [ref(d), n - was]
 		})
 	))
-	const ids = runs(rest.map((s) => s.ids as Value))
-	return [
+	const ids = runs(rest.map((s) => named(s.ids as Value)))
+	const out: Packed = [
 		prior ? s0.n : bytes[0],
 		runs(rest.map((s, i) => s.lamport - before[i].lamport)),
 		runs(rest.map((s, i) => s.when - before[i].when)),
@@ -159,11 +190,19 @@ export function pack(bytes: readonly Uint8Array[], prior?: Prior): Packed {
 		on,
 		ids,
 	]
+	if (devices.length) out.push(devices)
+	return out
 }
 
-export function unpack(p: unknown, prior?: Prior): Uint8Array[] {
-	if (!Array.isArray(p) || p.length !== 10) throw new TypeError("not a pack")
-	const [first, lamports, whens, nodes, parts, whos, counts, cols, ons, idss] = p as Packed
+export function unpack(p: unknown, prior?: Prior, max = RUN): Uint8Array[] {
+	if (!Array.isArray(p) || (p.length !== 10 && p.length !== 11)) throw new TypeError("not a pack")
+	const [first, lamports, whens, nodes, parts, whos, counts, cols, ons, idss, devices] =
+		p as Packed
+	if (
+		p.length === 11 &&
+		(!Array.isArray(devices) || devices.length < 1 || devices.length > DEVICES ||
+			!devices.every(key))
+	) throw new TypeError("not a pack")
 	const steps = length(lamports), patches = patchCount(cols)
 	const against = typeof first === "number"
 	const ok = steps >= 0 && steps < STEPS && patches >= 0 &&
@@ -181,9 +220,9 @@ export function unpack(p: unknown, prior?: Prior): Uint8Array[] {
 		: decodeStep(first as Uint8Array)
 	let next = against ? prior!.next : (prev as Step).seq + made(prev as Step)
 	let hash = against ? prior!.hash : hashStep(first as Uint8Array), at = 0
-	// the steps' bytes so far: past RUN, refused before any more is made
+	// the steps' bytes so far: past max, refused before any more is made
 	let bytes = against ? 0 : (first as Uint8Array).length
-	if (bytes > RUN) throw new RangeError("a run past its most bytes")
+	if (bytes > max) throw new Bound("a run past its most bytes")
 	const lamport = unruns(lamports),
 		when = unruns(whens),
 		node = unruns(nodes),
@@ -203,15 +242,22 @@ export function unpack(p: unknown, prior?: Prior): Uint8Array[] {
 	if (!on.every((x) => Array.isArray(x)) || !ids.every((x) => Array.isArray(x))) {
 		throw new TypeError("not a pack")
 	}
+	// a key whole, or by its table index; a one byte string with no table, or past it: not a pack
+	const expand = <T extends Value>(v: T): T =>
+		(v instanceof Uint8Array
+			? v.length === 1 ? devices?.[v[0]] ?? bad() : v
+			: Array.isArray(v)
+			? v.map(expand)
+			: v) as T
 	const device = unhex(prev.device), last = new Map<string, number>()
 	for (let i = 0; i < count.length; i++) {
 		const written = (on[i] as unknown[]).map((o) => {
 			if (!Array.isArray(o) || o.length !== 2 || !(o[0] instanceof Uint8Array)) return o
-			const k = hex(o[0]), n = (last.get(k) ?? 0) + (o[1] as number)
-			return last.set(k, n), [o[0], n]
+			const d = expand(o[0]), k = hex(d), n = (last.get(k) ?? 0) + (o[1] as number)
+			return last.set(k, n), [d, n]
 		})
 		if (!written.every(onOf(device, prev.n + 1))) throw new TypeError("not a pack")
-		const named = ids[i] as Value[]
+		const named = expand(ids[i] as Value) as Value[]
 		const s: Step = {
 			device: prev.device,
 			n: prev.n + 1,
@@ -232,7 +278,7 @@ export function unpack(p: unknown, prior?: Prior): Uint8Array[] {
 		if (next > Number.MAX_SAFE_INTEGER - made(s)) throw new TypeError("not a pack")
 		next += made(s)
 		const b = encodeStep(s)
-		if ((bytes += b.length) > RUN) throw new RangeError("a run past its most bytes")
+		if ((bytes += b.length) > max) throw new Bound("a run past its most bytes")
 		out.push(b)
 		prev = s, hash = hashStep(b)
 	}

@@ -42,6 +42,8 @@ const char *tp_why(int code);
 #define TP_WHOLE 9007199254740991ull
 // the most bytes a run's steps make, all told (WIRE.md, runs)
 #define TP_RUN ((size_t)1 << 24)
+// a run closes before a step takes its steps' bytes past TP_CLOSE (../WIRE.md, runs)
+#define TP_CLOSE ((size_t)1 << 14)
 
 // One write; its spans point into the step's bytes. node, part and who are UTF-8 text.
 typedef struct {
@@ -183,7 +185,8 @@ typedef struct {
 	tp_span on;
 	tp_span ids; // after on only; none: p NULL
 } tp_write;
-// Stays open in the store until its run closes (32 steps or 2048 bytes).
+// Stays open in the store until its run closes: 32 steps, the byte close (TP_CLOSE), or a peer
+// asking for it.
 int tp_log_write(tp_log *log, const tp_write *w, uint64_t *n, uint64_t *lamport);
 
 size_t tp_log_devices(const tp_log *log);
@@ -233,7 +236,11 @@ typedef struct {
 	void (*random)(void *ctx, uint8_t *out, size_t n);
 	void *ctx;
 	size_t seen; // live ids remembered (1024)
-	size_t max; // the most bytes of a run's steps, or a message (TP_RUN; less: runs past it refused)
+	size_t max; // the most bytes of a run's steps, or a message (TP_RUN; less: runs past it refused `bound`)
+	// told when a run is refused, by this side (taker) or the other, once a device a link: why is
+	// "bound" for a run past what the taker takes, "memory" for one it had no memory for (a try
+	// again after its next have). Optional.
+	void (*refused)(void *ctx, const uint8_t device[32], uint64_t n, const char *why, int taker);
 } tp_sync_options;
 
 tp_sync *tp_sync_new(const tp_sync_options *o);

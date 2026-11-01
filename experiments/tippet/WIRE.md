@@ -144,6 +144,19 @@ before and FugueMax are mine, not decided: Weidner and Kleppmann's FugueMax, in 
 (Gentle's YjsMod), so it works on the runs as held; naming before, two typing at one place don't
 interleave, in any direction.
 
+devices is mine, not decided: a table per pack, so a pack reads on its own and a stored run is its
+pack; a key named once costs nothing (no table), each time more 1 byte (was 34). by turns, 3
+devices, bursts of 10: 3 bytes a keystroke packed (of 23); bursts of 1: 23 (of 183). a key's index
+in a device's chain would cut more, and a device that forgets would hold it.
+
+the bytes close is mine, not decided: 32 keystrokes (110 to 200 bytes a step) share a run and a
+signature: 200 keystrokes at the end, 12.8 bytes a keystroke stored (was 19.0), 6.0 packed (was
+8.1). 16384 is past a keystroke burst and keeps the worst run a peer takes small: a fresh C peer
+takes a 16384-byte run in about 33 KB of heap (31 to 33 KB for steps of 500 to 8000 bytes), and a
+message of that size; with no byte close, 32 steps of 4 KB took 392 KB. one close for everyone: a
+run once closed is never cut, so a close a peer could ask to be smaller would strand it on every run
+closed before it asked.
+
 on's shape is mink's pick (10-26), not decided: heads by device and n, as the log finds a step (its
 chain binds n to its bytes), not by hash; this device's own as how far back, and runs in a pack.
 
@@ -160,15 +173,18 @@ hash: blake3 (32 bytes) of the step's bytes. Bytes are never encoded twice: a st
 
 A device's steps travel in runs: from some n to a signed n.
 
-- closed: by the writer, when 32 steps or 2048 bytes of steps have been written since the last
-  close, or when a peer asks for the steps of an open one (it is closed at the latest step)
+- closed: by the writer, when 32 steps have been written since the last close, or before a step that
+  would take its steps' bytes past the close, or when a peer asks for the steps of an open one (it
+  is closed at the latest step, in runs within the close). a step alone may be past it
+- close: 16384 bytes of steps, unpacked, for every device
 - sig: ed25519 over the 32-byte hash of the run's last step. one per run; the chain vouches for the
   steps before it
 - never cut or joined: a run's end is fixed once signed. anyone passing it on sends it to that end
   with that sig; a peer holding its start is sent only the rest
 - at most 2^24 bytes (16 MB) of steps, all told, the first whole one too: the writer closes its run
-  before a step that would take it past, and writes no step past it alone. a peer may take less (a
-  small device), never more
+  before a step that would take it past, and writes no step past it alone. a taker may take less (a
+  host's setting, `max`: `typescript/sync.ts` createSync, `c/tippet.h` tp_sync_options), never more;
+  a run past it is refused `bound`
 
 Taking a run, in order:
 
@@ -193,7 +209,7 @@ Each a cbor array. Anything else is dropped, silently.
     ["have", [[device, n], …]]
     ["run", device, sig, pack]
     ["live", id, data]
-    ["refused", device, n]
+    ["refused", device, n, why?]
     ["fork", device, sig, pack, sig, pack]
 
 - have: per device, how many steps the sender holds through its last signed step (its own: all).
@@ -202,7 +218,14 @@ Each a cbor array. Anything else is dropped, silently.
 - live: id 8 random bytes, data bstr. never kept. ids lately seen (1024) are dropped; a relay sends
   it to its other links
 - refused: device 32 bytes, n the refusing side's count of it. that device is sent no more on that
-  link
+  link. why: text, `bound` for a run past what the refuser takes; `memory` for one it had no memory
+  for (C only): not for good, below; none otherwise. both sides' hosts are told, once a device a
+  link (`typescript/sync.ts` onRefused, `c/tippet.h` tp_sync_options refused)
+- memory: the writer counts the device as holding n (the refuser's count), so a peer that lets go of
+  what its links hold keeps what this one lacks, and sends it no more of the device until the
+  refuser's next have or a newer step of the device; the refuser, until it takes a run of the
+  device, answers no gap with a have, so a pipeline of runs makes one try, not a loop. its host is
+  told again after each try
 - fork: device 32 bytes; two runs of it, each a sig and a pack with its first step whole (bstr), as
   runs; a proof (forks). dropped when it does not check. sent on every link but the one it came
   from, and after have on a new link
@@ -245,6 +268,7 @@ a backup restored and written on. Nobody is told by a refusal on one link; a for
 A run's steps, small.
 
     [first, lamport, when, node, part, who, count, columns, on, ids]
+    [first, lamport, when, node, part, who, count, columns, on, ids, devices]
 
 - first: whole n, from 2: step n is packed against step n - 1, like the rest; or bstr, the first
   step's bytes, whole (at n = 1)
@@ -258,8 +282,13 @@ A run's steps, small.
     device (from 0, may be negative), so typing by turns makes runs (mink's pick: two typing by
     turns, 38 bytes a step packed without it, 4 with)
   - ids: the step's ids as written
+  - key (a device's, in on or ids): whole (bstr, 32 bytes), or 1 byte: its place in devices
   - seq: none: the one after the steps before it (the whole first's, or step n - 1's)
 - columns: every later step's patches, in order, as below
+- devices: array of 1 to 256 keys (bstr, 32 bytes): the keys of on, then of ids, in the order first
+  named (so TS and C make the same bytes); one past 256 stays whole. a writer adds it only when its
+  pack is shorter with it (not when equal); a reader takes any valid table. an index past it, a
+  1-byte bstr with no devices, a bstr of another length: not a pack
 
 Unpack: for each step after step n - 1 (the receiver's) or the whole first, from the one before
 (prev):
@@ -269,11 +298,12 @@ Unpack: for each step after step n - 1 (the receiver's) or the whole first, from
 
 encoded canonically: the same bytes the writer made, so chain and sig check as ever.
 
-Refused before anything is made: not 10 elements, first neither bstr nor whole from 2, 4096 or more
-steps in the columns (none, when first is n), more than 65536 patches, a column of another length,
-counts not summing to the patches, an on or ids entry not an array. A step it makes that isn't one
-(an n added back to below 1, a seq past 2^53 - 1 with what it inserts, ids not as a step has them):
-refused. Steps that make more than a run's 2^24 bytes: refused once they do, nothing more made.
+Refused before anything is made: not 10 or 11 elements, devices not as above, first neither bstr nor
+whole from 2, 4096 or more steps in the columns (none, when first is n), more than 65536 patches, a
+column of another length, counts not summing to the patches, an on or ids entry not an array. A step
+it makes that isn't one (an n added back to below 1, a seq past 2^53 - 1 with what it inserts, ids
+not as a step has them): refused. Steps that make more than the taker's max (at most a run's 2^24
+bytes): refused `bound` once they do, nothing more made.
 
 Step n - 1 not held: past what is held, a gap (answered with have); all steps held, passed over;
 else held but not to be read (forgotten), refused, never guessed.
