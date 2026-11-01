@@ -23,7 +23,7 @@ needs: deno 2.9.7 (what CI pins), a C11 compiler (cc), make. macOS's leaks for `
     make test-c               each conformance suite against its C harness
     make test-check           the same against the harness-checks
     make test-leaks           the same under macOS's leaks
-    WERROR=1                  with any of these: warnings are errors (CI builds so)
+    WERROR=1                  with any of these: the harnesses' warnings are errors (CI builds so)
     <package>/c/build.sh      one package's harnesses alone; CHECK=1: its harness-checks
 
 ## measuring

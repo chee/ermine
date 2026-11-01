@@ -34,8 +34,7 @@ char *copyString(const char *text) {
 static char *vformat(const char *format, va_list arguments) {
 	va_list again;
 	va_copy(again, arguments);
-	char one;
-	int length = vsnprintf(&one, 1, format, arguments);
+	int length = vsnprintf(NULL, 0, format, arguments);
 	char *text = allocate((size_t)length + 1);
 	vsnprintf(text, (size_t)length + 1, format, again);
 	va_end(again);

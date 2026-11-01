@@ -117,8 +117,7 @@ static char *formatString(const char *format, ...) __attribute__((format(printf,
 static char *formatString(const char *format, ...) {
 	va_list args;
 	va_start(args, format);
-	char one;
-	int n = vsnprintf(&one, 1, format, args);
+	int n = vsnprintf(NULL, 0, format, args);
 	va_end(args);
 	char *out = allocate((size_t)n + 1);
 	va_start(args, format);

@@ -4,7 +4,8 @@
 #   make test         the TypeScript tests (the references)
 #   make test-c       each conformance suite against its C harness
 #   make test-check   the same against the harness-checks
-#   WERROR=1          any of these with warnings as errors (CI builds so)
+#   WERROR=1          the harnesses with warnings as errors (CI builds so); not the harness-checks,
+#                     where the sanitizers' checks make gcc warn of what can't happen
 #   make clean
 # <group>/<lib>/c/build.sh builds that topic's libraries alone (CHECK=1: the harness-checks).
 
@@ -16,7 +17,6 @@ SOURCE = $(if $(filter Linux,$(shell uname -s)),-D_DEFAULT_SOURCE,)
 CFLAGS += $(SOURCE)
 CHECKFLAGS = -std=c11 -g -O1 -Wall -Wextra -Wpedantic -fsanitize=address,undefined -fno-omit-frame-pointer $(SOURCE)
 CFLAGS += $(if $(WERROR),-Werror,)
-CHECKFLAGS += $(if $(WERROR),-Werror,)
 DENO = deno test --quiet --allow-run --allow-read --allow-env
 
 # the shared loop of every harness on the one runner: it and changeable's value and JSON

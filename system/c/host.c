@@ -31,8 +31,7 @@ static void forget(void) {
 static char *format(const char *format, va_list args) {
 	va_list again;
 	va_copy(again, args);
-	char one;
-	int n = vsnprintf(&one, 1, format, again);
+	int n = vsnprintf(NULL, 0, format, again);
 	va_end(again);
 	char *text = es_alloc((size_t)n + 1);
 	vsnprintf(text, (size_t)n + 1, format, args);
