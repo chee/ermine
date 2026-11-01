@@ -1,6 +1,6 @@
 // crow's streams: writes, unwrites, reads and marks on an entry, checked against a model; wild adds odd input.
 import apply, { ApplyError, type Patch } from "@ermine/changeable/apply"
-import { isMap, made, patch, paths } from "../../crow/typescript/random_harness.ts"
+import { isMap, made, patch, paths } from "../../core/crow/typescript/random_harness.ts"
 import { wildPatches } from "./apply.ts"
 import {
 	type Answer,

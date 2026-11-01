@@ -17,6 +17,12 @@ const PACKAGES: Record<string, readonly string[]> = {
 const root = new URL("../", import.meta.url).pathname
 const ORDER = Object.keys(PACKAGES)
 
+const workspace: string[] = JSON.parse(Deno.readTextFileSync(root + "deno.json")).workspace
+const DIRS = new Map(
+	workspace.map((w) => w.slice("./".length)).filter((w) => !w.startsWith("experiments/"))
+		.map((w) => [w.split("/").at(-1)!, w]),
+)
+
 const reachable = (p: string): Set<string> =>
 	new Set((PACKAGES[p] ?? []).flatMap((d) => [d, ...reachable(d)]))
 const C_ONLY: string[] = []
@@ -52,15 +58,12 @@ function reaches(from: string, spec: string): string | undefined {
 		if (s === "..") return at.slice(0, -1)
 		return s === "." ? at : [...at, s]
 	}
-	return spec.split("/").reduce(step, from.split("/").slice(0, -1))[0]
+	const at = spec.split("/").reduce(step, from.split("/").slice(0, -1)).join("/") + "/"
+	return [...DIRS].find(([, dir]) => at.startsWith(`${dir}/`))?.[0] ?? at.split("/")[0]
 }
 
 Deno.test("layout: every workspace package is in the order, and only those", () => {
-	const workspace: string[] = JSON.parse(Deno.readTextFileSync(root + "deno.json")).workspace
-	const packages = workspace.map((w) => w.replace(/^\.\//, "")).filter((w) =>
-		!w.startsWith("experiments/")
-	)
-	assertEquals(packages.toSorted(), ORDER.filter((p) => !C_ONLY.includes(p)).toSorted())
+	assertEquals([...DIRS.keys()].toSorted(), ORDER.filter((p) => !C_ONLY.includes(p)).toSorted())
 })
 
 Deno.test("layout: a package may import only packages before it", () => {
@@ -73,7 +76,7 @@ Deno.test("layout: a package may import only packages before it", () => {
 Deno.test("layout: a package's files import only itself and what they may", () => {
 	const wrong = Object.keys(PACKAGES).flatMap((p) => {
 		const may = reachable(p)
-		return files(p).flatMap((f) =>
+		return files(DIRS.get(p)!).flatMap((f) =>
 			specifiers(f).filter((spec) => {
 				const to = reaches(f, spec)
 				if (to === "conformance" && testOnly(f)) return false

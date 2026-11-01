@@ -1,0 +1,44 @@
+# ermine changes (changes/README): after core passes on main, a release pull request while changes/
+# has changes, deno publish when it has none
+
+name: changes
+
+on:
+  workflow_run:
+    workflows: [core]
+    types: [completed]
+    branches: [main]
+
+concurrency: changes
+
+jobs:
+  changes:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - id: plan
+        run: |
+          deno task changes > "$RUNNER_TEMP/release.md"
+          if [ -s "$RUNNER_TEMP/release.md" ]; then echo pending=yes >> "$GITHUB_OUTPUT"; fi
+      - if: steps.plan.outputs.pending
+        run: deno task changes version
+      - if: steps.plan.outputs.pending
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: changes/release
+          base: main
+          title: release
+          commit-message: release
+          body-path: ${{ runner.temp }}/release.md
+      - if: ${{ !steps.plan.outputs.pending }}
+        run: deno publish

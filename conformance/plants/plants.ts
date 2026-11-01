@@ -11,8 +11,8 @@ const fuzzPaths = { fuzz: `reactivity/${T}/paths_fuzz_test.ts` }
 const fuzzUpdate = { fuzz: `changeable/${T}/update_fuzz_test.ts` }
 const fuzzApply = { fuzz: `changeable/${T}/apply_fuzz_test.ts` }
 const fuzzCrow = { fuzz: `crow/${T}/crow_fuzz_test.ts` }
-const fuzzEnd = { fuzz: `places/fuzz/end_to_end_fuzz_test.ts` }
-const fuzzPlacesPaths = { fuzz: `places/fuzz/places_paths_fuzz_test.ts` }
+const fuzzEnd = { fuzz: `core/places/fuzz/end_to_end_fuzz_test.ts` }
+const fuzzPlacesPaths = { fuzz: `core/places/fuzz/places_paths_fuzz_test.ts` }
 const fuzzPlaces = { fuzz: `places/${T}/places_fuzz_test.ts` }
 
 export const plants: Plant[] = [

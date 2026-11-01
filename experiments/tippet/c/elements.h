@@ -7,7 +7,7 @@
 #ifndef TIPPET_ELEMENTS_H
 #define TIPPET_ELEMENTS_H
 
-#include "../../../changeable/c/apply.h"
+#include "../../../core/changeable/c/apply.h"
 #include "tippet.h"
 #include "wire.h"
 

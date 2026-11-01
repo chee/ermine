@@ -18,10 +18,10 @@ mkdir -p "$out"
 own="wire step pack sign log store store_file sync http"
 # on the graph: C11
 graph="history elements"
-reused="encoding/ed25519/c/ed25519 encoding/ed25519/c/sha2 encoding/c/cbor encoding/c/json encoding/c/blake3/blake3 encoding/c/blake3/blake3_dispatch encoding/c/blake3/blake3_portable"
+reused="core/encoding/ed25519/c/ed25519 core/encoding/ed25519/c/sha2 core/encoding/c/cbor core/encoding/c/json core/encoding/c/blake3/blake3 core/encoding/c/blake3/blake3_dispatch core/encoding/c/blake3/blake3_portable"
 # the graph: table, node, op, places, scheduler (the root Makefile's places_src, but its harnesses)
-places="places/c/places crow/c/crow places/c/crowify processes/c/status graph/c/table graph/c/node graph/c/update changeable/c/value changeable/c/frame changeable/c/apply changeable/c/invert reactivity/c/paths reactivity/c/scheduler reactivity/c/order reactivity/c/rank reactivity/c/causes changeable/c/ptrmap reactivity/c/tracker"
-harness="conformance/c/harness conformance/c/protocol_harness changeable/c/json"
+places="core/places/c/places core/crow/c/crow core/places/c/crowify system/processes/c/status core/graph/c/table core/graph/c/node core/graph/c/update core/changeable/c/value core/changeable/c/frame core/changeable/c/apply core/changeable/c/invert core/reactivity/c/paths core/reactivity/c/scheduler core/reactivity/c/order core/reactivity/c/rank core/reactivity/c/causes core/changeable/c/ptrmap core/reactivity/c/tracker"
+harness="conformance/c/harness conformance/c/protocol_harness core/changeable/c/json"
 STRICT="-std=c99 -Wall -Wextra -Wpedantic -Werror"
 LOOSE="-std=c11 -Wall -Wextra -Wpedantic"
 BLAKE3="-DBLAKE3_NO_SSE2 -DBLAKE3_NO_SSE41 -DBLAKE3_NO_AVX2 -DBLAKE3_NO_AVX512 -DBLAKE3_USE_NEON=0"
