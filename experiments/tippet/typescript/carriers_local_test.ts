@@ -112,8 +112,8 @@ function stuck() {
 Deno.test("a websocket whose peer never reads: runs wait, and past 8 MB unsent the link is closed", async () => {
 	const log = createLog({ writes: true })
 	await log.load()
-	const big = "x".repeat(512 * 1024)
-	for (let i = 0; i < 40; i++) {
+	const big = "x".repeat(20 * 1024)
+	for (let i = 0; i < 100; i++) {
 		log.write({ node: "pig", part: "value", patches: [{ path: [], value: big + i }], when: 0 })
 	}
 	const sync = createSync({ log, relay: true })

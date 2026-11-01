@@ -9,12 +9,12 @@ import { createPaths } from "@ermine/reactivity/paths"
 import { createTable, type Key } from "@ermine/graph/table"
 import { children, createPlaces } from "@ermine/places"
 import { createChangeHeader } from "@ermine/places/header"
-import { createLog, createMemoryStore, type Log, type Run, type Store } from "./log.ts"
+import { CLOSE, createLog, createMemoryStore, type Log, type Run, type Store } from "./log.ts"
 import { createHistory } from "./history.ts"
-import { createSync } from "./sync.ts"
+import { createSync, type Message, read, wire } from "./sync.ts"
 import { createSigner } from "./sign.ts"
 import { decodeStep, encodeStep, hashStep, type Step, unhex } from "./step.ts"
-import { pack, RUN, unpack } from "./pack.ts"
+import { pack, type Packed, RUN, unpack } from "./pack.ts"
 import { fileStore } from "./store_file.ts"
 import { port } from "./carriers/messagechannel.ts"
 
@@ -216,7 +216,7 @@ Deno.test("7. runs are small, and a relay passes them on as they were made, on d
 	for (let n = 1; n <= 200;) {
 		const r = (await d.run(d.device!, n))!
 		assert(
-			r.steps.length <= 32 && size(r) <= 2048 + 512,
+			r.steps.length <= 32,
 			`${r.steps.length} steps, ${size(r)} bytes`,
 		)
 		assertEquals(await relay.take(r), { added: r.steps.length })
@@ -403,4 +403,159 @@ Deno.test("14. a snapshot from before seq loads without reading its steps back",
 	const counted: Store = { ...inner, get: (d, n) => (gets++, inner.get(d, n)) }
 	const r = await device({ store: counted })
 	assertEquals([r.value("pig299"), r.log.count(w.log.device!), gets], [{ n: 299 }, 300, 0])
+})
+
+Deno.test("15. a pack names the devices it carries by a table when that is shorter, and a stored run reads back", async () => {
+	const a = await writer(), other = await writer()
+	const by = (k: number) => ({ device: other.device!, n: k })
+	for (let k = 1; k <= 4; k++) {
+		a.write({
+			node: "pig",
+			part: "value",
+			patches: [{ path: [], value: k }],
+			when: 0,
+			on: [by(k)],
+		})
+	}
+	const r = (await a.run(a.device!, 1))!, p = pack(r.steps)
+	assertEquals([p.length, p[10]?.length], [11, 1])
+	assertEquals(unpack(p), r.steps)
+	assertEquals(pack(r.steps.slice(0, 2)).length, 10)
+	const store = createMemoryStore(), relay = createLog({ store })
+	assertEquals(await relay.take(r), { added: 4 })
+	const again = createLog({ store })
+	await again.load()
+	assertEquals(await again.run(a.device!, 1), r)
+	const out = (f: (p: Packed) => void) => {
+		const q = structuredClone(p)
+		f(q)
+		assertThrows(() => unpack(q))
+	}
+	out((q) => q[10] = [])
+	out((q) => q[10] = [new Uint8Array(31)])
+	out((q) => q[10] = Array.from({ length: 257 }, () => new Uint8Array(32)))
+	out((q) => q[10] = [unhex(a.device!)])
+	out((q) => q[8] = [[[Uint8Array.of(1), 1]], 4])
+	out((q) => q[8] = [[[new Uint8Array(2), 1]], 4])
+	out((q) => void q.push([]))
+})
+
+function joined(a: ReturnType<typeof createSync>, b: ReturnType<typeof createSync>) {
+	const heard: ((x: Uint8Array) => void)[] = [(_) => {}, (_) => {}], sent = [0, 0]
+	const end = (i: number) => ({
+		send: (x: Uint8Array) => (sent[i]++, void setTimeout(() => heard[1 - i](x), 0)),
+		onMessage: (f: (x: Uint8Array) => void) => void (heard[i] = f),
+	})
+	const ends = [end(0), end(1)]
+	return { sent, link: () => (a.link(ends[0]), b.link(ends[1])) }
+}
+
+Deno.test("16. a writer that wrote offline sends runs of 16 KB at most, and a taker with that max takes them", async () => {
+	const w = await writer(), r = await writer()
+	const big = "x".repeat(4000)
+	for (let k = 0; k < 32; k++) put(w, big + k)
+	const taking = createSync({ log: r, max: CLOSE }), refused: unknown[] = []
+	taking.onRefused((x) => refused.push(x))
+	const sending = createSync({ log: w }), told: unknown[] = []
+	sending.onRefused((x) => told.push(x))
+	joined(sending, taking).link()
+	await until(() => r.count(w.device!) === 32)
+	assertEquals([refused, told], [[], []])
+	for (let n = 1; n <= 32;) {
+		const run = (await w.run(w.device!, n))!
+		assert(
+			size(run) <= CLOSE || run.steps.length === 1,
+			`${run.steps.length} steps, ${size(run)}`,
+		)
+		n += run.steps.length
+	}
+})
+
+Deno.test("17. a run past the max its taker takes is refused `bound`, both hosts are told, and it is not sent again", async () => {
+	const w = await writer(), r = await writer()
+	const big = "x".repeat(4000)
+	for (let k = 0; k < 3; k++) put(w, big + k)
+	const taking = createSync({ log: r, max: 4096 }), refused: unknown[] = []
+	taking.onRefused((x) => refused.push(x))
+	const told: unknown[] = []
+	const sending = createSync({ log: w })
+	sending.onRefused((x) => told.push(x))
+	const line = joined(sending, taking)
+	line.link()
+	await until(() => told.length > 0 && refused.length > 0)
+	await tick(100)
+	const me = { device: w.device!, n: 0, why: "bound" }
+	assertEquals([refused, told], [[{ ...me, taker: true }], [{ ...me, taker: false }]])
+	assertEquals(r.count(w.device!), 0)
+	const sent = line.sent[0]
+	put(w, "more")
+	await tick(100)
+	assertEquals([line.sent[0], r.count(w.device!)], [sent, 0])
+})
+
+// a peer that is a list of what it was sent, and says what the test tells it to
+function peer() {
+	const sent: Uint8Array[] = [], at: { hear?: (x: Uint8Array) => void } = {}
+	return {
+		sent,
+		say: (m: Message) => at.hear!(wire(m)),
+		link: {
+			send: (x: Uint8Array) => void sent.push(x),
+			onMessage: (f: (x: Uint8Array) => void) => void (at.hear = f),
+		},
+		runs: () => sent.map((x) => read(x)).filter((m) => m?.t === "run").length,
+	}
+}
+
+Deno.test("18. a run refused `memory` is not for good: the writer's host is told once, it counts the taker as lacking the run, and sends again after the taker's next have or a newer step", async () => {
+	const a = await writer(), me = a.device!
+	const relay = createLog({})
+	const more = async () => {
+		put(a, "n")
+		const n = a.count(me)
+		assertEquals(await relay.take((await a.run(me, n))!), { added: 1 })
+	}
+	await more()
+	const sync = createSync({ log: relay }), told: unknown[] = []
+	sync.onRefused((x) => told.push(x))
+	const p = peer()
+	sync.link(p.link)
+	p.say({ t: "have", have: {} })
+	await until(() => p.runs() === 1)
+	const refuse = () => p.say({ t: "refused", device: me, n: 0, why: "memory" })
+	refuse(), refuse()
+	await tick(20)
+	const once = { device: me, n: 0, why: "memory", taker: false }
+	assertEquals([told, sync.passed()[me], p.runs()], [[once], 0, 1])
+	await more()
+	await until(() => p.runs() > 1)
+	await tick(20)
+	const sent = p.runs()
+	refuse()
+	await tick(20)
+	assertEquals([told, sync.passed()[me], p.runs()], [[once, once], 0, sent])
+	p.say({ t: "have", have: {} })
+	await until(() => p.runs() > sent)
+	assertEquals(told.length, 2)
+})
+
+Deno.test("19. a taker's host is told once a device a link of the runs it refuses, however many come", async () => {
+	const w = await writer(), r = await writer()
+	for (let k = 0; k < 3; k++) put(w, "x".repeat(4000) + k)
+	const run = (await w.run(w.device!, 1))!
+	const taking = createSync({ log: r, max: 1000 }), told: unknown[] = []
+	taking.onRefused((x) => told.push(x))
+	const p = peer()
+	taking.link(p.link)
+	for (let k = 0; k < 5; k++) {
+		p.say({ t: "run", device: w.device!, sig: run.sig, pack: pack(run.steps) })
+	}
+	await tick(50)
+	assertEquals(told, [{ device: w.device!, n: 0, why: "bound", taker: true }])
+})
+
+Deno.test("20. a have is two elements: one with a third is not a message", () => {
+	const have = [new Uint8Array(32)].map((d) => [d, 1])
+	assertEquals(read(encode(["have", have, 4096])), undefined)
+	assertEquals(read(encode(["have", have]))?.t, "have")
 })

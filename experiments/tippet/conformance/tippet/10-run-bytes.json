@@ -1,5 +1,5 @@
 {
-	"title": "a run is closed once 2048 bytes of steps are written since the last close",
+	"title": "a run is not closed by the bytes of its steps: six steps of about 400 bytes are one run, closed when asked for",
 	"steps": [
 		{
 			"op": "device",
@@ -119,8 +119,8 @@
 			"from": 1,
 			"expect": {
 				"from": 1,
-				"to": 5,
-				"sig": "83472a2c107a8bf28e4a7ab4ed5a63d63f0f10b3bfc1e4b4e879f1ccf6b88bce00187a14a5bb01d63b60f3b3372ab740e80e9a73a34712d3f4c15db6f77de902"
+				"to": 6,
+				"sig": "89f4ede705f7f6417d70b72b455762816537091e11d6aabdadff1559525b0f05b249b26d7c8ddc71e465f687f9b1cf02c8cea7f4a64bd860fb11e3b56e7dac09"
 			}
 		},
 		{

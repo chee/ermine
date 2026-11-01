@@ -14,9 +14,10 @@
 //   unpack  { pack, before? } -> { steps } | { refused: true }
 //   message { message } -> { bytes }     a run is ["run", device, sig, steps]
 //   read    { bytes } -> { message } | { refused: true }
-//   device  { name, seed, rebase?, forgets?, forks? } -> { key }    a log that writes, with its graph and sync;
+//   device  { name, seed, rebase?, forgets?, forks?, max? } -> { key }    a log that writes, with its graph and sync;
 //                                        rebase: history's (how many steps an entry can undo);
-//                                        forks: the most bytes of steps its fork proofs hold
+//                                        forks: the most bytes of steps its fork proofs hold;
+//                                        max: the most bytes of steps in a run its sync takes
 //   relay   { name } -> {}               no key, no graph
 //   write   { device, node, part?, patches, when?, who? } -> { n, lamport }
 //   disk    { name, seed, log? } -> { key }    a log on the file store, no graph; log: initial hex
@@ -27,6 +28,7 @@
 //   value   { device, node, part? } -> { value } | {}
 //   versions { device, node, part? } -> { versions }   each { value } or { gone: true }, and from
 //   have    { device } -> { have }       { device: n }
+//   passed  { device } -> { passed }     { device: n }: what its sync says every linked peer holds
 //   count   { device, of } -> { count }
 //   steps   { device, of } -> { steps }  hex
 //   run     { device, of, from } -> { from, to, sig } | {}
@@ -40,9 +42,11 @@
 //   inject  { from, to, message?, bytes? } -> {}
 //   live    { device, data } -> {}
 //   heard   { device } -> { heard }
+//   refusals { device } -> { refusals }    each { device, n, why, taker }: the runs its sync's host was told
+//                                        were refused, by it (taker) or by the other side
 //   forks   { device } -> { forks }      each { device, n, hashes }: the forks it knows, one a device
-// Views: ["have", { device: n }], ["run", device, from, to], ["live", id, data], ["refused",
-// device, n], ["fork", device, n].
+// Views: ["have", { device: n }], ["run", device, from, to], ["live", id, data],
+// ["refused", device, n, why?], ["fork", device, n].
 import { decode, encode, type Value } from "@ermine/encoding/cbor"
 import createEntry from "@ermine/graph/entry"
 import update from "@ermine/changeable/update"
@@ -56,7 +60,7 @@ import { type Answer, type Request, serve } from "../../../conformance/typescrip
 import { createLog, isRun, type Log, type Store } from "./log.ts"
 import { fileStore } from "./store_file.ts"
 import { createHistory } from "./history.ts"
-import { createSync, type Link, type Message, read, type Sync, wire } from "./sync.ts"
+import { createSync, type Link, type Message, read, type Refusal, type Sync, wire } from "./sync.ts"
 import { createSigner, type Signer } from "./sign.ts"
 import {
 	decodeStep,
@@ -110,6 +114,7 @@ type Device = {
 		) => string | undefined
 	}
 	heard: Uint8Array[]
+	refused: Refusal[]
 }
 const devices = new Map<string, Device>()
 const device = (name: string) => {
@@ -123,7 +128,7 @@ const nameOf = (key: string) => {
 	return key
 }
 
-function made(log: Log, relay: boolean, signer?: Signer): Device {
+function made(log: Log, relay: boolean, signer?: Signer, max?: number): Device {
 	const tracked = new Proxy(log, {
 		get(t, k) {
 			const v = Reflect.get(t, k)
@@ -132,8 +137,15 @@ function made(log: Log, relay: boolean, signer?: Signer): Device {
 				: v
 		},
 	})
-	const d: Device = { log, sync: createSync({ log: tracked, relay }), signer, heard: [] }
+	const d: Device = {
+		log,
+		sync: createSync({ log: tracked, relay, max }),
+		signer,
+		heard: [],
+		refused: [],
+	}
 	d.sync.onLive((b) => d.heard.push(b))
+	d.sync.onRefused((r) => d.refused.push(r))
 	return d
 }
 
@@ -142,6 +154,7 @@ async function createDevice(
 	rebase?: number,
 	forgets?: boolean,
 	forks?: number,
+	max?: number,
 ): Promise<Device> {
 	const s = createScheduler()
 	const table = createTable((part, id) => places.onTableChange(part as Key, id))
@@ -158,7 +171,7 @@ async function createDevice(
 	const log = createLog({ writes: true, seed, forks })
 	const history = createHistory({ log, table, places, run, rebase, forgets })
 	await history.load()
-	const d = made(log, false, await createSigner(seed))
+	const d = made(log, false, await createSigner(seed), max)
 	d.graph = {
 		table,
 		history,
@@ -323,11 +336,20 @@ function messageIn(m: unknown[]): Message {
 		}
 	}
 	if (t === "live") return { t, id: x as string, data: unhex(y as string) }
-	if (t === "refused") return { t, device: keyOf(x as string), n: y as number }
+	if (t === "refused") {
+		return {
+			t,
+			device: keyOf(x as string),
+			n: y as number,
+			...(z !== undefined && { why: z as string }),
+		}
+	}
 	throw new Error(`not a message: ${t}`)
 }
 function messageOut(m: Message): unknown[] {
-	if (m.t === "have") return [m.t, Object.entries(m.have)]
+	if (m.t === "have") {
+		return [m.t, Object.entries(m.have)]
+	}
 	if (m.t === "run") return [m.t, m.device, hex(m.sig), unpack(m.pack).map(hex)]
 	if (m.t === "live") return [m.t, m.id, hex(m.data)]
 	if (m.t === "fork") {
@@ -340,13 +362,16 @@ function messageOut(m: Message): unknown[] {
 			unpack(m.b.pack).map(hex),
 		]
 	}
-	return [m.t, m.device, m.n]
+	return [m.t, m.device, m.n, ...(m.why === undefined ? [] : [m.why])]
 }
 function view(b: Uint8Array): unknown[] {
 	const m = read(b)
 	if (!m) return ["not a message", hex(b)]
 	if (m.t === "have") {
-		return [m.t, Object.fromEntries(Object.entries(m.have).map(([d, n]) => [nameOf(d), n]))]
+		return [
+			m.t,
+			Object.fromEntries(Object.entries(m.have).map(([d, n]) => [nameOf(d), n])),
+		]
 	}
 	if (m.t === "run") {
 		const from = firstOf(m.pack).n
@@ -354,7 +379,7 @@ function view(b: Uint8Array): unknown[] {
 	}
 	if (m.t === "live") return [m.t, m.id, hex(m.data)]
 	if (m.t === "fork") return [m.t, nameOf(m.device), firstOf(m.a.pack).n]
-	return [m.t, nameOf(m.device), m.n]
+	return [m.t, nameOf(m.device), m.n, ...(m.why === undefined ? [] : [m.why])]
 }
 const haveOut = (h: Record<string, number>) =>
 	Object.fromEntries(Object.entries(h).map(([d, n]) => [nameOf(d), n]))
@@ -466,7 +491,7 @@ async function one(r: Request): Promise<Answer> {
 
 		case "device": {
 			if (devices.has(r.name)) throw new Error(`${r.name} is made`)
-			const d = await createDevice(unhex(r.seed), r.rebase, r.forgets, r.forks)
+			const d = await createDevice(unhex(r.seed), r.rebase, r.forgets, r.forks, r.max)
 			devices.set(r.name, d)
 			return { key: d.log.device! }
 		}
@@ -552,6 +577,10 @@ async function one(r: Request): Promise<Answer> {
 		}
 		case "have":
 			return { have: haveOut(device(r.device).log.have()) }
+		case "passed": {
+			const d = device(r.device)
+			return { passed: haveOut(d.sync.passed()) }
+		}
 		case "count":
 			return { count: device(r.device).log.count(keyOf(r.of)) }
 		case "steps":
@@ -597,6 +626,15 @@ async function one(r: Request): Promise<Answer> {
 			return {}
 		case "heard":
 			return { heard: device(r.device).heard.map(hex) }
+		case "refusals":
+			return {
+				refusals: device(r.device).refused.map((f) => ({
+					device: nameOf(f.device),
+					n: f.n,
+					why: f.why,
+					taker: f.taker,
+				})),
+			}
 		case "forks":
 			return {
 				forks: device(r.device).log.forks().map((f) => ({

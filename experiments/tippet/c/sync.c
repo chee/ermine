@@ -7,7 +7,7 @@
 typedef struct {
 	uint8_t device[32];
 	uint64_t theirs;
-	uint8_t refused, pushing, again, tailed, proved;
+	uint8_t refused, pushing, again, tailed, proved, waits, low, told;
 } peer;
 
 struct tp_link {
@@ -31,6 +31,7 @@ struct tp_sync {
 	void (*heard)(void *ctx, const uint8_t *data, size_t length);
 	void (*random)(void *ctx, uint8_t *out, size_t n);
 	void *ctx;
+	void (*refused)(void *ctx, const uint8_t device[32], uint64_t n, const char *why, int taker);
 	size_t max, devices;
 	tp_link *links;
 	int depth;
@@ -47,7 +48,7 @@ tp_sync *tp_sync_new(const tp_sync_options *o) {
 	if (!s) return NULL;
 	memset(s, 0, sizeof *s);
 	s->mem = o->mem, s->log = o->log, s->relay = o->relay;
-	s->heard = o->heard, s->random = o->random, s->ctx = o->ctx;
+	s->heard = o->heard, s->random = o->random, s->ctx = o->ctx, s->refused = o->refused;
 	s->most = o->seen ? o->seen : 1024;
 	// less than TP_RUN if asked, never more: past it a run is refused (WIRE.md, runs)
 	s->max = o->max && o->max < TP_RUN ? o->max : TP_RUN;
@@ -130,12 +131,25 @@ static void say_have(tp_sync *s, tp_link *l) {
 	if (!b->bad) send(s, l, b->p, b->len);
 }
 
-static void say_refused(tp_sync *s, tp_link *l, const uint8_t device[32]) {
-	uint8_t m[48];
+// why: NULL, or the text that goes with it
+static void say_refused(tp_sync *s, tp_link *l, const uint8_t device[32], const char *why) {
+	uint8_t m[64];
 	tp_buf b = {m, 0, sizeof m, sizeof m, NULL, 0};
-	tp_put_head(&b, 4, 3), tp_put_text(&b, "refused");
+	tp_put_head(&b, 4, why ? 4 : 3), tp_put_text(&b, "refused");
 	tp_put_head(&b, 2, 32), tp_put(&b, device, 32), tp_put_head(&b, 0, tp_log_count(s->log, device));
+	if (why) tp_put_text(&b, why);
 	send(s, l, m, b.len);
+}
+
+static void refused(tp_sync *s, const uint8_t device[32], uint64_t n, const char *why, int taker) {
+	if (s->refused) s->refused(s->ctx, device, n, why, taker);
+}
+
+// the host told of a run this side refused, once a device a link
+static void told(tp_sync *s, tp_link *l, long p, const uint8_t device[32], const char *why) {
+	if (p >= 0 && l->peers[p].told) return;
+	if (p >= 0) l->peers[p].told = 1;
+	refused(s, device, tp_log_count(s->log, device), why, 1);
 }
 
 static int packed(tp_sync *s, const uint8_t device[32], uint64_t from, uint64_t to, const uint8_t sig[64],
@@ -171,7 +185,7 @@ static int one(tp_sync *s, tp_link *l, size_t i) {
 	uint8_t device[32], sig[64];
 	memcpy(device, l->peers[i].device, 32);
 	uint64_t from = l->peers[i].theirs + 1, to;
-	if (l->peers[i].refused || from > tp_log_count(s->log, device)) return 0;
+	if (l->peers[i].refused || l->peers[i].waits || from > tp_log_count(s->log, device)) return 0;
 	if (tp_log_run(s->log, device, from, &to, sig)) return 0;
 	tp_buf *b = &s->out;
 	b->len = 0, b->bad = 0;
@@ -237,7 +251,10 @@ void tp_sync_told(void *ctx, const uint8_t device[32], uint64_t from, size_t cou
 	(void)from, (void)count;
 	s->depth++;
 	for (tp_link *l = s->links; l; l = l->next) {
-		if (!l->gone && l != s->from) push(s, l, device), pump(s, l);
+		if (l->gone || l == s->from) continue;
+		long p = peer_of(s, l, device);
+		if (p >= 0) l->peers[p].waits = 0;
+		push(s, l, device), pump(s, l);
 	}
 	s->depth--;
 	sweep(s);
@@ -307,7 +324,7 @@ static void have(tp_sync *s, tp_link *l, tp_in in, uint64_t k) {
 		return;
 	}
 	tp_in start = in;
-	for (size_t i = 0; i < l->npeers; i++) l->peers[i].theirs = 0;
+	for (size_t i = 0; i < l->npeers; i++) l->peers[i].theirs = 0, l->peers[i].waits = 0;
 	l->said = 0;
 	for (uint64_t i = 0; i < k; i++) {
 		uint64_t n;
@@ -382,29 +399,41 @@ static void run(tp_sync *s, tp_link *l, const uint8_t *device, const uint8_t *si
 		if (!tp_step_decode(steps.bytes, steps.at[1], &first)) last = first.n + steps.count - 1;
 		tp_span *spans = tp_alloc(&s->mem, steps.count * sizeof *spans);
 		if (!spans) {
-			tp_steps_free(&s->mem, &steps);
-			return;
+			r = TP_NOMEM;
+		} else {
+			for (size_t i = 0; i < steps.count; i++) {
+				spans[i] = (tp_span){steps.bytes + steps.at[i], steps.at[i + 1] - steps.at[i]};
+			}
+			tp_link *was = s->from;
+			s->from = l;
+			r = tp_log_take(s->log, device, spans, steps.count, sig, message);
+			s->from = was;
+			tp_free(&s->mem, spans, steps.count * sizeof *spans);
 		}
-		for (size_t i = 0; i < steps.count; i++) {
-			spans[i] = (tp_span){steps.bytes + steps.at[i], steps.at[i + 1] - steps.at[i]};
-		}
-		tp_link *was = s->from;
-		s->from = l;
-		r = tp_log_take(s->log, device, spans, steps.count, sig, message);
-		s->from = was;
-		tp_free(&s->mem, spans, steps.count * sizeof *spans);
 		tp_steps_free(&s->mem, &steps);
-	} else if (r == TP_NOTSTEP || r == TP_BOUND) {
-		// not a pack, or past what a run may make: refused
+	} else if (r == TP_NOTSTEP) {
+		// not a pack: refused
 		r = TP_CHAIN, packbad = 1;
 	}
+	long p = peer_of(s, l, device);
+	if (r == TP_BOUND || r == TP_NOMEM) {
+		// past what this side takes: refused for good; out of memory: for now
+		const char *why = r == TP_BOUND ? "bound" : "memory";
+		if (p >= 0) l->peers[p].low = r == TP_NOMEM;
+		told(s, l, p, device, why);
+		if (!l->many) say_refused(s, l, device, why);
+		return;
+	}
 	if (r >= 0) {
-		long p = peer_of(s, l, device);
 		if (p >= 0 && l->peers[p].theirs < last) l->peers[p].theirs = last;
+		if (p >= 0) l->peers[p].low = 0;
 	} else if (r == TP_GAP) {
-		say_have(s, l);
-	} else if (r <= TP_OWN && !l->many) {
-		say_refused(s, l, device);
+		// still short of memory for this device: it will say when it can take more
+		if (p < 0 || !l->peers[p].low) say_have(s, l);
+	} else if (r <= TP_OWN) {
+		if (r != TP_OWN) told(s, l, p, device, packbad ? "pack" : tp_why(r));
+		if (l->many) return;
+		say_refused(s, l, device, NULL);
 		if ((r == TP_CHAIN && !packbad) || r == TP_SIGNATURE) tail(s, l, device, pack);
 	}
 }
@@ -433,9 +462,20 @@ static void receive(tp_sync *s, tp_link *l, const uint8_t *bytes, size_t length)
 		}
 		tp_log_fork(s->log, (tp_span){bytes, length});
 		s->skip = was;
-	} else if (tp_is(t, "refused") && k == 3 && !tp_bytes(&in, 32, &x) && !tp_whole(&in, &n)) {
+	} else if (tp_is(t, "refused") && (k == 3 || k == 4) && !tp_bytes(&in, 32, &x) && !tp_whole(&in, &n)) {
+		tp_span why = {NULL, 0};
+		char text[16] = "refused";
+		if (k == 4 && tp_text(&in, &why)) return;
+		if (why.n) memcpy(text, why.p, why.n < sizeof text ? why.n : sizeof text - 1), text[why.n < sizeof text ? why.n : sizeof text - 1] = 0;
 		long p = !l->many && tp_log_count(s->log, x.p) ? peer_of(s, l, x.p) : -1;
-		if (p >= 0) l->peers[p].refused = 1;
+		if (p < 0 || l->peers[p].refused) return;
+		if (!strcmp(text, "memory")) {
+			// out of memory for now, not for good: what it holds is what it has; tried again after its next have
+			if (!l->peers[p].waits) refused(s, x.p, n, text, 0);
+			l->peers[p].waits = 1, l->peers[p].theirs = n;
+		} else {
+			l->peers[p].refused = 1, refused(s, x.p, n, text, 0);
+		}
 	} else if (tp_is(t, "live") && k == 3 && !tp_bytes(&in, 8, &x) && !tp_bytes(&in, 0, &y)) {
 		if (seen(s, x.p)) return;
 		if (s->heard) s->heard(s->ctx, y.p, y.n);

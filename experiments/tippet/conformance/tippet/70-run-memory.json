@@ -1,0 +1,374 @@
+{
+	"title": "a run refused `memory` is not for good: the writer's host is told once, it counts the taker as lacking the run (a forgetting peer does not let go of it), and sends again after the taker's next have or a newer step; `bound` is for good",
+	"steps": [
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "device",
+			"name": "r",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"expect": {
+				"key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
+		},
+		{
+			"op": "device",
+			"name": "b",
+			"seed": "0303030303030303030303030303030303030303030303030303030303030303",
+			"expect": {
+				"key": "ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1"
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": "one"
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "r",
+			"of": "a",
+			"at": 1,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "link",
+			"a": "r",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "deliver",
+			"from": "b",
+			"to": "r",
+			"expect": {
+				"got": [
+					[
+						"have",
+						{}
+					]
+				]
+			}
+		},
+		{
+			"op": "deliver",
+			"from": "r",
+			"to": "b",
+			"expect": {
+				"got": [
+					[
+						"have",
+						{
+							"a": 1
+						}
+					],
+					[
+						"run",
+						"a",
+						1,
+						1
+					]
+				]
+			}
+		},
+		{
+			"op": "passed",
+			"device": "r",
+			"expect": {
+				"passed": {
+					"a": 1
+				}
+			}
+		},
+		{
+			"op": "inject",
+			"from": "b",
+			"to": "r",
+			"message": [
+				"refused",
+				"a",
+				0,
+				"memory"
+			],
+			"expect": {}
+		},
+		{
+			"op": "inject",
+			"from": "b",
+			"to": "r",
+			"message": [
+				"refused",
+				"a",
+				0,
+				"memory"
+			],
+			"expect": {}
+		},
+		{
+			"op": "refusals",
+			"device": "r",
+			"expect": {
+				"refusals": [
+					{
+						"device": "a",
+						"n": 0,
+						"why": "memory",
+						"taker": false
+					}
+				]
+			}
+		},
+		{
+			"op": "passed",
+			"device": "r",
+			"expect": {
+				"passed": {
+					"a": 0
+				}
+			}
+		},
+		{
+			"op": "queued",
+			"from": "r",
+			"to": "b",
+			"expect": {
+				"queued": []
+			}
+		},
+		{
+			"op": "inject",
+			"from": "b",
+			"to": "r",
+			"message": [
+				"have",
+				[]
+			],
+			"expect": {}
+		},
+		{
+			"op": "queued",
+			"from": "r",
+			"to": "b",
+			"expect": {
+				"queued": [
+					[
+						"run",
+						"a",
+						1,
+						1
+					]
+				]
+			}
+		},
+		{
+			"op": "deliver",
+			"from": "r",
+			"to": "b",
+			"expect": {
+				"got": [
+					[
+						"run",
+						"a",
+						1,
+						1
+					]
+				]
+			}
+		},
+		{
+			"op": "have",
+			"device": "b",
+			"expect": {
+				"have": {
+					"a": 1
+				}
+			}
+		},
+		{
+			"op": "inject",
+			"from": "b",
+			"to": "r",
+			"message": [
+				"refused",
+				"a",
+				1,
+				"memory"
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": "two"
+				}
+			],
+			"expect": {
+				"n": 2,
+				"lamport": 2
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "r",
+			"of": "a",
+			"at": 2,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "queued",
+			"from": "r",
+			"to": "b",
+			"expect": {
+				"queued": [
+					[
+						"run",
+						"a",
+						2,
+						2
+					]
+				]
+			}
+		},
+		{
+			"op": "refusals",
+			"device": "r",
+			"expect": {
+				"refusals": [
+					{
+						"device": "a",
+						"n": 0,
+						"why": "memory",
+						"taker": false
+					},
+					{
+						"device": "a",
+						"n": 1,
+						"why": "memory",
+						"taker": false
+					}
+				]
+			}
+		},
+		{
+			"op": "deliver",
+			"from": "r",
+			"to": "b",
+			"expect": {
+				"got": [
+					[
+						"run",
+						"a",
+						2,
+						2
+					]
+				]
+			}
+		},
+		{
+			"op": "have",
+			"device": "b",
+			"expect": {
+				"have": {
+					"a": 2
+				}
+			}
+		},
+		{
+			"op": "inject",
+			"from": "b",
+			"to": "r",
+			"message": [
+				"refused",
+				"a",
+				2,
+				"bound"
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "pig",
+			"patches": [
+				{
+					"path": [],
+					"value": "three"
+				}
+			],
+			"expect": {
+				"n": 3,
+				"lamport": 3
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "r",
+			"of": "a",
+			"at": 3,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "queued",
+			"from": "r",
+			"to": "b",
+			"expect": {
+				"queued": []
+			}
+		},
+		{
+			"op": "refusals",
+			"device": "r",
+			"expect": {
+				"refusals": [
+					{
+						"device": "a",
+						"n": 0,
+						"why": "memory",
+						"taker": false
+					},
+					{
+						"device": "a",
+						"n": 1,
+						"why": "memory",
+						"taker": false
+					},
+					{
+						"device": "a",
+						"n": 2,
+						"why": "bound",
+						"taker": false
+					}
+				]
+			}
+		}
+	]
+}

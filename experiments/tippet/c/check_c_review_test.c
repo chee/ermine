@@ -1,4 +1,4 @@
-// Tries to break tippet's C; a FAIL line is a bug it found. ONLY=123456789rflhams picks checks, NOA=1
+// Tries to break tippet's C; a FAIL line is a bug it found. ONLY=123456789rflhamsxb picks checks, NOA=1
 // skips 6a, UNLINK=1 unlinks 7's link, SNAP=n sets s's entries. Run ./tippet-review-test-check dir (build.sh builds
 // it).
 #define _POSIX_C_SOURCE 200809L
@@ -17,13 +17,15 @@
 #include "tippet.h"
 #include "wire.h"
 
+// cap: when set, an allocation that would take the heap past it fails
 typedef struct {
-	size_t now, peak;
+	size_t now, peak, cap;
 } heap;
 
 static void *counted(void *ctx, void *p, size_t old, size_t size) {
 	heap *h = ctx;
 	if (!size) return free(p), h->now -= old, NULL;
+	if (h->cap && h->now - old + size > h->cap) return NULL;
 	void *q = realloc(p, size);
 	if (q) h->now = h->now - old + size, h->peak = h->now > h->peak ? h->now : h->peak;
 	return q;
@@ -300,7 +302,7 @@ static void key33(void) {
 		CHECK(tp_step_decode(s, b.len, &t) == TP_NOTSTEP);
 	}
 	tp_log *log = writer(2, 1, NULL);
-	tp_sync_options so = {mem, log, 0, NULL, NULL, NULL, 0, 0};
+	tp_sync_options so = {mem, log, 0, NULL, NULL, NULL, 0, 0, NULL};
 	tp_sync *sync = tp_sync_new(&so);
 	counter c = {0};
 	tp_link *l = tp_sync_link(sync, count_send, &c, 0);
@@ -468,7 +470,7 @@ static void devices(void) {
 	printf("5. many devices in one have\n");
 	for (size_t many = 10000; many <= 40000; many *= 2) {
 		tp_log *log = writer(5, 1, NULL);
-		tp_sync_options so = {mem, log, 0, NULL, NULL, NULL, 0, 0};
+		tp_sync_options so = {mem, log, 0, NULL, NULL, NULL, 0, 0, NULL};
 		tp_sync *sync = tp_sync_new(&so);
 		counter c = {0};
 		tp_link *l = tp_sync_link(sync, count_send, &c, 0);
@@ -577,7 +579,7 @@ static void closing(void) {
 		tp_log_write(probe, &w, &n, &l);
 		long len = tp_log_step(probe, tp_log_device(probe), 1, NULL, 0);
 		tp_log_free(probe);
-		size_t steps = 2048 / (size_t)len + 1;
+		size_t steps = 32;
 		tp_log *log = memlog(seed, steps * (size_t)(len + 4) + 20, NULL, NULL);
 		int why = 0;
 		size_t i;
@@ -626,7 +628,7 @@ static void ring(int fail) {
 		uint8_t seed[32];
 		memset(seed, (uint8_t)(30 + i), 32);
 		logs[i] = memlog(seed, 1 << 20, told_box, &boxes[i]);
-		tp_sync_options so = {mem, logs[i], 0, NULL, NULL, NULL, 0, 0};
+		tp_sync_options so = {mem, logs[i], 0, NULL, NULL, NULL, 0, 0, NULL};
 		boxes[i].sync = syncs[i] = tp_sync_new(&so);
 	}
 	end e[6] = {{0}};
@@ -667,7 +669,7 @@ static int http_send(void *ctx, const uint8_t *b, size_t n) { return tp_http_sen
 static void links(void) {
 	printf("7. a link whose send fails at once\n");
 	tp_log *log = writer(40, 1, NULL);
-	tp_sync_options so = {mem, log, 0, NULL, NULL, NULL, 0, 0};
+	tp_sync_options so = {mem, log, 0, NULL, NULL, NULL, 0, 0, NULL};
 	tp_sync *sync = tp_sync_new(&so);
 	tp_link *l = tp_sync_link(sync, fail_send, NULL, 0);
 	printf("  tp_sync_link gave %s; links held %zu\n", l ? "a link" : "NULL", tp_sync_links(sync));
@@ -707,7 +709,9 @@ static void links(void) {
 		if (h.bytes < TP_BODY / 2) tp_sync_go(sync, l);
 	}
 	printf("  answered: %llu messages sent, %zu waiting\n", (unsigned long long)h.sent, h.waiting);
-	CHECK(l && h.sent == 1 + 750);
+	// runs close before a step takes them past TP_CLOSE bytes
+	size_t each = TP_CLOSE / (size_t)tp_log_step(log, tp_log_device(log), 100, NULL, 0);
+	CHECK(l && h.sent == 1 + (1500 + each - 1) / each);
 	tp_http_close(&h);
 	tp_sync_free(sync);
 	tp_log_free(log);
@@ -867,7 +871,7 @@ static void typescript(const char *dir) {
 		memset(seed, 52, 32);
 		tp_log *log = memlog(seed, 1 << 20, NULL, NULL);
 		tp_log_take(log, r1.device, r1.spans, r1.n, r1.sig, (tp_span){NULL, 0}), tp_log_take(log, r2.device, r2.spans, r2.n, r2.sig, (tp_span){NULL, 0});
-		tp_sync_options so = {mem, log, 0, NULL, NULL, NULL, 0, 0};
+		tp_sync_options so = {mem, log, 0, NULL, NULL, NULL, 0, 0, NULL};
 		tp_sync *sync = tp_sync_new(&so);
 		counting c = {0, 0};
 		tp_link *link = tp_sync_link(sync, full_send, &c, 0);
@@ -889,7 +893,7 @@ static void typescript(const char *dir) {
 	}
 	{
 		tp_log *log = writer(53, 1, NULL);
-		tp_sync_options so = {mem, log, 0, NULL, ids, NULL, 0, 0};
+		tp_sync_options so = {mem, log, 0, NULL, ids, NULL, 0, 0, NULL};
 		tp_sync *sync = tp_sync_new(&so);
 		answering a = {sync, NULL, 0}, b = {sync, NULL, 0};
 		a.link = tp_sync_link(sync, answer_send, &a, 0);
@@ -954,7 +958,7 @@ static void part(end e[2]) {
 	tp_sync_unlink(e[0].sync, e[0].link), tp_sync_unlink(e[1].sync, e[1].link);
 }
 static tp_sync *sync_of(tp_log *log) {
-	tp_sync_options so = {mem, log, 0, NULL, NULL, NULL, 0, 0};
+	tp_sync_options so = {mem, log, 0, NULL, NULL, NULL, 0, 0, NULL};
 	return tp_sync_new(&so);
 }
 
@@ -1622,6 +1626,199 @@ static void reloads(const char *dir) {
 	}
 }
 
+
+// ---- b. a small device (a Cardputer: ESP32-S3, no PSRAM, about 300 KB of heap)
+
+static uint8_t bigbuf[8192];
+static tp_write bigput(size_t size, int x) {
+	static const uint8_t head[] = {0x81, 0xa2, 0x64, 'p', 'a', 't', 'h', 0x80, 0x65, 'v', 'a', 'l', 'u', 'e', 0x79};
+	memcpy(bigbuf, head, sizeof head);
+	bigbuf[sizeof head] = (uint8_t)(size >> 8), bigbuf[sizeof head + 1] = (uint8_t)size;
+	memset(bigbuf + sizeof head + 2, 'a' + x % 26, size);
+	tp_write w = {{(const uint8_t *)"pig", 3}, {(const uint8_t *)"value", 5}, {bigbuf, sizeof head + 2 + size}, {NULL, 0}, 1760000000, {NULL, 0}, {NULL, 0}};
+	return w;
+}
+
+typedef struct {
+	int taker, writer, sent;
+	char why[16];
+} told_of;
+static void note_refused(void *ctx, const uint8_t device[32], uint64_t n, const char *why, int taker) {
+	told_of *t = ctx;
+	(void)device, (void)n;
+	taker ? t->taker++ : t->writer++;
+	snprintf(t->why, sizeof t->why, "%s", why);
+}
+// two syncs joined by a queue, delivered once both have their link
+typedef struct tally {
+	tp_sync *sync;
+	tp_link *link;
+	struct tally *other;
+	told_of *t;
+} tally;
+static struct {
+	tally *to;
+	uint8_t *bytes;
+	size_t n;
+} fifo[1024];
+static size_t fifo_head, fifo_tail;
+static int tally_send(void *ctx, const uint8_t *bytes, size_t n) {
+	tally *y = ctx;
+	y->t->sent++;
+	fifo[fifo_tail].to = y->other, fifo[fifo_tail].n = n;
+	fifo[fifo_tail].bytes = malloc(n), memcpy(fifo[fifo_tail].bytes, bytes, n);
+	fifo_tail++;
+	return 0;
+}
+static void tally_pump(void) {
+	while (fifo_head < fifo_tail) {
+		size_t i = fifo_head++;
+		tp_sync_receive(fifo[i].to->sync, fifo[i].to->link, fifo[i].bytes, fifo[i].n);
+		free(fifo[i].bytes);
+	}
+	fifo_head = fifo_tail = 0;
+}
+static void tally_join(tally y[2], tp_sync *a, tp_sync *b, told_of *ta, told_of *tb) {
+	y[0] = (tally){a, NULL, &y[1], ta}, y[1] = (tally){b, NULL, &y[0], tb};
+	y[0].link = tp_sync_link(a, tally_send, &y[0], 0);
+	y[1].link = tp_sync_link(b, tally_send, &y[1], 0);
+	tally_pump();
+}
+
+static void small(void) {
+	printf("b. a small device\n");
+	heap P = {0, 0, 0};
+	tp_mem pm = {counted, &P};
+	{
+		// the writer wrote offline: 33 steps of 4000 bytes, closed as written
+		uint8_t seed[32], other[32];
+		memset(seed, 80, 32), memset(other, 81, 32);
+		tp_log *w = memlog(seed, 1 << 22, NULL, NULL);
+		uint64_t n, l;
+		for (int i = 0; i < 33; i++) {
+			tp_write wr = bigput(4000, i);
+			CHECK(!tp_log_write(w, &wr, &n, &l));
+		}
+		tp_log_options lo = {pm, tp_memory_store(&mem, 1 << 22), other, 1, {0, 0, 0, 0}, NULL, NULL, NULL};
+		tp_log *r = tp_log_new(&lo);
+		tp_log_load(r);
+		told_of t = {0, 0, 0, ""};
+		tp_sync_options wo = {mem, w, 0, NULL, NULL, &t, 0, 0, note_refused};
+		tp_sync_options ro = {pm, r, 0, NULL, NULL, &t, 0, TP_CLOSE, note_refused};
+		tp_sync *ws = tp_sync_new(&wo), *rs = tp_sync_new(&ro);
+		tally e[2];
+		size_t base = P.now;
+		P.peak = P.now;
+		tally_join(e, ws, rs, &t, &t);
+		uint64_t took = tp_log_count(r, tp_log_device(w));
+		printf("  33 steps of 4000 bytes, max %zu: took %llu; heap %zu bytes above %zu\n", (size_t)TP_CLOSE,
+			(unsigned long long)took, P.peak - base, base);
+		CHECK(took == 33 && !t.taker && !t.writer);
+		CHECK(P.peak - base < 100000);
+		tp_sync_free(ws), tp_sync_free(rs);
+		tp_log_free(w), tp_log_free(r);
+		CHECK(P.now == 0);
+	}
+	{
+		// a run past the max its taker takes: refused, both told, not sent again
+		uint8_t seed[32], other[32];
+		memset(seed, 82, 32), memset(other, 84, 32);
+		tp_log *w = memlog(seed, 1 << 22, NULL, NULL);
+		uint64_t n, l;
+		for (int i = 0; i < 3; i++) {
+			tp_write wr = bigput(4000, i);
+			tp_log_write(w, &wr, &n, &l);
+		}
+		told_of t = {0, 0, 0, ""};
+		tp_sync_options wo = {mem, w, 0, NULL, NULL, &t, 0, 0, note_refused};
+		tp_sync *ws = tp_sync_new(&wo);
+		tp_log_options lo = {pm, tp_memory_store(&mem, 1 << 22), other, 1, {0, 0, 0, 0}, NULL, NULL, NULL};
+		tp_log *r = tp_log_new(&lo);
+		tp_log_load(r);
+		tp_sync_options ro = {pm, r, 0, NULL, NULL, &t, 0, 4096, note_refused};
+		tp_sync *rs = tp_sync_new(&ro);
+		tally e[2];
+		tally_join(e, ws, rs, &t, &t);
+		int sent = t.sent;
+		tp_write wr = bigput(300, 9);
+		CHECK(!tp_log_write(w, &wr, &n, &l));
+		tally_pump();
+		printf("  a run of 3 steps past max 4096: took %llu; taker told %d (%s), writer told %d; sent %d, then %d\n",
+			(unsigned long long)tp_log_count(r, tp_log_device(w)), t.taker, t.why, t.writer, sent, t.sent);
+		CHECK(tp_log_count(r, tp_log_device(w)) == 0 && t.taker == 1 && t.writer == 1 && !strcmp(t.why, "bound"));
+		CHECK(t.sent == sent);
+		tp_sync_free(ws), tp_sync_free(rs);
+		tp_log_free(w), tp_log_free(r);
+		CHECK(P.now == 0);
+	}
+	{
+		// the allocation fails: a device with no room for a run says `memory`, which is not for good:
+		// the writer sends again after its next have, and nothing loops while the memory is short
+		uint8_t seed[32], other[32];
+		memset(seed, 85, 32), memset(other, 86, 32);
+		tp_log *w = memlog(seed, 1 << 22, NULL, NULL);
+		uint64_t n, l;
+		for (int i = 0; i < 40; i++) {
+			tp_write wr = bigput(4000, i);
+			tp_log_write(w, &wr, &n, &l);
+		}
+		heap tight = {0, 0, 0};
+		tp_mem tm = {counted, &tight};
+		tp_log_options lo = {tm, tp_memory_store(&mem, 1 << 22), other, 1, {0, 0, 0, 0}, NULL, NULL, NULL};
+		tp_log *r = tp_log_new(&lo);
+		tp_log_load(r);
+		told_of t = {0, 0, 0, ""};
+		tp_sync_options wo = {mem, w, 0, NULL, NULL, &t, 0, 0, note_refused};
+		tp_sync_options ro = {tm, r, 0, NULL, NULL, &t, 0, 0, note_refused};
+		tp_sync *ws = tp_sync_new(&wo), *rs = tp_sync_new(&ro);
+		tally e[2];
+		tight.cap = tight.now + 20000;
+		tally_join(e, ws, rs, &t, &t);
+		int sent = t.sent;
+		printf("  heap for 20000 bytes: took %llu; taker told %d (%s), writer told %d; sent %d\n",
+			(unsigned long long)tp_log_count(r, tp_log_device(w)), t.taker, t.why, t.writer, sent);
+		CHECK(tp_log_count(r, tp_log_device(w)) == 0 && t.taker == 1 && t.writer == 1 && !strcmp(t.why, "memory"));
+		// the writer counts the device as lacking them, so a forgetting peer is not let go of them
+		CHECK(tp_sync_passed(ws, tp_log_device(w)) == 0);
+		// its own next step, memory still short: one more try, nothing loops
+		tp_write wr = bigput(300, 9);
+		CHECK(!tp_log_write(w, &wr, &n, &l));
+		tally_pump();
+		CHECK(t.sent < sent + 10 && tp_log_count(r, tp_log_device(w)) == 0);
+		// memory back, and its next have: taken
+		tight.cap = 0;
+		tp_sync_receive(ws, e[0].link, (const uint8_t *)"\x82\x64have\x80", 7);
+		tally_pump();
+		printf("  memory back, a have: took %llu of 41\n", (unsigned long long)tp_log_count(r, tp_log_device(w)));
+		CHECK(tp_log_count(r, tp_log_device(w)) == 41);
+		tp_sync_free(ws), tp_sync_free(rs);
+		tp_log_free(w), tp_log_free(r);
+	}
+	{
+		// a have is two elements: one with a third is not read, in a device that takes a run
+		uint8_t seed[32], other[32];
+		memset(seed, 87, 32), memset(other, 88, 32);
+		tp_log *w = memlog(seed, 1 << 22, NULL, NULL), *r = memlog(other, 1 << 22, NULL, NULL);
+		uint64_t n, l;
+		tp_write wr = bigput(300, 1);
+		CHECK(!tp_log_write(w, &wr, &n, &l));
+		told_of t = {0, 0, 0, ""};
+		tp_sync *ws = sync_of(w);
+		tally e[2];
+		tally_join(e, ws, sync_of(r), &t, &t);
+		CHECK(!tp_log_write(w, &wr, &n, &l));
+		int sent = t.sent;
+		tp_sync_receive(ws, e[0].link, (const uint8_t *)"\x83\x64have\x80\x19\x10\x00", 9);
+		tally_pump();
+		CHECK(t.sent == sent);
+		tp_sync_receive(ws, e[0].link, (const uint8_t *)"\x82\x64have\x80", 7);
+		tally_pump();
+		CHECK(t.sent > sent);
+		tp_sync_free(e[0].sync), tp_sync_free(e[1].sync);
+		tp_log_free(w), tp_log_free(r);
+	}
+}
+
 int main(int argc, char **argv) {
 	if (argc != 2) return fprintf(stderr, "usage: check-c-review dir\n"), 2;
 	setvbuf(stdout, NULL, _IONBF, 0);
@@ -1644,6 +1841,7 @@ int main(int argc, char **argv) {
 	if (!only || strchr(only, 'm')) long_run(argv[1]), printf("  heap now %zu\n", H.now);
 	if (!only || strchr(only, 's')) seqs(), printf("  heap now %zu\n", H.now);
 	if (!only || strchr(only, 'x')) reloads(argv[1]), printf("  heap now %zu\n", H.now);
+	if (!only || strchr(only, 'b')) small(), printf("  heap now %zu\n", H.now);
 	rmdir(argv[1]);
 	CHECK(H.now == 0);
 	printf("check-c-review: %s, %d failed\n", failed ? "FAIL" : "ok", failed);
