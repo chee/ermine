@@ -24,13 +24,12 @@ type Item = {
 	id: Id
 	left: Id | null
 	right: Id | null
-	key: [number, string, number]
+	key: [string, number]
 	gone: boolean
 }
 const is = (a: Id | null, b: Id | null) =>
 	a === b || (!!a && !!b && a.device === b.device && a.c === b.c && a.k === b.k)
-const above = (a: Item["key"], b: Item["key"]) =>
-	a[0] !== b[0] ? a[0] > b[0] : a[1] !== b[1] ? a[1] > b[1] : a[2] > b[2]
+const above = (a: Item["key"], b: Item["key"]) => a[0] !== b[0] ? a[0] > b[0] : a[1] > b[1]
 function reference(steps: S[], chars: Map<string, string>) {
 	const doc: Item[] = []
 	const at = (i: Id | null, none: number) => i ? doc.findIndex((x) => is(x.id, i)) : none
@@ -56,7 +55,7 @@ function reference(steps: S[], chars: Map<string, string>) {
 					id: { device: s.device, c },
 					left: e ? { device: s.device, c: c - 1 } : a.after,
 					right,
-					key: [s.lamport, s.device, c],
+					key: [s.device, c],
 					gone: false,
 				}
 				let spot = left + 1
@@ -158,7 +157,7 @@ Deno.test("elements: where an insert goes never hangs on its runs (FugueMax, one
 				const lamport = Math.max(...[...known[i]].map((s) => s.lamport)) + 1 + gap[i]
 				const at = { device: names[i], n: ++count[i], seq: seqs[i] }
 				const undo: Patch[] = [], back: (() => void)[] = []
-				const { ids } = step(d.st, { ...at, lamport, patches: [p] }, { undo, back, name: true })
+				const { ids } = step(d.st, { ...at, lamport, patches: [p] }, { undo, back })
 				const s: S = { ...at, lamport, patches: [p], ids: writeIds(at, ids) }
 				d.tail.push({ s, undo, back }), d.has.add(s)
 				seqs[i] += p.value === undefined ? 0 : [...(p.value as string)].length
@@ -199,7 +198,7 @@ Deno.test("elements: one gone span over many runs is found run by run in no time
 		lamport: 3,
 		seq: 0,
 		patches: [gone],
-		ids: [[null, [[[new Uint8Array(32).fill(1), 0], P]]]],
+		ids: [[null, [[[new Uint8Array(32).fill(1), 0], P]], null, []]],
 	})
 	assertEquals((state.value as { t: string }).t, "")
 	assertEquals(performance.now() - began < 1500, true)

@@ -7,68 +7,61 @@ says (vectors in `encoding/conformance/cbor`). Whole numbers below: integers, 0 
 
 One kept write. Bytes: a cbor array.
 
-    [device, n, before, node, part, patches, lamport, when, on]
-    [device, n, before, node, part, patches, lamport, when, on, who]
-    [device, n, before, node, part, patches, lamport, when, on, ids]
-    [device, n, before, node, part, patches, lamport, when, on, ids, who]
-    [device, n, before, node, part, patches, lamport, when]          an old step
-    [device, n, before, node, part, patches, lamport, when, who]     an old step
+    [device, n, before, node, part, patches, lamport, when, seq, on, ids]
+    [device, n, before, node, part, patches, lamport, when, seq, on, ids, who]
 
 - device: bstr, 32 bytes. the writer's ed25519 public key
 - n: whole, from 1, per device, one more each step
 - before: bstr, 32 bytes, the hash of this device's step n - 1; null at n = 1
 - node: tstr without NUL, the node's id; or [rest]: relative to the writer, the id `ermine:ed01` +
   device's hex (ids: key) then rest, rest a tstr, empty or from `/`. a writer writes a node that is
-  its own id or under it so; read back to the same id. an old step's tstr stays as it was
+  its own id or under it so; read back to the same id
 - part: tstr without NUL. `value`, `attributes`, `children`, …
 - patches: array of patch maps
-- lamport: whole. one past the highest any step the writer had seen has. it orders, and names
-  nothing
+- lamport: whole. one past the highest any step the writer had seen has. it orders steps (an
+  entry's order, puts), and sorts no element
 - when: whole. seconds since 1970, the writer's clock
+- seq: whole. how many elements its device's steps before it insert (a patch with a range inserts
+  its tstr value's code points, its array value's items): 0 at n = 1, else step n - 1's seq plus
+  what step n - 1 inserts (a step that says another is not a chain). seq plus what the step
+  inserts: at most 2^53 - 1
 - on: array. what it was written on: its entry's (node and part) heads at the writer, each a step:
   - k, whole from 1, k < n: this device's own step n - k
   - [device, n]: another device's step n; device bstr 32, not this step's; n whole from 1
 
-  a writer with a graph says it always ([]: it held none). an old step, from before steps said, has
-  none: it is read as on every step of its entry before it, in order of lamport, then device. what
-  is made of it: `typescript/history.ts`, heads and versions
-- ids: array, one per patch, only after on: the elements a patch names, or null: by its range and
-  path as written (a writer holding no ids, an old step, anything else). each [through], or, a
-  splice (a patch with a range, into a string or an array), [after, gone], [after, gone, before] or
-  [after, gone, before or null (none), through]:
+  what is made of it: `typescript/history.ts`, heads and versions
+- ids: array, one per patch: the elements it names:
+  - null: a patch with no range and no index in its path; a move's too
+  - [through]: a patch with an index in its path and no range
+  - [after, gone, before, through]: a splice (a patch with a range, into a string or an array)
   - after: the element it goes after, or null: the start
   - gone: array of [id, count], count whole from 1: the elements it takes away, count of them from
     id on (its seq or k on). one named more than once is taken away once
-  - through: array, one per whole in its path, in order (in [through], at least one): the element
-    of the array item that index named at the writer; this device's x above minus what the step
-    inserts. none: its path by place as written; a move's by place always (its ids passed over). a
-    writer says it, empty when its path has no whole, for each splice into an array it names
   - before: the element it goes before, the one right after after at the writer (gone ones too): an
-    id; or true, after's own before (after not null). none: the end (an old step's too). a writer
-    says it only for a splice that inserts
+    id; true, after's own before (after not null); null, the end
+  - through: array, one per whole in the patch's path, in order (empty when none): the element of
+    the array item that index named at the writer
   - an element id: made by a step, its device and seq: the step's seq + i, the i-th element the step
-    inserts (from 0, in patch order); or there since a step made its sequence new: that step's
-    device and n, and k, its place then. written: this device's x, whole or negative, seq the step's
-    seq - x; or [x, k], x whole below n, that step n - x. another's [device, seq] or [device, n, k]
-    (device bstr 32, not this step's; n from 1)
-  - a step's seq: how many elements its device's steps before it insert (old steps too; a patch with
-    a range inserts its tstr value's code points, its array value's items). not written: a reader
-    holds a device's steps from n = 1 on, so counts it
+    inserts (from 0, in patch order); or there since a step made its sequence new: that step's device
+    and n, and k, its place then. written: this device's x, whole or negative, seq the step's seq -
+    x; or [x, k], x whole below n, that step n - x. another's [device, seq] or [device, n, k]
+    (device bstr 32, not this step's; n from 1). in a through this device's is c, whole: its seq; or
+    [m, k], m from 1 to n: step m, k its place then
 
   a sequence's elements are counted from its first splice: those there since the step that made it
   new are that step's, k their place. a sequence under an array item goes with the item, wherever
   it is. made new: by a put, a removal or a move at its path or above; by a move out of or into
-  it (an end with a range: the sequence it is in; at an index of an array: that array); and, for
-  those under an array, by a splice into the array with no through (by place as written, or ids
-  from before through). a removal at an index of an array (a path, no range) is a splice of that
-  one element: by place as written, or its through's last, taken away wherever it is now (gone
-  already: nothing); at an index of anything else, a removal at its path, as any
+  it (an end with a range: the sequence it is in; at an index of an array: that array). a splice
+  into a sequence no put made (its put not held yet: it applies once the put lands): the step
+  doesn't apply. a removal at an index of an array (a path, no
+  range) is a splice of that one element, its through's last, taken away wherever it is now (gone
+  already: nothing)
 
   a path by through: each index the place now of the element named, among those not gone; one gone
   (but a removal's last) or not there, or an index not into an array: the step doesn't apply
 
-  applied in the entry's order (history): a splice by ids takes its gone elements away wherever they
-  are now, then its first inserted one goes between after and before, among those put there since
+  applied in the entry's order (history): a splice takes its gone elements away wherever they are
+  now, then its first inserted one goes between after and before, among those put there since
   (FugueMax's rule), the rest each right after the one before:
 
       at = spot = right after after; scanning = no
@@ -84,103 +77,76 @@ One kept write. Bytes: a cbor array.
 
   places as they are now, gone ones too; the start before all, the end after all; how a reader holds
   elements (in runs, however cut) never changes where one goes. an element's after and before: its
-  splice's, but after the one before it when its splice put that one too; by range or with no
-  before, before the end; one there since a step, after the one before it (the first, the start),
-  before the end. sorts: by the lamport of the step that made it, then device, then seq (one there
-  since a step: that step's lamport and device, before what the step inserts), so two at one place
-  land the same whatever came first. an element it names not there (this device's x past the step's
-  seq too), or a before not after its after: the step doesn't apply (passed over, as any). by range:
-  as written, its inserted ones right after the element before from. what is made of it:
-  `typescript/elements.ts`
+  splice's, but after the one before it when its splice put that one too; one there since a step,
+  after the one before it (the first, the start), before the end. sorts: by device, then seq (one
+  there since a step: that step's device, before what the step inserts), greater first, so two at
+  one place land the same whatever came first. an element it names not there (this device's seq past
+  the step's too), or a before not after its after: the step doesn't apply (passed over, as any).
+  what is made of it: `typescript/elements.ts`
 
-  a reader that forgets: holds per entry its sequences' elements, per path the newest step that made
-  it new, per sequence its newest splice, the place of its newest step that is one put of the whole
-  value, and the graph's value (no steps, no second value). it ends at the same value as a reader
-  that holds every step.
+  a reader that forgets: holds per entry its sequences' elements (in its snapshot too), per path the
+  newest step that made it new, per sequence its newest splice, the place of its newest step that
+  is one put of the whole value, and the graph's value (no steps, no second value). it ends at the
+  same value as a reader that holds every step.
 
   a late step (ordered before a step applied) on a reader that forgets:
   - goes in as it is, unless a step after it made new a path at or above where it goes; it is a
-    move; it is a put, or a splice into an array without a through, and a step after it made new or
-    spliced a sequence under that path (a put: or at it); it goes by place (a range, or an index in
-    its path no through names) into a sequence a step after it spliced.
+    move; it is a put, and a step after it made new or spliced a sequence at or under that path
   - passed over, as applied: one put of the whole value, when a step ordered after it is one put of
     the whole value and no failed step of its entry is ordered after it (overwritten, as in order;
-    nothing read, nothing failed).
+    nothing read, nothing failed)
   - else the entry is worked out again from every step of it the log holds, once the run landing is
-    in: so too a late step that doesn't apply as it is, one that applies in an entry with a failed
-    step ordered after it, and a step by ids into an entry not seen from its first step (after a
-    load), late or not, which also leaves the entry's elements held (a device's own writes name ids
-    again).
+    in: so too a late step that doesn't apply as it is, and one that applies in an entry with a
+    failed step ordered after it
   - after a cut (the log has let go any device's first step): no entry is worked out again. a late
-    step needing that fails (late, and the steps after it let go); a step by ids into an entry not
-    seen from its first step fails (its elements let go with the steps before it), a step by
-    ranges alone going in as written; when a failed step of an entry is ordered after a late one,
-    the failed steps of its entry are tried again as they are, on that reader alone: its value can
-    differ from then on.
+    step needing that fails (late, and the steps after it let go); when a failed step of an entry
+    is ordered after a late one, the failed steps of its entry are tried again as they are, on
+    that reader alone: its value can differ from then on
 
   what is made of it: `typescript/history.ts`
 - who: tstr, only when there is one
 
 Anything else is not a step: another length, another kind in a place, a key or hash not 32 bytes, n
 of 0, a number not whole, a patch with another field, a node array not one rest, an on item not as
-above (k of 0 or of n or more, a pair naming the step's own device, of another length or kind), ids
-not as above (not one per patch, but [through] on a patch without a range, a through of another
-count than its path's wholes, an empty [through], a through's x of this device at or below minus
-what its step inserts, a before of null without a through, an id of another shape or naming the
-step's own device, another's seq below 0, a number past 2^53 - 1 either way, an [x, k] with x of n
-or more, a [device, n, k] with n of 0, a count of 0, a before of true with a null after, another
+above (k of 0 or of n or more, a pair naming the step's own device, of another length or kind), a
+seq past 2^53 - 1 with what the step inserts, ids not as above (not one per patch, null on a patch
+that names elements, anything but null on one that names none, a through of another count than its
+path's wholes, a before of true with a null after, an id of another shape or naming the step's own
+device, another's seq below 0, a number past 2^53 - 1 either way, an [x, k] with x of n or more, a
+through's [c, k] with c of 0 or past n, a [device, n, k] with n of 0, a count of 0, another
 length), a NUL in node (its rest too) or part, or containers nested 1024 deep (cbor's most; the
 step's own array counts): a run message holds a step's patches one deeper.
 
-A peer from before on refuses a step that carries it (not a step): a run with one doesn't pass it.
-So does a peer from before ids, a step with ids, and one from before before or through, ids that
-say it.
+ids' shape is mine, not decided: per patch beside it, so a patch stays a changeable patch (squish
+packs it); an element its device and seq (diamond-types), unique by its device's chain alone.
 
-ids' shape is mine (10-30), not decided: per patch beside it, so a patch stays a changeable patch
-(squish packs it); an element its device and seq (diamond-types' agent and per-agent sequence
-number; Automerge's actor and counter is not this, its counter being lamport's, max + 1): unique by
-its device's chain alone, whatever the lamports, and a big paste moves no lamport; seq counted, not
-written, so a step says no more than it did; one there since a step by that step's n, which no other
-step of its device has; lamport only sorts; this device's own as how far back from the step's seq,
-so typing alone (each after the one before) is one run in a pack.
+seq is mine, not decided: written after when, the numbers about a step's place together, so no log
+need count it: a run is taken with step n - 1 held (its seq and what it inserts give the next); the
+pack has no column for it.
 
-through is mine (10-31), not decided: an item by its element, as a splice names, so typing into an
-item survives an insert, a removal or Enter above it, and a splice into an array that says one
-leaves what is under its items as it was; beside the patch, so a patch stays a changeable patch
-(squish packs it); one per whole, so a reader knows which index each names; its own as how far back,
-in the pack shifted by what the run inserts, so typing into one item costs nothing a step after the
-first. steps without through go by place, as they did, and a splice into an array without one makes
-what is under it new, as it did (mine, 10-31, not decided): per step, the same on every
-reader, so a log from before through reads as it did, and a step with a through into an item an old
-splice made new names its elements as made new. the cost: an old splice ordered before a through's
-typing makes new what that typing names (passed over). this device's x above minus what the step
-inserts: an element of this device made by now, and the pack's shift stays within 2^53 - 1. a move
-goes by place: an edit into an item another moved, ordered after the move, names an element made new
-by it, and is passed over.
+sorting by device and seq is mine, not decided: lamport made runs cut whenever a write elsewhere
+came between keystrokes; device and seq (Fugue, Yjs: the replica id) cost no run.
 
-forgets is mine (10-31), not decided: a late splice by ids commutes (FugueMax), so it needs only the
-elements; a put needs only to know nothing after it is at, above or under it (last writer wins by
-path); the rest is rare (old steps, moves, a late put under newer edits), so the log is read for it.
-a late put of the whole value under a newer one is passed over, since two devices putting at once is
-the commonest write, and the loser is simply overwritten; narrow, so that a reader that holds every
-step and one that forgets list the same failures. elements cost a forgetting device about 56 bytes a
-run in C, typing one run, and 32 more a run in a sequence of more than 32 runs (its index); the log
-it reads is what it has not let go.
+through is mine, not decided: an item by its element, so typing into an item survives an insert, a
+removal or Enter above it; its own as seq c, a whole number, so typing into one item is one run in
+a pack.
 
-before and FugueMax are mine (10-31), not decided: Weidner and Kleppmann's FugueMax ("The Art of the
-Fugue"), in its list form (Gentle's YjsMod: Yjs's origin left and right, its scan fixed), not a
-tree, so it works on the runs as held; a splice naming only after (RGA) interleaves two typing at
-one place backward or at the start, naming before too it doesn't, in any direction. with every
-before none (old steps) the scan is RGA's (each passed one sorting above, with its own), so old logs
-merge as they did. before none for the end, so typing at the end says no more than it did; true for
-after's own, so typing forward in the middle says 1 byte more a step; this device's last insert is 1
-byte already (x 1), so typing backward is 1 byte more. typing backward is one run held too, each
-element before the one after it.
+a write that can't be named is mine, not decided: a write here whose splices or array items its
+entry's elements can't name (they differ from the graph's, as when host code updates twice before
+one commit) goes as the graph's whole value for the entry, one put, which starts the entry's
+elements again, so later writes name ids; the host is told in `unkept`.
 
-on's shape is mink's pick (10-26), not decided: after when, so an old step reads as it did; heads by
-device and n, as the log finds a step (its chain binds n to its bytes), not by hash; this device's
-own as how far back, 1 or 2 bytes, and runs in a pack; an old step read as on all before it, so old
-logs read as they did.
+forgets is mine, not decided: a late splice by ids commutes (FugueMax), so it needs only the
+elements, which its snapshot holds; the rest is rare, so the log is read for it. elements cost a
+forgetting device about 40 bytes a run in C, typing one run, and 32 more a run in a sequence of
+more than 32 runs (its index).
+
+before and FugueMax are mine, not decided: Weidner and Kleppmann's FugueMax, in its list form
+(Gentle's YjsMod), so it works on the runs as held; naming before, two typing at one place don't
+interleave, in any direction.
+
+on's shape is mink's pick (10-26), not decided: heads by device and n, as the log finds a step (its
+chain binds n to its bytes), not by hash; this device's own as how far back, and runs in a pack.
 
 patch: a map, only the fields it has.
 
@@ -211,16 +177,15 @@ Taking a run, in order:
 2. first n past held + 1: a gap, answered with have
 3. steps already held: passed over when the run's step at the lower of its last and the count held
    is the held one; else a fork (forks): refused, `fork` (`own` for this device's)
-4. each step: its device the run's, n one more, before the hash of the one before
+4. each step: its device the run's, n one more, before the hash of the one before, seq the one
+   after the steps before it
 5. sig good for the last step's hash
 
 Fail 1, 4 or 5, or a pack that does not unpack: refused.
 
-That nothing else is checked is mine (10-30), not decided: whether a run is taken hangs on the run
-and its device's chain alone, never on what else the taker holds, so a run good once is good
-anywhere, any time. no lamport check: one far past what is held is taken, and the taker's writes go
-past it. a lamport near 2^53 - 1 could end everyone's writes, but holding an id is the permission
-for now, and one who can write can do worse.
+That nothing else is checked is mine, not decided: whether a run is taken hangs on the run and its
+device's chain alone, so a run good once is good anywhere, any time. no lamport check: one far past
+what is held is taken (holding an id is the permission for now, and one who can write can do worse).
 
 ## messages
 
@@ -245,14 +210,14 @@ Each a cbor array. Anything else is dropped, silently.
 
 ## forks
 
-Mine (10-31), not decided. A device that signs two chains, differing from some n on: its key in two
+Mine, not decided. A device that signs two chains, differing from some n on: its key in two
 places, a backup restored and written on. Nobody is told by a refusal on one link; a fork is.
 
 - proof: two runs of one device, each as `fork` says: a pack whose first step is whole, its steps
-  one after another from n, each before the hash of the one before, sig good for the last's hash.
-  the two start at the same n, with steps of another hash there (the chains differ at n, and may
-  differ before it: n is a step where they differ, not the first); their bytes at most 2^24 all
-  told. checked by whoever gets it, from the message alone: it holds neither chain or one
+  one after another from n, each before the hash of the one before, seq the one after the steps
+  before it, sig good for the last's hash. the two start at the same n, with steps of another hash
+  there (the chains differ at n, and may differ before it: n is a step where they differ, not the
+  first). checked by whoever gets it, from the message alone: it holds neither chain or one
 - found: taking a run whose first n is at most held, m the lower of its last and the count held; its
   step m has another hash than the held one. the proof: the run from m to its end, and the held run
   from m to its signed end (every held step is in a signed run, this device's own closed first).
@@ -280,41 +245,36 @@ places, a backup restored and written on. Nobody is told by a refusal on one lin
 
 A run's steps, small.
 
-    [first, lamport, when, node, part, who, count, columns]
-    [first, lamport, when, node, part, who, count, columns, on]
     [first, lamport, when, node, part, who, count, columns, on, ids]
 
 - first: whole n, from 2: step n is packed against step n - 1, like the rest; or bstr, the first
-  step's bytes, whole (at n = 1, and old runs)
+  step's bytes, whole (at n = 1)
 - the rest: one entry per step after step n - 1 (or after the whole first), each a runs list
   `[value, count, value, count, …]`, count whole and at least 1
   - lamport, when: the step from the one before (when may be negative)
   - node: as in a step (tstr or [rest]); part: tstr
   - who: tstr, or null for none
   - count: how many patches the step has
-  - on: the step's on, or null for none; another device's n as the difference from the last n this
-    column gave that device (from 0, may be negative), so typing by turns makes runs (mink's pick:
-    two typing by turns, 38 bytes a step packed without it, 4 with). the column only when a step in
-    it says on
-  - ids: the step's ids as written, or null for none, but through's ids of this device: x as x less
-    what the steps before it in the pack insert (the whole first's too), [x, k] as x less how many
-    steps come before it (so typing into one item is one run; added back to unpack). the column
-    only when a step in it says ids (on is there then too)
+  - on: the step's on; another device's n as the difference from the last n this column gave that
+    device (from 0, may be negative), so typing by turns makes runs (mink's pick: two typing by
+    turns, 38 bytes a step packed without it, 4 with)
+  - ids: the step's ids as written
+  - seq: none: the one after the steps before it (the whole first's, or step n - 1's)
 - columns: every later step's patches, in order, as below
 
 Unpack: for each step after step n - 1 (the receiver's) or the whole first, from the one before
 (prev):
 
     [prev.device, prev.n + 1, blake3(prev bytes), node, part, the next count patches,
-     prev.lamport + lamport, prev.when + when (, on, each difference added back) (, ids) (, who)]
+     prev.lamport + lamport, prev.when + when, seq, on (each difference added back), ids (, who)]
 
 encoded canonically: the same bytes the writer made, so chain and sig check as ever.
 
-Refused before anything is made: not 8, 9 or 10 elements, first neither bstr nor whole from 2, 4096
-or more steps in the columns (none, when first is n), more than 65536 patches, a column of another
-length, counts not summing to the patches, an on neither null nor an array. A step it makes that
-isn't one (an n added back to below 1, ids where it says no on or not as a step has them): refused.
-Steps that make more than a run's 2^24 bytes: refused once they do, nothing more made.
+Refused before anything is made: not 10 elements, first neither bstr nor whole from 2, 4096 or more
+steps in the columns (none, when first is n), more than 65536 patches, a column of another length,
+counts not summing to the patches, an on or ids entry not an array. A step it makes that isn't one
+(an n added back to below 1, a seq past 2^53 - 1 with what it inserts, ids not as a step has them):
+refused. Steps that make more than a run's 2^24 bytes: refused once they do, nothing more made.
 
 Step n - 1 not held: past what is held, a gap (answered with have); all steps held, passed over;
 else held but not to be read (forgotten), refused, never guessed.

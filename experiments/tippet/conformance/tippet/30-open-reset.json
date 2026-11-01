@@ -56,7 +56,11 @@
 			"device": "a",
 			"expect": {
 				"log": [],
-				"open": []
+				"open": [],
+				"bytes": {
+					"log": 0,
+					"open": 0
+				}
 			},
 			"skip": [
 				"bytes"
@@ -88,7 +92,11 @@
 						"a",
 						3
 					]
-				]
+				],
+				"bytes": {
+					"log": 0,
+					"open": 294
+				}
 			},
 			"skip": [
 				"bytes"
@@ -165,7 +173,11 @@
 						4
 					]
 				],
-				"open": []
+				"open": [],
+				"bytes": {
+					"log": 272,
+					"open": 0
+				}
 			},
 			"skip": [
 				"bytes"

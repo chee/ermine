@@ -30,8 +30,8 @@ export type Packed = [
 	who: Value[],
 	count: number[],
 	columns: Columns,
-	on?: Value[],
-	ids?: Value[],
+	on: Value[],
+	ids: Value[],
 ]
 
 const alike = (a: unknown, b: unknown) =>
@@ -57,25 +57,6 @@ function unruns<T>(rs: T[]): T[] {
 	}
 	return out
 }
-
-// through's own ids in the column (WIRE.md, pack): x less what the run's steps before it insert,
-// [x, k] less how many steps come before it, so typing into one item is one run; back: added
-const shift = (ids: Value, inserted: number, steps: number, back = false) =>
-	!Array.isArray(ids) ? ids : ids.map((x) => {
-		const t = Array.isArray(x) && (x.length === 1 || x.length === 4) ? x.at(-1) : undefined
-		if (!Array.isArray(t)) return x
-		const d = back ? -1 : 1
-		return [
-			...x.slice(0, -1),
-			t.map((i) =>
-				typeof i === "number"
-					? i - d * inserted
-					: Array.isArray(i) && i.length === 2 && typeof i[0] === "number"
-					? [i[0] - d * steps, i[1]]
-					: i
-			),
-		]
-	})
 
 const STEPS = 4096, PATCHES = 65536
 // the most bytes a run's steps make, all told (WIRE.md, runs)
@@ -114,10 +95,25 @@ function patchCount(c: Columns): number {
 	return ok ? n : -1
 }
 
-export type Prior = { device: string; n: number; hash: Uint8Array; lamport: number; when: number }
+// next: the seq the step after it has
+export type Prior = {
+	device: string
+	n: number
+	hash: Uint8Array
+	lamport: number
+	when: number
+	next: number
+}
 export function priorOf(bytes: Uint8Array): Prior {
 	const s = decodeStep(bytes)
-	return { device: s.device, n: s.n, hash: hashStep(bytes), lamport: s.lamport, when: s.when }
+	return {
+		device: s.device,
+		n: s.n,
+		hash: hashStep(bytes),
+		lamport: s.lamport,
+		when: s.when,
+		next: s.seq + made(s),
+	}
 }
 export function firstOf(p: Packed): { n: number; prior: boolean } {
 	return typeof p[0] === "number"
@@ -135,7 +131,23 @@ export function pack(bytes: readonly Uint8Array[], prior?: Prior): Packed {
 	}
 	const before: Pick<Step, "lamport" | "when">[] = prior ? [prior, ...steps] : steps
 	const rest = prior ? steps : steps.slice(1)
-	const p: Packed = [
+	// a step's seq is not in a pack: the one after the steps before it
+	let next = prior ? prior.next : s0.seq + made(s0)
+	for (const s of rest) {
+		if (s.seq !== next) throw new RangeError("not the seq after the step before")
+		next += made(s)
+	}
+	// Another device's n counts from the last this column gave it, so typing by turns makes runs.
+	const last = new Map<string, number>()
+	const on = runs(rest.map((s) =>
+		(writtenOn(s) as Value[]).map((o) => {
+			if (typeof o === "number") return o
+			const [d, n] = o as [Uint8Array, number], k = hex(d), was = last.get(k) ?? 0
+			return last.set(k, n), [d, n - was]
+		})
+	))
+	const ids = runs(rest.map((s) => s.ids as Value))
+	return [
 		prior ? s0.n : bytes[0],
 		runs(rest.map((s, i) => s.lamport - before[i].lamport)),
 		runs(rest.map((s, i) => s.when - before[i].when)),
@@ -144,39 +156,15 @@ export function pack(bytes: readonly Uint8Array[], prior?: Prior): Packed {
 		runs(rest.map((s) => s.who ?? null)),
 		runs(rest.map((s) => s.patches.length)),
 		columns(rest.flatMap((s) => s.patches)),
+		on,
+		ids,
 	]
-	if (rest.some((s) => s.on)) {
-		// Another device's n counts from the last this column gave it, so typing by turns makes
-		// runs.
-		const last = new Map<string, number>()
-		p.push(runs(rest.map((s) =>
-			s.on
-				? (writtenOn(s) as Value[]).map((o) => {
-					if (typeof o === "number") return o
-					const [d, n] = o as [Uint8Array, number], k = hex(d), was = last.get(k) ?? 0
-					return last.set(k, n), [d, n - was]
-				})
-				: null
-		)))
-	}
-	// ids as written, through's own shifted: typing alone (each after the one before, its own) is
-	// one run
-	if (rest.some((s) => s.ids)) {
-		let inserted = prior ? 0 : made(s0)
-		p.push(runs(rest.map((s, i) => {
-			const x = s.ids ? shift(s.ids as Value[], inserted, prior ? i : i + 1) : null
-			return inserted += made(s), x
-		})))
-	}
-	return p
 }
 
 export function unpack(p: unknown, prior?: Prior): Uint8Array[] {
-	if (!Array.isArray(p) || p.length < 8 || p.length > 10) throw new TypeError("not a pack")
-	const [first, lamports, whens, nodes, parts, whos, counts, cols] = p as Packed
+	if (!Array.isArray(p) || p.length !== 10) throw new TypeError("not a pack")
+	const [first, lamports, whens, nodes, parts, whos, counts, cols, ons, idss] = p as Packed
 	const steps = length(lamports), patches = patchCount(cols)
-	const nulls = steps > 0 ? [null, steps] : []
-	const ons = p.length >= 9 ? (p as Packed)[8]! : nulls, idss = p.length === 10 ? p[9] : nulls
 	const against = typeof first === "number"
 	const ok = steps >= 0 && steps < STEPS && patches >= 0 &&
 		(first instanceof Uint8Array ||
@@ -191,6 +179,7 @@ export function unpack(p: unknown, prior?: Prior): Uint8Array[] {
 	let prev: Pick<Step, "device" | "n" | "lamport" | "when"> = against
 		? prior!
 		: decodeStep(first as Uint8Array)
+	let next = against ? prior!.next : (prev as Step).seq + made(prev as Step)
 	let hash = against ? prior!.hash : hashStep(first as Uint8Array), at = 0
 	// the steps' bytes so far: past RUN, refused before any more is made
 	let bytes = against ? 0 : (first as Uint8Array).length
@@ -202,7 +191,7 @@ export function unpack(p: unknown, prior?: Prior): Uint8Array[] {
 		who = unruns(whos),
 		count = unruns(counts),
 		on = unruns(ons),
-		ids = unruns(idss as unknown[])
+		ids = unruns(idss)
 	const all = patchesOf(cols)
 	if (
 		!node.every((x) =>
@@ -211,10 +200,18 @@ export function unpack(p: unknown, prior?: Prior): Uint8Array[] {
 	) {
 		throw new TypeError("not a pack")
 	}
-	if (!on.every((x) => x === null || Array.isArray(x))) throw new TypeError("not a pack")
+	if (!on.every((x) => Array.isArray(x)) || !ids.every((x) => Array.isArray(x))) {
+		throw new TypeError("not a pack")
+	}
 	const device = unhex(prev.device), last = new Map<string, number>()
-	let inserted = against ? 0 : made(prev as Step)
 	for (let i = 0; i < count.length; i++) {
+		const written = (on[i] as unknown[]).map((o) => {
+			if (!Array.isArray(o) || o.length !== 2 || !(o[0] instanceof Uint8Array)) return o
+			const k = hex(o[0]), n = (last.get(k) ?? 0) + (o[1] as number)
+			return last.set(k, n), [o[0], n]
+		})
+		if (!written.every(onOf(device, prev.n + 1))) throw new TypeError("not a pack")
+		const named = ids[i] as Value[]
 		const s: Step = {
 			device: prev.device,
 			n: prev.n + 1,
@@ -226,25 +223,14 @@ export function unpack(p: unknown, prior?: Prior): Uint8Array[] {
 			patches: all.slice(at, at += count[i]),
 			lamport: prev.lamport + lamport[i],
 			when: prev.when + when[i],
+			seq: next,
 			...(who[i] !== null && { who: who[i] as string }),
+			on: readOn(prev.device, prev.n + 1, written),
+			ids: named,
 		}
-		if (on[i] !== null) {
-			const written = (on[i] as unknown[]).map((o) => {
-				if (!Array.isArray(o) || o.length !== 2 || !(o[0] instanceof Uint8Array)) return o
-				const k = hex(o[0]), n = (last.get(k) ?? 0) + (o[1] as number)
-				return last.set(k, n), [o[0], n]
-			})
-			if (!written.every(onOf(device, prev.n + 1))) throw new TypeError("not a pack")
-			s.on = readOn(prev.device, prev.n + 1, written)
-		}
-		if (ids[i] !== null) {
-			ids[i] = shift(ids[i] as Value, inserted, against ? i : i + 1, true)
-			if (!s.on || !idsOf(device, s.n, s.patches as unknown[])(ids[i])) {
-				throw new TypeError("not a pack")
-			}
-			s.ids = ids[i] as Value[]
-		}
-		inserted += made(s)
+		if (!idsOf(device, s.n, s.patches as unknown[])(named)) throw new TypeError("not a pack")
+		if (next > Number.MAX_SAFE_INTEGER - made(s)) throw new TypeError("not a pack")
+		next += made(s)
 		const b = encodeStep(s)
 		if ((bytes += b.length) > RUN) throw new RangeError("a run past its most bytes")
 		out.push(b)

@@ -128,6 +128,9 @@ Deno.test("1. a pack that says more than it holds is refused before anything is 
 		patches: [],
 		lamport: 1,
 		when: 0,
+		seq: 0,
+		on: [],
+		ids: [],
 	})
 	// Many steps: nothing as long as k is made (an on column of nulls once took 5 s at this k).
 	const k = 50_000_000, none = pack([first])[7]
@@ -153,6 +156,9 @@ Deno.test("2. a step far past the highest lamport is taken (what is held decides
 		patches: [],
 		lamport: Number.MAX_SAFE_INTEGER,
 		when: 0,
+		seq: 0,
+		on: [],
+		ids: [],
 	})
 	const h = await writer()
 	const sig = await far.sign(hashStep(bytes))
@@ -233,6 +239,9 @@ Deno.test("8. a step is only what tippet writes: others are refused, and write t
 		patches: [{ path: ["t"], range: [0, 1], value: "a" }],
 		lamport: 1,
 		when: 0,
+		seq: 0,
+		on: [],
+		ids: [[null, [], null, []]],
 	}
 	const bad = [
 		{ when: 0.5 },
@@ -275,7 +284,10 @@ Deno.test("8. a step is only what tippet writes: others are refused, and write t
 		[{ path: ["big"], value: 2n ** 70n }],
 		[{ path: [], value: { a: [1, { b: null }], f: 1.5 } }],
 	]
-	for (const patches of writes) a.write({ node: "x", part: "value", patches, when: 1 })
+	for (const patches of writes) {
+		const ids = patches.map((p) => p.range && !p.move ? [null, [], null, []] : null)
+		a.write({ node: "x", part: "value", patches, ids, when: 1 })
+	}
 	assertEquals(unpack(pack(a.steps(a.device!))), a.steps(a.device!))
 })
 
@@ -370,8 +382,7 @@ Deno.test("13. a step the store can't read back takes nothing else with it: each
 	a.edit("doc", [{ path: ["t"], range: [2, 2], value: "z" }])
 	assertEquals(await b.log.take((await a.log.run(a.log.device!, 4))!), { added: 1 })
 	assertEquals([b.value("doc"), b.history.failed], [{ t: "xyz" }, []])
-	assertEquals(b.log.seq(a.log.device!, 5), 3)
-	assertThrows(() => b.log.seq(a.log.device!, 6), RangeError)
+	assertEquals(b.log.seq(a.log.device!), 3)
 })
 
 Deno.test("14. a snapshot from before seq loads without reading its steps back", async () => {

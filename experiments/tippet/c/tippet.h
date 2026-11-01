@@ -8,7 +8,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-
 // The one allocator: fn(ctx, p, old, size) allocates, resizes or frees (size 0); NULL if out of
 // memory.
 typedef struct {
@@ -44,7 +43,6 @@ const char *tp_why(int code);
 // the most bytes a run's steps make, all told (WIRE.md, runs)
 #define TP_RUN ((size_t)1 << 24)
 
-
 // One write; its spans point into the step's bytes. node, part and who are UTF-8 text.
 typedef struct {
 	tp_span bytes;
@@ -53,7 +51,7 @@ typedef struct {
 	const uint8_t *before; // 32, or NULL at n = 1
 	tp_span node, part, patches, who; // who.p NULL: none
 	size_t count;
-	uint64_t lamport, when;
+	uint64_t lamport, when, seq; // seq: how many elements its device's steps before it insert
 	int relative;
 	tp_span on;
 	tp_span ids; // per patch: null or [after, gone] (WIRE.md, ids); p NULL: none
@@ -79,7 +77,6 @@ uint64_t tp_patch_made(const tp_patch *p);
 uint64_t tp_step_made(const tp_step *s);
 int tp_on_next(const tp_step *s, size_t *at, const uint8_t **device, uint64_t *n);
 
-
 typedef struct {
 	uint8_t *bytes;
 	size_t *at;
@@ -95,7 +92,7 @@ typedef struct {
 	uint8_t device[32];
 	uint64_t n;
 	uint8_t hash[32];
-	uint64_t lamport, when;
+	uint64_t lamport, when, next; // next: the seq the step after it has
 } tp_prior;
 int tp_prior_of(const uint8_t *bytes, size_t length, tp_prior *p);
 
@@ -108,14 +105,12 @@ int tp_pack_first(tp_span pack, uint64_t *n, int *after);
 size_t tp_pack_count(tp_span pack);
 void tp_span_free(const tp_mem *mem, tp_span *s);
 
-
 typedef struct {
 	uint8_t a[32], prefix[32], pub[32];
 } tp_key;
 void tp_key_of(tp_key *k, const uint8_t seed[32]);
 void tp_sign(const tp_key *k, const uint8_t *m, size_t n, uint8_t sig[64]);
 int tp_verify(const uint8_t device[32], const uint8_t *m, size_t n, const uint8_t sig[64]);
-
 
 typedef struct {
 	const uint8_t *device;
@@ -147,7 +142,6 @@ tp_store *tp_memory_store(const tp_mem *mem, size_t max);
 // On disk (POSIX), like typescript/store_file.ts: dir/log, dir/open, dir/snapshot, dir/key, and an
 // index rebuilt on load if missing. NULL if out of memory or dir can't be made.
 tp_store *tp_file_store(const tp_mem *mem, const char *dir, size_t max);
-
 
 typedef struct {
 	size_t devices; // devices held (4096)
@@ -195,8 +189,8 @@ int tp_log_write(tp_log *log, const tp_write *w, uint64_t *n, uint64_t *lamport)
 size_t tp_log_devices(const tp_log *log);
 const uint8_t *tp_log_have(const tp_log *log, size_t i, uint64_t *have);
 uint64_t tp_log_count(const tp_log *log, const uint8_t device[32]);
-// how many elements the device's steps before step n insert (WIRE.md, ids); n past count + 1: TP_BOUND
-int tp_log_seq(const tp_log *log, const uint8_t device[32], uint64_t n, uint64_t *seq);
+// how many elements the device's steps insert (WIRE.md, ids): the seq its next step has
+uint64_t tp_log_seq(const tp_log *log, const uint8_t device[32]);
 int tp_log_prior(const tp_log *log, const uint8_t device[32], uint64_t n, tp_prior *p);
 long tp_log_step(const tp_log *log, const uint8_t device[32], uint64_t n, uint8_t *out, size_t cap);
 // Closes and syncs this device's open run first.
@@ -224,7 +218,6 @@ int tp_log_forked(const tp_log *log, const uint8_t device[32]);
 int tp_log_fork(tp_log *log, tp_span message);
 // Forget: stop reading device's steps through n, so they are never sent. Survives a reload.
 int tp_log_drop(tp_log *log, const uint8_t device[32], uint64_t n);
-
 
 typedef struct tp_sync tp_sync;
 typedef struct tp_link tp_link;
@@ -258,7 +251,6 @@ int tp_sync_live(tp_sync *s, const uint8_t *data, size_t length);
 void tp_sync_keeper(tp_sync *s, tp_link *l);
 // How many of device's steps have passed to every link (its own: to a keeper), for forgetting.
 uint64_t tp_sync_passed(const tp_sync *s, const uint8_t device[32]);
-
 
 // Client side of ../WIRE.md's http long-poll, with no sockets: the device makes the requests and
 // hands the answers here.

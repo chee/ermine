@@ -20,7 +20,7 @@ const char *tp_why(int code) {
 		case TP_SIGNATURE: return "signature";
 		case TP_BEFORE: return "before";
 		case TP_FORK: return "fork";
-		case TP_LATE: return "late: needs the steps after it";
+		case TP_LATE: return "late, and the steps after it let go";
 		default: return "unknown";
 	}
 }
@@ -100,7 +100,6 @@ static int on_item(tp_in *in, const uint8_t *device, uint64_t n, const uint8_t *
 }
 
 int tp_on_next(const tp_step *s, size_t *at, const uint8_t **device, uint64_t *n) {
-	if (!s->on.p) return 1;
 	tp_in in = {s->on.p + *at, s->on.p + s->on.n};
 	uint64_t k;
 	if (*at == 0 && tp_array(&in, &k)) return -1;
@@ -156,37 +155,48 @@ static uint64_t wholes(tp_span path) {
 	for (uint64_t i = 0; i < k; i++) n += *in.p >> 5 == 0, tp_skip(&in, &item);
 	return n;
 }
-// through: one id per whole in the path (one: at least one), this device's x above minus most (what
-// the step inserts)
-static int through(tp_in *in, const tp_patch *p, const uint8_t *device, uint64_t n, uint64_t most, int one) {
+// a through's element id: this device's c (whole) or [c, k] (c from 1 to n); another's as any
+static int through_item(tp_in *in, const uint8_t *device, uint64_t n) {
+	if (in->p >= in->end || *in->p >> 5 == 1) return -1;
+	tp_in at = *in;
+	uint64_t k, a, b;
+	if (*at.p >> 5 == 4 && !tp_array(&at, &k) && at.p < at.end && *at.p >> 5 == 0) {
+		*in = at;
+		return k != 2 || tp_whole(in, &a) || a < 1 || a > n || tp_whole(in, &b) ? -1 : 0;
+	}
+	return id_item(in, device, n);
+}
+// through: one id per whole in the path (one: at least one)
+static int through(tp_in *in, const tp_patch *p, const uint8_t *device, uint64_t n, int one) {
 	uint64_t t, w = wholes(p->path);
-	int64_t x;
 	if (tp_array(in, &t) || (one && !w) || t != w) return -1;
 	for (uint64_t i = 0; i < t; i++) {
-		tp_in at = *in;
-		if (id_item(in, device, n)) return -1;
-		if (*at.p >> 5 <= 1 && (tp_int(&at, &x), x <= 0 && (uint64_t)-x >= most)) return -1;
+		if (through_item(in, device, n)) return -1;
 	}
 	return 0;
 }
 
-// the ids: one per patch, null, [through], or [after, gone], [after, gone, before] or [after, gone,
-// before or null, through] only on a patch with a range; before true only with an after
+// the ids: one per patch: null for a patch with no splice and no index in its path, [through] for
+// one with an index, and for a splice (a patch with a range) [after, gone, before, through]: before
+// null for the end, true for after's own (after not null)
 static int ids_item(tp_in *in, const tp_step *s, const uint8_t *device) {
 	uint64_t k, two, g;
 	size_t at = 0;
 	tp_patch p;
-	uint64_t most = tp_step_made(s);
 	if (tp_array(in, &k) || k != s->count) return -1;
 	for (uint64_t i = 0; i < k; i++) {
 		if (tp_patch_next(s->patches, &at, &p)) return -1;
-		if (tp_null(in)) continue;
-		if (tp_array(in, &two) || two < 1 || two > 4) return -1;
-		if (two == 1) {
-			if (through(in, &p, device, s->n, most, 1)) return -1;
+		int w = wholes(p.path) > 0;
+		if (tp_null(in)) {
+			if (!p.move.p && (p.ranged || w)) return -1;
 			continue;
 		}
-		if (!p.ranged) return -1;
+		if (p.move.p || tp_array(in, &two)) return -1;
+		if (!p.ranged) {
+			if (two != 1 || !w || through(in, &p, device, s->n, 1)) return -1;
+			continue;
+		}
+		if (two != 4) return -1;
 		int after = !tp_null(in);
 		if (after && id_item(in, device, s->n)) return -1;
 		if (tp_array(in, &g)) return -1;
@@ -196,12 +206,12 @@ static int ids_item(tp_in *in, const tp_step *s, const uint8_t *device) {
 				count < 1)
 				return -1;
 		}
-		if (two > 2 && in->p < in->end && *in->p == 0xf5) {
+		if (in->p < in->end && *in->p == 0xf5) {
 			if (!after) return -1;
 			in->p++;
-		} else if (two == 4 && in->p < in->end && *in->p == 0xf6) in->p++;
-		else if (two > 2 && id_item(in, device, s->n)) return -1;
-		if (two == 4 && through(in, &p, device, s->n, most, 0)) return -1;
+		} else if (in->p < in->end && *in->p == 0xf6) in->p++;
+		else if (id_item(in, device, s->n)) return -1;
+		if (through(in, &p, device, s->n, 0)) return -1;
 	}
 	return 0;
 }
@@ -214,7 +224,7 @@ int tp_step_decode(const uint8_t *bytes, size_t length, tp_step *s) {
 	if (!tp_canonical(bytes, length)) return TP_NOTSTEP;
 	int deeper = tp_deeper(bytes, length, TP_DEPTH);
 	if (deeper) return deeper < 0 ? TP_NOMEM : TP_NOTSTEP;
-	if (tp_array(&in, &items) || items < 8 || items > 11) return TP_NOTSTEP;
+	if (tp_array(&in, &items) || items < 11 || items > 12) return TP_NOTSTEP;
 	if (tp_bytes(&in, 32, &device) || tp_whole(&in, &s->n) || s->n < 1) return TP_NOTSTEP;
 	if (!tp_null(&in) && tp_bytes(&in, 32, &before)) return TP_NOTSTEP;
 	if (in.p < in.end && *in.p == 0x81) {
@@ -231,32 +241,30 @@ int tp_step_decode(const uint8_t *bytes, size_t length, tp_step *s) {
 		if (patch(&in, &p)) return TP_NOTSTEP;
 	}
 	s->patches.p = start, s->patches.n = (size_t)(in.p - start);
-	if (tp_whole(&in, &s->lamport) || tp_whole(&in, &s->when)) return TP_NOTSTEP;
-	if (items > 8 && in.p < in.end && *in.p >> 5 == 4) {
-		const uint8_t *d;
-		uint64_t m;
-		start = in.p;
-		if (tp_array(&in, &k)) return TP_NOTSTEP;
-		for (uint64_t i = 0; i < k; i++) {
-			if (on_item(&in, device.p, s->n, &d, &m)) return TP_NOTSTEP;
-		}
-		s->on.p = start, s->on.n = (size_t)(in.p - start);
-		if (items > 9 && in.p < in.end && *in.p >> 5 == 4) {
-			start = in.p;
-			if (ids_item(&in, s, device.p)) return TP_NOTSTEP;
-			s->ids.p = start, s->ids.n = (size_t)(in.p - start);
-		}
+	if (tp_whole(&in, &s->lamport) || tp_whole(&in, &s->when) || tp_whole(&in, &s->seq)) return TP_NOTSTEP;
+	if (s->seq > TP_WHOLE - tp_step_made(s)) return TP_NOTSTEP;
+	if (in.p >= in.end || *in.p >> 5 != 4) return TP_NOTSTEP;
+	const uint8_t *d;
+	uint64_t m;
+	start = in.p;
+	if (tp_array(&in, &k)) return TP_NOTSTEP;
+	for (uint64_t i = 0; i < k; i++) {
+		if (on_item(&in, device.p, s->n, &d, &m)) return TP_NOTSTEP;
 	}
-	size_t at = 8 + !!s->on.p + !!s->ids.p;
-	if (items == at + 1 && tp_text(&in, &s->who)) return TP_NOTSTEP;
-	if (items > at + 1 || items < at || in.p != in.end) return TP_NOTSTEP;
+	s->on.p = start, s->on.n = (size_t)(in.p - start);
+	if (in.p >= in.end || *in.p >> 5 != 4) return TP_NOTSTEP;
+	start = in.p;
+	if (ids_item(&in, s, device.p)) return TP_NOTSTEP;
+	s->ids.p = start, s->ids.n = (size_t)(in.p - start);
+	if (items == 12 && tp_text(&in, &s->who)) return TP_NOTSTEP;
+	if (in.p != in.end) return TP_NOTSTEP;
 	s->bytes.p = bytes, s->bytes.n = length;
 	s->device = device.p, s->before = before.p;
 	return 0;
 }
 
 static void encode(tp_buf *b, const tp_step *s) {
-	tp_put_head(b, 4, 8 + (s->on.p != NULL) + (s->ids.p != NULL) + (s->who.p != NULL));
+	tp_put_head(b, 4, 11 + (s->who.p != NULL));
 	tp_put_head(b, 2, 32);
 	tp_put(b, s->device, 32);
 	tp_put_head(b, 0, s->n);
@@ -270,8 +278,9 @@ static void encode(tp_buf *b, const tp_step *s) {
 	tp_put(b, s->patches.p, s->patches.n);
 	tp_put_head(b, 0, s->lamport);
 	tp_put_head(b, 0, s->when);
-	if (s->on.p) tp_put(b, s->on.p, s->on.n);
-	if (s->ids.p) tp_put(b, s->ids.p, s->ids.n);
+	tp_put_head(b, 0, s->seq);
+	tp_put(b, s->on.p, s->on.n);
+	tp_put(b, s->ids.p, s->ids.n);
 	if (s->who.p) tp_put_head(b, 3, s->who.n), tp_put(b, s->who.p, s->who.n);
 }
 

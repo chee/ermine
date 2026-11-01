@@ -23,7 +23,7 @@ void tp_record_pack(const uint8_t *r, size_t length, tp_span *pack, tp_prior *pr
 	uint64_t n;
 	int after;
 	memcpy(prior->device, r + 7, 32), memcpy(prior->hash, b, 32);
-	prior->lamport = get64(b + 32), prior->when = get64(b + 40);
+	prior->lamport = get64(b + 32), prior->when = get64(b + 40), prior->next = get64(b + 48);
 	prior->n = tp_pack_first(*pack, &n, &after) || !after ? 0 : n - 1;
 }
 

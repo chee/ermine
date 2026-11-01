@@ -6,6 +6,7 @@ import {
 	encodeStep,
 	hashStep,
 	hex,
+	KEY,
 	made,
 	rest,
 	same,
@@ -20,16 +21,17 @@ export type Run = { device: string; steps: Uint8Array[]; sig: Uint8Array; messag
 export type At = [device: string, first: number, last: number]
 
 // A run as a store keeps it: its run message. A pack against the step before it has that step's
-// prior (48 bytes: hash, lamport, when) after it, so a step can be read out of it alone.
-const PRIOR = 50
+// prior (56 bytes: hash, lamport, when, next) after it, so a step can be read out of it alone.
+const PRIOR = 58
 function record(device: string, sig: Uint8Array, p: Packed, prior?: Prior) {
 	const parts: unknown[] = ["run", unhex(device), sig, p]
 	if (typeof p[0] === "number") {
 		if (!prior) throw new RangeError("the step before is not held")
-		const b = new Uint8Array(48), view = new DataView(b.buffer)
+		const b = new Uint8Array(56), view = new DataView(b.buffer)
 		b.set(prior.hash),
 			view.setBigUint64(32, BigInt(prior.lamport)),
-			view.setBigUint64(40, BigInt(prior.when))
+			view.setBigUint64(40, BigInt(prior.when)),
+			view.setBigUint64(48, BigInt(prior.next))
 		parts.push(b)
 	}
 	return encode(parts as Value)
@@ -47,6 +49,7 @@ function stepsOf(record: Uint8Array): Uint8Array[] {
 		hash: b.slice(0, 32),
 		lamport: Number(view.getBigUint64(32)),
 		when: Number(view.getBigUint64(40)),
+		next: Number(view.getBigUint64(48)),
 	}
 	return unpack(p, prior)
 }
@@ -176,25 +179,13 @@ export function createMemoryStore(): Store {
 
 const EVERY = 32, BYTES = 2048
 
-// seqs: where its steps' seqs go on evenly, each [n, seq, made]: steps n on each insert made, step n
-// at seq, up to the next
+// next: the seq the next step has
 type Feed = {
 	count: number
 	last: Uint8Array | null
 	lamport: number
 	when: number
-	seqs: [n: number, seq: number, made: number][]
-}
-const seqAt = (f: Feed | undefined, n: number) => {
-	const s = f?.seqs ?? []
-	let lo = 0, hi = s.length
-	while (lo < hi) {
-		const mid = (lo + hi) >> 1
-		if (s[mid][0] <= n) lo = mid + 1
-		else hi = mid
-	}
-	const g = s[lo - 1]
-	return g ? g[1] + g[2] * (n - g[0]) : 0
+	next: number
 }
 type Chained = { steps: Step[]; last: Uint8Array | null }
 export type Taken = { added: number } | { refused: string }
@@ -208,20 +199,28 @@ export type Fork = {
 }
 type Told = (device: string, steps: Step[], from?: unknown) => void
 
+// what a write is given: on and ids are none and null each, when not said
+export type Written =
+	& Omit<Step, "device" | "n" | "before" | "lamport" | "seq" | "relative" | "on" | "ids">
+	& {
+		on?: Step["on"]
+		ids?: Step["ids"]
+	}
+
 export type Log = {
 	readonly device: string | undefined
 	readonly lamport: number
 	have(): Record<string, number>
 	count: (device: string) => number
-	// how many elements the device's steps before step n insert (WIRE.md, ids); n past count + 1 throws
-	seq: (device: string, n: number) => number
+	// how many elements the device's steps insert (WIRE.md, ids): the seq its next step has
+	seq: (device: string) => number
 	step: (device: string, n: number) => Uint8Array
 	prior: (device: string, n: number) => Prior | undefined
 	steps: (device: string) => Uint8Array[]
 	on(t: Told): () => void
 	// told when a take is done and no other waits, whatever it did
 	onQuiet(f: () => void): () => void
-	write(s: Omit<Step, "device" | "n" | "before" | "lamport" | "relative">): Step
+	write(s: Written): Step
 	run(device: string, from: number): Promise<Run | undefined>
 	take(b: Run, from?: unknown): Promise<Taken>
 	// the forks known, one a device
@@ -276,14 +275,20 @@ export function createLog(
 	}
 	const count = (d: string) => feeds.get(d)?.count ?? 0
 
-	function chain(device: string, bytes: Uint8Array[]): Chained | "gap" | "chain" {
-		const f = feeds.get(device)
-		let n = f?.count ?? 0, before = f?.last ?? null
-		const first = decodeStep(bytes[0]).n, steps: Step[] = []
+	// the steps that follow one another from what is held (held = nothing: from the first step's
+	// own n, as a tail of a proof does)
+	function chain(device: string, bytes: Uint8Array[], held = true): Chained | "gap" | "chain" {
+		const f = held ? feeds.get(device) : undefined, one = decodeStep(bytes[0])
+		let n = f?.count ?? (held ? 0 : one.n - 1), before = f?.last ?? (held ? null : one.before)
+		const first = one.n, steps: Step[] = []
+		let next = f?.next ?? (held ? 0 : one.seq)
 		if (first > n + 1) return "gap"
 		for (const b of bytes.slice(n - first + 1)) {
 			const s = decodeStep(b)
-			if (s.device !== device || s.n !== n + 1 || !same(s.before, before)) return "chain"
+			if (s.device !== device || s.n !== n + 1 || !same(s.before, before) || s.seq !== next) {
+				return "chain"
+			}
+			next += made(s)
 			steps.push(s), before = hashStep(b)
 			n++
 		}
@@ -291,18 +296,13 @@ export function createLog(
 	}
 	function keep(device: string, c: Chained) {
 		if (!c.steps.length) return
-		const end = c.steps[c.steps.length - 1], was = feeds.get(device)
+		const end = c.steps[c.steps.length - 1]
 		const f: Feed = {
-			count: count(device),
+			count: count(device) + c.steps.length,
 			last: c.last,
 			lamport: end.lamport,
 			when: end.when,
-			seqs: was?.seqs ?? [],
-		}
-		for (const s of c.steps) {
-			const k = made(s)
-			if (f.seqs.at(-1)?.[2] !== k) f.seqs.push([s.n, seqAt(f, s.n), k])
-			f.count++
+			next: end.seq + made(end),
 		}
 		feeds.set(device, f)
 		for (const s of c.steps) lamport = Math.max(lamport, s.lamport)
@@ -401,23 +401,15 @@ export function createLog(
 			: 2
 	}
 	async function tail(device: string, r: Pick<Run, "steps" | "sig">) {
-		let n = 0, before: Uint8Array | null = null, bytes = 0
-		for (const [i, b] of r.steps.entries()) {
-			bytes += b.length
-			if (bytes > RUN) return
-			let s
-			try {
-				s = decodeStep(b)
-			} catch {
-				return
-			}
-			if (i === 0) n = s.n
-			else if (s.n !== n + i || !same(s.before, before)) return
-			if (s.device !== device) return
-			before = hashStep(b)
+		let c, bytes = 0
+		for (const b of r.steps) if ((bytes += b.length) > RUN) return
+		try {
+			c = chain(device, r.steps, false)
+		} catch {
+			return
 		}
-		if (!before || !await verify(device, before, r.sig)) return
-		return { n, hash: hex(hashStep(r.steps[0])), bytes }
+		if (typeof c === "string" || !await verify(device, c.last!, r.sig)) return
+		return { n: c.steps[0].n, hash: hex(hashStep(r.steps[0])), bytes }
 	}
 	const slim = (r: Pick<Run, "steps" | "sig">) => ({ steps: r.steps, sig: r.sig })
 	async function learn(
@@ -426,9 +418,9 @@ export function createLog(
 		b: Pick<Run, "steps" | "sig">,
 		from?: unknown,
 	): Promise<boolean> {
-		if (found.has(device) || !count(device) || !/^[0-9a-f]{64}$/.test(device)) return false
+		if (found.has(device) || !count(device) || !KEY.test(device)) return false
 		const x = await tail(device, a), y = x && await tail(device, b)
-		if (!x || !y || x.n !== y.n || x.hash === y.hash || x.bytes + y.bytes > RUN) return false
+		if (!x || !y || x.n !== y.n || x.hash === y.hash) return false
 		if (found.has(device) || proved + x.bytes + y.bytes > most) return false
 		proved += x.bytes + y.bytes
 		const low = x.hash < y.hash
@@ -488,7 +480,9 @@ export function createLog(
 	function prior_(device: string, n: number): Prior | undefined {
 		const f = feeds.get(device)
 		if (!f || n < 1 || n > f.count) return
-		if (n === f.count) return { device, n, hash: f.last!, lamport: f.lamport, when: f.when }
+		if (n === f.count) {
+			return { device, n, hash: f.last!, lamport: f.lamport, when: f.when, next: f.next }
+		}
 		try {
 			return priorOf(store.get(device, n))
 		} catch {
@@ -516,12 +510,7 @@ export function createLog(
 			return h
 		},
 		count,
-		seq(device: string, n: number) {
-			if (!Number.isSafeInteger(n) || n < 1 || n > count(device) + 1) {
-				throw new RangeError(`no step ${n} of that device`)
-			}
-			return seqAt(feeds.get(device), n)
-		},
+		seq: (device: string) => feeds.get(device)?.next ?? 0,
 		step: (device: string, n: number) => store.get(device, n),
 		prior: (device: string, n: number) => prior_(device, n),
 		steps: (device: string): Uint8Array[] =>
@@ -536,17 +525,20 @@ export function createLog(
 		},
 
 		// A step decodeStep rejects throws and is never sent; nothing is sent that isn't on disk.
-		write(s: Omit<Step, "device" | "n" | "before" | "lamport" | "relative">): Step {
+		write(s: Written): Step {
 			if (!me) throw new Error("this log writes nothing, or is not loaded")
 			if (failure !== undefined) throw new Error("the store failed", { cause: failure })
 			if (lamport >= Number.MAX_SAFE_INTEGER) throw new RangeError("lamport is at its end")
 			const n = count(me.device) + 1
 			const step: Step = {
 				...s,
+				on: s.on ?? [],
+				ids: s.ids ?? s.patches.map(() => null),
 				device: me.device,
 				n,
 				before: feeds.get(me.device)?.last ?? null,
 				lamport: lamport + 1,
+				seq: feeds.get(me.device)?.next ?? 0,
 			}
 			if (rest(me.device, step.node) !== undefined) step.relative = true
 			else delete step.relative

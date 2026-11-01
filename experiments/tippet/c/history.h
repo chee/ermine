@@ -1,5 +1,4 @@
 // History in C (see typescript/history.ts): a log tied to the C graph. The recorder turns writes
-// kept
 // here into steps; the lander writes steps from elsewhere into the graph.
 // History's own memory goes through tp_mem; what it writes into the graph is malloc'd.
 #ifndef TIPPET_HISTORY_H
@@ -19,7 +18,7 @@ typedef struct {
 	void (*run)(void *ctx, void (*f)(void *data), void *data);
 	void *ctx;
 	int forgets; // per entry its elements only, the value the graph's (WIRE.md, ids: a reader that forgets)
-	long rebase; // how many of each entry's newest steps hold what undoes them: 0 the default (256), negative none (its own value is still held, and names ids). forgets: none
+	long rebase; // newest steps per entry that hold their undo: 0 the default (256), negative none; forgets: none
 } tp_history_options;
 
 tp_history *tp_history_new(const tp_history_options *o);

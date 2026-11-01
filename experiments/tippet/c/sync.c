@@ -117,7 +117,6 @@ static long peer_of(tp_sync *s, tp_link *l, const uint8_t device[32]) {
 	return (long)l->npeers++;
 }
 
-
 static void say_have(tp_sync *s, tp_link *l) {
 	tp_buf *b = &s->out;
 	size_t n = tp_log_devices(s->log);
@@ -138,7 +137,6 @@ static void say_refused(tp_sync *s, tp_link *l, const uint8_t device[32]) {
 	tp_put_head(&b, 2, 32), tp_put(&b, device, 32), tp_put_head(&b, 0, tp_log_count(s->log, device));
 	send(s, l, m, b.len);
 }
-
 
 static int packed(tp_sync *s, const uint8_t device[32], uint64_t from, uint64_t to, const uint8_t sig[64],
 	int whole) {
@@ -280,7 +278,6 @@ tp_link *tp_sync_link(tp_sync *s, tp_send send_, void *ctx, int many) {
 	sweep(s);
 	return NULL;
 }
-
 
 static int seen(tp_sync *s, const uint8_t id[8]) {
 	for (size_t i = 0; i < s->nseen; i++) {
@@ -430,7 +427,7 @@ static void receive(tp_sync *s, tp_link *l, const uint8_t *bytes, size_t length)
 	} else if (tp_is(t, "fork") && k == 6) {
 		tp_link *was = s->skip;
 		s->skip = l;
-		if (k == 6 && !tp_bytes(&in, 32, &x)) {
+		if (!tp_bytes(&in, 32, &x)) {
 			long p = peer_of(s, l, x.p);
 			if (p >= 0) l->peers[p].proved = 1;
 		}
@@ -470,7 +467,6 @@ int tp_sync_live(tp_sync *s, const uint8_t *data, size_t length) {
 	sweep(s);
 	return why;
 }
-
 
 void tp_sync_keeper(tp_sync *s, tp_link *l) { (void)s, l->keeper = 1; }
 

@@ -1,5 +1,5 @@
 {
-	"title": "array paths: a removal at an index of an array (a path, no range) takes that element away from the array's elements too, named by its id (through), so later splices name what the writer saw; a move makes new the sequences at both ends (the one a range is in, the array an index is in), so writes after it still say ids (its steps' bytes here, ids and all)",
+	"title": "array paths: a removal at an index of an array (a path, no range) takes that element away from the array's elements too, named by its id (through), so later splices name what the writer saw; a move makes new the sequences at both ends (the one a range is in, the array an index is in), so writes after it still say ids (its steps' bytes here, ids and all); a removal at an index whose parent is no array doesn't apply (a removal of arr[0] while another put arr a map first, a removal at [\"m\", 0], [\"s\", 1], [\"arr\", 0, \"t\", 0]): the parent stays",
 	"steps": [
 		{
 			"op": "device",
@@ -381,17 +381,281 @@
 			"of": "a",
 			"expect": {
 				"steps": [
-					"8958208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c01f661746576616c756581a26470617468806576616c7565a161618401020304011a68e7780080",
-					"8a58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c02582037af36c48b476afdc154bde572220645041fbf600c4301e1e91d44a781d3733d61746576616c756581a364706174688161616572616e67658204046576616c75658105021a68e778008101818482010380f680",
-					"8a58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c0358209a174ee4f1b39cfd8d9e7822b9f8a8edc0952a7fd6ecb92e6c0a35cdb63f0a0961746576616c756581a1647061746882616101031a68e778008101818181820201",
-					"8a58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c0458206e89045e4fd15b2fda19faa6ff587f64ebf625a4e946e8b4d72b8ec42ec4459261746576616c756581a364706174688161616572616e67658201016576616c7565816141041a68e77800810181848203008082030180",
-					"8958208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c055820379d479711ba32cf56382b108d09800581afd2a10db0ec67671d29d020b07c61616d6576616c756581a26470617468806576616c7565a361618201026162820708617805051a68e7780080",
-					"8a58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c0658206712487025ba37db6f5864a5ff1ae05a695064db03c084867425fb407bab7249616d6576616c756581a364706174688161616572616e67658202026576616c75658103061a68e778008101818482010180f680",
-					"8958208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c07582009cfdbc3058298c54823bb9b9fe113a6d95ef75645d3e9e311ccabaa7a472214616d6576616c756581a3646d6f7665a1647061746881617864706174688161616572616e6765820000071a68e778008101",
-					"8a58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c085820a4114cf203f2ec4c7e87a3968dd9ce98607eb3831372c3e62edd73edc942c013616d6576616c756581a364706174688161616572616e67658204046576616c75658109081a68e778008101818482010380f680",
-					"8958208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c095820cdf5f8c22fbb519025639ee7eabf8fcb25ac20ee0c4790b2c42b7137c1d4fcef616d6576616c756581a2646d6f7665a16470617468826162006470617468816179091a68e778008101",
-					"8a58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c0a5820866556fa44b684c0d0923225e1518af8a35e95d80556b21d7f26ca5cea5052be616d6576616c756581a364706174688161626572616e67658201016576616c756581060a1a68e778008101818482010080f680"
+					"8b58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c01f661746576616c756581a26470617468806576616c7565a161618401020304011a68e77800008081f6",
+					"8b58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c0258203ad7f0d087da289d2d01d586accdeb4870b67cf3027b844eacd19c22eb70f44561746576616c756581a364706174688161616572616e67658204046576616c75658105021a68e77800008101818482010380f680",
+					"8b58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c0358206931adfa804bd2253d795f3cde33171fe1ac7c06f8c12fb7208b4d6f87ed886d61746576616c756581a1647061746882616101031a68e77800018101818181820101",
+					"8b58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c0458209e766e1abe674624986fd76cb42494746499eaa916f53192f0ab8e0deb640cde61746576616c756581a364706174688161616572616e67658201016576616c7565816141041a68e7780001810181848203008082030180",
+					"8b58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c055820783aa53c5890f0fe32b18b03a617069540e634c68c4c2abddd740da1c0af8b41616d6576616c756581a26470617468806576616c7565a361618201026162820708617805051a68e77800028081f6",
+					"8b58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c0658203c6a19de3c9162c5be419f57a6b4fc16cba33fdc970dc16fbadd0e2f43fb86ac616d6576616c756581a364706174688161616572616e67658202026576616c75658103061a68e77800028101818482010180f680",
+					"8b58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c07582015911b70f8e05f31477975b595ffa3b6ba1b609d737b3ce367e8ea44bfd79ce2616d6576616c756581a3646d6f7665a1647061746881617864706174688161616572616e6765820000071a68e7780003810181f6",
+					"8b58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c08582092eaa89b7c513f80f1a099d5317e9e5b7bd1731549fc87bdfeecf7886cb18cbb616d6576616c756581a364706174688161616572616e67658204046576616c75658109081a68e77800038101818482010380f680",
+					"8b58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c09582014f4f810a5cc6e0f5a138ca543a7618c923749abb14c48a87870317a6945a8e3616d6576616c756581a2646d6f7665a16470617468826162006470617468816179091a68e7780004810181f6",
+					"8b58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c0a5820ecc0c5125241370d04f0596640574e5aca7d9443eace7c35cf39843edb0e4f1b616d6576616c756581a364706174688161626572616e67658201016576616c756581060a1a68e77800048101818482010080f680"
 				]
+			}
+		},
+		{
+			"op": "device",
+			"name": "p",
+			"seed": "0505050505050505050505050505050505050505050505050505050505050505"
+		},
+		{
+			"op": "device",
+			"name": "q",
+			"seed": "0606060606060606060606060606060606060606060606060606060606060606"
+		},
+		{
+			"op": "device",
+			"name": "w",
+			"seed": "0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a"
+		},
+		{
+			"op": "device",
+			"name": "c",
+			"seed": "0303030303030303030303030303030303030303030303030303030303030303"
+		},
+		{
+			"op": "write",
+			"device": "p",
+			"node": "one",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"arr": [
+							{
+								"t": "ab"
+							}
+						]
+					}
+				}
+			]
+		},
+		{
+			"op": "pass",
+			"from": "p",
+			"to": "q",
+			"of": "p",
+			"at": 1
+		},
+		{
+			"op": "write",
+			"device": "p",
+			"node": "one",
+			"patches": [
+				{
+					"path": [
+						"arr",
+						0
+					]
+				}
+			]
+		},
+		{
+			"op": "write",
+			"device": "q",
+			"node": "one",
+			"patches": [
+				{
+					"path": [
+						"arr"
+					],
+					"value": {
+						"k": 1
+					}
+				}
+			]
+		},
+		{
+			"op": "pass",
+			"from": "p",
+			"to": "q",
+			"of": "p",
+			"at": 2
+		},
+		{
+			"op": "pass",
+			"from": "q",
+			"to": "p",
+			"of": "q",
+			"at": 1
+		},
+		{
+			"op": "value",
+			"device": "p",
+			"node": "one",
+			"expect": {
+				"value": {
+					"arr": {
+						"k": 1
+					}
+				}
+			}
+		},
+		{
+			"op": "value",
+			"device": "q",
+			"node": "one",
+			"expect": {
+				"value": {
+					"arr": {
+						"k": 1
+					}
+				}
+			}
+		},
+		{
+			"op": "take",
+			"device": "c",
+			"run": {
+				"device": "w",
+				"sign": "w",
+				"steps": [
+					{
+						"n": 1,
+						"node": "odd",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"value": {
+									"m": {
+										"x": 1
+									},
+									"s": "ab",
+									"arr": [
+										{
+											"t": "ab"
+										}
+									]
+								}
+							}
+						],
+						"lamport": 1,
+						"when": 0,
+						"on": []
+					},
+					{
+						"n": 2,
+						"node": "odd",
+						"part": "value",
+						"patches": [
+							{
+								"path": [
+									"m",
+									0
+								]
+							}
+						],
+						"lamport": 2,
+						"when": 0,
+						"on": [
+							[
+								"w",
+								1
+							]
+						],
+						"ids": [
+							{
+								"through": [
+									[
+										1,
+										0
+									]
+								]
+							}
+						]
+					},
+					{
+						"n": 3,
+						"node": "odd",
+						"part": "value",
+						"patches": [
+							{
+								"path": [
+									"s",
+									1
+								]
+							}
+						],
+						"lamport": 3,
+						"when": 0,
+						"on": [
+							[
+								"w",
+								2
+							]
+						],
+						"ids": [
+							{
+								"through": [
+									[
+										1,
+										0
+									]
+								]
+							}
+						]
+					},
+					{
+						"n": 4,
+						"node": "odd",
+						"part": "value",
+						"patches": [
+							{
+								"path": [
+									"arr",
+									0,
+									"t",
+									0
+								]
+							}
+						],
+						"lamport": 4,
+						"when": 0,
+						"on": [
+							[
+								"w",
+								3
+							]
+						],
+						"ids": [
+							{
+								"through": [
+									[
+										1,
+										0
+									],
+									[
+										1,
+										0
+									]
+								]
+							}
+						]
+					}
+				]
+			},
+			"expect": {
+				"added": 4
+			}
+		},
+		{
+			"op": "value",
+			"device": "c",
+			"node": "odd",
+			"expect": {
+				"value": {
+					"m": {
+						"x": 1
+					},
+					"s": "ab",
+					"arr": [
+						{
+							"t": "ab"
+						}
+					]
+				}
 			}
 		}
 	]

@@ -31,11 +31,11 @@ typedef struct {
 	tp_buf open;
 } tp_index;
 
-// A run record is ["run", device, sig, pack(, prior)]; prior is 48 bytes (hash, lamport, when) when
+// A run record is ["run", device, sig, pack(, prior)]; prior is 56 bytes (hash, lamport, when, next) when
 // the pack is against the step before it.
 #define TP_HEAD 105
 #define TP_SIG 41
-#define TP_PRIOR 50
+#define TP_PRIOR 58
 int tp_is_run(const uint8_t *record, size_t length);
 void tp_record_pack(const uint8_t *record, size_t length, tp_span *pack, tp_prior *prior, int *has);
 int tp_record_unpack(const tp_mem *mem, const uint8_t *record, size_t length, size_t max, tp_steps *out);

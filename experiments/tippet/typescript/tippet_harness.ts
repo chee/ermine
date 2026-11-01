@@ -58,7 +58,15 @@ import { fileStore } from "./store_file.ts"
 import { createHistory } from "./history.ts"
 import { createSync, type Link, type Message, read, type Sync, wire } from "./sync.ts"
 import { createSigner, type Signer } from "./sign.ts"
-import { decodeStep, encodeStep, hashStep, hex, type Step, unhex } from "./step.ts"
+import {
+	decodeStep,
+	encodeStep,
+	hashStep,
+	hex,
+	made as inserted,
+	type Step,
+	unhex,
+} from "./step.ts"
 import { firstOf, pack, type Packed, priorOf, stepsIn, unpack } from "./pack.ts"
 
 const WHEN = 1_760_000_000
@@ -92,7 +100,14 @@ type Device = {
 	graph?: {
 		table: Table
 		history: ReturnType<typeof createHistory>
-		write: (node: string, part: string, patches: Patch[], when: number, who?: string) => void
+		write: (
+			node: string,
+			part: string,
+			patches: Patch[],
+			when: number,
+			who?: string,
+			first?: Patch[],
+		) => string | undefined
 	}
 	heard: Uint8Array[]
 }
@@ -147,21 +162,22 @@ async function createDevice(
 	d.graph = {
 		table,
 		history,
-		write(node, part, patches, when, who) {
+		write(node, part, patches, when, who, first) {
 			const change = { time: when, actor: who ?? null, frame: { info: {}, parent: undefined } },
 				unkept = history.unkept.length
 			run(() => {
 				const e = table.get(part as Key, node)
-				if (e) return void (update(e, patches, change), places.commit([e]))
+				if (e) {
+					if (first) update(e, first, change)
+					return void (update(e, patches, change), places.commit([e]))
+				}
 				const [p] = patches
 				if (patches.length !== 1 || p.path.length || p.range || p.move || !("value" in p)) {
 					throw new Error("a first write is one whole value")
 				}
 				table.sub(part as Key, node, createEntry(p.value, change))
 			})
-			if (history.unkept.length > unkept) {
-				throw new Error(`not kept: ${history.unkept[unkept].why}`)
-			}
+			return history.unkept.length > unkept ? history.unkept[unkept].why : undefined
 		},
 	}
 	return d
@@ -223,32 +239,30 @@ function stepIn(s: Request, device?: string, before?: Uint8Array | null): Step {
 		patches: patchesIn(s.patches),
 		lamport: s.lamport,
 		when: s.when,
+		seq: s.seq ?? 0,
+		on: ((s.on ?? []) as [string, number][]).map(([d, n]) => ({ device: keyOf(d), n })),
+		ids: [],
 	}
-	if (s.on !== undefined) {
-		out.on = (s.on as [string, number][]).map(([d, n]) => ({ device: keyOf(d), n }))
+	type Written = number | (string | number)[]
+	const id = (i: Written): Value =>
+		Array.isArray(i) && typeof i[0] === "string" ? [unhex(keyOf(i[0])), ...i.slice(1)] : i
+	type In = {
+		after?: Written | null
+		gone?: [Written, number][]
+		before?: Written | true
+		through?: Written[]
 	}
-	if (s.ids !== undefined) {
-		type Written = number | (string | number)[]
-		const id = (i: Written): Value =>
-			Array.isArray(i) && typeof i[0] === "string" ? [unhex(keyOf(i[0])), ...i.slice(1)] : i
-		type In = {
-			after?: Written | null
-			gone?: [Written, number][]
-			before?: Written | true
-			through?: Written[]
-		}
-		out.ids = (s.ids as (In | null)[]).map((x) => {
-			if (!x) return null
-			const t = x.through?.map(id)
-			if (x.gone === undefined) return [t!]
-			const a = [x.after == null ? null : id(x.after), x.gone.map(([i, c]) => [id(i), c])]
-			if (x.before !== undefined || t) {
-				a.push(x.before === undefined ? null : x.before === true ? true : id(x.before))
-			}
-			if (t) a.push(t)
-			return a
-		})
-	}
+	out.ids = ((s.ids ?? s.patches.map(() => null)) as (In | null)[]).map((x) => {
+		if (!x) return null
+		const t = x.through?.map(id)
+		if (x.gone === undefined) return [t!]
+		return [
+			x.after == null ? null : id(x.after),
+			x.gone.map(([i, c]) => [id(i), c]),
+			x.before === undefined ? null : x.before === true ? true : id(x.before),
+			t ?? [],
+		]
+	})
 	if (s.who !== undefined) out.who = s.who
 	return out
 }
@@ -265,20 +279,19 @@ function stepOut(s: Step) {
 		patches: patchesOut(s.patches),
 		lamport: s.lamport,
 		when: s.when,
-		...(s.on !== undefined && { on: s.on.map((o) => [o.device, o.n]) }),
-		...(s.ids !== undefined && {
-			ids: s.ids.map((x) => {
-				if (x === null) return null
-				const w = x as Value[]
-				if (w.length === 1) return { through: (w[0] as Value[]).map(idOut) }
-				const [after, gone, before, through] = w as [Value, [Value, number][], Value?, Value[]?]
-				return {
-					after: idOut(after),
-					gone: gone.map(([i, c]) => [idOut(i), c]),
-					...(before !== undefined && before !== null && { before: idOut(before) }),
-					...(through && { through: through.map(idOut) }),
-				}
-			}),
+		seq: s.seq,
+		on: s.on.map((o) => [o.device, o.n]),
+		ids: s.ids.map((x) => {
+			if (x === null) return null
+			const w = x as Value[]
+			if (w.length === 1) return { through: (w[0] as Value[]).map(idOut) }
+			const [after, gone, before, through] = w as [Value, [Value, number][], Value?, Value[]?]
+			return {
+				after: idOut(after),
+				gone: gone.map(([i, c]) => [idOut(i), c]),
+				...(before !== undefined && before !== null && { before: idOut(before) }),
+				...(through && { through: through.map(idOut) }),
+			}
 		}),
 		...(s.who !== undefined && { who: s.who }),
 	}
@@ -376,8 +389,21 @@ const hear = (from: string, to: string, bytes: Uint8Array) => {
 async function runIn(r: Request) {
 	const device = keyOf(r.device)
 	let before: Uint8Array | null = null
+	let next: number | undefined
 	const steps = (r.steps as (string | Request)[]).map((s) => {
-		const bytes = typeof s === "string" ? unhex(s) : encodeStep(stepIn(s, device, before))
+		let bytes: Uint8Array
+		if (typeof s === "string") bytes = unhex(s)
+		else {
+			const step = stepIn(s, device, before)
+			if (s.seq === undefined && next !== undefined) step.seq = next
+			bytes = encodeStep(step)
+		}
+		try {
+			const step = decodeStep(bytes)
+			next = step.seq + inserted(step)
+		} catch {
+			next = undefined
+		}
 		before = hashStep(bytes)
 		return bytes
 	})
@@ -497,9 +523,18 @@ async function one(r: Request): Promise<Answer> {
 				return { n: s.n, lamport: s.lamport }
 			}
 			if (!d.graph) throw new Error(`${r.device} writes nothing`)
-			d.graph.write(r.node, r.part ?? "value", patchesIn(r.patches), r.when ?? WHEN, r.who)
+			const was = d.log.count(d.log.device!)
+			const unkept = d.graph.write(
+				r.node,
+				r.part ?? "value",
+				patchesIn(r.patches),
+				r.when ?? WHEN,
+				r.who,
+				r.first && patchesIn(r.first),
+			)
+			if (d.log.count(d.log.device!) === was) throw new Error(`not kept: ${unkept}`)
 			const s = decodeStep(d.log.step(d.log.device!, d.log.count(d.log.device!)))
-			return { n: s.n, lamport: s.lamport }
+			return { n: s.n, lamport: s.lamport, ...(unkept && { unkept: true }) }
 		}
 		case "value": {
 			const e = device(r.device).graph?.table.get((r.part ?? "value") as Key, r.node)
