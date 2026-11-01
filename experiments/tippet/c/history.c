@@ -6,7 +6,7 @@
 #include <string.h>
 #include <time.h>
 
-#include "../../../encoding/c/cbor.h"
+#include "../../../core/encoding/c/cbor.h"
 #include "elements.h"
 #include "wire.h"
 

@@ -1,0 +1,18 @@
+ermine changes
+
+a change is a file here ending .md:
+
+    ---
+    graph: minor
+    places: patch
+    ---
+    what changed
+
+levels: patch, minor, major. a prerelease (0.0.0-arctic-hare.3) counts its last number up
+whatever the level. a package whose new version leaves ^old takes its importers along at patch.
+
+    deno task changes           the next versions
+    deno task changes version   writes them, adds to each CHANGELOG.md, removes the files
+
+after core passes on main (.github/workflows/changes.yml): while there are changes, a release
+pull request; when there are none, deno publish.

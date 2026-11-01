@@ -5,8 +5,8 @@
 #include <stddef.h>
 #include <stdio.h>
 
-#include "../../changeable/c/json.h"
-#include "../../changeable/c/value.h"
+#include "../../core/changeable/c/json.h"
+#include "../../core/changeable/c/value.h"
 
 
 void hh_start(void);

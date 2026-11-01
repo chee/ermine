@@ -5,7 +5,7 @@
 #include <stdio.h>
 
 #include "harness.h"
-#include "../../graph/c/node.h"
+#include "../../core/graph/c/node.h"
 
 // It points into the request and the line's memory.
 void hh_patch(const op_value *p, op_patch *out);

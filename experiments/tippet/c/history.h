@@ -4,7 +4,7 @@
 #ifndef TIPPET_HISTORY_H
 #define TIPPET_HISTORY_H
 
-#include "../../../places/c/places.h"
+#include "../../../core/places/c/places.h"
 #include "tippet.h"
 
 typedef struct tp_history tp_history;

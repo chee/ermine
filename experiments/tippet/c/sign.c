@@ -2,7 +2,7 @@
 // step before it.
 #include <string.h>
 
-#include "../../../encoding/ed25519/c/ed25519.h"
+#include "../../../core/encoding/ed25519/c/ed25519.h"
 #include "tippet.h"
 
 void tp_key_of(tp_key *k, const uint8_t seed[32]) {

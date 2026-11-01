@@ -1,7 +1,7 @@
 // squish's streams: patches typed into a string and a list, squished, encoded and decoded.
 import type { Patch } from "@ermine/changeable/apply"
 import { encode } from "@ermine/changeable/squish"
-import { apply, at, type V } from "../../changeable/typescript/squish_model.ts"
+import { apply, at, type V } from "../../core/changeable/typescript/squish_model.ts"
 import {
 	type Answer,
 	content,

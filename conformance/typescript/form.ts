@@ -1,4 +1,4 @@
-// Values in the JSON form the C codec (changeable/c/json.c) writes: plain JSON, else {"/": ...} forms.
+// Values in the JSON form the C codec (core/changeable/c/json.c) writes: plain JSON, else {"/": ...} forms.
 import { Stand } from "@ermine/encoding/cbor"
 import { ordered } from "./json.ts"
 
