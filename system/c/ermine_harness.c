@@ -1619,8 +1619,10 @@ static int form_start(sys_t sys, env_t *env, const op_value *const *raw, size_t 
 	if (code == 0) {
 		// the next process is this one: its id, and the name its program finds itself by
 		char *was_next = W->next, *was_pending = W->pending;
-		char *mine = es_alloc(strlen(name) + 6);
-		sprintf(mine, "proc:%s", name);
+		size_t len = strlen(name);
+		char *mine = es_alloc(len + 6);
+		memcpy(mine, "proc:", 5);
+		memcpy(mine + 5, name, len + 1);
 		char *pending = es_dup(name);
 		W->next = mine;
 		W->pending = pending;

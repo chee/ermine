@@ -29,9 +29,11 @@
 	},
 	"fmt": {
 		"lineWidth": 100,
+		"indentWidth": 3,
 		"semiColons": false,
 		"useTabs": true,
 		"exclude": [
+			".github",
 			"changeable/conformance/apply/02-keys.json",
 			"changeable/conformance/apply/05-lone-surrogates.json",
 			"changeable/conformance/apply/18-typing.json",
