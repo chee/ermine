@@ -6,7 +6,7 @@
 // computer's equal, else by pointer. Single threaded. The rules are scheduler.ts's and
 // core/reactivity/conformance/scheduler's.
 //
-// Each scope has a frame (core/changeable/c/frame.h) holding its info. Making a scope or computer with
+// Each scope has a frame (lib/changeable/c/frame.h) holding its info. Making a scope or computer with
 // nothing open fails (unscoped).
 //
 // Runs: the caller of sc_mark says who made a change; it is never guessed from what is running.
@@ -41,7 +41,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "../../changeable/c/frame.h"
+#include "../../../lib/changeable/c/frame.h"
 
 #define SC_DISPOSED "disposed"
 #define SC_UNSCOPED "unscoped"

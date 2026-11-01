@@ -18,8 +18,8 @@
 // path: keys from the root ([] or none: the whole value).
 import createEntry, { type Entry } from "@ermine/graph/entry"
 import { ApplyError, type Key, type Patch } from "@ermine/changeable/apply"
-import { revive, toJson } from "../../../conformance/typescript/form.ts"
-import { type Request, serve } from "../../../conformance/typescript/harness.ts"
+import { revive, toJson } from "../../../meta/conformance/typescript/form.ts"
+import { type Request, serve } from "../../../meta/conformance/typescript/harness.ts"
 import { createScheduler } from "@ermine/reactivity"
 import { createCrow } from "@ermine/crow"
 import { crowify, updateEntry } from "./crowify.ts"

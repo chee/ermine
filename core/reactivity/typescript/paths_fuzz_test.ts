@@ -3,7 +3,7 @@
 import { assert, assertEquals } from "@std/assert"
 import apply, { ApplyError, type Key, type Patch } from "@ermine/changeable/apply"
 import { createPaths, marks, type Spot } from "./paths.ts"
-import { isMap, rand, show } from "../../../conformance/typescript/gen.ts"
+import { isMap, rand, show } from "../../../meta/conformance/typescript/gen.ts"
 
 const SEEDS = 40
 const CASES = 25

@@ -7,7 +7,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#include "../../../conformance/c/harness.h"
+#include "../../../meta/conformance/c/harness.h"
 #include "places.h"
 
 extern sc_scheduler *world_scheduler;

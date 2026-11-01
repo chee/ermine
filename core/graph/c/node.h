@@ -9,10 +9,10 @@
 #include <time.h>
 #endif
 
-#include "../../changeable/c/apply.h"
-#include "../../changeable/c/frame.h"
-#include "../../changeable/c/invert.h"
-#include "../../changeable/c/value.h"
+#include "../../../lib/changeable/c/apply.h"
+#include "../../../lib/changeable/c/frame.h"
+#include "../../../lib/changeable/c/invert.h"
+#include "../../../lib/changeable/c/value.h"
 
 // What a change says. has_time and has_op say which fields are given; the rest are NULL if not.
 // frame is shared, never copied; an entry holds its own reference to it, and the header's is

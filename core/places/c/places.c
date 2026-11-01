@@ -1,7 +1,7 @@
 // Places (places.h), in C.
 #include "places.h"
-#include "../../changeable/c/ptrmap.h"
-#include "../../crow/c/crow.h"
+#include "../../../lib/changeable/c/ptrmap.h"
+#include "../../../lib/crow/c/crow.h"
 #include "crowify.h"
 
 #include <stdint.h>

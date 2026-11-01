@@ -5,7 +5,7 @@
 import { assert, assertEquals, assertThrows } from "@std/assert"
 import { CborError, decode, DEPTH, encode, Stand, type Value } from "./cbor.ts"
 import { answer } from "./cbor_harness.ts"
-import { line, toJson } from "../../../conformance/typescript/form.ts"
+import { line, toJson } from "../../../meta/conformance/typescript/form.ts"
 import {
 	canon,
 	cat,
@@ -25,8 +25,8 @@ import {
 	stable,
 	value,
 } from "./fuzz_values.ts"
-import { ask, command } from "../../../conformance/typescript/ask.ts"
-import { read } from "../../../conformance/typescript/json.ts"
+import { ask, command } from "../../../meta/conformance/typescript/ask.ts"
+import { read } from "../../../meta/conformance/typescript/json.ts"
 
 const SEEDS = Number(Deno.env.get("SEEDS") ?? 40)
 const subject = command("cbor")

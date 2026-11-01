@@ -5,7 +5,7 @@
 #include <string.h>
 
 #include "protect.h"
-#include "../../../conformance/c/harness.h"
+#include "../../../meta/conformance/c/harness.h"
 
 static char *own(const char *s) { return strcpy(malloc(strlen(s) + 1), s); }
 

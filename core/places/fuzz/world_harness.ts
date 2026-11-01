@@ -12,7 +12,7 @@ import {
 	unplace,
 } from "@ermine/places"
 import { createPaths, type Spot } from "@ermine/reactivity/paths"
-import type { Pick } from "../../../conformance/typescript/gen.ts"
+import type { Pick } from "../../../meta/conformance/typescript/gen.ts"
 
 // any value goes in children here, on purpose: places takes what is not an id as taken
 type Children = Tables["children"]

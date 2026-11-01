@@ -3,7 +3,7 @@ import { assert, assertEquals } from "@std/assert"
 import { PlacesError } from "@ermine/places"
 import { get, list, lookup, members } from "@ermine/places/lib"
 import type { Spot } from "@ermine/reactivity/paths"
-import { isMap, rand } from "../../../conformance/typescript/gen.ts"
+import { isMap, rand } from "../../../meta/conformance/typescript/gen.ts"
 import { createWorld, show, type Wrote } from "./world_harness.ts"
 
 const SEEDS = 40

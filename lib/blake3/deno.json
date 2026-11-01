@@ -1,0 +1,11 @@
+{
+	"name": "@ermine/blake3",
+	"version": "0.0.0-arctic-hare.0",
+	"license": "AGPL-3.0-or-later",
+	"imports": {
+		"@noble/hashes/": "npm:/@noble/hashes@1.8.0/"
+	},
+	"exports": {
+		".": "./typescript/blake3.ts"
+	}
+}

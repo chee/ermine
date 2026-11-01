@@ -24,7 +24,9 @@ needs: deno 2.9.7 (what CI pins), a C11 compiler (cc), make. macOS's leaks for `
     make test-check           the same against the harness-checks
     make test-leaks           the same under macOS's leaks
     WERROR=1                  with any of these: the harnesses' warnings are errors (CI builds so)
-    <package>/c/build.sh      one package's harnesses alone; CHECK=1: its harness-checks
+    <group>/<package>/c/build.sh
+                              one package's harnesses alone (core/places/c/build.sh); CHECK=1: its
+                              harness-checks
 
 ## measuring
 
@@ -36,4 +38,4 @@ needs: deno 2.9.7 (what CI pins), a C11 compiler (cc), make. macOS's leaks for `
 
     deno publish --dry-run    what each workspace package would publish to JSR
 
-releasing: changes/README
+releasing: meta/changes/README

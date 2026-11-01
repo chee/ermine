@@ -1,10 +1,10 @@
-// cbor.ts on the line protocol (conformance/typescript/harness.ts): one JSON request per line.
-// Values use the JSON form (conformance/typescript/form.ts); bytes are lowercase hex.
+// cbor.ts on the line protocol (meta/conformance/typescript/harness.ts): one JSON request per line.
+// Values use the JSON form (meta/conformance/typescript/form.ts); bytes are lowercase hex.
 // { op: "encode", value } -> { bytes }  or { error: "no-encoding" | "not-a-form" }
 // { op: "decode", bytes } -> { value, again }  or { error: "not-an-encoding" }  (again: re-encoded hex)
 import { CborError, decode, encode, type Value } from "./cbor.ts"
-import { FormError, revive, toJson } from "../../../conformance/typescript/form.ts"
-import { type Answer, type Request, serve } from "../../../conformance/typescript/harness.ts"
+import { FormError, revive, toJson } from "../../../meta/conformance/typescript/form.ts"
+import { type Answer, type Request, serve } from "../../../meta/conformance/typescript/harness.ts"
 
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")
 const unhex = (s: unknown) =>

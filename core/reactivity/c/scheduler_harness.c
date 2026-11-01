@@ -32,7 +32,7 @@
 #include <string.h>
 
 #include "scheduler.h"
-#include "../../../conformance/c/harness.h"
+#include "../../../meta/conformance/c/harness.h"
 
 // The recorder: the scheduler's listeners as one ordered list of what happened (like the trace in
 // scheduler_harness.ts). due: a computer made due by the run of the mark (by is its computer).

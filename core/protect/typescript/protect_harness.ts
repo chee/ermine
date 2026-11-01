@@ -24,7 +24,7 @@ import {
 	same,
 	yes,
 } from "./protect.ts"
-import { type Request, serve } from "../../../conformance/typescript/harness.ts"
+import { type Request, serve } from "../../../meta/conformance/typescript/harness.ts"
 
 type Cell = {
 	part: string

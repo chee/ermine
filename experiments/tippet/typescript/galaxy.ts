@@ -7,7 +7,7 @@ import { fileStore } from "./store_file.ts"
 import { socket } from "./carriers/websocket.ts"
 import { httpLinks } from "./carriers/http.ts"
 import { hex } from "./step.ts"
-import { blake3 } from "@ermine/encoding/blake3"
+import { blake3 } from "@ermine/blake3"
 
 type Room = {
 	log: Log

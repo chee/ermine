@@ -53,7 +53,7 @@ jobs:
       - name: Conformance, C with sanitizers
         run: make -s test-check
 
-  # how cost grows with size (conformance/perf.ts): reported, never failing the build, until its
+  # how cost grows with size (meta/conformance/perf.ts): reported, never failing the build, until its
   # sizes and perf.sadly_known_fail lists are tuned on a quiet machine
   perf:
     strategy:
@@ -69,7 +69,7 @@ jobs:
           deno-version: v2.9.7
       - name: Build the harnesses
         run: |
-          make -s core/changeable/c/apply-harness core/changeable/c/squish-harness core/crow/c/crow-harness \
+          make -s lib/changeable/c/apply-harness lib/changeable/c/squish-harness lib/crow/c/crow-harness \
             core/reactivity/c/scheduler-harness
       - name: Performance, TypeScript
         run: deno task perf

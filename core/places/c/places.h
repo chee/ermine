@@ -19,7 +19,7 @@
 #include "../../graph/c/table.h"
 #include "../../graph/c/node.h"
 #include "../../graph/c/update.h"
-#include "../../crow/c/crow.h"
+#include "../../../lib/crow/c/crow.h"
 #include "crowify.h"
 
 typedef struct pl pl;

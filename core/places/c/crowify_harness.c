@@ -4,8 +4,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../../../conformance/c/protocol_harness.h"
-#include "../../crow/c/crow.h"
+#include "../../../meta/conformance/c/protocol_harness.h"
+#include "../../../lib/crow/c/crow.h"
 #include "crowify.h"
 
 static cr_crow *crow;

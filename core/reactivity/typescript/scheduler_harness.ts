@@ -1,4 +1,4 @@
-// The scheduler on the line protocol (conformance/typescript/harness.ts): one JSON request per
+// The scheduler on the line protocol (meta/conformance/typescript/harness.ts): one JSON request per
 // line in, one answer per line out. HARNESS names another implementation that speaks it.
 // The harness plays the host. It keeps a value at each key; a compute's result is written at its
 // key (to) and told as changed([to], the compute). Scopes and computations share one namespace
@@ -75,8 +75,8 @@ import {
 	SchedulerError,
 	type Scope,
 } from "@ermine/reactivity"
-import { serve } from "../../../conformance/typescript/harness.ts"
-import { revive, toJson } from "../../../conformance/typescript/form.ts"
+import { serve } from "../../../meta/conformance/typescript/harness.ts"
+import { revive, toJson } from "../../../meta/conformance/typescript/form.ts"
 
 // The recorder, also used by the tests: turns the scheduler's hooks into one ordered list.
 export type Told =

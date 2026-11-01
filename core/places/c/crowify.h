@@ -7,7 +7,7 @@
 
 #include <stddef.h>
 
-#include "../../crow/c/crow.h"
+#include "../../../lib/crow/c/crow.h"
 #include "../../graph/c/node.h"
 #include "../../reactivity/c/scheduler.h"
 

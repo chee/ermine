@@ -1,7 +1,8 @@
 # tippet wire
 
-What a C implementation sends and checks. cbor: canonical, as `core/encoding/typescript/cbor.ts`'s header
-says (vectors in `core/encoding/conformance/cbor`). Whole numbers below: integers, 0 to 2^53 - 1.
+What a C implementation sends and checks. cbor: canonical, as `core/encoding/typescript/cbor.ts`'s
+header says (vectors in `core/encoding/conformance/cbor`). Whole numbers below: integers, 0 to
+2^53 - 1.
 
 ## step
 
@@ -310,7 +311,7 @@ else held but not to be read (forgotten), refused, never guessed.
 
 ## columns
 
-squish's (`core/changeable/typescript/squish.ts`): a map.
+squish's (`lib/changeable/typescript/squish.ts`): a map.
 
 - paths: array, each distinct path once, in first-seen order
 - path: runs: per patch, its index in paths

@@ -7,8 +7,8 @@ import { join } from "node:path"
 import { fileURLToPath as fromFileUrl, pathToFileURL } from "node:url"
 import { createErmine, type Feature, read } from "@ermine/system"
 import ermine, { type Options } from "./unplugin.ts"
-import { manual } from "../../../system/system/typescript/manual_fixture.ts"
-import { NAMES } from "../../../system/system/typescript/system/index.ts"
+import { manual } from "../../../runtime/system/typescript/manual_fixture.ts"
+import { NAMES } from "../../../runtime/system/typescript/system/index.ts"
 
 const toFileUrl = (p: string) => pathToFileURL(p)
 const here = fromFileUrl(new URL(".", import.meta.url))
@@ -96,7 +96,7 @@ Deno.test("build: a program naming the site module, its entry, a file of it or a
 			await assertRejects(() => built(dir, source), Error, "only @ermine/bundling writes it")
 		})
 	}
-	for (const rel of ["../../../system/site.ts", "../../../system/site"]) {
+	for (const rel of ["../../../../runtime/system/site.ts", "../../../../runtime/system/site"]) {
 		await inDir(async (dir) => {
 			const source = `import { site } from ${JSON.stringify(rel)}\nexport default site`
 			await assertRejects(() => built(dir, source), Error, "only @ermine/bundling writes it")
@@ -113,7 +113,7 @@ Deno.test("build: external false: @ermine/system's own files are neither transfo
 		resolveId: (spec: string, importer?: string) => unknown
 		transformInclude: (id: string) => boolean
 	}
-	const system = fromFileUrl(new URL("../../../system/system/", import.meta.url))
+	const system = fromFileUrl(new URL("../../../runtime/system/", import.meta.url))
 	for (const f of ["mod.ts", ...NAMES.map((n) => `typescript/system/${n}.ts`), "site.ts"]) {
 		const id = join(system, f)
 		assertEquals(plugin.transformInclude(id), false, `${f} is not transformed`)

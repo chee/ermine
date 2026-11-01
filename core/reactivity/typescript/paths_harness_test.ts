@@ -3,8 +3,8 @@
 import { assert, assertEquals } from "@std/assert"
 import apply from "@ermine/changeable/apply"
 import type { Key, Patch } from "@ermine/changeable/apply"
-import { ask as send, command, reference } from "../../../conformance/typescript/ask.ts"
-import { rand as seeded } from "../../../conformance/typescript/rand.ts"
+import { ask as send, command, reference } from "../../../meta/conformance/typescript/ask.ts"
+import { rand as seeded } from "../../../meta/conformance/typescript/rand.ts"
 
 type Request = Record<string, unknown> & { op: string }
 type Shown = readonly Key[] | { keys: readonly Key[] } | "change"

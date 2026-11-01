@@ -1,4 +1,4 @@
-// The tracker (tracker.ts) on the line protocol (conformance/typescript/harness.ts); HARNESS names
+// The tracker (tracker.ts) on the line protocol (meta/conformance/typescript/harness.ts); HARNESS names
 // another implementation that speaks it. A node's owner is its name; names are any string.
 // { op: "begin" | "end" | "leave" | "trim" | "dedupe", from }  -> {}   begin in a run is an error
 // { op: "track" | "add", from, to }                           -> {}   add in a run is an error
@@ -9,7 +9,7 @@
 // every link, so a duplicate shows twice. tracker.ts and core/reactivity/conformance/tracker hold the
 // rules for track, end, add and untrack.
 import { createTracker, type Node } from "./tracker.ts"
-import { type Answer, type Request, serve } from "../../../conformance/typescript/harness.ts"
+import { type Answer, type Request, serve } from "../../../meta/conformance/typescript/harness.ts"
 
 const g = createTracker<string>()
 const nodes = new Map<string, Node<string>>()

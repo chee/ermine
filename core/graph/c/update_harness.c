@@ -1,4 +1,4 @@
-// The C update on the line protocol (core/changeable/typescript/update_harness.ts documents it). One
+// The C update on the line protocol (lib/changeable/typescript/update_harness.ts documents it). One
 // entry lasts for the process. The entry's change refers to the patches and the header's pieces,
 // so the line that made them is retained (hh_retain) until the next update that works, or start.
 #include <stdio.h>
@@ -6,8 +6,8 @@
 #include <string.h>
 
 #include "update.h"
-#include "../../../conformance/c/harness.h"
-#include "../../../conformance/c/protocol_harness.h"
+#include "../../../meta/conformance/c/harness.h"
+#include "../../../meta/conformance/c/protocol_harness.h"
 
 static nd_entry *entry;
 // The line the entry's change refers to.

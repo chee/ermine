@@ -1,0 +1,41 @@
+{
+	"typescript": {
+		"apply": "deno run --quiet --allow-read lib/changeable/typescript/apply_harness.ts",
+		"invert": "deno run --quiet --allow-read lib/changeable/typescript/apply_harness.ts",
+		"squish": "deno run --quiet --allow-read lib/changeable/typescript/squish_harness.ts",
+		"node": "deno run --quiet --allow-read core/graph/typescript/node_harness.ts",
+		"update": "deno run --quiet --allow-read lib/changeable/typescript/update_harness.ts",
+		"table": "deno run --quiet --allow-read core/graph/typescript/table_harness.ts",
+		"crow": "deno run --quiet --allow-read lib/crow/typescript/crow_harness.ts",
+		"crowify": "deno run --quiet --allow-read core/places/typescript/crowify_harness.ts",
+		"tracker": "deno run --quiet --allow-read core/reactivity/typescript/tracker_harness.ts",
+		"paths": "deno run --quiet --allow-read core/reactivity/typescript/paths_harness.ts",
+		"scheduler": "deno run --quiet --allow-read core/reactivity/typescript/scheduler_harness.ts"
+	},
+	"c": {
+		"apply": "lib/changeable/c/apply-harness",
+		"invert": "lib/changeable/c/apply-harness",
+		"squish": "lib/changeable/c/squish-harness",
+		"node": "core/graph/c/node-harness",
+		"update": "core/graph/c/update-harness",
+		"table": "core/graph/c/table-harness",
+		"crow": "lib/crow/c/crow-harness",
+		"crowify": "core/places/c/crowify-harness",
+		"tracker": "core/reactivity/c/tracker-harness",
+		"paths": "core/reactivity/c/paths-harness",
+		"scheduler": "core/reactivity/c/scheduler-harness"
+	},
+	"c-check": {
+		"apply": "lib/changeable/c/apply-harness-check",
+		"invert": "lib/changeable/c/apply-harness-check",
+		"squish": "lib/changeable/c/squish-harness-check",
+		"node": "core/graph/c/node-harness-check",
+		"update": "core/graph/c/update-harness-check",
+		"table": "core/graph/c/table-harness-check",
+		"crow": "lib/crow/c/crow-harness-check",
+		"crowify": "core/places/c/crowify-harness-check",
+		"tracker": "core/reactivity/c/tracker-harness-check",
+		"paths": "core/reactivity/c/paths-harness-check",
+		"scheduler": "core/reactivity/c/scheduler-harness-check"
+	}
+}

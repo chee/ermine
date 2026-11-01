@@ -7,7 +7,7 @@
 
 #include "causes.h"
 #include "order.h"
-#include "../../changeable/c/ptrmap.h"
+#include "../../../lib/changeable/c/ptrmap.h"
 #include "tracker.h"
 
 #define VEC_PUSH(v, n, cap, x) \

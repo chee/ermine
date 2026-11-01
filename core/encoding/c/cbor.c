@@ -1,7 +1,7 @@
 // cbor.c: deterministic CBOR encoding and decoding of json.h values. See cbor.h.
 
 #include "cbor.h"
-#include "../../changeable/c/whole.h"
+#include "../../../lib/changeable/c/whole.h"
 
 #include <float.h>
 #include <limits.h>
