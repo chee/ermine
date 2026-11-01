@@ -1,21 +1,37 @@
-# the tests on every push: the TypeScript tests, and the conformance suites against the TypeScript
-# harnesses, the C harnesses and their sanitizer builds (address, undefined behaviour), on Linux
-# and macOS. the Makefile says what each runs.
+# the tests on every push and pull request: lint, formatting and types; the TypeScript tests, and
+# the conformance suites against the TypeScript harnesses, the C harnesses (built with warnings as
+# errors) and their sanitizer builds (address, undefined behaviour), on Linux and macOS. the
+# Makefile says what each runs.
 
 name: core
 
 on:
   push:
+  pull_request:
   workflow_dispatch:
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.9.7
+      - name: Lint
+        run: deno lint
+      - name: Formatting
+        run: deno fmt --check
+      - name: Types
+        run: deno task check
+
   typescript:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@v2
         with:
-          deno-version: v2.x
+          deno-version: v2.9.7
       - name: TypeScript tests and conformance
         run: make test
 
@@ -29,9 +45,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@v2
         with:
-          deno-version: v2.x
+          deno-version: v2.9.7
       - name: Build the harnesses
-        run: make -s all check
+        run: make -s all check WERROR=1
       - name: Conformance, C
         run: make -s test-c
       - name: Conformance, C with sanitizers
@@ -50,7 +66,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@v2
         with:
-          deno-version: v2.x
+          deno-version: v2.9.7
       - name: Build the harnesses
         run: |
           make -s changeable/c/apply-harness changeable/c/squish-harness crow/c/crow-harness \

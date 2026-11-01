@@ -1049,7 +1049,7 @@ static char *names_key(const char *const *names, size_t n) {
 	size_t len = 1;
 	for (size_t i = 0; i < n; i++) len += strlen(names[i]) + 21;
 	char *s = es_alloc(len), *o = s;
-	for (size_t i = 0; i < n; i++) o += sprintf(o, "%zu:%s", strlen(names[i]), names[i]);
+	for (size_t i = 0; i < n; i++) o += snprintf(o, len - (size_t)(o - s), "%zu:%s", strlen(names[i]), names[i]);
 	return s;
 }
 

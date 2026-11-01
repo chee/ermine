@@ -196,9 +196,9 @@ static op_value *answer(const op_value *r) {
 	if (op == NULL) return world_error("no op");
 	if (strcmp(op, "runs") == 0) {
 		if (runs == NULL) {
-			runs = crn_new(&(crn_setup){world_places, world_table, world_scheduler});
+			runs = crn_new(&(crn_setup){.places = world_places, .table = world_table, .scheduler = world_scheduler});
 			policy = pr_call(may, NULL);
-			guard = gd_new(&(gd_setup){world_places, world_table, policy, NULL, 0});
+			guard = gd_new(&(gd_setup){.places = world_places, .table = world_table, .may = policy});
 			ph_add_form(run_form);
 		}
 		return op_map();

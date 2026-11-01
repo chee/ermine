@@ -167,7 +167,7 @@ static int splice(sq *s, size_t i, size_t x, size_t y, const sq_value *w) {
 		v->data = p, v->size = size, v->n = n;
 		return 1;
 	}
-	size_t cap = size * 2 ? size * 2 : 1;
+	size_t cap = size ? size * 2 : 1;
 	unsigned char *p = malloc(cap);
 	if (!p) abort();
 	if (bx) memcpy(p, v->data, bx);

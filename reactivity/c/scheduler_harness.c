@@ -107,10 +107,6 @@ static inline void sc_trace_start(sc_scheduler *s, sc_trace *t, void (*f)(const 
 	t->on[3] = sc_on_effect(s, sc_trace_effect, t);
 }
 
-static inline void sc_trace_stop(sc_trace *t) {
-	for (int i = 0; i < 4; i++) sc_remove_listener(t->on[i]);
-}
-
 static void *allocate(size_t size) {
 	void *p = calloc(1, size ? size : 1);
 	if (p == NULL) abort();

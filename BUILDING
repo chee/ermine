@@ -1,0 +1,39 @@
+# building ermine
+
+needs: deno 2.9.7 (what CI pins), a C11 compiler (cc), make. macOS's leaks for `make test-leaks`.
+
+## checks
+
+    deno lint                 lint (deno.json: what is excluded)
+    deno fmt --check          formatting; deno fmt to fix
+    deno task check           types
+
+## TypeScript
+
+    make test                 every TypeScript test, each with only the permissions it needs, then
+                              every conformance suite against the TypeScript harnesses (what CI runs)
+    deno task conformance [suite...] [--c | --check | --leaks]
+                              the conformance suites alone; --c against the C harnesses, --check
+                              against their sanitizer builds, --leaks under leaks
+
+## C
+
+    make                      every harness
+    make check                every harness-check: address and undefined-behaviour sanitizers
+    make test-c               each conformance suite against its C harness
+    make test-check           the same against the harness-checks
+    make test-leaks           the same under macOS's leaks
+    WERROR=1                  with any of these: warnings are errors (CI builds so)
+    <package>/c/build.sh      one package's harnesses alone; CHECK=1: its harness-checks
+
+## measuring
+
+    deno task perf [--c]      how cost grows with size
+    deno task bench           deno's benches
+    make bench                the C benches
+
+## packaging
+
+    deno publish --dry-run    what each workspace package would publish to JSR
+
+releasing: changes/README

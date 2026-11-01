@@ -35,7 +35,7 @@ op_value *sh_answer(const op_value *r) {
 	if (!formed) ph_add_form(status_form), formed = true;
 	const char *op = world_text(op_get(r, "op"));
 	if (op != NULL && strcmp(op, "status") == 0) {
-		if (statuses == NULL) statuses = cst_new(&(cst_setup){world_places, world_table, world_scheduler});
+		if (statuses == NULL) statuses = cst_new(&(cst_setup){.places = world_places, .table = world_table, .scheduler = world_scheduler});
 		return op_map();
 	}
 	if (op != NULL && strcmp(op, "give") == 0) {

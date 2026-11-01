@@ -437,10 +437,11 @@ char *es_uuidv7(void) {
 static char *base_id(es_ermine *e, const char *kind) {
 	if (strcmp(kind, "process") != 0) return es_uuidv7();
 	hosting *h = host_of(e);
-	char *id = es_alloc(sizeof "proc:" + 16 + 1 + 20);
-	int at = sprintf(id, "proc:");
-	for (size_t i = 0; i < 8; i++) at += sprintf(id + at, "%02x", h->boot[i]);
-	sprintf(id + at, "-%lu", ++h->processes_made);
+	size_t size = sizeof "proc:" + 16 + 1 + 20;
+	char *id = es_alloc(size);
+	int at = snprintf(id, size, "proc:");
+	for (size_t i = 0; i < 8; i++) at += snprintf(id + at, size - (size_t)at, "%02x", h->boot[i]);
+	snprintf(id + at, size - (size_t)at, "-%lu", ++h->processes_made);
 	return id;
 }
 

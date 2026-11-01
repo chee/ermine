@@ -11,6 +11,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+// gcc's -Wclobbered: what it names is never changed between a setjmp and its longjmp
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic ignored "-Wclobbered"
+#endif
+
 const char *op_code_name(int code) {
 	switch (code) {
 	case OP_OK: return "ok";

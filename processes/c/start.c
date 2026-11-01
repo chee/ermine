@@ -23,10 +23,11 @@ static void *xalloc(size_t n) {
 static char *xdup(const char *s) { return strcpy(xalloc(strlen(s) + 1), s); }
 
 static char *proc_id(const unsigned char boot[8], unsigned long n) {
-	char *id = xalloc(sizeof "proc:" + 16 + 1 + 20);
-	int at = sprintf(id, "proc:");
-	for (size_t i = 0; i < 8; i++) at += sprintf(id + at, "%02x", boot[i]);
-	sprintf(id + at, "-%lu", n);
+	size_t size = sizeof "proc:" + 16 + 1 + 20;
+	char *id = xalloc(size);
+	int at = snprintf(id, size, "proc:");
+	for (size_t i = 0; i < 8; i++) at += snprintf(id + at, size - (size_t)at, "%02x", boot[i]);
+	snprintf(id + at, size - (size_t)at, "-%lu", n);
 	return id;
 }
 
