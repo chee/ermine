@@ -1,8 +1,9 @@
 // The elements of an entry's strings and arrays (see typescript/elements.ts, WIRE.md ids), held as
 // runs: elements one after another of one device, numbered one on (or one down), all gone or none.
 // A sequence gets its elements at the first
-// splice that touches it. el_step applies a step's patches to a value by position, all or none, with
-// the elements, and gives what undoes both.
+// splice that touches it. State is keyed by container (a node: the step and patch that made it, then
+// its place in the value); a record says what each patch put at a slot. el_step applies a step's
+// patches to a value, all or none, with that state, and gives what undoes both.
 // Memory goes through tp_mem; values are the graph's (malloc'd).
 #ifndef TIPPET_ELEMENTS_H
 #define TIPPET_ELEMENTS_H
@@ -30,7 +31,7 @@ typedef struct {
 	uint32_t device;
 } el_ref;
 
-// an element: made by a step, c its seq (born 0); or there since a step made its sequence new
+// an element: made by a step, c its seq (born 0); or there since a step made its sequence's node
 // (born 1), c that step's n, k its place
 typedef struct {
 	uint32_t device, born;
@@ -40,40 +41,47 @@ typedef struct {
 	el_id id;
 	uint64_t count;
 } el_gone;
-// a patch's ids; named 0: its splice by its range as written. before: none (the end), the one its
-// after goes before (same), or an id. through: the array items its path goes through (has_through
-// 0: by place)
+// a patch's ids (WIRE.md, ids). kind: 0 none (a move), 1 [container, pred], 2 [container, pred,
+// element] (a put at an index), 3 [container, after, gone, before] (a splice, a removal at an
+// index). node: the container, as the bytes of cbor items one after another: the device's index,
+// n, the patch, and the place in its value (maps' keys, arrays' places); none (a put of the whole
+// value, the first)
 typedef struct {
-	int named, has_after;
+	int kind;
+	uint8_t *node;
+	size_t noden;
+	el_id element;
+	int has_after;
 	el_id after;
 	el_gone *gone;
 	size_t ngone;
 	int has_before, same;
 	el_id before;
-	el_id *through;
-	size_t nthrough;
-	int has_through;
 } el_anchor;
 
 typedef struct el_list el_list;
+// what a patch put at a slot: the key of a map, the element of an array, or the root (parent empty):
+// the container there (node empty: a scalar, or nothing), and the step that put it, for the order
+// (its lamport and device). buf holds the parent, the slot (a key as cbor text, an element as a cbor
+// array [device, born, c, k]) and the node, one after another
 typedef struct {
-	uint8_t *key;
-	size_t keyn;
-	el_ref r;
-} el_born;
+	uint8_t *buf;
+	uint32_t parentn, slotn, noden, device;
+	uint64_t lamport;
+} el_slot;
 
-// an entry's sequences by path, and the put that made what is at each path
+// an entry's sequences by container, and the records of what patches put
 typedef struct {
 	el_list **lists;
 	size_t n, room;
-	el_born *born;
-	size_t nborn, roomborn;
+	el_slot *slots;
+	size_t nslots, roomslots;
 } el_state;
 
-// st, empty, as after a put of the whole value by ref
+// st, empty, as after a put of the whole value by ref (its patch 0)
 int el_seed(const tp_mem *mem, el_state *st, const el_ref *ref);
 
-// what undoes the elements of a step (or steps): newest last
+// what undoes the state of a step (or steps): newest last
 typedef struct {
 	int kind;
 	union {
@@ -86,12 +94,16 @@ typedef struct {
 			el_ref was; // the list's newest splice before it
 		} splice;
 		struct {
-			el_born *born;
-			size_t nborn;
+			el_slot added; // the record put (its buffer the state's)
+			int has_added, had;
+			el_slot was; // the record it replaced
+		} slot;
+		struct {
 			el_list **lists;
 			size_t nlists;
-			const uint8_t *pushed; // the key this put added to the state's born
-		} put;
+			el_slot *slots;
+			size_t nslots;
+		} drop;
 	};
 } el_rec;
 typedef struct {
@@ -108,8 +120,8 @@ void el_write(tp_buf *b, const el_ctx *c, const el_anchor *a, size_t count, uint
 	uint64_t seq);
 
 // patches (their cbor, and as op patches) applied to *value in order, all or none. keep: 0 for a
-// patch to leave out (NULL: all). ids: per patch (NULL: none, a write here: its splices by range and
-// the array items its paths go through are named from the elements, *named, one per patch). late: steps
+// patch to leave out (NULL: all). ids: per patch (NULL: none, a write here: its containers and elements
+// are named from the state, *named, one per patch). late: steps
 // after it may be applied already; one whose effect needs them returns TP_LATE. undo gets what
 // undoes the value; back gets what undoes the elements. *applied (the patches as applied, by
 // position, sharing the values given, their paths in it) is malloc'd, the caller's to free.

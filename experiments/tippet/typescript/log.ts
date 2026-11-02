@@ -211,7 +211,8 @@ export type Fork = {
 }
 type Told = (device: string, steps: Step[], from?: unknown) => void
 
-// what a write is given: on and ids are none and null each, when not said
+// what a write is given: on is none when not said; ids are null for a move and [null, []] for a put
+// of the whole value, else they must be said
 export type Written =
 	& Omit<Step, "device" | "n" | "before" | "lamport" | "seq" | "relative" | "on" | "ids">
 	& {
@@ -550,7 +551,8 @@ export function createLog(
 			const step: Step = {
 				...s,
 				on: s.on ?? [],
-				ids: s.ids ?? s.patches.map(() => null),
+				ids: s.ids ??
+					s.patches.map((p) => !p.move && !p.path.length && !p.range ? [null, []] : null),
 				device: me.device,
 				n,
 				before: feeds.get(me.device)?.last ?? null,

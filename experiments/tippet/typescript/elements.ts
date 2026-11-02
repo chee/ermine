@@ -1,9 +1,22 @@
 // The elements of an entry's strings and arrays (WIRE.md, ids), held as runs: elements one after
 // another of one device, numbered one on (or, back, one down), all gone or none, each element after
-// the one before it in the run (or, back, before the one after it). A sequence gets its elements at the first splice that touches it.
+// the one before it in the run (or, back, before the one after it). A sequence gets its elements at
+// the first splice that touches it. State is keyed by container id: a sequence's elements, and a
+// record for each slot a patch assigned (which node is there, and the step that put it).
 import type { Value } from "@ermine/encoding/cbor"
-import apply, { type Key as Index, type Patch, type Target } from "@ermine/changeable/apply"
-import { type Anchor, type At, type Id, inserts, type Named, readIds, type Step } from "./step.ts"
+import apply, { type Key as Index, type Patch } from "@ermine/changeable/apply"
+import {
+	type Anchor,
+	type At,
+	type Id,
+	inserts,
+	type Named,
+	type Node,
+	nodeKey,
+	nodeOf,
+	readIds,
+	type Step,
+} from "./step.ts"
 
 // a step's place: lamport, device, n
 export type Ref = [lamport: number, device: string, n: number]
@@ -24,26 +37,41 @@ type Run = {
 }
 // a place in a list: a run and a place in it
 type Pos = [j: number, o: number]
-// a sequence's runs, the step its born ones are since, how many are not gone, a cursor (live: how
-// many before runs[j] are not gone), the newest step that spliced it
+// a sequence's runs, the step its born ones are since (dev, n: its container's maker), whether it is
+// a string, how many are not gone, a cursor (live: how many before runs[j] are not gone)
 type List = {
 	runs: Run[]
-	by: Ref
+	dev: string
+	n: number
+	text: boolean
+	// the newest step that spliced it
+	last?: Ref
 	count: number
 	j: number
 	live: number
-	last?: Ref
 	ix?: Ix[]
 }
 // the runs by their lowest id (device, born, number), sorted: made when a lookup walks far, kept up
 // to date by edit; a run's place is found by its lab
 type Ix = { d: string; b: boolean; lo: number; hi: number; run: Run }
-// an entry's value and its sequences' elements, by where (a path, each array item as its element);
-// born: by where, the step that made what is there new (a sequence under it is that step's until a
-// splice touches it)
-export type State = { value: unknown; lists: Map<string, List>; born: Map<string, Ref> }
+// a record: what a patch assigned at a slot (a key of a map, an element of an array, the root): the
+// container there (null: a scalar, or nothing) and the step that put it, for the order
+type Rec = { parent: Node; slot: string; el?: Id; node: Node | null; at: Ref }
+// an entry's value, its sequences' elements by container id, its records by parent and slot, and
+// the records' nodes by their record
+export type State = {
+	value: unknown
+	lists: Map<Node, List>
+	slots: Map<string, Rec>
+	nodes: Map<Node, string>
+}
 
-export const fresh = (): State => ({ value: undefined, lists: new Map(), born: new Map() })
+export const fresh = (): State => ({
+	value: undefined,
+	lists: new Map(),
+	slots: new Map(),
+	nodes: new Map(),
+})
 // a step applied after newer ones (late) whose effect needs what those did: it is worked out from them
 export const LATE = "late, and the steps after it let go"
 export class Late extends Error {
@@ -52,28 +80,26 @@ export class Late extends Error {
 	}
 }
 const newer = (a: Ref | undefined, b: Ref) => !!a && (a[0] > b[0] || (a[0] === b[0] && a[1] > b[1]))
-// late: a step after ref made where or above it new
-function covered(state: State, where: readonly unknown[], ref: Ref) {
-	for (let n = 0; n <= where.length; n++) {
-		if (newer(state.born.get(keyOf(where.slice(0, n))), ref)) return true
-	}
-	return false
-}
-// late: a step after ref made new or spliced what is at or under where
-function touched(state: State, where: readonly unknown[], ref: Ref) {
-	const prefix = keyOf(where)
-	for (const [k, b] of state.born) if (under(k, prefix) && newer(b, ref)) return true
-	for (const [k, l] of state.lists) if (under(k, prefix) && newer(l.last, ref)) return true
-	return false
-}
+
+const NUL = "\0"
+// a record's key: its parent, then its slot; the root's parent and slot are empty
+const SLOT = "\u0001"
+const ROOT = SLOT
+const keySlot = (k: string) => JSON.stringify(k)
+const elSlot = (e: Id) => e.k === undefined ? `${e.device} ${e.c}` : `${e.device} ${e.c} ${e.k}`
+const child = (n: Node, rel: string | number): Node => n + NUL + JSON.stringify(rel)
+// key's node is node, or under it
+const under = (key: Node, node: Node) => key === node || key.startsWith(node + NUL)
+const rootOf = (state: State) => state.slots.get(ROOT)?.node ?? undefined
+
 // sort keys: device, number (a born one's -1)
 type Key = [device: string, c: number]
 const after = (a: Key, b: Key) => a[0] > b[0] || (a[0] === b[0] && a[1] > b[1])
-const keyOf = (path: readonly unknown[]) => JSON.stringify(path)
-// key's path is prefix's, or under it
-const under = (key: string, prefix: string) =>
-	prefix === "[]" || key === prefix || key.startsWith(prefix.slice(0, -1) + ",")
 const isSeq = (v: unknown) => typeof v === "string" || Array.isArray(v)
+const isMap = (v: unknown): v is Record<string, unknown> =>
+	typeof v === "object" && v !== null && !Array.isArray(v) && !ArrayBuffer.isView(v)
+// a node: a map, an array or a string
+const isContainer = (v: unknown) => isSeq(v) || isMap(v)
 // a sequence's length: counted once, when its elements are made, and for what a splice inserts
 const units = (v: unknown) =>
 	typeof v === "string" ? [...v].length : Array.isArray(v) ? v.length : -1
@@ -88,7 +114,7 @@ function at(value: unknown, path: readonly unknown[]): unknown {
 
 const idAt = (l: List, r: Run, o: number): Id =>
 	r.born
-		? { device: r.device, c: l.by[2], k: r.c + o }
+		? { device: r.device, c: l.n, k: r.c + o }
 		: { device: r.device, c: r.back ? r.c - o : r.c + o }
 // the lowest id of r's [o, o + n)
 const low = (l: List, r: Run, o: number, n: number) => idAt(l, r, r.back ? o + n - 1 : o)
@@ -98,11 +124,11 @@ const rightOf = (l: List, r: Run, o: number) =>
 const plus = (i: Id, n: number): Id =>
 	i.k === undefined ? { ...i, c: i.c + n } : { ...i, k: i.k + n }
 const sortOf = (l: List, r: Run, o: number): Key =>
-	r.born ? [l.by[1], -1] : [r.device, r.back ? r.c - o : r.c + o]
+	r.born ? [l.dev, -1] : [r.device, r.back ? r.c - o : r.c + o]
 // where id is in r, or -1
 function place(l: List, r: Run, id: Id) {
 	if (r.device !== id.device || r.born !== (id.k !== undefined)) return -1
-	const x = id.k === undefined ? id.c : id.c === l.by[2] ? id.k : -1
+	const x = id.k === undefined ? id.c : id.c === l.n ? id.k : -1
 	const o = r.back ? r.c - x : x - r.c
 	return o >= 0 && o < r.len ? o : -1
 }
@@ -123,7 +149,7 @@ function find(l: List, id: Id): [number, number] | undefined {
 	}
 	l.ix ??= l.runs.map(entry).sort(order)
 	const born = id.k !== undefined, x = born ? id.k! : id.c
-	if (born && id.c !== l.by[2]) return
+	if (born && id.c !== l.n) return
 	const e = l.ix[below(l.ix, id.device, born, x) - 1]
 	if (e && e.d === id.device && e.b === born && x <= e.hi) {
 		const r = e.run
@@ -280,12 +306,225 @@ const there = (l: List, id: Id, n: number) => {
 	return true
 }
 
+// a record put, or taken (rec undefined), and undone
+function setRec(state: State, key: string, rec: Rec | undefined, back: (() => void)[]) {
+	const was = state.slots.get(key)
+	if (was?.node) state.nodes.delete(was.node)
+	if (rec) {
+		state.slots.set(key, rec)
+		if (rec.node) state.nodes.set(rec.node, key)
+	} else state.slots.delete(key)
+	back.push(() => {
+		if (rec?.node) state.nodes.delete(rec.node)
+		if (was) {
+			state.slots.set(key, was)
+			if (was.node) state.nodes.set(was.node, key)
+		} else state.slots.delete(key)
+	})
+}
+
+// a node gone, with its sequences and records, and what they hold, in turn
+function drop(state: State, node: Node, back: (() => void)[], leaf = false) {
+	const lists: [Node, List][] = [], recs: [string, Rec][] = []
+	if (leaf) {
+		const l = state.lists.get(node)
+		if (l) lists.push([node, l]), state.lists.delete(node)
+	} else {
+		for (const todo = [node]; todo.length;) {
+			const x = todo.pop()!
+			for (const [k, l] of state.lists) {
+				if (under(k, x)) lists.push([k, l]), state.lists.delete(k)
+			}
+			for (const [k, r] of state.slots) {
+				if (!under(r.parent, x)) continue
+				recs.push([k, r]), state.slots.delete(k)
+				if (r.node) state.nodes.delete(r.node), todo.push(r.node)
+			}
+		}
+	}
+	if (!lists.length && !recs.length) return
+	back.push(() => {
+		for (const [k, l] of lists) state.lists.set(k, l)
+		for (const [k, r] of recs) {
+			state.slots.set(k, r)
+			if (r.node) state.nodes.set(r.node, k)
+		}
+	})
+}
+
+// late: a step after ref spliced or put inside the node, or what a put inside it holds
+function touched(state: State, node: Node, ref: Ref) {
+	for (const todo = [node]; todo.length;) {
+		const x = todo.pop()!
+		for (const [k, l] of state.lists) if (under(k, x) && newer(l.last, ref)) return true
+		for (const r of state.slots.values()) {
+			if (!under(r.parent, x)) continue
+			if (newer(r.at, ref)) return true
+			if (r.node) todo.push(r.node)
+		}
+	}
+	return false
+}
+
+// the items of the array node taken away by a splice are gone, with what is under them
+function away(
+	state: State,
+	node: Node,
+	l: List,
+	taken: readonly (readonly [Id, number])[],
+	back: (() => void)[],
+) {
+	if (!state.nodes.size) return
+	for (const [key, r] of [...state.slots]) {
+		if (r.parent !== node || !r.el || !r.node) continue
+		const f = find(l, r.el)
+		if (!f || !l.runs[f[0]].gone) continue
+		drop(state, r.node, back)
+		setRec(state, key, undefined, back)
+	}
+	// the items born with the array have no record: what is under them goes by their place
+	for (const [id, n] of taken) {
+		for (let x = 0; x < n; x++) {
+			const k = plus(id, x).k
+			if (k !== undefined) drop(state, child(node, k), back)
+		}
+	}
+}
+
+// a patch assigns at a slot (a key of the map parent, an element of the array parent, the root): old
+// is what was there, derived the node it was if no record says (made with its parent's value), node
+// the node now. what was there goes, with what is under it; the step is late: a newer one assigned
+// there
+function assign(
+	state: State,
+	ref: Ref,
+	parent: Node | "",
+	slot: string,
+	el: Id | undefined,
+	derived: Node | null,
+	old: unknown,
+	node: Node | null,
+	back: (() => void)[],
+	late = false,
+) {
+	const key = parent + SLOT + slot, was = state.slots.get(key)
+	if (late && was && newer(was.at, ref)) throw new Late()
+	const gone = was ? was.node : derived
+	if (late && gone && touched(state, gone, ref)) throw new Late()
+	if (gone) drop(state, gone, back, typeof old === "string")
+	setRec(state, key, { parent, slot, ...(el && { el }), node, at: ref }, back)
+}
+
+// the places of the rel items of a node's tail, held, in turn; nothing when a patch assigned over one
+function inside(state: State, held: Node, tail: readonly (string | number)[]) {
+	const out: Index[] = []
+	let ck = held
+	for (const x of tail) {
+		if (typeof x === "string") {
+			if (state.slots.has(ck + SLOT + keySlot(x))) return
+			out.push(x)
+		} else {
+			const [device, n] = ck.split(NUL, 2), e: Id = { device, c: +n, k: x }
+			if (state.slots.has(ck + SLOT + elSlot(e))) return
+			const l = state.lists.get(ck), f = l && find(l, e)
+			if (l) {
+				if (!f || l.runs[f[0]].gone) return
+				out.push(liveBefore(l, f[0]) + f[1])
+			} else out.push(x)
+		}
+		ck = child(ck, x)
+	}
+	return out
+}
+
+// the path to a container node as it is now, or nothing: not held, replaced, or gone
+function where(state: State, node: Node): Index[] | undefined {
+	const parts: Index[][] = []
+	for (let cur = node;;) {
+		// the node some record holds that cur is, or is made inside
+		const f = cur.split(NUL)
+		let m = f.length
+		while (m >= 3 && !state.nodes.has(m === f.length ? cur : f.slice(0, m).join(NUL))) m--
+		if (m < 3) return
+		const held = m === f.length ? cur : f.slice(0, m).join(NUL)
+		const rec = state.slots.get(state.nodes.get(held)!)!
+		const rel = inside(state, held, f.slice(m).map((x) => JSON.parse(x)))
+		if (!rel) return
+		parts.push(rel)
+		if (rec.parent === "") break
+		if (rec.el) {
+			const l = state.lists.get(rec.parent), at = l && find(l, rec.el)
+			if (!l || !at || l.runs[at[0]].gone) return
+			parts.push([liveBefore(l, at[0]) + at[1]])
+		} else parts.push([JSON.parse(rec.slot)])
+		cur = rec.parent
+	}
+	return parts.reverse().flat()
+}
+
+// the container node at the path's first len items, found by place in value (a write here, a move),
+// its arrays' elements made as it goes; nothing when a scalar or nothing is there
+function nodeAt(
+	state: State,
+	path: readonly Index[],
+	len: number,
+	back: (() => void)[],
+	value: unknown = state.value,
+): Node | undefined {
+	let cur = rootOf(state), v = value
+	for (let h = 0; h < len; h++) {
+		if (cur === undefined) return
+		const k = path[h]
+		if (typeof k === "number") {
+			if (!Array.isArray(v)) return
+			const l = elements(state, cur, v, back)
+			if (k >= l.count) return
+			const [j, o] = liveAt(l, k),
+				e = idAt(l, l.runs[j], o),
+				r = state.slots.get(cur + SLOT + elSlot(e))
+			cur = r ? r.node ?? undefined : e.k !== undefined ? child(cur, e.k) : undefined
+			v = v[k]
+		} else {
+			if (!isMap(v)) return
+			const r = state.slots.get(cur + SLOT + keySlot(k))
+			cur = r ? r.node ?? undefined : isContainer(v[k]) ? child(cur, k) : undefined
+			v = v[k]
+		}
+	}
+	return len === 0 ? cur : isContainer(v) ? cur : undefined
+}
+
+// the elements of the sequence node (v its value), made at the first splice: there since the step
+// that made the node
+function elements(state: State, node: Node, v: unknown, back: (() => void)[]): List {
+	const had = state.lists.get(node)
+	if (had) return had
+	if (!isSeq(v)) throw new RangeError("wrong-kind")
+	const [dev, n] = node.split(NUL, 2), count = units(v)
+	const runs = count
+		? [{
+			device: dev,
+			c: 0,
+			len: count,
+			gone: false,
+			born: true,
+			back: false,
+			left: null,
+			right: null,
+			lab: GAP,
+		}]
+		: []
+	const l: List = { runs, dev, n: +n, text: typeof v === "string", count, j: 0, live: 0 }
+	state.lists.set(node, l)
+	back.push(() => state.lists.delete(node))
+	return l
+}
+
 // a step's patches applied to state in order, all or none, by its ids; a step with none is a write
-// here: its splices and the array items its paths go through are named from the elements
-// (returned). o.undo gets what undoes the value, o.back what undoes the elements (run newest
-// first). o.keep: false for a patch left out (its elements still counted). o.late: steps after it
-// may be applied already; one whose effect needs them throws Late. the patches as applied, by
-// position, returned for the graph
+// here: its containers and elements are named from state (returned). o.undo gets what undoes the
+// value, o.back what undoes the state (run newest first). o.keep: false for a patch left out (its
+// elements still counted). o.late: steps after it may be applied already; one whose effect needs
+// them throws Late. the patches as applied, by position, returned for the graph
 export function step(
 	state: State,
 	s: Pick<Step, "device" | "n" | "lamport" | "patches"> & { ids?: readonly Value[] } & At,
@@ -313,10 +552,8 @@ export function step(
 			}
 			if (p.move && o.late) throw new Late()
 			const out = p.move
-				? (renew(state, ref, end(state, p, back), back),
-					renew(state, ref, end(state, p.move, back), back),
-					{ patches: [p], named: null })
-				: patch(state, ref, c, p, named?.[i] ?? null, back, name, o.late)
+				? { patches: move(state, ref, c, i, p, back), named: null }
+				: patch(state, ref, c, i, p, named?.[i] ?? null, back, name, o.late)
 			ids.push(out.named)
 			for (const q of out.patches) {
 				const u: Patch[] = []
@@ -333,167 +570,207 @@ export function step(
 	return { applied, ids }
 }
 
-// a patch but a move, its path's array items found by ids (a write here: by place, and named): a
-// splice, a removal at an index of an array (a splice of that one) or a put
+const missing = (late: boolean | undefined, why: string): never => {
+	throw late ? new Late() : new RangeError(why)
+}
+
+// a patch but a move, its container found by its id (given) or by place (a write here, named): a
+// splice, a removal at an index of an array (a splice of that one), a put at an index, or a put at a
+// key or of the whole value
 function patch(
 	state: State,
 	ref: Ref,
 	c: number,
+	i: number,
 	p: Patch,
 	given: Named | null,
 	back: (() => void)[],
 	name: boolean,
 	late = false,
-): { patches: Patch[]; named: Named | null } {
-	const k = p.path.at(-1), by = given?.through ?? (name ? undefined : [])
-	const one = !p.range && p.value === undefined && typeof k === "number"
-	let up = locate(state, p.path, by, back, one ? p.path.length - 1 : p.path.length)
-	if (late && covered(state, up.where, ref)) throw new Late()
-	// empty: an empty through too (a splice into an array whose path has no whole)
-	const through = (more: Id[], empty = false) => {
-		const t = name && up.ids ? [...up.ids, ...more] : undefined
-		return t && (t.length || empty) ? t : undefined
+): { patches: Patch[]; named: Named } {
+	if (!name && !given) throw new RangeError("a patch with no ids")
+	const k = p.path.at(-1), spliced = p.range !== undefined
+	const index = !spliced && typeof k === "number"
+	const made = (isContainer(p.value) ? nodeKey(ref[1], ref[2], i) : null) as Node | null
+	if (!spliced && !p.path.length) {
+		const container = rootOf(state) ?? null
+		assign(state, ref, "", "", undefined, null, state.value, made, back, late)
+		return { patches: [p], named: { container: name ? container : given!.container } }
 	}
-	if (one && Array.isArray(at(state.value, up.path))) {
-		// by its id: taken away wherever it is now, once
-		const q: Patch = { path: up.path, range: [k, k + 1] }
-		const gone = by ? { after: null, gone: [[by.at(-1)!, 1]] as [Id, number][] } : null
-		const out = splice(state, ref, c, q, up.where, gone, back)
-		const t = out.anchor && through([out.anchor.gone[0][0]])
-		return { patches: out.patches, named: t ? { through: t } : null }
+	const len = spliced ? p.path.length : p.path.length - 1
+	let node: Node | undefined = name
+		? nodeAt(state, p.path, len, back)
+		: given!.container ?? undefined
+	if (node === undefined) return missing(late, "no container")
+	const up = name ? p.path.slice(0, len) : where(state, node)
+	if (!up) return missing(late, "a container not there")
+	const v = at(state.value, up)
+	if (spliced) {
+		if (!isSeq(v)) throw new RangeError("wrong-kind")
+		if (!name && !given!.splice) throw new RangeError("a splice with no ids")
+		const out = splice(state, ref, c, i, { ...p, path: up }, node, v, given?.splice ?? null, back)
+		return { patches: out.patches, named: { container: node, splice: out.anchor } }
 	}
-	if (one) up = locate(state, p.path, by, back, p.path.length)
-	if (one && late && covered(state, up.where, ref)) throw new Late()
-	const q: Patch = up.path === p.path ? p : { ...p, path: up.path }
-	if (p.range && isSeq(at(state.value, up.path))) {
-		if (!name && !given?.splice) throw new RangeError("a splice with no ids")
-		const out = splice(state, ref, c, q, up.where, given?.splice ?? null, back)
-		const t = through([], true)
+	if (index && p.value === undefined) {
+		// a removal: taken away wherever it is now, once
+		if (!Array.isArray(v)) throw new RangeError("wrong-kind")
+		if (!name && !given!.splice) throw new RangeError("a removal with no ids")
+		const q: Patch = { path: up, range: [k as number, (k as number) + 1] }
+		const out = splice(state, ref, c, i, q, node, v, given?.splice ?? null, back)
 		return {
 			patches: out.patches,
-			named: { splice: out.anchor!, ...(t && { through: t }) },
+			named: { container: node, splice: { after: null, gone: out.anchor.gone } },
 		}
 	}
-	if (late && touched(state, up.where, ref)) throw new Late()
-	renew(state, ref, up.where, back)
-	const t = through([])
-	return { patches: [q], named: t ? { through: t } : null }
-}
-
-// a path's first upto items, its arrays' items found by the ids by names, wherever they are now
-// (one gone or not there: it doesn't apply), or by place (a write here, a move). path: to apply;
-// where: its key, each array item as its element; ids: those elements (none: one not there)
-function locate(
-	state: State,
-	path: readonly Index[],
-	by: readonly Id[] | undefined,
-	back: (() => void)[],
-	upto = path.length,
-) {
-	const out: Index[] = [], where: unknown[] = []
-	let ids: Id[] | undefined = [], v = state.value, x = 0, moved = upto < path.length
-	for (let i = 0; i < upto; i++) {
-		let k = path[i]
-		if (typeof k === "number") {
-			const id = by?.[x++]
-			let e: Id | undefined
-			if (Array.isArray(v)) {
-				const l = elements(state, out, where, back)
-				if (by && !id) throw new RangeError("an element named is not there")
-				if (id) {
-					const f = find(l, id)
-					if (!f || l.runs[f[0]].gone) throw new RangeError("an element named is not there")
-					e = id, k = liveBefore(l, f[0]) + f[1], moved ||= k !== path[i]
-				} else if (k < l.count) {
-					const [j, o] = liveAt(l, k)
-					e = idAt(l, l.runs[j], o)
-				}
-			} else if (id) throw new RangeError("an element named is not there")
-			where.push(!e ? k : e.k === undefined ? [e.device, e.c] : [e.device, e.c, e.k])
-			if (e) ids?.push(e)
-			else ids = undefined
-		} else where.push(k)
-		out.push(k)
-		v = v !== null && typeof v === "object" ? (v as Record<string, unknown>)[k] : undefined
+	if (index) {
+		// a put at an index: the item is replaced, its element stays
+		if (!Array.isArray(v)) throw new RangeError("wrong-kind")
+		const l = elements(state, node, v, back)
+		let e: Id, x: number
+		if (name) {
+			if ((k as number) >= l.count) throw new RangeError("no-key")
+			const [j, o] = liveAt(l, k as number)
+			e = idAt(l, l.runs[j], o), x = k as number
+		} else {
+			if (!given!.element) throw new RangeError("a put at an index with no element")
+			const f = find(l, e = given!.element)
+			if (!f || l.runs[f[0]].gone) throw new RangeError("an element named is not there")
+			x = liveBefore(l, f[0]) + f[1]
+		}
+		const derived = e.k === undefined ? null : child(node, e.k)
+		assign(state, ref, node, elSlot(e), e, derived, v[x], made, back, late)
+		return { patches: [{ ...p, path: [...up, x] }], named: { container: node, element: e } }
 	}
-	return { path: moved ? out : path, where, ids }
+	if (!isMap(v)) throw new RangeError("wrong-kind")
+	const key = k as string, old = v[key]
+	assign(
+		state,
+		ref,
+		node,
+		keySlot(key),
+		undefined,
+		isContainer(old) ? child(node, key) : null,
+		old,
+		made,
+		back,
+		late,
+	)
+	return { patches: [{ ...p, path: [...up, key] }], named: { container: node } }
 }
 
-// what a move makes new at one end, by place: the sequence a range is in, or the array an index is
-// in, or what is at the path
-function end(state: State, t: Target, back: (() => void)[]) {
-	const k = t.path.at(-1), up = locate(state, t.path, undefined, back, t.path.length - 1)
-	return !t.range && typeof k === "number" && Array.isArray(at(state.value, up.path))
-		? up.where
-		: locate(state, t.path, undefined, back).where
-}
-
-// the sequences at where and under it made new by this step (a put, a removal, a move there)
-function renew(state: State, ref: Ref, where: readonly unknown[], back: (() => void)[]) {
-	const prefix = keyOf(where)
-	const lists = [...state.lists].filter(([k]) => under(k, prefix))
-	const born = [...state.born].filter(([k]) => under(k, prefix))
-	for (const [k] of lists) state.lists.delete(k)
-	for (const [k] of born) state.born.delete(k)
-	state.born.set(prefix, ref)
-	back.push(() => {
-		state.born.delete(prefix)
-		for (const [k, v] of born) state.born.set(k, v)
-		for (const [k, v] of lists) state.lists.set(k, v)
-	})
-}
-
-// the elements of the sequence at path (where, its key), made at the first splice: there since the
-// step that made it new
-function elements(
+// a move, by place: what it moves is taken from where it was and put where it goes, as a new node
+// there (a new element for a slot); the patches to apply
+function move(
 	state: State,
-	path: readonly unknown[],
-	where: readonly unknown[],
+	ref: Ref,
+	c: number,
+	i: number,
+	p: Patch,
 	back: (() => void)[],
-): List {
-	const key = keyOf(where)
-	const had = state.lists.get(key)
-	if (had) return had
-	let by: Ref | undefined
-	for (let n = where.length; n >= 0 && !by; n--) by = state.born.get(keyOf(where.slice(0, n)))
-	if (!by) throw new RangeError("no put made it")
-	const count = units(at(state.value, path))
-	const runs = count
-		? [{
-			device: by[1],
-			c: 0,
-			len: count,
-			gone: false,
-			born: true,
-			back: false,
-			left: null,
-			right: null,
-			lab: GAP,
-		}]
-		: []
-	const l: List = { runs, by, count, j: 0, live: 0 }
-	state.lists.set(key, l)
-	back.push(() => state.lists.delete(key))
-	return l
+): Patch[] {
+	const f = p.move!, F = f.path, T = p.path
+	if (!F.length) throw new RangeError("range")
+	const fk = F[F.length - 1], tk = T[T.length - 1]
+	const src = at(state.value, F)
+	const items = (v: unknown): unknown =>
+		typeof v === "string"
+			? [...v].slice(...f.range!).join("")
+			: (v as unknown[]).slice(...f.range!)
+	if (f.range ? !isSeq(src) : src === undefined) throw new RangeError("no-key")
+	const moved = f.range ? items(src) : src
+	let cut: Patch
+	if (f.range) {
+		const n = nodeAt(state, F, F.length, back)
+		if (n === undefined) throw new RangeError("no-key")
+		cut = { path: F, range: f.range }
+		splice(state, ref, c, i, cut, n, src, null, back)
+	} else {
+		cut = { path: F }
+		const n = nodeAt(state, F, F.length - 1, back), up = at(state.value, F.slice(0, -1))
+		if (n === undefined) throw new RangeError("no-key")
+		if (typeof fk === "number") {
+			if (!Array.isArray(up)) throw new RangeError("wrong-kind")
+			splice(state, ref, c, i, { path: F.slice(0, -1), range: [fk, fk + 1] }, n, up, null, back)
+		} else {
+			if (!isMap(up)) throw new RangeError("wrong-kind")
+			const old = up[fk]
+			assign(
+				state,
+				ref,
+				n,
+				keySlot(fk),
+				undefined,
+				isContainer(old) ? child(n, fk) : null,
+				old,
+				null,
+				back,
+			)
+		}
+	}
+	const rest = apply(state.value, [cut])
+	const made = (isContainer(moved) ? nodeKey(ref[1], ref[2], i) : null) as Node | null
+	if (p.range) {
+		const n = nodeAt(state, T, T.length, back, rest), into = at(rest, T)
+		if (n === undefined || !isSeq(into)) throw new RangeError("wrong-kind")
+		const q: Patch = { path: T, range: p.range, value: f.range ? moved : [moved] }
+		splice(state, ref, c, i, q, n, into, null, back)
+	} else if (!T.length) {
+		assign(state, ref, "", "", undefined, null, rest, made, back)
+	} else {
+		const n = nodeAt(state, T, T.length - 1, back, rest), up = at(rest, T.slice(0, -1))
+		if (n === undefined) throw new RangeError("no-key")
+		if (typeof tk === "number") {
+			if (!Array.isArray(up)) throw new RangeError("wrong-kind")
+			const l = elements(state, n, up, back)
+			if (tk >= l.count) throw new RangeError("no-key")
+			const [j, o] = liveAt(l, tk), e = idAt(l, l.runs[j], o)
+			assign(
+				state,
+				ref,
+				n,
+				elSlot(e),
+				e,
+				e.k === undefined ? null : child(n, e.k),
+				up[tk],
+				made,
+				back,
+			)
+		} else {
+			if (!isMap(up)) throw new RangeError("wrong-kind")
+			const old = up[tk as string]
+			assign(
+				state,
+				ref,
+				n,
+				keySlot(tk as string),
+				undefined,
+				isContainer(old) ? child(n, tk as string) : null,
+				old,
+				made,
+				back,
+			)
+		}
+	}
+	return [p]
 }
 
-// a splice, its inserted ones numbered from c: by ids (anchor) or by its range; name: its ids found
-// from its range
+// a splice into the sequence node (v its value, p.path where it is now), its inserted ones numbered
+// from c, patch i of its step: by ids (anchor) or by its range; the anchor made is returned
 function splice(
 	state: State,
 	ref: Ref,
 	c: number,
+	i: number,
 	p: Patch,
-	where: readonly unknown[],
+	node: Node,
+	v: unknown,
 	anchor: Anchor | null,
 	back: (() => void)[],
 ): { patches: Patch[]; anchor: Anchor } {
 	// an insert of another kind than the sequence (a list into a text): doesn't apply, as apply refuses
 	const kind = (v: unknown) => typeof v === "string" ? "text" : Array.isArray(v) ? "list" : "other"
-	if (p.value !== undefined && kind(p.value) !== kind(at(state.value, p.path))) {
-		throw new RangeError("wrong-kind")
-	}
-	const l = elements(state, p.path, where, back)
+	if (p.value !== undefined && kind(p.value) !== kind(v)) throw new RangeError("wrong-kind")
+	const l = elements(state, node, v, back)
 	const was = l.last
 	if (!newer(was, ref)) l.last = ref
 	back.push(() => void (l.last = was))
@@ -550,6 +827,7 @@ function splice(
 		right = idAt(l, l.runs[spot[0]], spot[1])
 		before = lp && is(rightOf(l, l.runs[lp[0]], lp[1]), right) ? true : right
 	}
+	if (!l.text && taken.length) away(state, node, l, taken, back)
 	let [j, o] = spot
 	const to = liveBefore(l, j) + (l.runs[j] && !l.runs[j].gone ? o : 0)
 	if (m > 0) {
@@ -568,6 +846,19 @@ function splice(
 		l.count += m
 		join(l, j + 1), join(l, j)
 		patches.push({ path: p.path, range: [to, to], value })
+		if (Array.isArray(value)) {
+			for (let x = 0; x < m; x++) {
+				if (!isContainer(value[x])) continue
+				const e: Id = { device: ref[1], c: c + x }
+				setRec(state, node + SLOT + elSlot(e), {
+					parent: node,
+					slot: elSlot(e),
+					el: e,
+					node: nodeKey(ref[1], ref[2], i, [x]),
+					at: ref,
+				}, back)
+			}
+		}
 	}
 	if (!patches.length) patches.push(cleared(p, to, to))
 	back.push(() => {
@@ -685,7 +976,7 @@ function anchorOf(
 	return a
 }
 
-// a state's elements as a value, for a snapshot; the value itself is the graph's
+// a state's sequences and records as a value, for a snapshot; the value itself is the graph's
 const idOut = (i: Id | null): Value =>
 	i === null ? null : i.k === undefined ? [i.device, i.c] : [i.device, i.c, i.k]
 const idIn = (v: unknown): Id | null => {
@@ -693,10 +984,20 @@ const idIn = (v: unknown): Id | null => {
 	const [device, c, k] = v as [string, number, number?]
 	return k === undefined ? { device, c } : { device, c, k }
 }
+const nodeOut = (k: Node | null): Value => {
+	if (k === null) return null
+	const f = nodeOf(k)
+	return [f.device, f.n, f.i, ...f.rel]
+}
+const nodeIn = (v: unknown): Node | null => {
+	if (v === null) return null
+	const [device, n, i, ...rel] = v as [string, number, number, ...(string | number)[]]
+	return nodeKey(device, n, i, rel)
+}
 export function save(state: State): Value {
-	const lists = [...state.lists].map(([key, l]) => [
-		key,
-		l.by,
+	const lists = [...state.lists].map(([node, l]) => [
+		nodeOut(node),
+		l.text ? 1 : 0,
 		l.last ?? null,
 		l.runs.map((r) => [
 			r.device,
@@ -707,12 +1008,19 @@ export function save(state: State): Value {
 			idOut(r.right),
 		]),
 	])
-	return [lists, [...state.born]] as unknown as Value
+	const slots = [...state.slots.values()].map((r) => [
+		r.parent === "" ? null : nodeOut(r.parent),
+		r.el ? idOut(r.el) : r.slot,
+		nodeOut(r.node),
+		r.at,
+	])
+	return [lists, slots] as unknown as Value
 }
 export function load(v: unknown): State {
-	const [lists, born] = v as [unknown[][], [string, Ref][]]
+	const [lists, slots] = v as [unknown[][], unknown[][]]
 	const state = fresh()
-	for (const [key, by, last, runs] of lists as [string, Ref, Ref | null, unknown[][]][]) {
+	for (const [node, text, last, runs] of lists as [unknown, number, Ref | null, unknown[][]][]) {
+		const key = nodeIn(node)!
 		const rs = runs.map((r, i): Run => ({
 			device: r[0] as string,
 			c: r[1] as number,
@@ -725,8 +1033,23 @@ export function load(v: unknown): State {
 			lab: GAP * (i + 1),
 		}))
 		const count = rs.reduce((n, r) => n + (r.gone ? 0 : r.len), 0)
-		state.lists.set(key, { runs: rs, by, count, j: 0, live: 0, ...(last && { last }) })
+		const [dev, n] = key.split(NUL, 2)
+		state.lists.set(key, {
+			runs: rs,
+			dev,
+			n: +n,
+			text: !!text,
+			count,
+			j: 0,
+			live: 0,
+			...(last && { last }),
+		})
 	}
-	for (const [key, ref] of born) state.born.set(key, ref)
+	for (const [parent, slot, node, at] of slots as [unknown, unknown, unknown, Ref][]) {
+		const p = nodeIn(parent) ?? "", el = Array.isArray(slot) ? idIn(slot)! : undefined
+		const s = el ? elSlot(el) : (slot as string), key = p + SLOT + s, n = nodeIn(node)
+		state.slots.set(key, { parent: p, slot: s, ...(el && { el }), node: n, at })
+		if (n) state.nodes.set(n, key)
+	}
 	return state
 }

@@ -1,0 +1,267 @@
+{
+	"title": "a NUL in a map's key: typing into the text and putting inside the map under it are written with ids and read back on every peer, as bytes; a container id whose rel text has a NUL finds no key \"a\" (the text is not cut at the NUL)",
+	"steps": [
+		{
+			"op": "device",
+			"name": "w",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "device",
+			"name": "r",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"expect": {
+				"key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
+		},
+		{
+			"op": "device",
+			"name": "x",
+			"seed": "0303030303030303030303030303030303030303030303030303030303030303",
+			"expect": {
+				"key": "ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1"
+			}
+		},
+		{
+			"op": "write",
+			"device": "w",
+			"node": "d",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"a\u0000b": {
+							"t": "",
+							"m": {}
+						}
+					}
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "w",
+			"node": "d",
+			"patches": [
+				{
+					"path": [
+						"a\u0000b",
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				}
+			],
+			"expect": {
+				"n": 2,
+				"lamport": 2
+			}
+		},
+		{
+			"op": "write",
+			"device": "w",
+			"node": "d",
+			"patches": [
+				{
+					"path": [
+						"a\u0000b",
+						"m",
+						"k"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"n": 3,
+				"lamport": 3
+			}
+		},
+		{
+			"op": "value",
+			"device": "w",
+			"node": "d",
+			"expect": {
+				"value": {
+					"a\u0000b": {
+						"t": "x",
+						"m": {
+							"k": 1
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "steps",
+			"device": "w",
+			"of": "w",
+			"expect": {
+				"steps": [
+					"8b58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c01f661646576616c756581a26470617468806576616c7565a163610062a2616da0617460011a68e7780000808182f680",
+					"8b58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c025820a87f998d9f3ae0a3e107e62642e0ada3c68cea3d7f6818c0638ae0e161c5ed2861646576616c756581a36470617468826361006261746572616e67658200006576616c75656178021a68e778000081018184840100636100626174f680f6",
+					"8b58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c035820d076fd8b0bcb69e31bc0c8dacb05ba865a5e7d507d4a4ab06c259fcdeb19fead61646576616c756581a264706174688363610062616d616b6576616c756501031a68e77800018101818284010063610062616d80"
+				]
+			}
+		},
+		{
+			"op": "pass",
+			"from": "w",
+			"to": "r",
+			"of": "w",
+			"at": 1,
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "value",
+			"device": "r",
+			"node": "d",
+			"expect": {
+				"value": {
+					"a\u0000b": {
+						"m": {
+							"k": 1
+						},
+						"t": "x"
+					}
+				}
+			}
+		},
+		{
+			"op": "take",
+			"device": "x",
+			"run": {
+				"device": "w",
+				"steps": [
+					{
+						"n": 1,
+						"node": "d",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"value": {
+									"a\u0000b": {
+										"t": "",
+										"m": {}
+									}
+								}
+							}
+						],
+						"lamport": 1,
+						"when": 0,
+						"on": [],
+						"ids": [
+							{
+								"container": null
+							}
+						],
+						"seq": 0
+					},
+					{
+						"n": 2,
+						"node": "d",
+						"part": "value",
+						"patches": [
+							{
+								"path": [
+									"a\u0000b",
+									"t"
+								],
+								"range": [
+									0,
+									0
+								],
+								"value": "x"
+							}
+						],
+						"lamport": 2,
+						"when": 0,
+						"on": [
+							[
+								"w",
+								1
+							]
+						],
+						"ids": [
+							{
+								"container": [
+									1,
+									0,
+									"a\u0000b",
+									"t"
+								],
+								"after": null,
+								"gone": []
+							}
+						],
+						"seq": 0
+					},
+					{
+						"n": 3,
+						"node": "d",
+						"part": "value",
+						"patches": [
+							{
+								"path": [
+									"a\u0000b",
+									"m",
+									"k"
+								],
+								"value": 1
+							}
+						],
+						"lamport": 3,
+						"when": 0,
+						"on": [
+							[
+								"w",
+								2
+							]
+						],
+						"ids": [
+							{
+								"container": [
+									1,
+									0,
+									"a\u0000b",
+									"m"
+								]
+							}
+						],
+						"seq": 1
+					}
+				]
+			},
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "value",
+			"device": "x",
+			"node": "d",
+			"expect": {
+				"value": {
+					"a\u0000b": {
+						"m": {
+							"k": 1
+						},
+						"t": "x"
+					}
+				}
+			}
+		}
+	]
+}

@@ -78,6 +78,7 @@ typedef struct {
 
 struct tp_history {
 	tp_mem mem;
+	int skipped; // a step of the log walked over because the store could not give it back
 	tp_log *log;
 	tb_table *table;
 	pl *places;
@@ -643,6 +644,7 @@ static void look(tp_history *h, const entry *e, cursor *c) {
 	for (; c->at.n; c->at.n--) {
 		long length = fetch(h, h->devices[c->at.device], c->at.n);
 		if (length >= 0 && !tp_step_decode(h->bytes.p, (size_t)length, &s)) break;
+		h->skipped = 1;
 	}
 	if (!c->at.n) return;
 	c->at.lamport = s.lamport;
@@ -892,13 +894,14 @@ static int redo(tp_history *h, long k, block *last, const ref *lates, size_t nla
 	int reach = m && (t > 0 || m->all) && unwound(m, t, &value);
 	if (m && !reach) unown(h, &h->entries[k]), m = NULL;
 	uint8_t *done = tp_alloc(&h->mem, nlates);
+	h->skipped = 0;
 	if (!done || walked(h, k, late, reach ? late : NULL, &whole, &list, &count)) {
 		tp_free(&h->mem, done, nlates), tp_buf_free(&list), block_free(last), op_free(value);
 		h->entries[k].unsure = 1;
 		return TP_NOMEM;
 	}
 	memset(done, 0, nlates);
-	el_state local = {NULL, 0, 0, NULL, 0, 0}, *es = &local;
+	el_state local = {0}, *es = &local;
 	if (reach) {
 		for (size_t i = m->n; i-- > t;) {
 			el_back_undo(&h->mem, &m->el, &m->tail[i].back);
@@ -912,7 +915,7 @@ static int redo(tp_history *h, long k, block *last, const ref *lates, size_t nla
 		unown(h, &h->entries[k]);
 		h->entries[k].mine = m = fresh;
 	}
-	int twice = 0, dropped = 0;
+	int twice = 0, dropped = 0, unread = h->skipped;
 	size_t left = nlates;
 	for (size_t i = 0; i < count && left && !h->forgets; i++) {
 		const ref *r = &((const ref *)list.p)[i];
@@ -934,6 +937,7 @@ static int redo(tp_history *h, long k, block *last, const ref *lates, size_t nla
 		op_undo u = {NULL, 0, 0};
 		el_back bk = {NULL, 0, 0};
 		int code = apply_ref(h, &r, &value, es, m ? &u : NULL, &bk, &b);
+		if (code == TP_STORE) unread = 1;
 		failure *was = failed_at(h, device, r.n);
 		if (code) el_back_free(&h->mem, &bk), bk = (el_back){NULL, 0, 0};
 		if (m) {
@@ -953,6 +957,15 @@ static int redo(tp_history *h, long k, block *last, const ref *lates, size_t nla
 		if (b) block_free(b);
 	}
 	tp_buf_free(&list);
+	if (unread) {
+		// a step the store can't give back: what is rebuilt is not the entry, so the value the graph has stays
+		op_free(value);
+		block_free(last);
+		el_state_free(&h->mem, &local);
+		unown(h, &h->entries[k]);
+		h->entries[k].unsure = 1;
+		return 0;
+	}
 	if (m) {
 		trim(h, m, h->window);
 		op_free(m->value), m->value = value ? op_ref(value) : NULL;
@@ -1192,15 +1205,8 @@ static void settle(tp_history *h) {
 	h->early.len = 0;
 }
 
-// a patch that names elements: a splice, or a path with an index (a move names none)
-static int needs(const op_patch *p) {
-	if (p->has_move) return 0;
-	if (p->place.has_range) return 1;
-	for (size_t i = 0; i < p->place.length; i++) {
-		if (p->place.path[i].type == OP_NUM_KEY) return 1;
-	}
-	return 0;
-}
+// a patch that names a container: every patch but a move
+static int needs(const op_patch *p) { return !p->has_move; }
 
 static void land(tp_history *h, const uint8_t device[32], uint64_t n) {
 	long length = fetch(h, device, n);
@@ -1556,7 +1562,7 @@ static int record(tp_history *h, const pl_fact *f, long k, int retry) {
 	size_t np = f->patches_length;
 	tp_buf on = {NULL, 0, 0, (size_t)-1, &h->mem, 0}, idb = {NULL, 0, 0, (size_t)-1, &h->mem, 0};
 	if (me) put_on(h, &h->entries[k], me, tp_log_count(h->log, me) + 1, &on);
-	// its splices and the array items its paths go through named by ids from the entry's own elements,
+	// its containers and elements named by ids from the entry's own state,
 	// applied there (as the graph has it); a whole value starts them again
 	el_ctx c = elc(h);
 	el_anchor *named = NULL;
@@ -1576,7 +1582,7 @@ static int record(tp_history *h, const pl_fact *f, long k, int retry) {
 		} else if (!en->broken) {
 			mine = en->mine;
 			if (!mine && en->count && !h->forgets) mine = rebuild(h, k);
-			else if (!mine && en->plain && !simple) {
+			else if (!mine && en->plain) {
 				mine = en->mine = seeded(h, &en->one);
 				en->plain = !mine;
 				if (mine) mine->value = en->was, en->was = NULL;
@@ -1594,7 +1600,7 @@ static int record(tp_history *h, const pl_fact *f, long k, int retry) {
 		}
 		// every patch that names elements has them; nothing else does
 		for (size_t i = 0; i < np && ids; i++) {
-			if (needs(&f->patches[i]) != (named && (named[i].named || named[i].has_through))) mistake = 1;
+			if (needs(&f->patches[i]) != (named && named[i].kind != 0)) mistake = 1;
 		}
 		if (!ids && wants) mistake = 1;
 	}
@@ -1861,7 +1867,7 @@ size_t tp_history_versions(tp_history *h, const char *node, const char *part, tp
 		}
 		if (tp_buf_why(&side)) break;
 		op_value *value = NULL;
-		el_state es = {NULL, 0, 0, NULL, 0, 0};
+		el_state es = {0};
 		for (size_t i = start; i < m; i++) {
 			long length = fetch(h, h->devices[steps[i].device], steps[i].n);
 			block *b = length < 0 ? NULL : block_of(h->bytes.p, (size_t)length);

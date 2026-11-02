@@ -4,9 +4,12 @@
 // seeds,
 // a write's when is the request's or 1760000000, and the k-th random call gives k big-endian.
 //   encode  { step: { device, n, before, node, relative?, part, patches, lamport, when, on?, ids?, who? } } -> { bytes }
-//           ids: per patch null or { after: id | null, gone: [[id, count], …], before?: id | true,
-//           through?: [id, …] } or { through: [id, …] }, an id as written
-//           (WIRE.md): this device's x or [x, k], another's [device, c] or [device, n, k]
+//           ids: per patch null (a move) or { container: node | null, pred?: [node, …] } (a put, a
+//           removal), { container, pred?, element: id } (a put at an index), { container, after:
+//           id | null, gone: [[id, count], …], before?: id | true } (a splice, a removal at an
+//           index); as written (WIRE.md): an element id this device's x or [x, k], another's
+//           [device, c] or [device, n, k]; a node this device's [n, i, rel…], another's
+//           [device, n, i, rel…]
 //   decode  { bytes } -> { step } | { refused: true }
 //   hash    { bytes } -> { hash }        blake3
 //   sign    { seed, bytes } -> { sig }   ed25519
@@ -27,6 +30,7 @@
 //   files   { device } -> { log, open, bytes }   frames: ["run", device, first, last], ["step", device, n], ["other"]
 //   value   { device, node, part? } -> { value } | {}
 //   versions { device, node, part? } -> { versions }   each { value } or { gone: true }, and from
+//   failed  { device } -> { failed }     each { device, n }: the steps its history could not apply, by n then device
 //   have    { device } -> { have }       { device: n }
 //   passed  { device } -> { passed }     { device: n }: what its sync says every linked peer holds
 //   count   { device, of } -> { count }
@@ -260,21 +264,26 @@ function stepIn(s: Request, device?: string, before?: Uint8Array | null): Step {
 	const id = (i: Written): Value =>
 		Array.isArray(i) && typeof i[0] === "string" ? [unhex(keyOf(i[0])), ...i.slice(1)] : i
 	type In = {
+		container?: Written | null
+		pred?: Written[]
 		after?: Written | null
 		gone?: [Written, number][]
 		before?: Written | true
-		through?: Written[]
+		element?: Written
 	}
 	out.ids = ((s.ids ?? s.patches.map(() => null)) as (In | null)[]).map((x) => {
 		if (!x) return null
-		const t = x.through?.map(id)
-		if (x.gone === undefined) return [t!]
-		return [
-			x.after == null ? null : id(x.after),
-			x.gone.map(([i, c]) => [id(i), c]),
-			x.before === undefined ? null : x.before === true ? true : id(x.before),
-			t ?? [],
-		]
+		const c = x.container == null ? null : id(x.container)
+		if (x.gone !== undefined) {
+			return [
+				c,
+				x.after == null ? null : id(x.after),
+				x.gone.map(([i, n]) => [id(i), n]),
+				x.before === undefined ? null : x.before === true ? true : id(x.before),
+			]
+		}
+		const pred = (x.pred ?? []).map(id)
+		return x.element !== undefined ? [c, pred, id(x.element)] : [c, pred]
 	})
 	if (s.who !== undefined) out.who = s.who
 	return out
@@ -296,15 +305,18 @@ function stepOut(s: Step) {
 		on: s.on.map((o) => [o.device, o.n]),
 		ids: s.ids.map((x) => {
 			if (x === null) return null
-			const w = x as Value[]
-			if (w.length === 1) return { through: (w[0] as Value[]).map(idOut) }
-			const [after, gone, before, through] = w as [Value, [Value, number][], Value?, Value[]?]
-			return {
-				after: idOut(after),
-				gone: gone.map(([i, c]) => [idOut(i), c]),
-				...(before !== undefined && before !== null && { before: idOut(before) }),
-				...(through && { through: through.map(idOut) }),
+			const w = x as Value[], container = w[0] === null ? null : idOut(w[0])
+			if (w.length === 4) {
+				const [, after, gone, before] = w as [Value, Value, [Value, number][], Value]
+				return {
+					container,
+					after: idOut(after),
+					gone: gone.map(([i, c]) => [idOut(i), c]),
+					...(before !== null && { before: idOut(before) }),
+				}
 			}
+			const pred = (w[1] as Value[]).map(idOut)
+			return w.length === 3 ? { container, pred, element: idOut(w[2]) } : { container, pred }
 		}),
 		...(s.who !== undefined && { who: s.who }),
 	}
@@ -572,6 +584,18 @@ async function one(r: Request): Promise<Answer> {
 				versions: h.versions(r.node, r.part ?? "value").map((v) => ({
 					...(v.gone ? { gone: true } : { value: toJson(v.value) }),
 					from: v.from.heads.map(([d, n]) => [nameOf(d), n]),
+				})),
+			}
+		}
+		case "failed": {
+			const h = device(r.device).graph?.history
+			if (!h) throw new Error(`${r.device} has no graph`)
+			const key = (f: { device: string; n: number }) =>
+				`${String(f.n).padStart(16, "0")}${f.device}`
+			return {
+				failed: [...h.failed].sort((a, b) => key(a) < key(b) ? -1 : 1).map((f) => ({
+					device: nameOf(f.device),
+					n: f.n,
 				})),
 			}
 		}

@@ -198,7 +198,12 @@ Deno.test("elements: one gone span over many runs is found run by run in no time
 		lamport: 3,
 		seq: 0,
 		patches: [gone],
-		ids: [[null, [[[new Uint8Array(32).fill(1), 0], P]], null, []]],
+		ids: [[
+			[new Uint8Array(32).fill(1), 1, 0, "t"],
+			null,
+			[[[new Uint8Array(32).fill(1), 0], P]],
+			null,
+		]],
 	})
 	assertEquals((state.value as { t: string }).t, "")
 	assertEquals(performance.now() - began < 1500, true)

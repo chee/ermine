@@ -2,7 +2,7 @@
 import { assert, assertEquals } from "@std/assert"
 import createEntry from "@ermine/graph/entry"
 import update from "@ermine/changeable/update"
-import { decodeStep } from "./step.ts"
+import { decodeStep, unhex } from "./step.ts"
 import { createScheduler } from "@ermine/reactivity"
 import { createPaths } from "@ermine/reactivity/paths"
 import { createTable, type Key } from "@ermine/graph/table"
@@ -21,6 +21,24 @@ async function until(f: () => boolean, ms = 3000) {
 		if (Date.now() > end) throw new Error("timed out")
 		await tick(5)
 	}
+}
+
+// ids for a writer that holds the entry's newest put of the whole value: a container under its root
+function named(w: Log, node: string, patches: { path: (string | number)[] }[]) {
+	let root: [number, string, number] | undefined, at = ""
+	for (const d of Object.keys(w.have())) {
+		for (let n = 1; n <= w.count(d); n++) {
+			const s = decodeStep(w.step(d, n)), p = s.patches[0], key = `${s.lamport} ${d}`
+			if (s.node === node && p && !p.path.length && p.value !== undefined && key > at) {
+				root = [n, d, 0], at = key
+			}
+		}
+	}
+	return patches.map((p) => {
+		if (!p.path.length) return [null, []]
+		const [n, d, i] = root!, rel = p.path.slice(0, -1)
+		return [d === w.device ? [n, i, ...rel] : [unhex(d), n, i, ...rel], []]
+	})
 }
 
 async function device(o: { store?: Store; forgets?: boolean } = {}) {
@@ -138,7 +156,7 @@ Deno.test("forgets: a late step older than the newest is merged in, as on a devi
 	const w1 = createLog({ writes: true }), w2 = createLog({ writes: true })
 	await w1.load(), await w2.load()
 	const write = (w: Log, node: string, patches: { path: string[]; value: unknown }[]) =>
-		w.write({ node, part: "value", patches, when: 0 })
+		w.write({ node, part: "value", patches, when: 0, ids: named(w, node, patches) })
 	write(w1, "pig", [{ path: [], value: { a: 1 } }])
 	const first = (await w1.run(w1.device!, 1))!
 	await w2.take(first)
@@ -160,7 +178,7 @@ Deno.test("forgets: a late step needing steps after it works the entry out again
 	const [w1, w2, w3] = [0, 1, 2].map(() => createLog({ writes: true }))
 	for (const w of [w1, w2, w3]) await w.load()
 	const write = (w: Log, patches: { path: string[]; value: unknown }[]) =>
-		w.write({ node: "pig", part: "value", patches, when: 0 })
+		w.write({ node: "pig", part: "value", patches, when: 0, ids: named(w, "pig", patches) })
 	const last = async (w: Log) => (await w.run(w.device!, w.count(w.device!)))!
 	write(w2, [{ path: [], value: { a: 1 } }])
 	await w1.take(await last(w2))
@@ -203,7 +221,13 @@ function reads(d: Device) {
 	return seen
 }
 const put = (w: Log, node: string, path: (string | number)[], value: unknown) =>
-	w.write({ node, part: "value", patches: [{ path, value }], when: 0 })
+	w.write({
+		node,
+		part: "value",
+		patches: [{ path, value }],
+		when: 0,
+		ids: named(w, node, [{ path }]),
+	})
 
 Deno.test("forgets: a late step after a reload goes in as it is, the log held or let go; never dropped", async () => {
 	const w1 = createLog({ writes: true }), w2 = createLog({ writes: true })
@@ -237,7 +261,13 @@ Deno.test("forgets: a late keystroke into an entry with a step that fails for go
 	put(wa, "doc", [], { s: "hello" })
 	await wb.take(await last(wa))
 	for (let i = 0; i < 300; i++) put(wc, `n${i % 20}`, [], i)
-	put(wo, "doc", ["x", "y"], 1)
+	wo.write({
+		node: "doc",
+		part: "value",
+		patches: [{ path: ["x", "y"], value: 1 }],
+		when: 0,
+		ids: [[[unhex(wa.device!), 1, 0, "x"], []]],
+	})
 	const r = await device({ forgets: true })
 	await all(r, wa), await all(r, wc), await all(r, wo)
 	assertEquals(r.history.failed.length, 1)
@@ -264,7 +294,8 @@ Deno.test("forgets: the log is read once for all the entries a catch-up lands ea
 	await all(r, wa)
 	const seen = reads(r)
 	await all(r, wc)
-	for (let i = 0; i < E; i++) assertEquals(r.value(`e${i}`), { x: 1, y: 2 })
+	// wa's edits name the roots it put, which wc's puts of the whole value replaced
+	for (let i = 0; i < E; i++) assertEquals(r.value(`e${i}`), { x: 2, y: 2 })
 	assert(
 		seen.n < 3 * (wa.count(wa.device!) + wc.count(wc.device!)),
 		`read ${seen.n} steps of the log`,

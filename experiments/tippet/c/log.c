@@ -289,17 +289,23 @@ int tp_log_write(tp_log *log, const tp_write *w, uint64_t *n, uint64_t *lamport)
 	feed *f = make(log, log->key.pub);
 	if (!f) return unmade(log);
 	if (f->count >= log->limits.steps) return TP_BOUND;
-	// on and ids are none and null each, when not given
+	// on is none, and ids are null for a move and [null, []] for a put of the whole value, when not given
 	static const uint8_t none = 0x80;
 	uint64_t np = 0;
 	tp_in pin = {w->patches.p, w->patches.p + w->patches.n};
-	uint8_t nulls[TP_PATCHES / 8 + 8];
+	uint8_t nulls[3 * 4096 + 16];
 	tp_span on = w->on.p ? w->on : (tp_span){&none, 1}, ids = w->ids;
 	if (!ids.p) {
 		tp_buf nb = {nulls, 0, sizeof nulls, (size_t)-1, NULL, 0};
+		size_t at = 0;
+		tp_patch p;
 		if (tp_array(&pin, &np) || np > 4096) return TP_NOTSTEP;
 		tp_put_head(&nb, 4, np);
-		for (uint64_t i = 0; i < np; i++) tp_put(&nb, "\xf6", 1);
+		for (uint64_t i = 0; i < np; i++) {
+			if (tp_patch_next(w->patches, &at, &p)) return TP_NOTSTEP;
+			if (!p.move.p && !p.ranged && p.path.n == 1) tp_put(&nb, "\x82\xf6\x80", 3);
+			else tp_put(&nb, "\xf6", 1);
+		}
 		ids = (tp_span){nulls, nb.len};
 	}
 	tp_step s = {{0}, log->key.pub, f->count + 1, f->count ? f->last : NULL,

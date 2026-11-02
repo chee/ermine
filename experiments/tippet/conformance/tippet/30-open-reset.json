@@ -54,6 +54,9 @@
 		{
 			"op": "files",
 			"device": "a",
+			"skip": [
+				"bytes"
+			],
 			"expect": {
 				"log": [],
 				"open": [],
@@ -61,10 +64,7 @@
 					"log": 0,
 					"open": 0
 				}
-			},
-			"skip": [
-				"bytes"
-			]
+			}
 		},
 		{
 			"op": "sync",
@@ -74,6 +74,9 @@
 		{
 			"op": "files",
 			"device": "a",
+			"skip": [
+				"bytes"
+			],
 			"expect": {
 				"log": [],
 				"open": [
@@ -95,12 +98,9 @@
 				],
 				"bytes": {
 					"log": 0,
-					"open": 294
+					"open": 300
 				}
-			},
-			"skip": [
-				"bytes"
-			]
+			}
 		},
 		{
 			"op": "reset",
@@ -164,6 +164,9 @@
 		{
 			"op": "files",
 			"device": "a",
+			"skip": [
+				"bytes"
+			],
 			"expect": {
 				"log": [
 					[
@@ -175,13 +178,10 @@
 				],
 				"open": [],
 				"bytes": {
-					"log": 272,
+					"log": 276,
 					"open": 0
 				}
-			},
-			"skip": [
-				"bytes"
-			]
+			}
 		},
 		{
 			"op": "reset",
