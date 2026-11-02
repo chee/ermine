@@ -1,5 +1,5 @@
 {
-	"title": "two writes made apart on one value: at paths apart both stand, one version; at one path, or one inside the other (a key, a splice each into one text, a key put inside a value put whole), both stay: the merge first (the later applied over the earlier, a splice where its writer meant: by ids, after the element it followed), then each side as it wrote it; a write that saw both replaces both, there only",
+	"title": "two writes made apart on one value: at paths apart both stand; at one path, or one inside the other (a key, a splice each into one text, a key put inside a value put whole), the later applied over the earlier, a splice where its writer meant: by ids, after the element it followed; one cell at the root throughout",
 	"steps": [
 		{
 			"op": "device",
@@ -363,10 +363,6 @@
 						"from": [
 							[
 								"a",
-								2
-							],
-							[
-								"b",
 								1
 							]
 						]
@@ -387,22 +383,7 @@
 						"from": [
 							[
 								"a",
-								4
-							],
-							[
-								"b",
-								2
-							]
-						]
-					},
-					{
-						"value": {
-							"x": 2
-						},
-						"from": [
-							[
-								"b",
-								2
+								3
 							]
 						]
 					}
@@ -420,29 +401,7 @@
 						"from": [
 							[
 								"a",
-								6
-							],
-							[
-								"b",
-								3
-							]
-						]
-					},
-					{
-						"value": "cats",
-						"from": [
-							[
-								"a",
-								6
-							]
-						]
-					},
-					{
-						"value": "!cat",
-						"from": [
-							[
-								"b",
-								3
+								5
 							]
 						]
 					}
@@ -464,25 +423,7 @@
 						"from": [
 							[
 								"a",
-								8
-							],
-							[
-								"b",
-								4
-							]
-						]
-					},
-					{
-						"value": {
-							"x": {
-								"k": 0,
-								"z": 5
-							}
-						},
-						"from": [
-							[
-								"b",
-								4
+								7
 							]
 						]
 					}
@@ -503,10 +444,6 @@
 						"from": [
 							[
 								"a",
-								2
-							],
-							[
-								"b",
 								1
 							]
 						]
@@ -527,22 +464,7 @@
 						"from": [
 							[
 								"a",
-								4
-							],
-							[
-								"b",
-								2
-							]
-						]
-					},
-					{
-						"value": {
-							"x": 2
-						},
-						"from": [
-							[
-								"b",
-								2
+								3
 							]
 						]
 					}
@@ -560,29 +482,7 @@
 						"from": [
 							[
 								"a",
-								6
-							],
-							[
-								"b",
-								3
-							]
-						]
-					},
-					{
-						"value": "cats",
-						"from": [
-							[
-								"a",
-								6
-							]
-						]
-					},
-					{
-						"value": "!cat",
-						"from": [
-							[
-								"b",
-								3
+								5
 							]
 						]
 					}
@@ -604,25 +504,7 @@
 						"from": [
 							[
 								"a",
-								8
-							],
-							[
-								"b",
-								4
-							]
-						]
-					},
-					{
-						"value": {
-							"x": {
-								"k": 0,
-								"z": 5
-							}
-						},
-						"from": [
-							[
-								"b",
-								4
+								7
 							]
 						]
 					}
@@ -703,22 +585,7 @@
 						"from": [
 							[
 								"a",
-								4
-							],
-							[
-								"b",
-								2
-							]
-						]
-					},
-					{
-						"value": {
-							"x": 2
-						},
-						"from": [
-							[
-								"b",
-								2
+								3
 							]
 						]
 					}

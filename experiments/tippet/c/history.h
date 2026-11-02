@@ -5,6 +5,7 @@
 #define TIPPET_HISTORY_H
 
 #include "../../../core/places/c/places.h"
+#include "../../../lib/changeable/c/apply.h"
 #include "tippet.h"
 
 typedef struct tp_history tp_history;
@@ -37,16 +38,16 @@ size_t tp_history_unkept(const tp_history *h, size_t i, tp_failed *out);
 
 int tp_history_forget(tp_history *h, const tp_sync *s);
 
-// One of an entry's values (the merge of every head if device is NULL). The caller frees it with
-// op_free.
+// One of the cells at a path: its value (the caller frees it with op_free) and the step that made it.
 typedef struct {
 	op_value *value;
 	const uint8_t *device;
 	uint64_t n;
 } tp_version;
-#define TP_VERSIONS 17
-size_t tp_history_versions(tp_history *h, const char *node, const char *part, tp_version out[TP_VERSIONS]);
-size_t tp_history_heads(const tp_history *h, const char *node, const char *part, size_t i,
-	const uint8_t **device, uint64_t *n);
+// The cells visible at a path (a key or index of the graph's value): the shown first, then the rest
+// newest first, each from the step that made it (device, n). *out is malloc'd (free it with free,
+// each value with op_free); *count 0 when the path has none.
+int tp_history_cells(tp_history *h, const char *node, const char *part, const op_key *path, size_t length,
+	tp_version **out, size_t *count);
 
 #endif

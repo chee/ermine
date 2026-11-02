@@ -5,6 +5,7 @@
 	"exports": {
 		".": "./typescript/mod.ts",
 		"./galaxy": "./typescript/galaxy.ts",
+		"./reading": "./typescript/reading.ts",
 		"./carriers/broadcastchannel": "./typescript/carriers/broadcastchannel.ts",
 		"./carriers/http": "./typescript/carriers/http.ts",
 		"./carriers/messagechannel": "./typescript/carriers/messagechannel.ts",

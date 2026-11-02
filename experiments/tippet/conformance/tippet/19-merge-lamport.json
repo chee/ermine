@@ -1,5 +1,5 @@
 {
-	"title": "a write made after seeing another's replaces it, whichever device is greater: one version, the later; before the one it saw comes, nothing",
+	"title": "a write made after seeing another's replaces it, whichever device is greater: one cell, the later; before the one it saw comes, none",
 	"steps": [
 		{
 			"op": "device",
@@ -155,7 +155,7 @@
 						},
 						"from": [
 							[
-								"b",
+								"a",
 								1
 							]
 						]
@@ -175,7 +175,7 @@
 						},
 						"from": [
 							[
-								"b",
+								"a",
 								1
 							]
 						]
@@ -195,7 +195,7 @@
 						},
 						"from": [
 							[
-								"b",
+								"a",
 								1
 							]
 						]

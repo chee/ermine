@@ -140,7 +140,7 @@ def gen(seed, kind, gaps=False):
         if x < 0.54:
             return listop()
         if x < 0.61:
-            return {"o": "map", "d": r.choice(names), "k": r.randrange(4), "v": r.randrange(100), "whole": r.random() < 0.3}
+            return {"o": "map", "d": r.choice(names), "k": r.randrange(4), "v": r.randrange(100), "whole": r.random() < 0.3, "mode": r.choice(["put", "put", "remove", "nest", "edit"])}
         if x < 0.63:
             return {"o": "put", "d": r.choice(names), "node": r.choice(["doc", "list"]), "t": "reset"}
         if x < 0.82:
@@ -273,6 +273,10 @@ class Sim:
                 self.ask({"op": "value", "device": d, "node": n}, keep=False)
                 if versions and not self.big:
                     self.ask({"op": "versions", "device": d, "node": n}, keep=False)
+                    # readAll at the keys concurrent puts make cells at: every harness must list the same
+                    if n == "map":
+                        for i in range(3):
+                            self.ask({"op": "versions", "device": d, "node": n, "path": [f"k{i}"]}, keep=False)
 
     # -- ops
     def target(self, o, d):
@@ -356,7 +360,18 @@ class Sim:
             self.look([d], ["list"])
         elif k == "map":
             d = o["d"]
-            p = {"path": [], "value": {"k0": o["v"]}} if o["whole"] else {"path": [f"k{o['k']}"], "value": o["v"]}
+            key = f"k{o['k']}"
+            cur = self.value(d, "map")
+            if o["whole"]:
+                p = {"path": [], "value": {"k0": o["v"]}}
+            elif o.get("mode") == "remove" and isinstance(cur, dict) and key in cur:
+                p = {"path": [key]}  # a key taken away; an edit inside it may follow, ordered after
+            elif o.get("mode") == "nest":
+                p = {"path": [key], "value": {"x": o["v"]}}
+            elif o.get("mode") == "edit" and isinstance(cur, dict) and isinstance(cur.get(key), dict):
+                p = {"path": [key, "x"], "value": o["v"]}
+            else:
+                p = {"path": [key], "value": o["v"]}
             self.write(d, "map", [p])
             self.look([d], ["map"])
         elif k == "put":

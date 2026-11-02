@@ -965,24 +965,26 @@ static void versions(const op_value *r, FILE *out) {
 	const char *node = hh_str(r, "node"), *part = hh_str(r, "part") ? hh_str(r, "part") : "value";
 	if (!d) return;
 	if (!d->history || !node) { hh_error(out, "no graph"); return; }
-	tp_version v[TP_VERSIONS];
-	size_t n = tp_history_versions(d->history, node, part, v);
-	fputs("{\"versions\":[", out);
-	for (size_t i = 0; i < n; i++) {
-		if (i) fputc(',', out);
-		if (v[i].value) fputs("{\"value\":", out), op_json_write(out, v[i].value);
-		else fputs("{\"gone\":true", out);
-		fputs(",\"from\":[", out);
-		const uint8_t *key;
-		uint64_t m;
-		if (v[i].device) fputc('[', out), nameof(out, v[i].device), fprintf(out, ",%llu]", (unsigned long long)v[i].n);
-		for (size_t k = 0; !v[i].device && k < TP_VERSIONS - 1 &&
-			k < tp_history_heads(d->history, node, part, k, &key, &m); k++) {
-			fputs(k ? ",[" : "[", out), nameof(out, key), fprintf(out, ",%llu]", (unsigned long long)m);
-		}
-		fputs("]}", out);
-		if (v[i].value) op_free(v[i].value);
+	const op_value *pv = op_get(r, "path");
+	size_t len = pv && pv->type == OP_LIST ? pv->count : 0;
+	op_key *keys = malloc((len + 1) * sizeof *keys);
+	for (size_t i = 0; i < len; i++) {
+		int64_t x;
+		const op_value *k = pv->items[i];
+		if (k->type == OP_STR) keys[i] = (op_key){.type = OP_STR_KEY, .s = k->str};
+		else keys[i] = (op_key){.type = OP_NUM_KEY, .n = op_as_int64(k, &x) ? (long)x : 0};
 	}
+	tp_version *cv = NULL;
+	size_t cn = 0;
+	if (tp_history_cells(d->history, node, part, keys, len, &cv, &cn)) cn = 0;
+	fputs("{\"versions\":[", out);
+	for (size_t i = 0; i < cn; i++) {
+		if (i) fputc(',', out);
+		fputs("{\"value\":", out), op_json_write(out, cv[i].value);
+		fputs(",\"from\":[[", out), nameof(out, cv[i].device), fprintf(out, ",%llu]]}", (unsigned long long)cv[i].n);
+		op_free(cv[i].value);
+	}
+	free(cv), free(keys);
 	fputs("]}", out);
 }
 

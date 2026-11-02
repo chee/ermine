@@ -1113,8 +1113,7 @@ static void forgetting(const char *dir) {
 		forgets = 0;
 	}
 	{
-		// a put below a newer whole put: the entry worked out again from the log; with a step of it
-		// let go, passed over
+		// a put below a newer whole put goes in as is (a cell under the newer), with the log whole or not
 		run r1, r2, r3;
 		tp_log *w1 = writer(70, 0, NULL), *w2 = writer(71, 0, NULL), *w3 = writer(72, 0, NULL);
 		edit(w2, x0, sizeof x0), edit(w2, x1, sizeof x1), run_of(w2, 1, &r2);
@@ -1142,7 +1141,7 @@ static void forgetting(const char *dir) {
 		}
 		printf("  a late put: from the log y %lld, %zu failed; a step let go y %lld, %zu failed\n",
 			(long long)y[0], lost[0], (long long)y[1], lost[1]);
-		CHECK(y[0] == 1 && lost[0] == 0 && y[1] == 1 && lost[1] == 1);
+		CHECK(y[0] == 1 && lost[0] == 0 && y[1] == 1 && lost[1] == 0);
 		tp_log_free(w1), tp_log_free(w2), tp_log_free(w3);
 	}
 	{
@@ -1184,7 +1183,7 @@ static void forgetting(const char *dir) {
 		tp_log *wa = writer(86, 0, NULL), *wb = writer(87, 0, NULL), *wc = writer(88, 300, NULL), *wo = writer(89, 0, NULL);
 		int swap = memcmp(tp_log_device(wa), tp_log_device(wb), 32) < 0;
 		tp_log *lo = swap ? wa : wb, *hi = swap ? wb : wa;
-		static const uint8_t bad[] = {0x81, 0xa2, 0x64, 'p', 'a', 't', 'h', 0x82, 0x61, 'q', 0x61, 'z', 0x65, 'v', 'a', 'l', 'u', 'e', 1};
+		static const uint8_t bad[] = {0x81, 0xa2, 0x64, 'p', 'a', 't', 'h', 0x82, 0x61, 'x', 0x61, 'z', 0x65, 'v', 'a', 'l', 'u', 'e', 1};
 		run base, filler, fails, step;
 		edit(hi, x0, sizeof x0), run_of(hi, 1, &base);
 		tp_log_take(lo, base.device, base.spans, base.n, base.sig, (tp_span){NULL, 0});
@@ -1324,7 +1323,7 @@ static void late(void) {
 	}
 }
 
-// ---- h. heads, through a snapshot (history.h)
+// ---- h. cells, through a snapshot (history.h)
 
 static void apart(tp_log *log, uint8_t v) {
 	uint8_t p[sizeof x0];
@@ -1334,19 +1333,21 @@ static void apart(tp_log *log, uint8_t v) {
 	uint64_t s, l;
 	tp_log_write(log, &w, &s, &l);
 }
-static size_t xs(dev *d, int64_t out[TP_VERSIONS]) {
-	tp_version v[TP_VERSIONS];
-	size_t n = tp_history_versions(d->history, "doc", "value", v);
-	for (size_t i = 0; i < n; i++) {
+static size_t xs(dev *d, int64_t out[16]) {
+	tp_version *v;
+	size_t n;
+	if (tp_history_cells(d->history, "doc", "value", NULL, 0, &v, &n)) return 0;
+	for (size_t i = 0; i < n && i < 16; i++) {
 		out[i] = -1;
 		if (v[i].value && op_get(v[i].value, "x")) op_as_int64(op_get(v[i].value, "x"), &out[i]);
 		op_free(v[i].value);
 	}
+	free(v);
 	return n;
 }
 
 static void heads(void) {
-	printf("h. heads through a snapshot\n");
+	printf("h. cells through a snapshot\n");
 	run ra, rb;
 	tp_log *a = writer(60, 0, NULL), *b = writer(61, 0, NULL);
 	apart(a, 1), run_of(a, 1, &ra);
@@ -1358,7 +1359,7 @@ static void heads(void) {
 	dev_make(&r, st, 62);
 	tp_log_take(r.log, ra.device, ra.spans, ra.n, ra.sig, (tp_span){NULL, 0});
 	tp_log_take(r.log, rb.device, rb.spans, rb.n, rb.sig, (tp_span){NULL, 0});
-	int64_t was[TP_VERSIONS], now[TP_VERSIONS];
+	int64_t was[16], now[16];
 	size_t n = xs(&r, was);
 	CHECK(!tp_history_snapshot(r.history));
 	dev_free(&r);

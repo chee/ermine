@@ -35,8 +35,9 @@ export type Anchor = { after: Id | null; gone: readonly [Id, number][]; before?:
 // field after a NUL; see nodeKey
 export type Node = string
 // what a patch names by ids: container, the node its path ends in the container of (null: no root
-// yet); splice: its elements; element: the array item a put at an index replaces
-export type Named = { container: Node | null; splice?: Anchor; element?: Id }
+// yet); pred: the cells a put or removal replaces; splice: its elements; element: the array item a
+// put at an index replaces
+export type Named = { container: Node | null; pred?: Node[]; splice?: Anchor; element?: Id }
 const NUL = "\0"
 export const nodeKey = (
 	device: string,
@@ -122,7 +123,8 @@ export const writeIds = (s: At, ids: readonly (Named | null)[]): Value[] =>
 				a.before === undefined ? null : a.before === true ? true : writeId(s, a.before),
 			]
 		}
-		return x.element ? [c, [], writeId(s, x.element)] : [c, []]
+		const pred = (x.pred ?? []).map((n) => writeNode(s, n))
+		return x.element ? [c, pred, writeId(s, x.element)] : [c, pred]
 	})
 const readId = (s: At, i: unknown): Id => {
 	if (typeof i === "number") return { device: s.device, c: s.seq - i }
@@ -147,8 +149,10 @@ export const readIds = (s: At, ids: readonly Value[]): (Named | null)[] =>
 	ids.map((x) => {
 		if (x === null) return null
 		const w = x as unknown[], container = readNode(s, w[0])
-		if (w.length === 2) return { container }
-		if (w.length === 3) return { container, element: readId(s, w[2]) }
+		if (w.length === 2 || w.length === 3) {
+			const pred = (w[1] as unknown[]).map((n) => readNode(s, n)!)
+			return w.length === 2 ? { container, pred } : { container, pred, element: readId(s, w[2]) }
+		}
 		const [, after, gone, before] = w as [unknown, unknown, [unknown, number][], unknown]
 		const a: Anchor = {
 			after: after === null ? null : readId(s, after),
@@ -220,7 +224,7 @@ export const nodeOfIds = (device: Uint8Array, n: number, at: number) => (v: unkn
 }
 // ids as written: one per patch, null for a move; else the patch's container (a node; null only for
 // a put of the whole value, the first) and
-//   a put or removal at a key, or the whole: [container, pred]    pred: array of nodes (not acted on)
+//   a put or removal at a key, or the whole: [container, pred]    pred: array of cells it replaces
 //   a put at an index of an array: [container, pred, element]
 //   a splice (a patch with a range), a removal at an index: [container, after, gone, before]
 //   before null for the end, true for after's own (after not null)

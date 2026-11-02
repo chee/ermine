@@ -1,5 +1,5 @@
 {
-	"title": "two writes made apart at one lamport: both stay, as versions: the merge first (the greater device's, whichever came first), then the other as it wrote it; a write that saw both replaces both",
+	"title": "two writes made apart at one lamport: both are cells at the root, the greater device's first (whichever came first), each from the step that made it; a write that saw both replaces both",
 	"steps": [
 		{
 			"op": "device",
@@ -131,10 +131,6 @@
 							[
 								"a",
 								1
-							],
-							[
-								"b",
-								1
 							]
 						]
 					},
@@ -161,10 +157,6 @@
 						"from": [
 							[
 								"a",
-								1
-							],
-							[
-								"b",
 								1
 							]
 						]
@@ -229,10 +221,6 @@
 							[
 								"a",
 								1
-							],
-							[
-								"b",
-								1
 							]
 						]
 					},
@@ -259,10 +247,6 @@
 						"from": [
 							[
 								"a",
-								1
-							],
-							[
-								"b",
 								1
 							]
 						]
@@ -379,10 +363,6 @@
 						"from": [
 							[
 								"a",
-								1
-							],
-							[
-								"b",
 								1
 							]
 						]

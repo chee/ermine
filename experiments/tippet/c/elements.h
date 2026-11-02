@@ -2,8 +2,9 @@
 // runs: elements one after another of one device, numbered one on (or one down), all gone or none.
 // A sequence gets its elements at the first
 // splice that touches it. State is keyed by container (a node: the step and patch that made it, then
-// its place in the value); a record says what each patch put at a slot. el_step applies a step's
-// patches to a value, all or none, with that state, and gives what undoes both.
+// its place in the value); a cell says what a patch assigned at a slot and no assignment has replaced
+// since (WIRE.md, assignments). el_step applies a step's patches to a value, all or none, with that
+// state, and gives what undoes both.
 // Memory goes through tp_mem; values are the graph's (malloc'd).
 #ifndef TIPPET_ELEMENTS_H
 #define TIPPET_ELEMENTS_H
@@ -16,13 +17,15 @@
 // a device named in ids that is not known: no element is its
 #define EL_UNKNOWN (UINT32_MAX - 1)
 
-// devices are held by the caller, by index
+// devices are held by the caller, by index; so are values' bytes (a held value saved and loaded)
 typedef struct {
 	const tp_mem *mem;
 	void *self;
 	long (*index)(void *self, const uint8_t device[32]); // the device's index, made if new; -1 no memory
 	long (*find)(void *self, const uint8_t device[32]); // the device's index if known, else -1
 	const uint8_t *(*bytes)(void *self, uint32_t index);
+	int (*put_value)(void *self, tp_buf *b, const op_value *v); // v's cbor put in b; 0 ok
+	op_value *(*get_value)(void *self, tp_span cbor); // a value from cbor, NULL if it is not
 } el_ctx;
 
 // a step's place: its lamport, n, and seq (how many elements its device's steps before it insert)
@@ -45,11 +48,16 @@ typedef struct {
 // element] (a put at an index), 3 [container, after, gone, before] (a splice, a removal at an
 // index). node: the container, as the bytes of cbor items one after another: the device's index,
 // n, the patch, and the place in its value (maps' keys, arrays' places); none (a put of the whole
-// value, the first)
+// value, the first). pred (kinds 1 and 2): the cells it replaces, each a node in the same bytes,
+// spans into predbuf
 typedef struct {
 	int kind;
 	uint8_t *node;
 	size_t noden;
+	uint8_t *predbuf;
+	size_t predbufn;
+	tp_span *pred;
+	size_t npred;
 	el_id element;
 	int has_after;
 	el_id after;
@@ -60,26 +68,57 @@ typedef struct {
 } el_anchor;
 
 typedef struct el_list el_list;
-// what a patch put at a slot: the key of a map, the element of an array, or the root (parent empty):
-// the container there (node empty: a scalar, or nothing), and the step that put it, for the order
-// (its lamport and device). buf holds the parent, the slot (a key as cbor text, an element as a cbor
-// array [device, born, c, k]) and the node, one after another
+// a cell: what a patch assigned at a slot (the key of a map, the element of an array, or the root,
+// parent empty) and no assignment has replaced. buf holds the parent, the slot (a key as cbor
+// text, an element as a cbor array [device, born, c, k]) and the cell's id, one after another. idn:
+// the id's bytes, and two flags: EL_CELL_NODE, it holds a container (its id is the container's
+// node), EL_CELL_GHOST, an assignment named it before it landed (no value, no container). device,
+// lamport: its step's, for the order, then its id's n and patch. value: its whole value, held
+// while another cell at the slot shows
+#define EL_CELL_GHOST (1u << 31)
+#define EL_CELL_NODE (1u << 30)
+#define EL_CELL_LEN (EL_CELL_NODE - 1)
 typedef struct {
 	uint8_t *buf;
-	uint32_t parentn, slotn, noden, device;
+	uint32_t parentn, slotn, idn, device;
 	uint64_t lamport;
+	op_value *value;
 } el_slot;
 
-// an entry's sequences by container, and the records of what patches put
+// an entry's sequences by container, the cells of what patches assigned, per device the newest step
+// of it that landed here, and the newest move applied (lamport 0: none)
 typedef struct {
 	el_list **lists;
 	size_t n, room;
 	el_slot *slots;
 	size_t nslots, roomslots;
+	struct {
+		uint32_t device;
+		uint64_t n;
+	} *landed;
+	size_t nlanded, roomlanded;
+	el_ref moved;
+	uint64_t passed; // patches passed over, a container gone (counted, never undone)
 } el_state;
 
-// st, empty, as after a put of the whole value by ref (its patch 0)
-int el_seed(const tp_mem *mem, el_state *st, const el_ref *ref);
+// st, empty, as after a put of the whole value by ref (its patch 0); container: it makes one
+int el_seed(const tp_mem *mem, el_state *st, const el_ref *ref, int container);
+
+// whether st is only the root cell a put of the whole value by ref made, one patch, with nothing
+// else known (a plain entry's)
+int el_lone(const el_state *st, const el_ref *ref);
+
+// the cells visible at the path (a key, or an index) in value: the shown first,
+// then the rest newest first. value gets a reference on each held value; the caller frees them with
+// op_free. path/length as op_target; value the graph's; st the entry's state
+typedef struct {
+	op_value *value;
+	uint32_t device;
+	uint64_t n;
+} el_version;
+int el_cells(const el_ctx *c, el_state *st, const op_value *value, const op_key *path, size_t length,
+	el_version **out, size_t *count);
+void el_cells_free(const tp_mem *mem, el_version *v, size_t count);
 
 // what undoes the state of a step (or steps): newest last
 typedef struct {
@@ -91,13 +130,21 @@ typedef struct {
 			uint64_t c, m;
 			el_gone *taken; // taken away, as runs
 			size_t ntaken, roomtaken;
-			el_ref was; // the list's newest splice before it
 		} splice;
 		struct {
-			el_slot added; // the record put (its buffer the state's)
-			int has_added, had;
-			el_slot was; // the record it replaced
+			el_slot cell; // the cell added (its buffer the state's), or taken (the record owns it)
 		} slot;
+		struct {
+			const uint8_t *buf; // the cell whose value changed
+			op_value *was; // its value before (the record owns it)
+		} hold;
+		struct {
+			uint32_t device; // landed: the device's n before (0: none)
+			uint64_t n;
+		} landed;
+		struct {
+			el_ref was; // the newest move before
+		} moved;
 		struct {
 			el_list **lists;
 			size_t nlists;

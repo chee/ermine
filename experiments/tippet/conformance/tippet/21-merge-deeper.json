@@ -1,5 +1,5 @@
 {
-	"title": "a whole value and a deeper write made on it, the deeper arriving first: one value both ways, one version, the deeper",
+	"title": "a whole value and a deeper write made on it, the deeper arriving first: one value both ways, one cell",
 	"steps": [
 		{
 			"op": "device",
@@ -167,7 +167,7 @@
 						},
 						"from": [
 							[
-								"b",
+								"a",
 								1
 							]
 						]
@@ -188,7 +188,7 @@
 						},
 						"from": [
 							[
-								"b",
+								"a",
 								1
 							]
 						]

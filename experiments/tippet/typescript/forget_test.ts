@@ -24,7 +24,7 @@ async function until(f: () => boolean, ms = 3000) {
 }
 
 // ids for a writer that holds the entry's newest put of the whole value: a container under its root
-function named(w: Log, node: string, patches: { path: (string | number)[] }[]) {
+function named(w: Log, node: string, patches: { path: (string | number)[]; move?: unknown }[]) {
 	let root: [number, string, number] | undefined, at = ""
 	for (const d of Object.keys(w.have())) {
 		for (let n = 1; n <= w.count(d); n++) {
@@ -35,6 +35,7 @@ function named(w: Log, node: string, patches: { path: (string | number)[] }[]) {
 		}
 	}
 	return patches.map((p) => {
+		if (p.move) return null
 		if (!p.path.length) return [null, []]
 		const [n, d, i] = root!, rel = p.path.slice(0, -1)
 		return [d === w.device ? [n, i, ...rel] : [unhex(d), n, i, ...rel], []]
@@ -177,7 +178,7 @@ Deno.test("forgets: a late step older than the newest is merged in, as on a devi
 Deno.test("forgets: a late step needing steps after it works the entry out again from the log; once runs are let go it is passed over", async () => {
 	const [w1, w2, w3] = [0, 1, 2].map(() => createLog({ writes: true }))
 	for (const w of [w1, w2, w3]) await w.load()
-	const write = (w: Log, patches: { path: string[]; value: unknown }[]) =>
+	const write = (w: Log, patches: { path: string[]; value?: unknown; move?: { path: string[] } }[]) =>
 		w.write({ node: "pig", part: "value", patches, when: 0, ids: named(w, "pig", patches) })
 	const last = async (w: Log) => (await w.run(w.device!, w.count(w.device!)))!
 	write(w2, [{ path: [], value: { a: 1 } }])
@@ -196,7 +197,7 @@ Deno.test("forgets: a late step needing steps after it works the entry out again
 	await gone.history.forget(gone.sync)
 	closeAll()
 	write(w3, [{ path: ["d"], value: 4 }])
-	write(w2, [{ path: ["b"], value: { c: 5 } }])
+	write(w2, [{ path: ["z"], move: { path: ["a"] } }])
 	await gone.log.take(await last(w3))
 	await gone.log.take(await last(w2))
 	assertEquals(gone.value("pig"), { a: 2, b: { x: 3 }, d: 4 })
@@ -264,9 +265,9 @@ Deno.test("forgets: a late keystroke into an entry with a step that fails for go
 	wo.write({
 		node: "doc",
 		part: "value",
-		patches: [{ path: ["x", "y"], value: 1 }],
+		patches: [{ path: ["s", "y"], value: 1 }],
 		when: 0,
-		ids: [[[unhex(wa.device!), 1, 0, "x"], []]],
+		ids: [[[unhex(wa.device!), 1, 0, "s"], []]],
 	})
 	const r = await device({ forgets: true })
 	await all(r, wa), await all(r, wc), await all(r, wo)
