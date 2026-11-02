@@ -225,8 +225,8 @@ Deno.test("a store that refuses an append doesn't crash: saved() says it, no run
 Deno.test("late runs into a long entry land in one working out: 320 late steps after 4000, well under a second", async () => {
 	const b = await device(), a = await device()
 	b.put("doc", { t: "" })
+	await a.log.take((await b.log.run(b.log.device!, 1))!)
 	for (let i = 0; i < 320; i++) b.edit("doc", [{ path: ["t"], range: [i, i], value: "b" }])
-	a.put("doc", { t: "" })
 	for (let i = 0; i < 400; i++) a.put("other", i)
 	for (let i = 0; i < 4000; i++) a.edit("doc", [{ path: ["t"], range: [i, i], value: "a" }])
 	const t = performance.now()
@@ -239,6 +239,24 @@ Deno.test("late runs into a long entry land in one working out: 320 late steps a
 Deno.test("a late step is worked in when the log goes quiet, even when the last take is refused", async () => {
 	const b = await device(), a = await device()
 	b.put("doc", { t: "" })
+	const dev = b.log.device!
+	await a.log.take((await b.log.run(dev, 1))!)
+	b.edit("doc", [{ path: ["t"], range: [0, 0], value: "b" }])
+	for (let i = 0; i < 400; i++) a.put("other", i)
+	a.edit("doc", [{ path: ["t"], range: [0, 0], value: "a" }])
+	const r = (await b.log.run(dev, 2))!
+	const late = a.log.take(r)
+	const forged = a.log.take({ ...r, device: "ab".repeat(32) })
+	assertEquals(await late, { added: 1 })
+	assert("refused" in await forged)
+	// two at one place sort by device, the greater first: worked out again
+	assertEquals(a.value("doc"), { t: dev > a.log.device! ? "ba" : "ab" })
+	assertEquals(a.history.failed, [])
+})
+
+Deno.test("a late step is worked in when the log goes quiet, two devices having put the whole value alone: the later put in the order keeps its own typing, the other's typing is in failed", async () => {
+	const b = await device(), a = await device()
+	b.put("doc", { t: "" })
 	b.edit("doc", [{ path: ["t"], range: [0, 0], value: "b" }])
 	a.put("doc", { t: "" })
 	for (let i = 0; i < 400; i++) a.put("other", i)
@@ -248,7 +266,9 @@ Deno.test("a late step is worked in when the log goes quiet, even when the last 
 	const forged = a.log.take({ ...r, device: "ab".repeat(32) })
 	assertEquals(await late, { added: 2 })
 	assert("refused" in await forged)
-	// two at one place sort by device, the greater first: worked out again
-	assertEquals(a.value("doc"), { t: dev > a.log.device! ? "ba" : "ab" })
-	assertEquals(a.history.failed, [])
+	// both puts are at lamport 1: the greater device's is later, and the other's typing names a
+	// root that is gone
+	assertEquals(a.value("doc"), { t: dev > a.log.device! ? "b" : "a" })
+	assertEquals(a.history.failed.length, 1)
+	assertEquals(a.history.failed[0].device, dev > a.log.device! ? a.log.device! : dev)
 })

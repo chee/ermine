@@ -272,15 +272,17 @@ static op_value *id_in(const op_value *x) {
 	return a;
 }
 
-// through as written: an array of ids
-static op_value *through_in(const op_value *t) {
-	if (!t || t->type != OP_LIST) return NULL;
+// a node as written: this device's [n, i, rel…] or another's [device, n, i, rel…] (the device a key
+// or its name in the scenario)
+static op_value *node_in(const op_value *x) {
+	if (x->type == OP_NULL) return op_null();
+	if (x->type != OP_LIST || x->count < 2) return NULL;
+	if (x->items[0]->type != OP_STR) return op_ref((op_value *)x);
+	const uint8_t *d = keyof(x->items[0]->str);
+	if (!d) return NULL;
 	op_value *a = op_list();
-	for (size_t j = 0; j < t->count; j++) {
-		op_value *id = id_in(t->items[j]);
-		if (!id) return op_free(a), NULL;
-		op_push(a, id);
-	}
+	op_push(a, op_bytes(d, 32));
+	for (size_t i = 1; i < x->count; i++) op_push(a, op_ref(x->items[i]));
 	return a;
 }
 
@@ -288,38 +290,51 @@ static op_value *ids_in(const op_value *v) {
 	if (v->type != OP_LIST) return NULL;
 	op_value *out = op_list();
 	for (size_t i = 0; i < v->count; i++) {
-		const op_value *x = v->items[i], *after = x->type == OP_MAP ? op_get(x, "after") : NULL,
-			       *gone = x->type == OP_MAP ? op_get(x, "gone") : NULL,
-			       *through = x->type == OP_MAP ? op_get(x, "through") : NULL;
+		const op_value *x = v->items[i];
 		if (x->type == OP_NULL) { op_push(out, op_null()); continue; }
-		op_value *t = through ? through_in(through) : NULL;
-		if (through && !t) return op_free(out), NULL;
-		if (!gone && t) {
-			op_value *one = op_list();
-			op_push(one, t), op_push(out, one);
+		if (x->type != OP_MAP) return op_free(out), NULL;
+		const op_value *container = op_get(x, "container"), *after = op_get(x, "after"), *gone = op_get(x, "gone"),
+			       *pred = op_get(x, "pred"), *element = op_get(x, "element");
+		op_value *c = container ? node_in(container) : op_null();
+		if (!c) return op_free(out), NULL;
+		op_value *a = op_list();
+		op_push(a, c);
+		if (!gone) {
+			op_value *p = op_list();
+			for (size_t j = 0; pred && pred->type == OP_LIST && j < pred->count; j++) {
+				op_value *n = node_in(pred->items[j]);
+				if (!n) return op_free(p), op_free(a), op_free(out), NULL;
+				op_push(p, n);
+			}
+			op_push(a, p);
+			if (element) {
+				op_value *e = id_in(element);
+				if (!e) return op_free(a), op_free(out), NULL;
+				op_push(a, e);
+			}
+			op_push(out, a);
 			continue;
 		}
-		op_value *a = op_list(), *g = op_list(), *id = NULL;
-		if (!after || !gone || gone->type != OP_LIST || (after->type != OP_NULL && !(id = id_in(after))))
-			return op_free(a), op_free(g), op_free(t), op_free(out), NULL;
+		op_value *g = op_list(), *id = NULL;
+		if (!after || gone->type != OP_LIST || (after->type != OP_NULL && !(id = id_in(after))))
+			return op_free(a), op_free(g), op_free(out), NULL;
 		op_push(a, id ? id : op_null()), op_push(a, g);
 		for (size_t j = 0; j < gone->count; j++) {
 			const op_value *pair = gone->items[j];
-			int64_t c;
+			int64_t cnt;
 			op_value *i2 = pair->type == OP_LIST && pair->count == 2 ? id_in(pair->items[0]) : NULL;
-			if (!i2 || !whole(pair->items[1], &c)) return op_free(a), op_free(out), NULL;
+			if (!i2 || !whole(pair->items[1], &cnt)) return op_free(a), op_free(out), NULL;
 			op_value *p = op_list();
-			op_push(p, i2), op_push(p, op_int(c)), op_push(g, p);
+			op_push(p, i2), op_push(p, op_int(cnt)), op_push(g, p);
 		}
 		const op_value *before = op_get(x, "before");
 		if (before && before->type == OP_BOOL && before->bool_) op_push(a, op_bool(1));
 		else if (before && before->type == OP_NULL) op_push(a, op_null());
 		else if (before) {
 			op_value *b = id_in(before);
-			if (!b) return op_free(a), op_free(t), op_free(out), NULL;
+			if (!b) return op_free(a), op_free(out), NULL;
 			op_push(a, b);
 		} else op_push(a, op_null());
-		op_push(a, t ? t : op_list());
 		op_push(out, a);
 	}
 	return out;
@@ -420,6 +435,32 @@ static void id_out(FILE *out, tp_in *in) {
 	fputc(']', out);
 }
 
+// a node as written, the device as hex; rel texts as json strings
+static void node_out(FILE *out, tp_in *in) {
+	uint64_t k, a;
+	tp_span key;
+	tp_array(in, &k);
+	fputc('[', out);
+	if (*in->p >> 5 == 2) {
+		tp_bytes(in, 32, &key), hex(out, key.p, 32), k--;
+		if (k) fputc(',', out);
+	}
+	for (uint64_t i = 0; i < k; i++) {
+		if (i) fputc(',', out);
+		if (*in->p >> 5 == 3) {
+			tp_text(in, &key), fputc('"', out);
+			for (size_t j = 0; j < key.n; j++) {
+				unsigned char ch = key.p[j];
+				if (ch == '"' || ch == '\\') fputc('\\', out), fputc(ch, out);
+				else if (ch < 0x20) fprintf(out, "\\u%04x", ch);
+				else fputc(ch, out);
+			}
+			fputc('"', out);
+		} else tp_whole(in, &a), fprintf(out, "%llu", (unsigned long long)a);
+	}
+	fputc(']', out);
+}
+
 static void ids_out(FILE *out, const tp_step *s) {
 	tp_in in = {s->ids.p, s->ids.p + s->ids.n};
 	uint64_t k, g, items;
@@ -429,14 +470,19 @@ static void ids_out(FILE *out, const tp_step *s) {
 		if (i) fputc(',', out);
 		if (tp_null(&in)) { fputs("null", out); continue; }
 		tp_array(&in, &items);
-		if (items == 1) {
+		fputs("{\"container\":", out);
+		if (tp_null(&in)) fputs("null", out);
+		else node_out(out, &in);
+		if (items < 4) {
 			uint64_t t;
-			tp_array(&in, &t), fputs("{\"through\":[", out);
-			for (uint64_t j = 0; j < t; j++) fputs(j ? "," : "", out), id_out(out, &in);
-			fputs("]}", out);
+			tp_array(&in, &t), fputs(",\"pred\":[", out);
+			for (uint64_t j = 0; j < t; j++) fputs(j ? "," : "", out), node_out(out, &in);
+			fputc(']', out);
+			if (items == 3) fputs(",\"element\":", out), id_out(out, &in);
+			fputc('}', out);
 			continue;
 		}
-		fputs("{\"after\":", out);
+		fputs(",\"after\":", out);
 		if (tp_null(&in)) fputs("null", out);
 		else id_out(out, &in);
 		fputs(",\"gone\":[", out);
@@ -448,15 +494,9 @@ static void ids_out(FILE *out, const tp_step *s) {
 			tp_whole(&in, &count), fprintf(out, ",%llu]", (unsigned long long)count);
 		}
 		fputc(']', out);
-		if (items > 2 && in.p < in.end && *in.p == 0xf5) in.p++, fputs(",\"before\":true", out);
-		else if (items > 2 && in.p < in.end && *in.p == 0xf6) in.p++;
-		else if (items > 2) fputs(",\"before\":", out), id_out(out, &in);
-		if (items == 4) {
-			uint64_t t;
-			tp_array(&in, &t), fputs(",\"through\":[", out);
-			for (uint64_t j = 0; j < t; j++) fputs(j ? "," : "", out), id_out(out, &in);
-			fputc(']', out);
-		}
+		if (in.p < in.end && *in.p == 0xf5) in.p++, fputs(",\"before\":true", out);
+		else if (in.p < in.end && *in.p == 0xf6) in.p++;
+		else fputs(",\"before\":", out), id_out(out, &in);
 		fputc('}', out);
 	}
 	fputc(']', out);
@@ -892,6 +932,34 @@ static void written(const op_value *r, FILE *out) {
 		lost ? ",\"unkept\":true" : "");
 }
 
+// the steps its history could not apply, by n then device: { device, n } each
+static int by_n(const void *a, const void *b) {
+	const tp_failed *x = a, *y = b;
+	if (x->n != y->n) return x->n < y->n ? -1 : 1;
+	return memcmp(x->device, y->device, 32);
+}
+static void failed(const op_value *r, FILE *out) {
+	device *d = which(r, "device", out);
+	if (!d) return;
+	if (!d->history) { hh_error(out, "no graph"); return; }
+	tp_failed f;
+	size_t n = tp_history_failed(d->history, 0, &f);
+	tp_failed *all = hh_take((n ? n : 1) * sizeof *all);
+	size_t m = 0;
+	for (size_t i = 0; i < n; i++) {
+		tp_history_failed(d->history, i, &all[m]);
+		if (all[m].device) m++;
+	}
+	qsort(all, m, sizeof *all, by_n);
+	fputs("{\"failed\":[", out);
+	for (size_t i = 0; i < m; i++) {
+		if (i) fputc(',', out);
+		fputs("{\"device\":", out), nameof(out, all[i].device);
+		fprintf(out, ",\"n\":%llu}", (unsigned long long)all[i].n);
+	}
+	fputs("]}", out);
+}
+
 static void versions(const op_value *r, FILE *out) {
 	device *d = which(r, "device", out);
 	const char *node = hh_str(r, "node"), *part = hh_str(r, "part") ? hh_str(r, "part") : "value";
@@ -1234,12 +1302,19 @@ static void write_disk(device *d, const op_value *r, FILE *out) {
 	}
 	size_t np = encode(revived, &ps);
 	const char *node = hh_str(r, "node"), *part = hh_str(r, "part") ? hh_str(r, "part") : "value";
-	uint8_t nulls[24] = {0x80 + patches->count}, none[1] = {0x80};
+	uint8_t nulls[24 * 3 + 1] = {0x80 + patches->count}, none[1] = {0x80};
+	size_t nl = 1;
 	if (patches->count > 23) { hh_error(out, "a write of at most 23 patches"); return; }
-	memset(nulls + 1, 0xf6, patches->count);
+	for (size_t i = 0; i < patches->count; i++) {
+		// a put of the whole value: [null, []] (its container none, its pred none); a move: null
+		const op_value *given = patches->items[i], *pth = op_get(given, "path");
+		int whole_put = pth && pth->type == OP_LIST && !pth->count && !op_get(given, "range") && !op_get(given, "move");
+		if (whole_put) nulls[nl++] = 0x82, nulls[nl++] = 0xf6, nulls[nl++] = 0x80;
+		else nulls[nl++] = 0xf6;
+	}
 	tp_write x = {{(const uint8_t *)node, strlen(node)}, {(const uint8_t *)part, strlen(part)}, {ps, np},
 		{who && who->type == OP_STR ? (const uint8_t *)who->str : NULL, who && who->type == OP_STR ? who->bytes : 0},
-		(uint64_t)when, {none, 1}, {nulls, 1 + patches->count}};
+		(uint64_t)when, {none, 1}, {nulls, nl}};
 	uint64_t n, lamport;
 	int why = tp_log_write(d->log, &x, &n, &lamport);
 	if (why) { hh_error(out, "%s", tp_why(why)); return; }
@@ -1374,6 +1449,8 @@ void hh_answer(const op_value *r, FILE *out) {
 		value(r, out);
 	} else if (!strcmp(op, "versions")) {
 		versions(r, out);
+	} else if (!strcmp(op, "failed")) {
+		failed(r, out);
 	} else if (!strcmp(op, "link")) {
 		join(r, out);
 	} else if (!strcmp(op, "unlink")) {

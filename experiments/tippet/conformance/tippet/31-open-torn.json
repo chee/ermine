@@ -64,6 +64,9 @@
 		{
 			"op": "files",
 			"device": "a",
+			"skip": [
+				"bytes"
+			],
 			"expect": {
 				"log": [],
 				"open": [
@@ -85,12 +88,9 @@
 				],
 				"bytes": {
 					"log": 0,
-					"open": 294
+					"open": 300
 				}
-			},
-			"skip": [
-				"bytes"
-			]
+			}
 		},
 		{
 			"op": "tear",
@@ -102,6 +102,9 @@
 		{
 			"op": "files",
 			"device": "a",
+			"skip": [
+				"bytes"
+			],
 			"expect": {
 				"log": [],
 				"open": [
@@ -118,12 +121,9 @@
 				],
 				"bytes": {
 					"log": 0,
-					"open": 284
+					"open": 290
 				}
-			},
-			"skip": [
-				"bytes"
-			]
+			}
 		},
 		{
 			"op": "reset",
@@ -135,6 +135,9 @@
 		{
 			"op": "files",
 			"device": "a",
+			"skip": [
+				"bytes"
+			],
 			"expect": {
 				"log": [],
 				"open": [
@@ -151,12 +154,9 @@
 				],
 				"bytes": {
 					"log": 0,
-					"open": 185
+					"open": 189
 				}
-			},
-			"skip": [
-				"bytes"
-			]
+			}
 		},
 		{
 			"op": "write",
@@ -181,6 +181,9 @@
 		{
 			"op": "files",
 			"device": "a",
+			"skip": [
+				"bytes"
+			],
 			"expect": {
 				"log": [],
 				"open": [
@@ -202,12 +205,9 @@
 				],
 				"bytes": {
 					"log": 0,
-					"open": 295
+					"open": 301
 				}
-			},
-			"skip": [
-				"bytes"
-			]
+			}
 		},
 		{
 			"op": "relay",
@@ -227,6 +227,9 @@
 		{
 			"op": "files",
 			"device": "a",
+			"skip": [
+				"bytes"
+			],
 			"expect": {
 				"log": [
 					[
@@ -238,13 +241,10 @@
 				],
 				"open": [],
 				"bytes": {
-					"log": 271,
+					"log": 275,
 					"open": 0
 				}
-			},
-			"skip": [
-				"bytes"
-			]
+			}
 		}
 	]
 }

@@ -43,18 +43,19 @@ static int range(tp_in *in, uint64_t *from, uint64_t *to) {
 	return tp_array(in, &k) || k != 2 || tp_whole(in, from) || tp_whole(in, to) ? -1 : 0;
 }
 
-static int move(tp_in *in, tp_span *out) {
+static int move(tp_in *in, tp_patch *q) {
 	const uint8_t *start = in->p;
-	uint64_t k, from, to;
+	uint64_t k;
 	int pathed = 0;
 	if (tp_map(in, &k) || k < 1 || k > 2) return -1;
 	for (uint64_t i = 0; i < k; i++) {
 		tp_span key, p;
 		if (tp_text(in, &key)) return -1;
 		if (tp_is(key, "path") && !path(in, &p)) pathed = 1;
-		else if (!tp_is(key, "range") || range(in, &from, &to)) return -1;
+		else if (!tp_is(key, "range") || range(in, &q->mfrom, &q->mto)) return -1;
+		else q->mranged = 1;
 	}
-	out->p = start, out->n = (size_t)(in->p - start);
+	q->move.p = start, q->move.n = (size_t)(in->p - start);
 	return pathed ? 0 : -1;
 }
 
@@ -68,7 +69,7 @@ static int patch(tp_in *in, tp_patch *p) {
 		int bad = tp_is(key, "path")    ? path(in, &p->path)
 			: tp_is(key, "range") ? (p->ranged = 1, range(in, &p->from, &p->to))
 			: tp_is(key, "value") ? tp_skip(in, &p->value)
-			: tp_is(key, "move")  ? move(in, &p->move)
+			: tp_is(key, "move")  ? move(in, p)
 					      : -1;
 		if (bad) return -1;
 	}
@@ -129,6 +130,7 @@ static int id_item(tp_in *in, const uint8_t *device, uint64_t n) {
 
 uint64_t tp_patch_made(const tp_patch *p) {
 	uint64_t made = 0, k;
+	if (p->move.p) return !p->ranged ? 0 : p->mranged ? (p->mto > p->mfrom ? p->mto - p->mfrom : 0) : 1;
 	if (!p->ranged || !p->value.p) return 0;
 	tp_in in = {p->value.p, p->value.p + p->value.n};
 	tp_span t;
@@ -146,39 +148,45 @@ uint64_t tp_step_made(const tp_step *s) {
 	return made;
 }
 
-// the wholes in a path
-static uint64_t wholes(tp_span path) {
-	tp_in in = {path.p, path.p + path.n};
-	uint64_t k, n = 0;
-	tp_span item;
-	tp_array(&in, &k);
-	for (uint64_t i = 0; i < k; i++) n += *in.p >> 5 == 0, tp_skip(&in, &item);
-	return n;
-}
-// a through's element id: this device's c (whole) or [c, k] (c from 1 to n); another's as any
-static int through_item(tp_in *in, const uint8_t *device, uint64_t n) {
-	if (in->p >= in->end || *in->p >> 5 == 1) return -1;
-	tp_in at = *in;
+// a node as written: this device's [n, i, rel…] (n from 1 to the step's, and the step's only with i
+// below the patch's index at), another's [device, n, i, rel…] (n from 1); rel: text or whole
+static int node_item(tp_in *in, const uint8_t *device, uint64_t n, uint64_t at) {
 	uint64_t k, a, b;
-	if (*at.p >> 5 == 4 && !tp_array(&at, &k) && at.p < at.end && *at.p >> 5 == 0) {
-		*in = at;
-		return k != 2 || tp_whole(in, &a) || a < 1 || a > n || tp_whole(in, &b) ? -1 : 0;
+	tp_span key;
+	if (tp_array(in, &k) || k < 2 || in->p >= in->end) return -1;
+	if (*in->p >> 5 == 0) {
+		if (tp_whole(in, &a) || a < 1 || a > n || tp_whole(in, &b) || (a == n && b >= at)) return -1;
+		k -= 2;
+	} else {
+		if (k < 3 || tp_bytes(in, 32, &key) || !memcmp(key.p, device, 32) || tp_whole(in, &a) || a < 1 ||
+			tp_whole(in, &b))
+			return -1;
+		k -= 3;
 	}
-	return id_item(in, device, n);
-}
-// through: one id per whole in the path (one: at least one)
-static int through(tp_in *in, const tp_patch *p, const uint8_t *device, uint64_t n, int one) {
-	uint64_t t, w = wholes(p->path);
-	if (tp_array(in, &t) || (one && !w) || t != w) return -1;
-	for (uint64_t i = 0; i < t; i++) {
-		if (through_item(in, device, n)) return -1;
+	for (; k; k--) {
+		tp_span t;
+		if (in->p >= in->end) return -1;
+		if (*in->p >> 5 == 3 ? tp_text(in, &t) : tp_whole(in, &a)) return -1;
 	}
 	return 0;
 }
+// a path's length, and whether it ends in a whole
+static uint64_t path_end(tp_span path, int *whole) {
+	tp_in in = {path.p, path.p + path.n};
+	uint64_t k;
+	tp_span item;
+	tp_array(&in, &k);
+	*whole = 0;
+	for (uint64_t i = 0; i < k; i++) *whole = *in.p >> 5 == 0, tp_skip(&in, &item);
+	return k;
+}
 
-// the ids: one per patch: null for a patch with no splice and no index in its path, [through] for
-// one with an index, and for a splice (a patch with a range) [after, gone, before, through]: before
-// null for the end, true for after's own (after not null)
+// the ids: one per patch: null for a move; else its container (a node; null only for a put of the
+// whole value) and
+//   a put or removal at a key, or of the whole value: [container, pred]    pred: array of nodes
+//   a put at an index of an array: [container, pred, element]
+//   a splice (a patch with a range), a removal at an index: [container, after, gone, before]
+// before null for the end, true for after's own (after not null)
 static int ids_item(tp_in *in, const tp_step *s, const uint8_t *device) {
 	uint64_t k, two, g;
 	size_t at = 0;
@@ -186,32 +194,43 @@ static int ids_item(tp_in *in, const tp_step *s, const uint8_t *device) {
 	if (tp_array(in, &k) || k != s->count) return -1;
 	for (uint64_t i = 0; i < k; i++) {
 		if (tp_patch_next(s->patches, &at, &p)) return -1;
-		int w = wholes(p.path) > 0;
 		if (tp_null(in)) {
-			if (!p.move.p && (p.ranged || w)) return -1;
+			if (!p.move.p) return -1;
 			continue;
 		}
 		if (p.move.p || tp_array(in, &two)) return -1;
-		if (!p.ranged) {
-			if (two != 1 || !w || through(in, &p, device, s->n, 1)) return -1;
+		int whole;
+		uint64_t len = path_end(p.path, &whole);
+		int sliced = p.ranged || (whole && !p.value.p), cnull = tp_null(in);
+		if (cnull ? len || p.ranged : node_item(in, device, s->n, i)) return -1;
+		if (!sliced) {
+			if (tp_array(in, &g)) return -1;
+			for (uint64_t j = 0; j < g; j++) {
+				if (node_item(in, device, s->n, i)) return -1;
+			}
+			if (whole ? two != 3 || cnull || id_item(in, device, s->n) : two != 2) return -1;
 			continue;
 		}
-		if (two != 4) return -1;
+		if (two != 4 || cnull) return -1;
 		int after = !tp_null(in);
 		if (after && id_item(in, device, s->n)) return -1;
 		if (tp_array(in, &g)) return -1;
+		uint64_t one = 0;
 		for (uint64_t j = 0; j < g; j++) {
 			uint64_t pair, count;
-			if (tp_array(in, &pair) || pair != 2 || id_item(in, device, s->n) || tp_whole(in, &count) ||
-				count < 1)
+			if (tp_array(in, &pair) || pair != 2 || id_item(in, device, s->n) || tp_whole(in, &count) || count < 1)
 				return -1;
+			one = count;
 		}
+		int before = 0;
 		if (in->p < in->end && *in->p == 0xf5) {
 			if (!after) return -1;
-			in->p++;
+			in->p++, before = 1;
 		} else if (in->p < in->end && *in->p == 0xf6) in->p++;
 		else if (id_item(in, device, s->n)) return -1;
-		if (through(in, &p, device, s->n, 0)) return -1;
+		else before = 1;
+		// a removal at an index: no after, the one element, no before
+		if (!p.ranged && (after || g != 1 || one != 1 || before)) return -1;
 	}
 	return 0;
 }

@@ -80,8 +80,10 @@ static size_t typing(uint8_t p[32], unsigned i) {
 
 static void type(tp_log *log, unsigned i) {
 	uint8_t p[32];
+	// typing at the end: the text is the writer's first put (its step 1, patch 0), after the character before
+	uint8_t ids[] = {0x81, 0x84, 0x82, 0x01, 0x00, i ? 0x01 : 0xf6, 0x80, 0xf6};
 	tp_write w = {{(const uint8_t *)"text", 4}, {(const uint8_t *)"value", 5}, {p, typing(p, i)},
-		{NULL, 0}, 1760000000 + i / 5, {NULL, 0}, {NULL, 0}};
+		{NULL, 0}, 1760000000 + i / 5, {NULL, 0}, {ids, sizeof ids}};
 	uint64_t n, lamport;
 	if (tp_log_write(log, &w, &n, &lamport)) abort();
 }

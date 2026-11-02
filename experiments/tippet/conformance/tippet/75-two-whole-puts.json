@@ -1,0 +1,212 @@
+{
+	"title": "two devices each put the whole value, then each types into its own: the later whole put in the order replaces the other, and the typing into the replaced one doesn't apply (it is listed in failed, on every device, a forgetting one too)",
+	"steps": [
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "device",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"expect": {
+				"key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
+		},
+		{
+			"op": "device",
+			"name": "f",
+			"seed": "0303030303030303030303030303030303030303030303030303030303030303",
+			"forgets": true,
+			"expect": {
+				"key": "ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1"
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "doc",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"t": ""
+					}
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "b",
+			"node": "doc",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"t": ""
+					}
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "doc",
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				}
+			],
+			"expect": {
+				"n": 2,
+				"lamport": 2
+			}
+		},
+		{
+			"op": "write",
+			"device": "b",
+			"node": "doc",
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "y"
+				}
+			],
+			"expect": {
+				"n": 2,
+				"lamport": 2
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "b",
+			"of": "a",
+			"at": 1,
+			"expect": {
+				"added": 2
+			}
+		},
+		{
+			"op": "pass",
+			"from": "b",
+			"to": "a",
+			"of": "b",
+			"at": 1,
+			"expect": {
+				"added": 2
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "f",
+			"of": "a",
+			"at": 1,
+			"expect": {
+				"added": 2
+			}
+		},
+		{
+			"op": "pass",
+			"from": "b",
+			"to": "f",
+			"of": "b",
+			"at": 1,
+			"expect": {
+				"added": 2
+			}
+		},
+		{
+			"op": "value",
+			"device": "a",
+			"node": "doc",
+			"expect": {
+				"value": {
+					"t": "x"
+				}
+			}
+		},
+		{
+			"op": "value",
+			"device": "b",
+			"node": "doc",
+			"expect": {
+				"value": {
+					"t": "x"
+				}
+			}
+		},
+		{
+			"op": "value",
+			"device": "f",
+			"node": "doc",
+			"expect": {
+				"value": {
+					"t": "x"
+				}
+			}
+		},
+		{
+			"op": "failed",
+			"device": "a",
+			"expect": {
+				"failed": [
+					{
+						"device": "b",
+						"n": 2
+					}
+				]
+			}
+		},
+		{
+			"op": "failed",
+			"device": "b",
+			"expect": {
+				"failed": [
+					{
+						"device": "b",
+						"n": 2
+					}
+				]
+			}
+		},
+		{
+			"op": "failed",
+			"device": "f",
+			"expect": {
+				"failed": [
+					{
+						"device": "b",
+						"n": 2
+					}
+				]
+			}
+		}
+	]
+}

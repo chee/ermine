@@ -6,7 +6,7 @@ import { children, createPlaces } from "@ermine/places"
 import { createLog } from "./log.ts"
 import { createHistory } from "./history.ts"
 import { createSigner, type Signer } from "./sign.ts"
-import { encodeStep, hashStep, type Step } from "./step.ts"
+import { encodeStep, hashStep, type Step, unhex } from "./step.ts"
 import type { Patch } from "@ermine/changeable/apply"
 
 async function receiver() {
@@ -29,6 +29,8 @@ async function receiver() {
 
 type Out = { device: string; steps: Uint8Array[]; sig: Uint8Array; name: string }
 const chains = new Map<string, Uint8Array | null>()
+// the node the put of the whole value made: its device's step 1, patch 0
+let root = ""
 async function step(
 	w: Signer,
 	name: string,
@@ -47,7 +49,9 @@ async function step(
 		when: 0,
 		seq: 0,
 		on: [],
-		ids: patches.map(() => null),
+		ids: patches.map((p) =>
+			p.path.length ? [w.device === root ? [1, 0] : [unhex(root), 1, 0], []] : [null, []]
+		),
 	}
 	const bytes = encodeStep(s)
 	chains.set(w.device, hashStep(bytes))
@@ -63,6 +67,7 @@ function orders<T>(xs: T[]): T[][] {
 
 Deno.test("review: three devices, every arrival order, one value", async () => {
 	const [a, b, c] = await Promise.all([createSigner(), createSigner(), createSigner()])
+	root = a.device
 	const base = await step(a, "a1 {x:0,y:0} @1", 1, 1, [{ path: [], value: { x: 0, y: 0 } }])
 	const by = await step(b, "b1 y=2 @2", 1, 2, [{ path: ["y"], value: 2 }])
 	const axy = await step(a, "a2 x=1,y=1 @3", 2, 3, [
@@ -86,6 +91,7 @@ Deno.test("review: three devices, every arrival order, one value", async () => {
 Deno.test("review: a deeper winner arriving after a shallower loser", async () => {
 	const [a, b] = await Promise.all([createSigner(), createSigner()])
 	chains.clear()
+	root = a.device
 	const whole = await step(a, "a1 {x:0,y:9} @1", 1, 1, [{ path: [], value: { x: 0, y: 9 } }])
 	const deep = await step(b, "b1 x=5 @2", 1, 2, [{ path: ["x"], value: 5 }])
 	const r1 = await receiver(), r2 = await receiver()

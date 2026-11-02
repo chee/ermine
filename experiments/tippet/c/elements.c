@@ -2,14 +2,17 @@
 // one device, numbered one on (or one down), all gone or none, held as one (typing is one run,
 // forward or back). With them how many are not gone, and a cursor (j, and live: how many before
 // runs[j] are not gone) that typing and edits near the last move from (an element is found near the
-// cursor, else from the first).
+// cursor, else from the first). State is keyed by container: a node is the bytes of cbor items one
+// after another (the device's index, n, the patch, then the place in the patch's value), so one is
+// under another when its bytes start with the other's.
 #include "elements.h"
 
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-enum { MADE, SPLICE, PUT };
+enum { MADE, SPLICE, SLOT, DROP };
 
 // a run's most elements
 #define MOST ((1u << 29) - 1)
@@ -58,10 +61,15 @@ struct el_list {
 	size_t keyn;
 	run *runs;
 	size_t n, room;
-	el_ref by; // the step its born ones are since
+	struct {
+		uint32_t device;
+		uint64_t n;
+	} by; // the step that made the container: its born ones are since
+	int text; // a string
 	el_ref last; // the newest step that spliced it (lamport 0: none)
 	size_t count, j, live;
 };
+
 
 static void list_free(const tp_mem *mem, el_list *l) {
 	tp_free(mem, l->ix, l->roomix * sizeof *l->ix);
@@ -310,21 +318,11 @@ static void mark(el_list *l, size_t j, uint64_t o, uint64_t n, int gone) {
 	join(l, i + 1), join(l, i);
 }
 
-// paths are cbor arrays, canonical: one is a prefix of another when its items are the other's first
-// items, byte for byte. the prefix's length in items, or -1
-static long prefix_of(tp_span a, tp_span b) {
-	tp_in x = {a.p, a.p + a.n}, y = {b.p, b.p + b.n};
-	uint64_t m, k;
-	if (tp_array(&x, &m) || tp_array(&y, &k) || m > k) return -1;
-	size_t bytes = (size_t)(x.end - x.p);
-	if ((size_t)(y.end - y.p) < bytes || memcmp(x.p, y.p, bytes)) return -1;
-	return (long)m;
-}
-static int under(tp_span prefix, const uint8_t *key, size_t keyn) {
-	return prefix_of(prefix, (tp_span){key, keyn}) >= 0;
-}
 
 static int is_seq(const op_value *v) { return v && (v->type == OP_LIST || v->type == OP_STR); }
+static int is_map(const op_value *v) { return v && v->type == OP_MAP; }
+// a node: a map, an array or a string
+static int is_container(const op_value *v) { return v && (v->type == OP_MAP || v->type == OP_LIST || v->type == OP_STR); }
 // a sequence's length, or -1: counted once, when its elements are made, and for what a splice inserts
 static long units(const op_value *v) {
 	if (!v) return -1;
@@ -335,10 +333,10 @@ static long units(const op_value *v) {
 	return n;
 }
 
-// what is at the target's path, NULL if nothing
-static const op_value *at_path(const op_value *v, const op_target *t) {
-	for (size_t i = 0; i < t->length; i++) {
-		const op_key *k = &t->path[i];
+// what is at the first len keys of the target's path, NULL if nothing
+static const op_value *at_keys(const op_value *v, const op_key *path, size_t len) {
+	for (size_t i = 0; i < len; i++) {
+		const op_key *k = &path[i];
 		if (!v) return NULL;
 		if (v->type == OP_LIST) {
 			if (k->type != OP_NUM_KEY || k->n < 0 || (size_t)k->n >= v->count) return NULL;
@@ -352,18 +350,13 @@ static const op_value *at_path(const op_value *v, const op_target *t) {
 	}
 	return v;
 }
+static const op_value *at_path(const op_value *v, const op_target *t) { return at_keys(v, t->path, t->length); }
 
-static tp_span move_path(tp_span move) {
-	tp_in in = {move.p, move.p + move.n};
-	uint64_t k;
-	tp_span key, v = {NULL, 0};
-	tp_map(&in, &k);
-	for (uint64_t i = 0; i < k; i++) {
-		tp_text(&in, &key), tp_skip(&in, &v);
-		if (tp_is(key, "path")) return v;
-	}
-	return v;
-}
+// a path found by id, as op keys and their strings, that lives on until the step is done
+typedef struct {
+	void *p;
+	size_t size, nkeys, chars;
+} block;
 
 typedef struct {
 	const el_ctx *c;
@@ -371,6 +364,11 @@ typedef struct {
 	el_back *back;
 	el_ref ref;
 	int late;
+	// the patch of the step in hand: its index; the block its path is in
+	uint64_t i;
+	long last;
+	block *blocks;
+	size_t nblocks, roomblocks;
 } work;
 
 static int devcmp(const el_ctx *c, uint32_t x, uint32_t y) {
@@ -380,30 +378,12 @@ static int devcmp(const el_ctx *c, uint32_t x, uint32_t y) {
 	return memcmp(c->bytes(c->self, x), c->bytes(c->self, y), 32);
 }
 // a step after this one
-static int newer(const work *w, const el_ref *a) {
-	if (a->lamport != w->ref.lamport) return a->lamport > w->ref.lamport;
-	return devcmp(w->c, a->device, w->ref.device) > 0;
+static int newer_ref(const el_ctx *c, const el_ref *a, const el_ref *b) {
+	if (a->lamport != b->lamport) return a->lamport > b->lamport;
+	return devcmp(c, a->device, b->device) > 0;
 }
-// late: a step after this one made where or above it new
-static int covered(const work *w, tp_span where) {
-	for (size_t i = 0; i < w->st->nborn; i++) {
-		const el_born *b = &w->st->born[i];
-		if (prefix_of((tp_span){b->key, b->keyn}, where) >= 0 && newer(w, &b->r)) return 1;
-	}
-	return 0;
-}
-// late: a step after this one made new or spliced what is at or under where
-static int touched(const work *w, tp_span where) {
-	for (size_t i = 0; i < w->st->nborn; i++) {
-		const el_born *b = &w->st->born[i];
-		if (under(where, b->key, b->keyn) && newer(w, &b->r)) return 1;
-	}
-	for (size_t i = 0; i < w->st->n; i++) {
-		const el_list *l = w->st->lists[i];
-		if (under(where, l->key, l->keyn) && newer(w, &l->last)) return 1;
-	}
-	return 0;
-}
+static int newer(const work *w, const el_ref *a) { return newer_ref(w->c, a, &w->ref); }
+
 // the element at runs[j], place o, sorts after one of this step's at seq c: by device, seq
 // (a born one before what its step inserts)
 static int sorts_after(const work *w, const el_list *l, size_t j, uint64_t o, uint64_t c) {
@@ -587,6 +567,17 @@ done:
 	return code;
 }
 
+
+// room for one more in a growing array of size each
+static int more(const tp_mem *mem, void **p, size_t n, size_t *room, size_t each) {
+	if (n < *room) return 0;
+	size_t r = *room ? 2 * *room : 4;
+	void *q = tp_grow(mem, *p, *room * each, r * each);
+	if (!q) return -1;
+	*p = q, *room = r;
+	return 0;
+}
+
 static int rec_room(work *w) {
 	el_back *b = w->back;
 	if (b->n < b->room) return 0;
@@ -597,10 +588,10 @@ static int rec_room(work *w) {
 	return 0;
 }
 
-static el_list *list_at(const el_state *st, tp_span path) {
+static el_list *list_at(const el_state *st, tp_span node) {
 	for (size_t i = 0; i < st->n; i++) {
 		el_list *l = st->lists[i];
-		if (l->keyn == path.n && !memcmp(l->key, path.p, path.n)) return l;
+		if (l->keyn == node.n && !memcmp(l->key, node.p, node.n)) return l;
 	}
 	return NULL;
 }
@@ -614,190 +605,454 @@ static int lists_room(const tp_mem *mem, el_state *st) {
 	st->lists = p, st->room = room;
 	return 0;
 }
+static int slots_room(const tp_mem *mem, el_state *st) {
+	if (st->nslots < st->roomslots) return 0;
+	size_t room = st->roomslots ? 2 * st->roomslots : 4;
+	el_slot *p = tp_grow(mem, st->slots, st->roomslots * sizeof *p, room * sizeof *p);
+	if (!p) return -1;
+	st->slots = p, st->roomslots = room;
+	return 0;
+}
 
-// the sequence at the target's path (path, its where: the key), its elements made now: those there
-// since the step that made it new
-static int elements(work *w, const op_value *cur, const op_target *place, tp_span path, el_list **out) {
+static uint8_t *dup(const tp_mem *mem, const uint8_t *p, size_t n) {
+	if (!n) return NULL;
+	uint8_t *q = tp_alloc(mem, n);
+	if (q) memcpy(q, p, n);
+	return q;
+}
+static void slot_free(const tp_mem *mem, el_slot *s) { tp_free(mem, s->buf, (size_t)s->parentn + s->slotn + s->noden); }
+static const uint8_t *sl_parent(const el_slot *s) { return s->buf; }
+static const uint8_t *sl_slot(const el_slot *s) { return s->buf + s->parentn; }
+static const uint8_t *sl_node(const el_slot *s) { return s->buf + s->parentn + s->slotn; }
+static tp_span sl_nodespan(const el_slot *s) { return (tp_span){sl_node(s), s->noden}; }
+static el_ref sl_at(const el_slot *s) { return (el_ref){s->lamport, 0, 0, s->device}; }
+// the element a slot is, if it is one: [device, born, c, k]
+static int sl_el(const el_slot *s, el_id *e) {
+	if (!s->slotn || *sl_slot(s) >> 5 != 4) return 0;
+	tp_in in = {sl_slot(s), sl_slot(s) + s->slotn};
+	uint64_t k, d, b;
+	if (tp_array(&in, &k) || tp_whole(&in, &d) || tp_whole(&in, &b) || tp_whole(&in, &e->c) || tp_whole(&in, &e->k)) return 0;
+	e->device = (uint32_t)d, e->born = (uint32_t)b;
+	return 1;
+}
+
+// a node: the device's index, n, the patch, then the place in the patch's value (rel items)
+static void node_make(tp_buf *b, uint32_t device, uint64_t n, uint64_t i) {
+	tp_put_head(b, 0, device), tp_put_head(b, 0, n), tp_put_head(b, 0, i);
+}
+// a key text as the wire has it: the op layer holds a NUL as the two bytes c0 80
+static void rel_text(tp_buf *b, const char *s) {
+	size_t n = strlen(s), m = 0;
+	for (size_t i = 0; i < n; i++, m++) {
+		if ((unsigned char)s[i] == 0xc0 && (unsigned char)s[i + 1] == 0x80) i++;
+	}
+	tp_put_head(b, 3, m);
+	for (size_t i = 0; i < n; i++) {
+		if ((unsigned char)s[i] == 0xc0 && (unsigned char)s[i + 1] == 0x80) tp_put(b, "", 1), i++;
+		else tp_put(b, s + i, 1);
+	}
+}
+static void rel_num(tp_buf *b, uint64_t x) { tp_put_head(b, 0, x); }
+// the device and n a node was made by
+static int node_head(tp_span node, uint32_t *device, uint64_t *n) {
+	tp_in in = {node.p, node.p + node.n};
+	uint64_t d;
+	if (tp_whole(&in, &d) || tp_whole(&in, n)) return -1;
+	*device = (uint32_t)d;
+	return 0;
+}
+// a record's slot: a key of a map as cbor text, an element of an array as [device, born, c, k]
+static void slot_key(tp_buf *b, const char *s) { rel_text(b, s); }
+static void slot_el(tp_buf *b, const el_id *e) {
+	tp_put_head(b, 4, 4), tp_put_head(b, 0, e->device), tp_put_head(b, 0, e->born);
+	tp_put_head(b, 0, e->c), tp_put_head(b, 0, e->born ? e->k : 0);
+}
+
+// the record at (parent, slot), or -1
+static long slot_at(const el_state *st, tp_span parent, tp_span slot) {
+	for (size_t i = 0; i < st->nslots; i++) {
+		const el_slot *s = &st->slots[i];
+		if (s->parentn == parent.n && s->slotn == slot.n && (!parent.n || !memcmp(sl_parent(s), parent.p, parent.n)) &&
+			(!slot.n || !memcmp(sl_slot(s), slot.p, slot.n)))
+			return (long)i;
+	}
+	return -1;
+}
+// the record that holds node, or -1
+static long slot_of(const el_state *st, tp_span node) {
+	for (size_t i = 0; i < st->nslots; i++) {
+		const el_slot *s = &st->slots[i];
+		if (s->noden == node.n && node.n && !memcmp(sl_node(s), node.p, node.n)) return (long)i;
+	}
+	return -1;
+}
+// is the key under the node
+static int under(const uint8_t *key, size_t keyn, tp_span node) {
+	return keyn >= node.n && !memcmp(key, node.p, node.n);
+}
+
+// the record at (parent, slot) put by this step, node its container (none: node.n 0), el its element;
+// the record it replaces noted for undo
+static int set_rec(work *w, tp_span parent, tp_span slot, tp_span node) {
 	const tp_mem *mem = w->c->mem;
 	el_state *st = w->st;
-	if ((*out = list_at(st, path))) return 0;
-	long most = -1;
-	el_ref by = {0, 0, 0, EL_NONE};
-	for (size_t i = 0; i < st->nborn; i++) {
-		long m = prefix_of((tp_span){st->born[i].key, st->born[i].keyn}, path);
-		if (m > most) most = m, by = st->born[i].r;
+	long i = slot_at(st, parent, slot);
+	if (rec_room(w) || (i < 0 && slots_room(mem, st))) return TP_NOMEM;
+	el_slot n = {0};
+	size_t total = parent.n + slot.n + node.n;
+	n.buf = total ? tp_alloc(mem, total) : NULL;
+	if (total && !n.buf) return TP_NOMEM;
+	if (parent.n) memcpy(n.buf, parent.p, parent.n);
+	if (slot.n) memcpy(n.buf + parent.n, slot.p, slot.n);
+	if (node.n) memcpy(n.buf + parent.n + slot.n, node.p, node.n);
+	n.parentn = (uint32_t)parent.n, n.slotn = (uint32_t)slot.n, n.noden = (uint32_t)node.n;
+	n.lamport = w->ref.lamport, n.device = w->ref.device;
+	el_rec *r = &w->back->p[w->back->n++];
+	*r = (el_rec){.kind = SLOT};
+	r->slot.added = n, r->slot.has_added = 1;
+	if (i >= 0) r->slot.had = 1, r->slot.was = st->slots[i], st->slots[i] = n;
+	else st->slots[st->nslots++] = n;
+	return 0;
+}
+// the record i taken out, noted for undo
+static int del_rec(work *w, size_t i) {
+	el_state *st = w->st;
+	if (rec_room(w)) return TP_NOMEM;
+	el_rec *r = &w->back->p[w->back->n++];
+	*r = (el_rec){.kind = SLOT};
+	r->slot.had = 1, r->slot.was = st->slots[i];
+	st->slots[i] = st->slots[--st->nslots];
+	return 0;
+}
+
+// a node gone, with its sequences and records, and what they hold, in turn. leaf: a string, which holds none
+static int drop_node(work *w, tp_span node, int leaf) {
+	const tp_mem *mem = w->c->mem;
+	el_state *st = w->st;
+	size_t nl = st->n, ns = st->nslots, ngl = 0, ngs = 0, nt = 0, rt = 0;
+	uint8_t *ml = NULL, *ms = NULL;
+	tp_span *todo = NULL;
+	el_list **dl = NULL;
+	el_slot *ds = NULL;
+	int code = 0;
+	if (!nl && !ns) return 0;
+	if (rec_room(w)) return TP_NOMEM;
+	ml = tp_alloc(mem, nl ? nl : 1), ms = tp_alloc(mem, ns ? ns : 1);
+	if (!ml || !ms) {
+		code = TP_NOMEM;
+		goto done;
 	}
-	if (most < 0) return OP_RANGE;
-	size_t count = (size_t)units(at_path(cur, place)), runs = (count + MOST - 1) / MOST;
+	memset(ml, 0, nl), memset(ms, 0, ns);
+	if (leaf) {
+		for (size_t i = 0; i < nl; i++) {
+			if (st->lists[i]->keyn == node.n && !memcmp(st->lists[i]->key, node.p, node.n)) ml[i] = 1;
+		}
+	} else {
+		if (more(mem, (void **)&todo, nt, &rt, sizeof *todo)) {
+			code = TP_NOMEM;
+			goto done;
+		}
+		todo[nt++] = node;
+		while (nt) {
+			tp_span x = todo[--nt];
+			for (size_t i = 0; i < nl; i++) {
+				if (!ml[i] && under(st->lists[i]->key, st->lists[i]->keyn, x)) ml[i] = 1;
+			}
+			for (size_t i = 0; i < ns; i++) {
+				if (ms[i] || !under(sl_parent(&st->slots[i]), st->slots[i].parentn, x)) continue;
+				ms[i] = 1;
+				if (!st->slots[i].noden) continue;
+				if (more(mem, (void **)&todo, nt, &rt, sizeof *todo)) {
+					code = TP_NOMEM;
+					goto done;
+				}
+				todo[nt++] = sl_nodespan(&st->slots[i]);
+			}
+		}
+	}
+	for (size_t i = 0; i < nl; i++) ngl += ml[i];
+	for (size_t i = 0; i < ns; i++) ngs += ms[i];
+	if (!ngl && !ngs) goto done;
+	dl = ngl ? tp_alloc(mem, ngl * sizeof *dl) : NULL;
+	ds = ngs ? tp_alloc(mem, ngs * sizeof *ds) : NULL;
+	if ((ngl && !dl) || (ngs && !ds)) {
+		code = TP_NOMEM;
+		goto done;
+	}
+	size_t a = 0, b = 0;
+	for (size_t i = 0; i < nl; i++) {
+		if (ml[i]) dl[a++] = st->lists[i];
+		else st->lists[i - a] = st->lists[i];
+	}
+	st->n -= a;
+	for (size_t i = 0; i < ns; i++) {
+		if (ms[i]) ds[b++] = st->slots[i];
+		else st->slots[i - b] = st->slots[i];
+	}
+	st->nslots -= b;
+	el_rec *r = &w->back->p[w->back->n++];
+	*r = (el_rec){.kind = DROP};
+	r->drop.lists = dl, r->drop.nlists = ngl, r->drop.slots = ds, r->drop.nslots = ngs;
+	dl = NULL, ds = NULL;
+done:
+	tp_free(mem, ml, nl ? nl : 1), tp_free(mem, ms, ns ? ns : 1);
+	tp_free(mem, todo, rt * sizeof *todo);
+	tp_free(mem, dl, ngl * sizeof *dl), tp_free(mem, ds, ngs * sizeof *ds);
+	return code;
+}
+
+// the sequence node's elements, made now: those there since the step that made it
+static int elements(work *w, tp_span node, const op_value *v, el_list **out) {
+	const tp_mem *mem = w->c->mem;
+	el_state *st = w->st;
+	if ((*out = list_at(st, node))) return 0;
+	if (!is_seq(v)) return OP_WRONG_KIND;
+	uint32_t dev;
+	uint64_t n;
+	if (node_head(node, &dev, &n)) return OP_RANGE;
+	size_t count = (size_t)units(v), runs = (count + MOST - 1) / MOST;
 	el_list *l = tp_alloc(mem, sizeof *l);
 	if (!l) return TP_NOMEM;
 	memset(l, 0, sizeof *l);
 	l->mem = mem;
-	l->key = tp_alloc(mem, path.n), l->keyn = path.n;
+	l->key = tp_alloc(mem, node.n), l->keyn = node.n;
 	l->room = runs + 4, l->runs = tp_alloc(mem, l->room * sizeof *l->runs);
 	if (!l->key || !l->runs || rec_room(w) || lists_room(mem, st)) {
 		if (!l->runs) l->room = 0;
 		list_free(mem, l);
 		return TP_NOMEM;
 	}
-	memcpy(l->key, path.p, path.n);
+	memcpy(l->key, node.p, node.n);
 	for (size_t k = 0; k < count; k += MOST) {
 		uint32_t len = (uint32_t)(count - k < MOST ? count - k : MOST);
-		l->runs[l->n++] = (run){.c = k, .device = by.device, .len = len, .born = 1, .left = {.none = 1}, .right = {.none = 1}};
+		l->runs[l->n++] = (run){.c = k, .device = dev, .len = len, .born = 1, .left = {.none = 1}, .right = {.none = 1}};
 	}
-	l->by = by, l->count = count;
+	l->by.device = dev, l->by.n = n, l->count = count, l->text = v->type == OP_STR;
 	st->lists[st->n++] = l;
 	w->back->p[w->back->n++] = (el_rec){.kind = MADE, .splice = {.list = l}};
 	*out = l;
 	return 0;
 }
 
-// the sequences at where and under it made new by this step (a put, a removal, a move there)
-static int renew(work *w, tp_span prefix) {
-	const tp_mem *mem = w->c->mem;
+// the items of the array node taken away by a splice are gone, with what is under them
+static int away(work *w, tp_span node, el_list *l, const el_gone *taken, size_t ntaken) {
 	el_state *st = w->st;
-	size_t nl = 0, nb = 0;
-#define GOES(l) under(prefix, (l)->key, (l)->keyn)
-	for (size_t i = 0; i < st->n; i++) nl += GOES(st->lists[i]);
-	for (size_t i = 0; i < st->nborn; i++) nb += under(prefix, st->born[i].key, st->born[i].keyn);
-	el_list **rl = nl ? tp_alloc(mem, nl * sizeof *rl) : NULL;
-	el_born *rb = nb ? tp_alloc(mem, nb * sizeof *rb) : NULL;
-	uint8_t *key = tp_alloc(mem, prefix.n);
-	int bad = (nl && !rl) || (nb && !rb) || !key || rec_room(w);
-	if (!bad && st->nborn - nb + 1 > st->roomborn) {
-		size_t room = st->roomborn ? 2 * st->roomborn : 4;
-		el_born *born = tp_grow(mem, st->born, st->roomborn * sizeof *born, room * sizeof *born);
-		if (born) st->born = born, st->roomborn = room;
-		else bad = 1;
-	}
-	if (bad) {
-		tp_free(mem, rl, nl * sizeof *rl), tp_free(mem, rb, nb * sizeof *rb);
-		tp_free(mem, key, prefix.n);
-		return TP_NOMEM;
-	}
-	size_t k = 0;
-	for (size_t i = 0; i < st->n; i++) {
-		if (GOES(st->lists[i])) rl[k++] = st->lists[i];
-		else st->lists[i - k] = st->lists[i];
-	}
-#undef GOES
-	st->n -= nl, k = 0;
-	for (size_t i = 0; i < st->nborn; i++) {
-		if (under(prefix, st->born[i].key, st->born[i].keyn)) rb[k++] = st->born[i];
-		else st->born[i - k] = st->born[i];
-	}
-	st->nborn -= nb;
-	memcpy(key, prefix.p, prefix.n);
-	st->born[st->nborn++] = (el_born){key, prefix.n, w->ref};
-	w->back->p[w->back->n++] = (el_rec){.kind = PUT, .put = {rb, nb, rl, nl, key}};
-	return 0;
-}
-
-// b: a cbor array of n items, then items' bytes
-static void keyed(tp_buf *b, size_t n, const tp_buf *items) {
-	b->len = 0;
-	tp_put_head(b, 4, n), tp_put(b, items->p, items->len);
-}
-// an element as a where item: [device, c] or [device, n, k]
-static void put_id(tp_buf *b, const el_id *e) {
-	tp_put_head(b, 4, e->born ? 3 : 2), tp_put_head(b, 0, e->device), tp_put_head(b, 0, e->c);
-	if (e->born) tp_put_head(b, 0, e->k);
-}
-
-// a path's first upto items, its arrays' items found by the nby ids by (NULL: by place, a write here or
-// a move), wherever they are now (one gone or not there: OP_RANGE). out (room for upto): the path to
-// apply; where: its key, each array item as its element; ids (room for upto, or NULL) those elements,
-// *found how many (-1: one not there)
-static int locate(work *w, const op_value *cur, const op_target *t, tp_span path, const el_id *by,
-	size_t nby, size_t upto, op_key *out, tp_buf *where, el_id *ids, long *found) {
-	const tp_mem *mem = w->c->mem;
-	tp_in in = {path.p, path.p + path.n};
-	uint64_t k;
-	tp_array(&in, &k);
-	tp_buf items = {NULL, 0, 0, (size_t)-1, mem, 0}, key = {NULL, 0, 0, (size_t)-1, mem, 0};
-	if (upto) memcpy(out, t->path, upto * sizeof *out);
-	*found = 0;
-	size_t x = 0;
-	int code = 0;
-	for (size_t i = 0; i < upto && !code; i++) {
-		const uint8_t *from = in.p;
-		tp_span item;
-		tp_skip(&in, &item);
-		if (out[i].type != OP_NUM_KEY) {
-			tp_put(&items, from, (size_t)(in.p - from));
+	for (size_t i = 0; i < st->nslots;) {
+		el_slot *s = &st->slots[i];
+		size_t j;
+		uint64_t o;
+		el_id e;
+		if (s->parentn != node.n || memcmp(sl_parent(s), node.p, node.n) || !s->noden || !sl_el(s, &e) ||
+			!find(l, &e, &j, &o) || !l->runs[j].gone) {
+			i++;
 			continue;
 		}
-		const el_id *id = by && x < nby ? &by[x] : NULL;
-		x++;
-		op_target up = {out, i, 0, 0, 0};
-		const op_value *a = at_path(cur, &up);
-		el_id e = {0};
-		int has = 0;
-		if (a && a->type == OP_LIST) {
-			el_list *l;
-			keyed(&key, i, &items);
-			if ((code = tp_buf_why(&key)) || (code = elements(w, cur, &up, (tp_span){key.p, key.len}, &l))) break;
-			size_t j;
-			uint64_t o;
-			if (by && !id) code = OP_RANGE;
-			else if (id) {
-				if (!find(l, id, &j, &o) || l->runs[j].gone) code = OP_RANGE;
-				else e = *id, has = 1, out[i].n = (long)(live_before(l, j) + (size_t)o);
-			} else if (out[i].n >= 0 && (size_t)out[i].n < l->count) {
-				j = live_at(l, (size_t)out[i].n, &o);
-				e = id_at(l, &l->runs[j], o), has = 1;
-			}
-		} else if (id) code = OP_RANGE;
-		if (has) put_id(&items, &e);
-		else tp_put(&items, from, (size_t)(in.p - from));
-		if (ids && has && *found >= 0) ids[(*found)++] = e;
-		else if (!has) *found = -1;
+		// the record goes first: dropping packs the records
+		tp_span held = sl_nodespan(s);
+		int code = del_rec(w, i);
+		if (!code) code = drop_node(w, held, 0);
+		if (code) return code;
 	}
-	if (!code) keyed(where, upto, &items), code = tp_buf_why(&items) ? TP_NOMEM : tp_buf_why(where);
-	tp_buf_free(&items), tp_buf_free(&key);
-	return code;
-}
-
-// a target at an index of an array (no range): 1; else 0
-static int in_array(const op_value *cur, const op_target *t) {
-	if (t->has_range || !t->length || t->path[t->length - 1].type != OP_NUM_KEY) return 0;
-	op_target up = *t;
-	up.length--;
-	const op_value *a = at_path(cur, &up);
-	return a && a->type == OP_LIST;
-}
-
-// what a move makes new at one end, by place: the sequence a range is in, or the array an index is
-// in, or what is at the path
-static int end(work *w, const op_value *cur, const op_target *t, tp_span path, op_key *keys) {
-	tp_buf where = {NULL, 0, 0, (size_t)-1, w->c->mem, 0};
-	long found;
-	int code = locate(w, cur, t, path, NULL, 0, t->length - (size_t)in_array(cur, t), keys, &where, NULL, &found);
-	if (!code) code = renew(w, (tp_span){where.p, where.len});
-	tp_buf_free(&where);
-	return code;
-}
-
-// room for one more in a growing array of size each
-static int more(const tp_mem *mem, void **p, size_t n, size_t *room, size_t each) {
-	if (n < *room) return 0;
-	size_t r = *room ? 2 * *room : 4;
-	void *q = tp_grow(mem, *p, *room * each, r * each);
-	if (!q) return -1;
-	*p = q, *room = r;
+	// the items born with the array have no record: what is under them goes by their place
+	for (size_t r = 0; r < ntaken; r++) {
+		for (uint64_t x = 0; x < taken[r].count; x++) {
+			el_id e = plus(taken[r].id, x);
+			if (!e.born) continue;
+			tp_buf cb = {NULL, 0, 0, (size_t)-1, w->c->mem, 0};
+			tp_put(&cb, node.p, node.n), rel_num(&cb, e.k);
+			int code = tp_buf_why(&cb) ? TP_NOMEM : drop_node(w, (tp_span){cb.p, cb.len}, 0);
+			tp_buf_free(&cb);
+			if (code) return code;
+		}
+	}
 	return 0;
 }
 
-// a splice, its inserted ones counted from c, by its ids (anchor) or its range, as the patches to
-// apply by position (*qs, *nq)
-static int splice(work *w, const op_value *cur, const op_patch *p, tp_span key, uint64_t c,
+// late: a step after this one spliced or put inside the node, or what a put inside it holds
+static int touched(work *w, tp_span node) {
+	const tp_mem *mem = w->c->mem;
+	el_state *st = w->st;
+	tp_span *todo = NULL;
+	size_t nt = 0, rt = 0;
+	int hit = 0, bad = 0;
+	if (more(mem, (void **)&todo, nt, &rt, sizeof *todo)) return -1;
+	todo[nt++] = node;
+	while (nt && !hit && !bad) {
+		tp_span x = todo[--nt];
+		for (size_t i = 0; i < st->n && !hit; i++) {
+			if (under(st->lists[i]->key, st->lists[i]->keyn, x) && newer(w, &st->lists[i]->last)) hit = 1;
+		}
+		for (size_t i = 0; i < st->nslots && !hit && !bad; i++) {
+			el_ref at = sl_at(&st->slots[i]);
+			if (!under(sl_parent(&st->slots[i]), st->slots[i].parentn, x)) continue;
+			if (newer(w, &at)) hit = 1;
+			else if (st->slots[i].noden) {
+				if (more(mem, (void **)&todo, nt, &rt, sizeof *todo)) bad = 1;
+				else todo[nt++] = sl_nodespan(&st->slots[i]);
+			}
+		}
+	}
+	tp_free(mem, todo, rt * sizeof *todo);
+	return bad ? -1 : hit;
+}
+
+// a patch puts at a slot (a key of a map, an element of an array, the root: parent empty): old is
+// what was there, derived the node it was if no record says (made with its parent's value), node
+// the node now (none: n 0). what was there goes, with what is under it; late: a newer step put there
+static int assign(work *w, tp_span parent, tp_span slot, tp_span derived, const op_value *old, tp_span node) {
+	long i = slot_at(w->st, parent, slot);
+	el_ref at = i >= 0 ? sl_at(&w->st->slots[i]) : (el_ref){0};
+	if (w->late && i >= 0 && newer(w, &at)) return TP_LATE;
+	tp_span gone = i >= 0 ? sl_nodespan(&w->st->slots[i]) : derived;
+	int code = 0;
+	if (w->late && gone.n) {
+		int t = touched(w, gone);
+		if (t) return t < 0 ? TP_NOMEM : TP_LATE;
+	}
+	if (gone.n) code = drop_node(w, gone, old && old->type == OP_STR);
+	return code ? code : set_rec(w, parent, slot, node);
+}
+
+// a path as hops, the first at the end: a key (its text) or a place
+typedef struct {
+	int num;
+	long n;
+	tp_span s;
+} hop;
+typedef struct {
+	hop *p;
+	size_t n, room;
+} hops;
+
+// the hops from held through the node's tail: its rel items. no hops (*ok 0) when a patch put over one
+static int inside(work *w, tp_span held, tp_span tail, hops *out, int *ok) {
+	const tp_mem *mem = w->c->mem;
+	el_state *st = w->st;
+	tp_in in = {tail.p, tail.p + tail.n};
+	size_t start = out->n;
+	// the key so far: held then the rel items taken
+	size_t at = held.n;
+	*ok = 1;
+	while (in.p < in.end) {
+		const uint8_t *from = in.p;
+		int major = (int)(*in.p >> 5);
+		tp_span key;
+		uint64_t x;
+		tp_buf slot = {NULL, 0, 0, (size_t)-1, mem, 0};
+		hop h = {0};
+		int code = 0;
+		tp_span ck = {held.p, at};
+		if (major == 3) {
+			if (tp_text(&in, &key)) return OP_RANGE;
+			tp_put(&slot, from, (size_t)(in.p - from));
+			if (slot_at(st, ck, (tp_span){slot.p, slot.len}) >= 0) *ok = 0;
+			h.s = key;
+		} else {
+			if (tp_whole(&in, &x)) return OP_RANGE;
+			uint32_t dev;
+			uint64_t n;
+			if (node_head(ck, &dev, &n)) return OP_RANGE;
+			el_id e = {dev, 1, n, x};
+			slot_el(&slot, &e);
+			if (slot_at(st, ck, (tp_span){slot.p, slot.len}) >= 0) *ok = 0;
+			el_list *l = list_at(st, ck);
+			size_t j;
+			uint64_t o;
+			h.num = 1;
+			if (l && *ok) {
+				if (!find(l, &e, &j, &o) || l->runs[j].gone) *ok = 0;
+				else h.n = (long)(live_before(l, j) + (size_t)o);
+			} else if (x > (uint64_t)LONG_MAX) *ok = 0;
+			else h.n = (long)x;
+		}
+		code = tp_buf_why(&slot);
+		tp_buf_free(&slot);
+		if (code) return TP_NOMEM;
+		if (!*ok) return 0;
+		if (more(mem, (void **)&out->p, out->n, &out->room, sizeof *out->p)) return TP_NOMEM;
+		out->p[out->n++] = h;
+		at += (size_t)(in.p - from);
+	}
+	// the tail's hops were pushed first to last; the path is read last to first, so turn them
+	for (size_t a = start, b = out->n; a + 1 < b; a++, b--) {
+		hop t = out->p[a];
+		out->p[a] = out->p[b - 1], out->p[b - 1] = t;
+	}
+	return 0;
+}
+
+// the bytes of the first m items of a node
+static size_t item_end(tp_span node, size_t m) {
+	tp_in in = {node.p, node.p + node.n};
+	tp_span item;
+	while (m--) tp_skip(&in, &item);
+	return (size_t)(in.p - node.p);
+}
+
+// the path to the container node as it is now, root first, in hops (turned at the end); *ok 0: not
+// held, replaced, or gone
+static int where(work *w, tp_span node, hops *out, int *ok) {
+	const tp_mem *mem = w->c->mem;
+	el_state *st = w->st;
+	tp_span cur = node;
+	*ok = 1;
+	for (;;) {
+		// the node some record holds that cur is, or is made inside: longest first
+		size_t ne = 0;
+		tp_in in = {cur.p, cur.p + cur.n};
+		while (in.p < in.end) {
+			tp_span item;
+			if (tp_skip(&in, &item)) return OP_RANGE;
+			if (++ne > 1024) return OP_RANGE;
+		}
+		long si = -1;
+		size_t m = ne, end = cur.n;
+		for (; m >= 3; m--) {
+			end = item_end(cur, m);
+			si = slot_of(st, (tp_span){cur.p, end});
+			if (si >= 0) break;
+		}
+		if (si < 0) return *ok = 0, 0;
+		tp_span held = {cur.p, end}, tail = {cur.p + end, cur.n - end};
+		const el_slot *rec = &st->slots[si];
+		int good;
+		int code = inside(w, held, tail, out, &good);
+		if (code || !good) return code ? code : (*ok = 0, 0);
+		if (!rec->parentn) break;
+		hop h = {0};
+		el_id e;
+		if (sl_el(rec, &e)) {
+			el_list *l = list_at(st, (tp_span){sl_parent(rec), rec->parentn});
+			size_t j;
+			uint64_t o;
+			if (!l || !find(l, &e, &j, &o) || l->runs[j].gone) return *ok = 0, 0;
+			h.num = 1, h.n = (long)(live_before(l, j) + (size_t)o);
+		} else {
+			tp_in s = {sl_slot(rec), sl_slot(rec) + rec->slotn};
+			if (tp_text(&s, &h.s)) return OP_RANGE;
+		}
+		if (more(mem, (void **)&out->p, out->n, &out->room, sizeof *out->p)) return TP_NOMEM;
+		out->p[out->n++] = h;
+		cur = (tp_span){sl_parent(rec), rec->parentn};
+	}
+	// hops so far: innermost first; the path is root first
+	for (size_t a = 0, b = out->n; a + 1 < b; a++, b--) {
+		hop t = out->p[a];
+		out->p[a] = out->p[b - 1], out->p[b - 1] = t;
+	}
+	return 0;
+}
+
+// a splice into the sequence node (v its value, p->place.path where it is now), patch w->i of its
+// step, its inserted ones counted from c, by its ids (anchor) or its range, as the patches to apply
+// by position (*qs, *nq)
+static int splice(work *w, const op_patch *p, tp_span node, const op_value *v, uint64_t c,
 	const el_anchor *anchor, op_patch **qs, size_t *nq, size_t *qcap, el_anchor *named) {
 	const tp_mem *mem = w->c->mem;
 	// an insert of another kind than the sequence (a list into a text): doesn't apply, as apply refuses
-	const op_value *into = at_path(cur, &p->place);
-	if (p->has_value && (!p->value || p->value->type != into->type)) return OP_WRONG_KIND;
+	if (p->has_value && (!p->value || p->value->type != v->type)) return OP_WRONG_KIND;
 	el_list *l;
-	int code = elements(w, cur, &p->place, key, &l);
+	int code = elements(w, node, v, &l);
 	if (code) return code;
 	uint64_t a = (uint64_t)p->place.from, b = (uint64_t)p->place.to, o;
 	long m = p->has_value ? units(p->value) : 0;
@@ -873,6 +1128,7 @@ static int splice(work *w, const op_value *cur, const op_patch *p, tp_span key, 
 			}
 		}
 	}
+	if (!l->text && REC.ntaken && (code = away(w, node, l, REC.taken, REC.ntaken))) goto done;
 	// where the inserted go: right after its element; by ids, past those put there meanwhile
 	pos lp = {0, 0}, rp = {0, 0}, spot = {0, 0};
 	el_id left = has_first ? first : NOWHERE;
@@ -904,6 +1160,19 @@ static int splice(work *w, const op_value *cur, const op_patch *p, tp_span key, 
 		l->count += (size_t)m;
 		join(l, j + 1), join(l, j);
 		REC.device = w->ref.device, REC.c = c, REC.m = (uint64_t)m;
+		// the items it inserts that are containers are nodes, each put at its element
+		if (p->value->type == OP_LIST) {
+			for (long x = 0; x < m && !code; x++) {
+				if (!is_container(p->value->items[x])) continue;
+				tp_buf nb = {NULL, 0, 0, (size_t)-1, mem, 0}, sb = {NULL, 0, 0, (size_t)-1, mem, 0};
+				el_id e = {w->ref.device, 0, c + (uint64_t)x, 0};
+				node_make(&nb, w->ref.device, w->ref.n, w->i), rel_num(&nb, (uint64_t)x), slot_el(&sb, &e);
+				code = tp_buf_why(&nb) || tp_buf_why(&sb) ? TP_NOMEM
+					: set_rec(w, node, (tp_span){sb.p, sb.len}, (tp_span){nb.p, nb.len});
+				tp_buf_free(&nb), tp_buf_free(&sb);
+			}
+			if (code) goto done;
+		}
 	}
 	if (m > 0 || !nout) {
 		out[nout] = (op_patch){0};
@@ -920,7 +1189,8 @@ static int splice(work *w, const op_value *cur, const op_patch *p, tp_span key, 
 			goto done;
 		}
 		if (ngone) gone = g, roomgone = ngone;
-		*named = (el_anchor){1, has_first, first, gone, ngone, !nowhere(&right), same_before, right, NULL, 0, 0};
+		named->kind = 3, named->has_after = has_first, named->after = first, named->gone = gone, named->ngone = ngone;
+		named->has_before = !nowhere(&right), named->same = same_before, named->before = right;
 		gone = NULL, roomgone = 0;
 	}
 	*qs = out, *nq = nout, *qcap = qroom, out = NULL;
@@ -929,68 +1199,390 @@ done:
 	return code;
 }
 
-// a patch but a move, its path's array items found by ids (named non-NULL: a write here, by place,
-// and named): a splice, a removal at an index of an array (a splice of that one) or a put. keys:
-// room for its path; *qs (made) the patches to apply; named its ids
-static int patch(work *w, const op_value *cur, const op_patch *p, tp_span path, uint64_t c,
-	const el_anchor *given, op_key *keys, el_anchor *named, op_patch **qs, size_t *nq, size_t *qcap) {
-	static const el_id nothing[1];
+
+// the node at the first len keys of the path, found by place in value (a write here, a move), its
+// arrays' elements made as it goes; *found 0 when a scalar or nothing is there. its bytes in out
+static int node_at(work *w, const op_value *value, const op_key *path, size_t len, tp_buf *out, int *found) {
 	const tp_mem *mem = w->c->mem;
-	int reading = !named;
-	const el_id *by = !reading ? NULL : given && given->through ? given->through : nothing;
-	size_t nby = reading && given ? given->nthrough : 0;
-	size_t len = p->place.length;
-	int one = !p->place.has_range && !p->has_value && len && p->place.path[len - 1].type == OP_NUM_KEY;
-	tp_buf where = {NULL, 0, 0, (size_t)-1, mem, 0};
-	el_id *ids = named ? tp_alloc(mem, (len ? len : 1) * sizeof *ids) : NULL;
-	el_anchor sp = {0};
-	long found = 0;
-	int empty = 0;
-	if (named && !ids) return TP_NOMEM;
-	int code = locate(w, cur, &p->place, path, by, nby, len - (size_t)one, keys, &where, ids, &found);
-	if (!code && w->late && covered(w, (tp_span){where.p, where.len})) code = TP_LATE;
-	op_patch q = *p;
-	q.place.path = keys, q.place.length = len - (size_t)one;
-	const op_value *at = code ? NULL : at_path(cur, &q.place);
-	if (!code && one && at && at->type == OP_LIST) {
-		// by its id: taken away wherever it is now, once
-		if (reading && !nby) code = OP_RANGE;
+	el_state *st = w->st;
+	*found = 0;
+	long ri = slot_at(st, (tp_span){NULL, 0}, (tp_span){NULL, 0});
+	if (ri < 0 || !st->slots[ri].noden) return 0;
+	out->len = 0;
+	tp_put(out, sl_node(&st->slots[ri]), st->slots[ri].noden);
+	const op_value *v = value;
+	for (size_t h = 0; h < len; h++) {
+		const op_key *k = &path[h];
+		tp_buf slot = {NULL, 0, 0, (size_t)-1, mem, 0};
+		long si;
+		if (k->type == OP_NUM_KEY) {
+			el_list *l;
+			int code;
+			if (!v || v->type != OP_LIST) return 0;
+			if ((code = elements(w, (tp_span){out->p, out->len}, v, &l))) return code;
+			if (k->n < 0 || (size_t)k->n >= l->count) return 0;
+			uint64_t o;
+			size_t j = live_at(l, (size_t)k->n, &o);
+			el_id e = id_at(l, &l->runs[j], o);
+			slot_el(&slot, &e);
+			si = tp_buf_why(&slot) ? -2 : slot_at(st, (tp_span){out->p, out->len}, (tp_span){slot.p, slot.len});
+			if (si == -2) return tp_buf_free(&slot), TP_NOMEM;
+			if (si >= 0) {
+				if (!st->slots[si].noden) return tp_buf_free(&slot), 0;
+				out->len = 0, tp_put(out, sl_node(&st->slots[si]), st->slots[si].noden);
+			} else if (e.born) rel_num(out, e.k);
+			else return tp_buf_free(&slot), 0;
+			v = v->items[k->n];
+		} else {
+			if (!is_map(v)) return 0;
+			slot_key(&slot, k->s);
+			si = tp_buf_why(&slot) ? -2 : slot_at(st, (tp_span){out->p, out->len}, (tp_span){slot.p, slot.len});
+			if (si == -2) return tp_buf_free(&slot), TP_NOMEM;
+			const op_value *c = op_get(v, k->s);
+			if (si >= 0) {
+				if (!st->slots[si].noden) return tp_buf_free(&slot), 0;
+				out->len = 0, tp_put(out, sl_node(&st->slots[si]), st->slots[si].noden);
+			} else if (is_container(c)) rel_text(out, k->s);
+			else return tp_buf_free(&slot), 0;
+			v = c;
+		}
+		tp_buf_free(&slot);
+		if (tp_buf_why(out)) return TP_NOMEM;
+	}
+	if (len && !is_container(v)) return 0;
+	*found = 1;
+	return 0;
+}
+
+// a path as op keys in a block: the hops, then room more keys (the caller fills them); its strings after
+static int block_make(work *w, const hops *h, size_t more_keys, op_key **keys) {
+	const tp_mem *mem = w->c->mem;
+	size_t nk = h->n + more_keys, chars = 0;
+	for (size_t i = 0; i < h->n; i++) {
+		if (h->p[i].num) continue;
+		chars += h->p[i].s.n + 1;
+		for (size_t x = 0; x < h->p[i].s.n; x++) chars += h->p[i].s.p[x] == 0;
+	}
+	size_t size = nk * sizeof(op_key) + chars;
+	op_key *k = tp_alloc(mem, size ? size : 1);
+	if (!k) return TP_NOMEM;
+	char *s = (char *)(k + nk);
+	for (size_t i = 0; i < h->n; i++) {
+		if (h->p[i].num) k[i] = (op_key){.type = OP_NUM_KEY, .n = h->p[i].n};
 		else {
-			el_gone g = {reading ? by[nby - 1] : (el_id){0, 0, 0, 0}, 1};
-			el_anchor gone = {1, 0, {0, 0, 0, 0}, &g, 1, 0, 0, {0, 0, 0, 0}, NULL, 0, 0};
-			long k = p->place.path[len - 1].n;
-			q.place.has_range = 1, q.place.from = k, q.place.to = k + 1;
-			code = splice(w, cur, &q, (tp_span){where.p, where.len}, c, reading ? &gone : NULL, qs, nq, qcap,
-				named ? &sp : NULL);
-			if (!code && named && sp.named && found >= 0) ids[found++] = sp.gone[0].id;
-			else found = -1;
+			char *start = s;
+			for (size_t x = 0; x < h->p[i].s.n; x++) {
+				if (h->p[i].s.p[x]) *s++ = (char)h->p[i].s.p[x];
+				else *s++ = (char)0xc0, *s++ = (char)0x80;
+			}
+			*s++ = 0;
+			k[i] = (op_key){.type = OP_STR_KEY, .s = start};
+		}
+	}
+	if (w->nblocks == w->roomblocks) {
+		size_t room = w->roomblocks ? 2 * w->roomblocks : 8;
+		block *b = tp_grow(mem, w->blocks, w->roomblocks * sizeof *b, room * sizeof *b);
+		if (!b) return tp_free(mem, k, size ? size : 1), TP_NOMEM;
+		w->blocks = b, w->roomblocks = room;
+	}
+	w->blocks[w->nblocks++] = (block){k, size ? size : 1, nk, chars};
+	*keys = k;
+	return 0;
+}
+
+static void drop_qs(const tp_mem *mem, op_patch *qs, size_t cap) { tp_free(mem, qs, cap * sizeof *qs); }
+
+// a patch but a move, its container found by its id (given) or by place (named non-NULL: a write
+// here, and named): a splice, a removal at an index of an array (a splice of that one), a put at an
+// index, a put at a key, or of the whole value. *qs (made) the patches to apply, their path in
+// w->last (a block, if made)
+static int patch(work *w, const op_value *cur, const op_patch *p, uint64_t c, const el_anchor *given,
+	el_anchor *named, op_patch **qs, size_t *nq, size_t *qcap) {
+	const tp_mem *mem = w->c->mem;
+	int reading = !named, code = 0, has_value = p->has_value && p->value;
+	size_t len = p->place.length;
+	int spliced = p->place.has_range;
+	const op_key *last = len ? &p->place.path[len - 1] : NULL;
+	int index = !spliced && len && last->type == OP_NUM_KEY;
+	tp_buf cn = {NULL, 0, 0, (size_t)-1, mem, 0}, nb = {NULL, 0, 0, (size_t)-1, mem, 0},
+	       sb = {NULL, 0, 0, (size_t)-1, mem, 0};
+	hops hp = {0};
+	op_key *keys = NULL;
+	size_t nup = 0;
+	tp_span node = {0}, made = {0}, none = {0};
+	w->last = -1;
+	if (reading && !given) return OP_NOT_A_PATCH;
+	if (has_value && is_container(p->value)) node_make(&nb, w->ref.device, w->ref.n, w->i), made = (tp_span){nb.p, nb.len};
+	if (!spliced && !len) {
+		// the whole value
+		long ri = slot_at(w->st, none, none);
+		if (named) {
+			named->kind = 1;
+			if (ri >= 0 && w->st->slots[ri].noden) {
+				named->node = dup(mem, sl_node(&w->st->slots[ri]), w->st->slots[ri].noden), named->noden = w->st->slots[ri].noden;
+				if (!named->node) code = TP_NOMEM;
+			}
+		}
+		if (!code) code = assign(w, none, none, none, cur, made);
+		if (!code && !(*qs = tp_alloc(mem, sizeof **qs))) code = TP_NOMEM;
+		if (!code) **qs = *p, *nq = 1, *qcap = 1;
+		goto done;
+	}
+	size_t nlen = spliced ? len : len - 1;
+	if (reading) {
+		int ok;
+		if (!given->noden) code = w->late ? TP_LATE : OP_RANGE;
+		else if (!(code = where(w, (tp_span){given->node, given->noden}, &hp, &ok)) && !ok) code = w->late ? TP_LATE : OP_RANGE;
+		if (code) goto done;
+		node = (tp_span){given->node, given->noden};
+		if ((code = block_make(w, &hp, 1, &keys))) goto done;
+		w->last = (long)w->nblocks - 1;
+		nup = hp.n;
+	} else {
+		int found;
+		if ((code = node_at(w, cur, p->place.path, nlen, &cn, &found))) goto done;
+		if (!found) {
+			code = w->late ? TP_LATE : OP_RANGE;
+			goto done;
+		}
+		node = (tp_span){cn.p, cn.len}, keys = (op_key *)p->place.path, nup = nlen;
+	}
+	const op_value *v = at_keys(cur, keys, nup);
+	op_patch t = *p;
+	t.place.path = keys, t.place.length = nup;
+	if (named) {
+		named->node = dup(mem, node.p, node.n), named->noden = node.n;
+		if (!named->node) {
+			code = TP_NOMEM;
+			goto done;
+		}
+	}
+	if (spliced) {
+		if (!is_seq(v)) code = OP_WRONG_KIND;
+		else if (reading && given->kind != 3) code = OP_RANGE;
+		else code = splice(w, &t, node, v, c, reading ? given : NULL, qs, nq, qcap, named);
+		goto done;
+	}
+	if (index && !has_value) {
+		// a removal: taken away wherever it is now, once
+		el_anchor sp = {0};
+		if (!v || v->type != OP_LIST) code = OP_WRONG_KIND;
+		else if (reading && given->kind != 3) code = OP_RANGE;
+		else {
+			t.place.has_range = 1, t.place.from = last->n, t.place.to = last->n + 1;
+			code = splice(w, &t, node, v, c, reading ? given : NULL, qs, nq, qcap, named ? &sp : NULL);
+			if (!code && named) {
+				named->kind = 3, named->gone = sp.gone, named->ngone = sp.ngone;
+				sp.gone = NULL;
+			}
+		}
+		tp_free(mem, sp.gone, sp.ngone * sizeof *sp.gone);
+		goto done;
+	}
+	if (!(*qs = tp_alloc(mem, sizeof **qs))) {
+		code = TP_NOMEM;
+		goto done;
+	}
+	*nq = 1, *qcap = 1;
+	**qs = *p;
+	(*qs)->place.path = keys;
+	if (index) {
+		// a put at an index: the item is replaced, its element stays
+		el_list *l;
+		el_id e = {0};
+		long x = 0;
+		if (!v || v->type != OP_LIST) code = OP_WRONG_KIND;
+		else if (!(code = elements(w, node, v, &l))) {
+			if (!reading) {
+				if (last->n < 0 || (size_t)last->n >= l->count) code = OP_NO_KEY;
+				else {
+					uint64_t o;
+					size_t j = live_at(l, (size_t)last->n, &o);
+					e = id_at(l, &l->runs[j], o), x = last->n;
+				}
+			} else if (given->kind != 2) code = OP_RANGE;
+			else {
+				size_t j;
+				uint64_t o;
+				e = given->element;
+				if (!find(l, &e, &j, &o) || l->runs[j].gone) code = OP_RANGE;
+				else x = (long)(live_before(l, j) + (size_t)o);
+			}
+		}
+		if (!code) {
+			tp_buf db = {NULL, 0, 0, (size_t)-1, mem, 0};
+			slot_el(&sb, &e);
+			if (e.born) db.len = 0, tp_put(&db, node.p, node.n), rel_num(&db, e.k);
+			code = tp_buf_why(&sb) || tp_buf_why(&db) ? TP_NOMEM
+				: assign(w, node, (tp_span){sb.p, sb.len}, e.born ? (tp_span){db.p, db.len} : none, v->items[x], made);
+			tp_buf_free(&db);
+			if (!code) {
+				keys[nup] = (op_key){.type = OP_NUM_KEY, .n = x};
+				(*qs)->place.length = nup + 1;
+				if (named) named->kind = 2, named->element = e;
+			}
 		}
 	} else {
-		// not into an array: the whole path, as any
-		if (!code && one) code = locate(w, cur, &p->place, path, by, nby, len, keys, &where, ids, &found);
-		if (!code && one && w->late && covered(w, (tp_span){where.p, where.len})) code = TP_LATE;
-		q.place.length = len, at = code ? NULL : at_path(cur, &q.place);
-		if (!code && p->place.has_range && is_seq(at)) {
-			if (reading && !(given && given->named)) code = OP_RANGE;
-			else code = splice(w, cur, &q, (tp_span){where.p, where.len}, c, reading ? given : NULL, qs, nq, qcap,
-				named);
-			// a splice named says through, empty when its path has no whole
-			empty = named && named->named;
-		} else if (!code && w->late && touched(w, (tp_span){where.p, where.len})) {
-			code = TP_LATE;
-		} else if (!code && !(code = renew(w, (tp_span){where.p, where.len}))) {
-			if (!(*qs = tp_alloc(mem, sizeof **qs))) code = TP_NOMEM;
-			else **qs = q, *nq = 1, *qcap = 1;
+		// a put or removal at a key
+		if (!is_map(v)) code = OP_WRONG_KIND;
+		else {
+			const op_value *old = op_get(v, last->s);
+			tp_buf db = {NULL, 0, 0, (size_t)-1, mem, 0};
+			slot_key(&sb, last->s);
+			if (is_container(old)) tp_put(&db, node.p, node.n), rel_text(&db, last->s);
+			code = tp_buf_why(&sb) || tp_buf_why(&db) ? TP_NOMEM
+				: assign(w, node, (tp_span){sb.p, sb.len}, is_container(old) ? (tp_span){db.p, db.len} : none, old, made);
+			tp_buf_free(&db);
+			if (!code) {
+				keys[nup] = *last;
+				(*qs)->place.length = nup + 1;
+				if (named) named->kind = 1;
+			}
 		}
 	}
-	if (!code && named && (found > 0 || (found == 0 && empty))) {
-		el_id *t = found ? tp_grow(mem, ids, (len ? len : 1) * sizeof *ids, (size_t)found * sizeof *ids) : NULL;
-		if (found && !t) code = TP_NOMEM;
-		else if (found) named->through = t, ids = NULL;
-		if (!code) named->nthrough = (size_t)found, named->has_through = 1;
+done:
+	tp_buf_free(&cn), tp_buf_free(&nb), tp_buf_free(&sb);
+	tp_free(mem, hp.p, hp.room * sizeof *hp.p);
+	return code;
+}
+
+// a move, by place: what it moves is taken from where it was and put where it goes, as a new node
+// there (a new element for a slot)
+static int move(work *w, const op_value *cur, const op_patch *p, uint64_t c) {
+	const tp_mem *mem = w->c->mem;
+	const op_target *F = &p->move, *T = &p->place;
+	int code = 0, found;
+	op_value *moved = NULL, *rest = NULL, *wrap = NULL;
+	tp_buf nb = {NULL, 0, 0, (size_t)-1, mem, 0}, sb = nb, db = nb, mb = nb;
+	op_patch *qs = NULL;
+	size_t nq = 0, qcap = 0;
+	tp_span none = {0};
+	if (!F->length) return OP_RANGE;
+	const op_key *fk = &F->path[F->length - 1], *tk = T->length ? &T->path[T->length - 1] : NULL;
+	const op_value *src = at_path(cur, F);
+	if (F->has_range ? !is_seq(src) : !src) return OP_NO_KEY;
+	if (F->has_range) {
+		if (F->from > F->to) return OP_RANGE;
+		if (src->type == OP_STR) {
+			size_t x, y;
+			if (!op_string_span(src, F->from, F->to, &x, &y)) return OP_RANGE;
+			moved = op_str_n(src->str + x, y - x);
+		} else {
+			if ((size_t)F->to > src->count) return OP_RANGE;
+			moved = op_list();
+			for (int64_t i = F->from; i < F->to; i++) op_push(moved, op_ref(src->items[i]));
+		}
+	} else moved = op_ref((op_value *)src);
+	// the source goes
+	op_patch cut = {0};
+	cut.place = *F;
+	size_t failed;
+	if ((code = op_apply(cur, &cut, 1, NULL, &rest, &failed))) goto done;
+	if (F->has_range) {
+		if ((code = node_at(w, cur, F->path, F->length, &nb, &found))) goto done;
+		if (!found) {
+			code = OP_NO_KEY;
+			goto done;
+		}
+		code = splice(w, &cut, (tp_span){nb.p, nb.len}, src, c, NULL, &qs, &nq, &qcap, NULL);
+		drop_qs(mem, qs, qcap), qs = NULL;
+	} else {
+		const op_value *up = at_keys(cur, F->path, F->length - 1);
+		if ((code = node_at(w, cur, F->path, F->length - 1, &nb, &found))) goto done;
+		if (!found) {
+			code = OP_NO_KEY;
+			goto done;
+		}
+		if (fk->type == OP_NUM_KEY) {
+			if (!up || up->type != OP_LIST) code = OP_WRONG_KIND;
+			else {
+				op_patch one = {0};
+				one.place = (op_target){F->path, F->length - 1, 1, fk->n, fk->n + 1};
+				code = splice(w, &one, (tp_span){nb.p, nb.len}, up, c, NULL, &qs, &nq, &qcap, NULL);
+				drop_qs(mem, qs, qcap), qs = NULL;
+			}
+		} else if (!is_map(up)) code = OP_WRONG_KIND;
+		else {
+			const op_value *old = op_get(up, fk->s);
+			slot_key(&sb, fk->s);
+			if (is_container(old)) tp_put(&db, nb.p, nb.len), rel_text(&db, fk->s);
+			code = tp_buf_why(&sb) || tp_buf_why(&db) ? TP_NOMEM
+				: assign(w, (tp_span){nb.p, nb.len}, (tp_span){sb.p, sb.len}, is_container(old) ? (tp_span){db.p, db.len} : none, old, none);
+		}
 	}
-	tp_free(mem, sp.gone, sp.ngone * sizeof *sp.gone);
-	tp_free(mem, ids, (len ? len : 1) * sizeof *ids), tp_buf_free(&where);
+	if (code) goto done;
+	// it lands where it goes
+	tp_buf_free(&nb), tp_buf_free(&sb), tp_buf_free(&db);
+	nb = (tp_buf){NULL, 0, 0, (size_t)-1, mem, 0}, sb = nb, db = nb;
+	tp_span made = none;
+	if (is_container(moved)) {
+		node_make(&mb, w->ref.device, w->ref.n, w->i);
+		if (tp_buf_why(&mb)) {
+			code = TP_NOMEM;
+			goto done;
+		}
+		made = (tp_span){mb.p, mb.len};
+	}
+	if (T->has_range) {
+		const op_value *into = at_path(rest, T);
+		if ((code = node_at(w, rest, T->path, T->length, &nb, &found))) goto done;
+		if (!found || !is_seq(into)) {
+			code = OP_WRONG_KIND;
+			goto done;
+		}
+		op_value *value = moved;
+		if (!F->has_range) {
+			wrap = op_list();
+			op_push(wrap, op_ref(moved));
+			value = wrap;
+		}
+		op_patch q = {0};
+		q.place = *T, q.has_value = 1, q.value = value;
+		code = splice(w, &q, (tp_span){nb.p, nb.len}, into, c, NULL, &qs, &nq, &qcap, NULL);
+		drop_qs(mem, qs, qcap), qs = NULL;
+	} else if (!T->length) {
+		code = assign(w, none, none, none, rest, made);
+	} else {
+		const op_value *up = at_keys(rest, T->path, T->length - 1);
+		if ((code = node_at(w, rest, T->path, T->length - 1, &nb, &found))) goto done;
+		if (!found) {
+			code = OP_NO_KEY;
+			goto done;
+		}
+		tp_span parent = {nb.p, nb.len};
+		if (tk->type == OP_NUM_KEY) {
+			el_list *l;
+			if (!up || up->type != OP_LIST) code = OP_WRONG_KIND;
+			else if (!(code = elements(w, parent, up, &l))) {
+				if (tk->n < 0 || (size_t)tk->n >= l->count) code = OP_NO_KEY;
+				else {
+					uint64_t o;
+					size_t j = live_at(l, (size_t)tk->n, &o);
+					el_id e = id_at(l, &l->runs[j], o);
+					slot_el(&sb, &e);
+					if (e.born) tp_put(&db, parent.p, parent.n), rel_num(&db, e.k);
+					tp_span derived = e.born ? (tp_span){db.p, db.len} : none;
+					code = tp_buf_why(&sb) || tp_buf_why(&db) ? TP_NOMEM
+						: assign(w, parent, (tp_span){sb.p, sb.len}, derived, up->items[tk->n], made);
+				}
+			}
+		} else if (!is_map(up)) code = OP_WRONG_KIND;
+		else {
+			const op_value *old = op_get(up, tk->s);
+			tp_buf eb = {NULL, 0, 0, (size_t)-1, mem, 0};
+			slot_key(&sb, tk->s);
+			if (is_container(old)) tp_put(&eb, parent.p, parent.n), rel_text(&eb, tk->s);
+			code = tp_buf_why(&sb) || tp_buf_why(&eb) ? TP_NOMEM
+				: assign(w, parent, (tp_span){sb.p, sb.len}, is_container(old) ? (tp_span){eb.p, eb.len} : none, old, made);
+			tp_buf_free(&eb);
+		}
+	}
+done:
+	tp_buf_free(&nb), tp_buf_free(&sb), tp_buf_free(&db), tp_buf_free(&mb);
+	drop_qs(mem, qs, qcap);
+	if (moved) op_free(moved);
+	if (rest) op_free(rest);
+	if (wrap) op_free(wrap);
 	return code;
 }
 
@@ -1029,28 +1621,36 @@ static void undo_rec(const tp_mem *mem, el_state *st, el_rec *r) {
 		}
 		l->last = r->splice.was;
 		tp_free(mem, r->splice.taken, r->splice.roomtaken * sizeof *r->splice.taken);
+	} else if (r->kind == SLOT) {
+		const el_slot *a = &r->slot.added;
+		if (r->slot.has_added) {
+			for (size_t i = 0; i < st->nslots; i++) {
+				el_slot *s = &st->slots[i];
+				if (s->buf != a->buf || s->parentn != a->parentn || s->slotn != a->slotn || s->noden != a->noden) continue;
+				slot_free(mem, s);
+				if (r->slot.had) *s = r->slot.was;
+				else *s = st->slots[--st->nslots];
+				break;
+			}
+		} else if (r->slot.had) st->slots[st->nslots++] = r->slot.was;
 	} else {
-		for (size_t i = 0; i < st->nborn; i++) {
-			if (st->born[i].key != r->put.pushed) continue;
-			tp_free(mem, st->born[i].key, st->born[i].keyn);
-			memmove(st->born + i, st->born + i + 1, (st->nborn - i - 1) * sizeof *st->born);
-			st->nborn--;
-			break;
-		}
-		for (size_t i = 0; i < r->put.nborn; i++) st->born[st->nborn++] = r->put.born[i];
-		for (size_t i = 0; i < r->put.nlists; i++) st->lists[st->n++] = r->put.lists[i];
-		tp_free(mem, r->put.born, r->put.nborn * sizeof *r->put.born);
-		tp_free(mem, r->put.lists, r->put.nlists * sizeof *r->put.lists);
+		for (size_t i = 0; i < r->drop.nlists; i++) st->lists[st->n++] = r->drop.lists[i];
+		for (size_t i = 0; i < r->drop.nslots; i++) st->slots[st->nslots++] = r->drop.slots[i];
+		tp_free(mem, r->drop.lists, r->drop.nlists * sizeof *r->drop.lists);
+		tp_free(mem, r->drop.slots, r->drop.nslots * sizeof *r->drop.slots);
 	}
 }
 
 static void drop_rec(const tp_mem *mem, el_rec *r) {
 	if (r->kind == SPLICE) tp_free(mem, r->splice.taken, r->splice.roomtaken * sizeof *r->splice.taken);
-	if (r->kind != PUT) return;
-	for (size_t i = 0; i < r->put.nborn; i++) tp_free(mem, r->put.born[i].key, r->put.born[i].keyn);
-	for (size_t i = 0; i < r->put.nlists; i++) list_free(mem, r->put.lists[i]);
-	tp_free(mem, r->put.born, r->put.nborn * sizeof *r->put.born);
-	tp_free(mem, r->put.lists, r->put.nlists * sizeof *r->put.lists);
+	else if (r->kind == SLOT) {
+		if (r->slot.had) slot_free(mem, &r->slot.was);
+	} else if (r->kind == DROP) {
+		for (size_t i = 0; i < r->drop.nlists; i++) list_free(mem, r->drop.lists[i]);
+		for (size_t i = 0; i < r->drop.nslots; i++) slot_free(mem, &r->drop.slots[i]);
+		tp_free(mem, r->drop.lists, r->drop.nlists * sizeof *r->drop.lists);
+		tp_free(mem, r->drop.slots, r->drop.nslots * sizeof *r->drop.slots);
+	}
 }
 
 void el_back_undo(const tp_mem *mem, el_state *st, el_back *back) {
@@ -1066,24 +1666,22 @@ void el_back_free(const tp_mem *mem, el_back *back) {
 }
 
 int el_seed(const tp_mem *mem, el_state *st, const el_ref *ref) {
-	uint8_t *key = tp_alloc(mem, 1);
-	st->born = tp_alloc(mem, 4 * sizeof *st->born);
-	if (!key || !st->born) {
-		tp_free(mem, key, 1), tp_free(mem, st->born, 4 * sizeof *st->born);
-		st->born = NULL;
-		return TP_NOMEM;
-	}
-	*key = 0x80;
-	st->roomborn = 4, st->nborn = 1;
-	st->born[0] = (el_born){key, 1, *ref};
+	tp_buf nb = {NULL, 0, 0, (size_t)-1, mem, 0};
+	node_make(&nb, ref->device, ref->n, 0);
+	el_slot s = {0};
+	s.buf = dup(mem, nb.p, nb.len), s.noden = (uint32_t)nb.len, s.lamport = ref->lamport, s.device = ref->device;
+	int bad = tp_buf_why(&nb) || !s.buf || slots_room(mem, st);
+	tp_buf_free(&nb);
+	if (bad) return tp_free(mem, s.buf, s.noden), TP_NOMEM;
+	st->slots[st->nslots++] = s;
 	return 0;
 }
 
 void el_state_free(const tp_mem *mem, el_state *st) {
 	for (size_t i = 0; i < st->n; i++) list_free(mem, st->lists[i]);
-	for (size_t i = 0; i < st->nborn; i++) tp_free(mem, st->born[i].key, st->born[i].keyn);
+	for (size_t i = 0; i < st->nslots; i++) slot_free(mem, &st->slots[i]);
 	tp_free(mem, st->lists, st->room * sizeof *st->lists);
-	tp_free(mem, st->born, st->roomborn * sizeof *st->born);
+	tp_free(mem, st->slots, st->roomslots * sizeof *st->slots);
 	*st = (el_state){0};
 }
 
@@ -1096,26 +1694,17 @@ static void rollback(work *w, size_t marks) {
 int el_step(const el_ctx *c, el_state *st, op_value **value, const el_ref *ref, tp_span patches,
 	const op_patch *ps, size_t n, const uint8_t *keep, const el_anchor *ids, int late,
 	op_undo *undo, el_back *back, op_patch **applied, size_t *napplied, el_anchor **named) {
-	work w = {c, st, back, *ref, late};
+	work w = {.c = c, .st = st, .back = back, .ref = *ref, .late = late, .last = -1};
 	size_t marks = back->n, at = 0, nout = 0, roomout = 0, nus = 0, roomus = 0;
 	op_value *cur = *value;
 	int owned = 0, code = 0;
 	op_patch *out = NULL, *cat = NULL;
+	long *outblk = NULL;
 	op_undo *us = NULL;
 	el_anchor *nm = NULL;
-	size_t total = 0, room = 0, from = 0;
+	size_t total = 0;
 	uint64_t made = 0; // the step's elements so far: the next is its seq + made
-	for (size_t i = 0; i < n; i++) {
-		size_t m = ps[i].has_move && ps[i].move.length > ps[i].place.length ? ps[i].move.length : ps[i].place.length;
-		room += m;
-	}
-	// the paths as applied, each patch's from its own place in it
-	op_key *pool = tp_alloc(c->mem, (room ? room : 1) * sizeof *pool);
-	if (!pool) return TP_NOMEM;
-	if (!ids && named && n && !(nm = tp_alloc(c->mem, n * sizeof *nm))) {
-		tp_free(c->mem, pool, (room ? room : 1) * sizeof *pool);
-		return TP_NOMEM;
-	}
+	if (!ids && named && n && !(nm = tp_alloc(c->mem, n * sizeof *nm))) return TP_NOMEM;
 	if (nm) memset(nm, 0, n * sizeof *nm);
 	tp_patch tp;
 	for (size_t i = 0; i < n && !code; i++) {
@@ -1126,19 +1715,15 @@ int el_step(const el_ctx *c, el_state *st, op_value **value, const el_ref *ref, 
 		uint64_t counter = ref->seq + made;
 		made += tp_patch_made(&tp);
 		const op_patch *p = &ps[i];
-		op_key *keys = pool + from;
-		from += p->has_move && p->move.length > p->place.length ? p->move.length : p->place.length;
+		w.i = i;
 		if (keep && !keep[i]) continue;
 		op_patch *qs = (op_patch *)p, *made_qs = NULL;
 		size_t nq = 1, qcap = 0;
+		w.last = -1;
 		if (p->has_move && late) code = TP_LATE;
-		else if (p->has_move) {
-			// by place
-			code = end(&w, cur, &p->place, tp.path, keys);
-			if (!code) code = end(&w, cur, &p->move, move_path(tp.move), keys);
-		} else {
-			code = patch(&w, cur, p, tp.path, counter, ids ? &ids[i] : NULL, keys, nm ? &nm[i] : NULL,
-				&made_qs, &nq, &qcap);
+		else if (p->has_move) code = move(&w, cur, p, counter);
+		else {
+			code = patch(&w, cur, p, counter, ids ? &ids[i] : NULL, nm ? &nm[i] : NULL, &made_qs, &nq, &qcap);
 			if (!code) qs = made_qs;
 		}
 		for (size_t q = 0; q < nq && !code; q++) {
@@ -1152,12 +1737,15 @@ int el_step(const el_ctx *c, el_state *st, op_value **value, const el_ref *ref, 
 			if (nout == roomout) {
 				size_t room = roomout ? 2 * roomout : 8;
 				op_patch *o = realloc(out, room * sizeof *o);
-				if (!o) {
+				long *ob = realloc(outblk, room * sizeof *ob);
+				if (o) out = o;
+				if (ob) outblk = ob;
+				if (!o || !ob) {
 					op_undo_free(&u);
 					code = TP_NOMEM;
 					break;
 				}
-				out = o, roomout = room;
+				roomout = room;
 			}
 			if (undo && nus == roomus) {
 				size_t room = roomus ? 2 * roomus : 8;
@@ -1169,6 +1757,7 @@ int el_step(const el_ctx *c, el_state *st, op_value **value, const el_ref *ref, 
 				}
 				us = t, roomus = room;
 			}
+			outblk[nout] = qs == p ? -1 : w.last;
 			out[nout++] = qs[q];
 			if (undo) us[nus++] = u;
 		}
@@ -1178,27 +1767,46 @@ int el_step(const el_ctx *c, el_state *st, op_value **value, const el_ref *ref, 
 		for (size_t i = 0; i < nus; i++) total += us[i].n;
 		if (total && !(cat = malloc(total * sizeof *cat))) code = TP_NOMEM;
 	}
-	// the patches as applied, their paths after them
+	// the patches as applied, their paths after them: keys, then the strings of those found by id
 	op_patch *whole = NULL;
-	if (!code && applied && nout && !(whole = malloc(nout * sizeof *whole + room * sizeof *pool))) {
-		free(cat);
-		code = TP_NOMEM;
-	}
-	if (whole) {
-		op_key *k = (op_key *)(whole + nout);
-		uintptr_t lo = (uintptr_t)pool, hi = (uintptr_t)(pool + room);
-		if (room) memcpy(k, pool, room * sizeof *k);
-		for (size_t i = 0; i < nout; i++) {
-			whole[i] = out[i];
-			uintptr_t at = (uintptr_t)out[i].place.path;
-			if (at >= lo && at < hi) whole[i].place.path = k + (out[i].place.path - pool);
+	if (!code && applied && nout) {
+		size_t bytes = nout * sizeof *whole;
+		for (size_t i = 0; i < nout; i++) bytes += out[i].place.length * sizeof(op_key);
+		for (size_t b = 0; b < w.nblocks; b++) bytes += w.blocks[b].chars;
+		if (!(whole = malloc(bytes))) {
+			free(cat);
+			code = TP_NOMEM;
+		} else {
+			op_key *k = (op_key *)(whole + nout);
+			char *chars = (char *)(k);
+			for (size_t i = 0; i < nout; i++) chars += out[i].place.length * sizeof(op_key);
+			char **base = w.nblocks ? calloc(w.nblocks, sizeof *base) : NULL;
+			for (size_t i = 0; i < nout; i++) {
+				whole[i] = out[i];
+				size_t m = out[i].place.length;
+				if (outblk[i] >= 0 && base) {
+					const block *b = &w.blocks[outblk[i]];
+					const char *old = (const char *)((op_key *)b->p + b->nkeys);
+					if (!base[outblk[i]]) memcpy(chars, old, b->chars), base[outblk[i]] = chars, chars += b->chars;
+					for (size_t x = 0; x < m; x++) {
+						k[x] = out[i].place.path[x];
+						if (k[x].type == OP_STR_KEY && k[x].s >= old && k[x].s < old + b->chars) {
+							k[x].s = base[outblk[i]] + (k[x].s - old);
+						}
+					}
+				} else if (m) memcpy(k, out[i].place.path, m * sizeof *k);
+				whole[i].place.path = k;
+				k += m;
+			}
+			free(base);
 		}
 	}
-	tp_free(c->mem, pool, (room ? room : 1) * sizeof *pool);
+	for (size_t b = 0; b < w.nblocks; b++) tp_free(c->mem, w.blocks[b].p, w.blocks[b].size);
+	tp_free(c->mem, w.blocks, w.roomblocks * sizeof *w.blocks);
 	if (code) {
 		for (size_t i = 0; i < nus; i++) op_undo_free(&us[i]);
 		tp_free(c->mem, us, roomus * sizeof *us);
-		free(out);
+		free(out), free(outblk);
 		if (nm) el_anchors_free(c->mem, nm, n);
 		if (owned) op_free(cur);
 		rollback(&w, marks);
@@ -1215,7 +1823,7 @@ int el_step(const el_ctx *c, el_state *st, op_value **value, const el_ref *ref, 
 	}
 	tp_free(c->mem, us, roomus * sizeof *us);
 	if (owned) op_free(*value), *value = cur;
-	free(out);
+	free(out), free(outblk);
 	if (applied) *applied = whole, *napplied = nout;
 	if (named) *named = nm;
 	return 0;
@@ -1225,14 +1833,14 @@ void el_anchors_free(const tp_mem *mem, el_anchor *a, size_t n) {
 	if (!a) return;
 	for (size_t i = 0; i < n; i++) {
 		tp_free(mem, a[i].gone, a[i].ngone * sizeof *a[i].gone);
-		tp_free(mem, a[i].through, a[i].nthrough * sizeof *a[i].through);
+		tp_free(mem, a[i].node, a[i].noden);
 	}
 	tp_free(mem, a, n * sizeof *a);
 }
 
 int el_named(const el_anchor *a, size_t n) {
 	for (size_t i = 0; a && i < n; i++) {
-		if (a[i].named || a[i].has_through) return 1;
+		if (a[i].kind) return 1;
 	}
 	return 0;
 }
@@ -1263,6 +1871,30 @@ static int read_id(const el_ctx *c, tp_in *in, const tp_step *s, uint64_t seq, u
 	return 0;
 }
 
+
+// a node as written: this device's [n, i, rel…] or another's [device, n, i, rel…]; its bytes (cbor
+// items one after another) put in out
+static int read_node(const el_ctx *c, tp_in *in, uint32_t me, tp_buf *out) {
+	uint64_t k, a, i;
+	tp_span key;
+	if (tp_array(in, &k) || k < 2) return -1;
+	if (in->p < in->end && *in->p >> 5 == 0) {
+		if (tp_whole(in, &a) || tp_whole(in, &i)) return -1;
+		node_make(out, me, a, i), k -= 2;
+	} else {
+		if (k < 3 || tp_bytes(in, 32, &key) || tp_whole(in, &a) || tp_whole(in, &i)) return -1;
+		long d = c->find(c->self, key.p);
+		node_make(out, d < 0 ? EL_UNKNOWN : (uint32_t)d, a, i), k -= 3;
+	}
+	for (; k; k--) {
+		const uint8_t *from = in->p;
+		tp_span item;
+		if (tp_skip(in, &item)) return -1;
+		tp_put(out, from, (size_t)(in->p - from));
+	}
+	return 0;
+}
+
 int el_read(const el_ctx *c, const tp_step *s, el_anchor **out) {
 	uint64_t seq = s->seq;
 	*out = NULL;
@@ -1276,13 +1908,31 @@ int el_read(const el_ctx *c, const tp_step *s, el_anchor **out) {
 	if (k) memset(a, 0, (size_t)k * sizeof *a);
 	int code = 0;
 	for (uint64_t i = 0; i < k && !code; i++) {
-		uint64_t two, g = 0, t = 0;
+		uint64_t two, g = 0;
+		tp_span pred;
+		tp_buf nb = {NULL, 0, 0, (size_t)-1, c->mem, 0};
 		if (tp_null(&in)) continue;
-		if (tp_array(&in, &two) || (two != 1 && two != 4)) code = TP_NOTSTEP;
-		else if (two == 4 && !tp_null(&in)) {
-			code = read_id(c, &in, s, seq, (uint32_t)me, 0, &a[i].after), a[i].has_after = 1;
+		if (tp_array(&in, &two) || two < 2 || two > 4) {
+			code = TP_NOTSTEP;
+			break;
 		}
-		if (!code && two == 4 && tp_array(&in, &g)) code = TP_NOTSTEP;
+		if (!tp_null(&in)) {
+			if (read_node(c, &in, (uint32_t)me, &nb) || tp_buf_why(&nb)) code = tp_buf_why(&nb) ? TP_NOMEM : TP_NOTSTEP;
+			else if (!(a[i].node = dup(c->mem, nb.p, nb.len))) code = TP_NOMEM;
+			else a[i].noden = nb.len;
+		}
+		tp_buf_free(&nb);
+		if (code) break;
+		a[i].kind = (int)two - 1;
+		if (two <= 3) {
+			if (tp_skip(&in, &pred)) code = TP_NOTSTEP;
+			else if (two == 3 && read_id(c, &in, s, seq, (uint32_t)me, 0, &a[i].element)) code = TP_NOTSTEP;
+			continue;
+		}
+		if (!tp_null(&in)) {
+			code = read_id(c, &in, s, seq, (uint32_t)me, 0, &a[i].after) ? TP_NOTSTEP : 0, a[i].has_after = 1;
+		}
+		if (!code && tp_array(&in, &g)) code = TP_NOTSTEP;
 		if (!code && g && !(a[i].gone = tp_alloc(c->mem, (size_t)g * sizeof *a[i].gone))) code = TP_NOMEM;
 		if (!code) a[i].ngone = (size_t)g;
 		for (uint64_t j = 0; j < g && !code; j++) {
@@ -1291,17 +1941,10 @@ int el_read(const el_ctx *c, const tp_step *s, el_anchor **out) {
 				tp_whole(&in, &a[i].gone[j].count))
 				code = TP_NOTSTEP;
 		}
-		if (!code && two == 4 && !tp_null(&in)) {
+		if (!code && !tp_null(&in)) {
 			a[i].has_before = 1;
 			if (in.p < in.end && *in.p == 0xf5) in.p++, a[i].same = 1;
 			else code = read_id(c, &in, s, seq, (uint32_t)me, 0, &a[i].before) ? TP_NOTSTEP : 0;
-		}
-		a[i].named = !code && two == 4;
-		if (!code && tp_array(&in, &t)) code = TP_NOTSTEP;
-		if (!code && t && !(a[i].through = tp_alloc(c->mem, (size_t)t * sizeof *a[i].through))) code = TP_NOMEM;
-		if (!code) a[i].nthrough = (size_t)t, a[i].has_through = 1;
-		for (uint64_t j = 0; j < t && !code; j++) {
-			if (read_id(c, &in, s, seq, (uint32_t)me, 1, &a[i].through[j])) code = TP_NOTSTEP;
 		}
 	}
 	if (code) return el_anchors_free(c->mem, a, (size_t)k), code;
@@ -1322,38 +1965,52 @@ static void write_id(tp_buf *b, const el_ctx *c, const el_id *id, uint32_t me, u
 	if (id->born) tp_put_head(b, 0, id->k);
 }
 
+// a node as written: this device's [n, i, rel…], another's [device, n, i, rel…]
+static void write_node(tp_buf *b, const el_ctx *c, const uint8_t *node, size_t noden, uint32_t me) {
+	tp_in in = {node, node + noden};
+	uint64_t k = 0, dev;
+	tp_span item;
+	if (tp_whole(&in, &dev)) return;
+	while (in.p < in.end && !tp_skip(&in, &item)) k++;
+	in = (tp_in){node, node + noden};
+	tp_whole(&in, &dev);
+	if (dev == me) tp_put_head(b, 4, k);
+	else tp_put_head(b, 4, k + 1), tp_put_head(b, 2, 32), tp_put(b, c->bytes(c->self, (uint32_t)dev), 32);
+	tp_put(b, in.p, (size_t)(in.end - in.p));
+}
+
 void el_write(tp_buf *b, const el_ctx *c, const el_anchor *a, size_t count, uint32_t me, uint64_t n,
 	uint64_t seq) {
 	tp_put_head(b, 4, count);
 	for (size_t i = 0; i < count; i++) {
-		if (!a[i].named && !a[i].has_through) {
+		if (!a[i].kind) {
 			tp_put(b, "\xf6", 1);
 			continue;
 		}
-		if (!a[i].named) {
-			tp_put_head(b, 4, 1), tp_put_head(b, 4, a[i].nthrough);
-			for (size_t j = 0; j < a[i].nthrough; j++) write_id(b, c, &a[i].through[j], me, n, seq, 1);
-			continue;
-		}
-		tp_put_head(b, 4, 4);
-		if (a[i].has_after) write_id(b, c, &a[i].after, me, n, seq, 0);
+		tp_put_head(b, 4, a[i].kind == 1 ? 2 : a[i].kind == 2 ? 3 : 4);
+		if (a[i].noden) write_node(b, c, a[i].node, a[i].noden, me);
 		else tp_put(b, "\xf6", 1);
-		tp_put_head(b, 4, a[i].ngone);
-		for (size_t j = 0; j < a[i].ngone; j++) {
-			tp_put_head(b, 4, 2), write_id(b, c, &a[i].gone[j].id, me, n, seq, 0);
-			tp_put_head(b, 0, a[i].gone[j].count);
+		if (a[i].kind == 1) tp_put_head(b, 4, 0);
+		else if (a[i].kind == 2) tp_put_head(b, 4, 0), write_id(b, c, &a[i].element, me, n, seq, 0);
+		else {
+			if (a[i].has_after) write_id(b, c, &a[i].after, me, n, seq, 0);
+			else tp_put(b, "\xf6", 1);
+			tp_put_head(b, 4, a[i].ngone);
+			for (size_t j = 0; j < a[i].ngone; j++) {
+				tp_put_head(b, 4, 2), write_id(b, c, &a[i].gone[j].id, me, n, seq, 0);
+				tp_put_head(b, 0, a[i].gone[j].count);
+			}
+			if (a[i].has_before && a[i].same) tp_put(b, "\xf5", 1);
+			else if (a[i].has_before) write_id(b, c, &a[i].before, me, n, seq, 0);
+			else tp_put(b, "\xf6", 1);
 		}
-		if (a[i].has_before && a[i].same) tp_put(b, "\xf5", 1);
-		else if (a[i].has_before) write_id(b, c, &a[i].before, me, n, seq, 0);
-		else tp_put(b, "\xf6", 1);
-		tp_put_head(b, 4, a[i].nthrough);
-		for (size_t j = 0; j < a[i].nthrough; j++) write_id(b, c, &a[i].through[j], me, n, seq, 1);
 	}
 }
 
-// a state's elements as cbor, for a snapshot (the value is the graph's): [lists, born], a list
-// [key, by, last, runs], a run [device, c, len, flags, left, right], an element's
-// origin null or [device, born, number], a step's place [lamport, device, n, seq] or null
+// a state's sequences and records as cbor, for a snapshot (the value is the graph's): [lists, slots],
+// a list [node, text, runs], a run [device, c, len, flags, left, right], an element's origin null or
+// [device, born, number], a node [device, n, patch, rel…], a slot [parent or null, key or an
+// element [device, born, c, k], node or null, a step's place [lamport, device, n, seq]]
 static void save_ref(tp_buf *b, const el_ctx *c, const el_ref *r, int none) {
 	if (none) {
 		tp_put(b, "\xf6", 1);
@@ -1373,12 +2030,19 @@ static void save_org(tp_buf *b, const el_ctx *c, org g) {
 	else tp_put_head(b, 2, 32), tp_put(b, c->bytes(c->self, g.device), 32);
 	tp_put_head(b, 0, g.born), tp_put_head(b, 0, (uint64_t)g.hi << 32 | g.lo);
 }
+static void save_node(tp_buf *b, const el_ctx *c, const uint8_t *node, size_t noden) {
+	if (!noden) {
+		tp_put(b, "\xf6", 1);
+		return;
+	}
+	write_node(b, c, node, noden, UINT32_MAX);
+}
 void el_save(tp_buf *b, const el_ctx *c, const el_state *st) {
 	tp_put_head(b, 4, 2), tp_put_head(b, 4, st->n);
 	for (size_t i = 0; i < st->n; i++) {
 		const el_list *l = st->lists[i];
-		tp_put_head(b, 4, 4), tp_put_head(b, 2, l->keyn), tp_put(b, l->key, l->keyn);
-		save_ref(b, c, &l->by, 0), save_ref(b, c, &l->last, !l->last.lamport);
+		tp_put_head(b, 4, 4), save_node(b, c, l->key, l->keyn), tp_put_head(b, 0, (uint64_t)l->text);
+		save_ref(b, c, &l->last, !l->last.lamport);
 		tp_put_head(b, 4, l->n);
 		for (size_t j = 0; j < l->n; j++) {
 			const run *r = &l->runs[j];
@@ -1387,10 +2051,19 @@ void el_save(tp_buf *b, const el_ctx *c, const el_state *st) {
 			save_org(b, c, r->left), save_org(b, c, r->right);
 		}
 	}
-	tp_put_head(b, 4, st->nborn);
-	for (size_t i = 0; i < st->nborn; i++) {
-		tp_put_head(b, 4, 2), tp_put_head(b, 2, st->born[i].keyn), tp_put(b, st->born[i].key, st->born[i].keyn);
-		save_ref(b, c, &st->born[i].r, 0);
+	tp_put_head(b, 4, st->nslots);
+	for (size_t i = 0; i < st->nslots; i++) {
+		const el_slot *s = &st->slots[i];
+		el_id e;
+		el_ref at = sl_at(s);
+		tp_put_head(b, 4, 4), save_node(b, c, sl_parent(s), s->parentn);
+		if (sl_el(s, &e)) {
+			tp_put_head(b, 4, 4), tp_put_head(b, 2, 32), tp_put(b, c->bytes(c->self, e.device), 32);
+			tp_put_head(b, 0, e.born), tp_put_head(b, 0, e.c), tp_put_head(b, 0, e.k);
+		} else if (s->slotn) tp_put(b, sl_slot(s), s->slotn);
+		else tp_put(b, "\xf6", 1);
+		save_node(b, c, sl_node(s), s->noden);
+		save_ref(b, c, &at, 0);
 	}
 }
 
@@ -1421,17 +2094,36 @@ static int load_org(const el_ctx *c, tp_in *in, org *g) {
 	*g = (org){d, (uint32_t)born, 0, (uint32_t)x, (uint32_t)(x >> 32)};
 	return 0;
 }
+// a node as saved: null (out empty), or [device, n, patch, rel…]
+static int load_node(const el_ctx *c, tp_in *in, tp_buf *out) {
+	uint64_t k, n, i;
+	tp_span key;
+	if (tp_null(in)) return 0;
+	if (tp_array(in, &k) || k < 3 || tp_bytes(in, 32, &key) || tp_whole(in, &n) || tp_whole(in, &i)) return -1;
+	long d = c->index(c->self, key.p);
+	if (d < 0) return TP_NOMEM;
+	node_make(out, (uint32_t)d, n, i);
+	for (k -= 3; k; k--) {
+		const uint8_t *from = in->p;
+		tp_span item;
+		int major = in->p < in->end ? *in->p >> 5 : -1;
+		if (major != 0 && major != 3) return -1;
+		if (tp_skip(in, &item)) return -1;
+		tp_put(out, from, (size_t)(in->p - from));
+	}
+	return 0;
+}
 // st, empty, made from what el_save wrote
 int el_load(const el_ctx *c, el_state *st, tp_span bytes) {
 	const tp_mem *mem = c->mem;
 	tp_in in = {bytes.p, bytes.p + bytes.n};
-	uint64_t k, nl, nb = 0;
+	uint64_t k, nl, ns = 0;
 	int code = 0;
 	*st = (el_state){0};
 	if (tp_array(&in, &k) || k != 2 || tp_array(&in, &nl)) return TP_NOTSTEP;
 	for (uint64_t i = 0; i < nl && !code; i++) {
-		tp_span key;
-		uint64_t nr;
+		uint64_t nr, text;
+		tp_buf nb = {NULL, 0, 0, (size_t)-1, mem, 0};
 		el_list *l = tp_alloc(mem, sizeof *l);
 		if (!l) return code = TP_NOMEM, el_state_free(mem, st), code;
 		memset(l, 0, sizeof *l);
@@ -1439,19 +2131,33 @@ int el_load(const el_ctx *c, el_state *st, tp_span bytes) {
 		if (lists_room(mem, st)) tp_free(mem, l, sizeof *l), code = TP_NOMEM;
 		else st->lists[st->n++] = l;
 		if (code) break;
-		if (tp_array(&in, &k) || k != 4 || tp_bytes(&in, 0, &key) || (code = load_ref(c, &in, &l->by, 0)) ||
-			(code = load_ref(c, &in, &l->last, 1)) || tp_array(&in, &nr))
-			code = code ? code : TP_NOTSTEP;
+		if (tp_array(&in, &k) || k != 4) code = TP_NOTSTEP;
+		if (!code && (code = load_node(c, &in, &nb))) code = code < 0 ? TP_NOTSTEP : code;
+		if (!code && (tp_buf_why(&nb) || nb.len < 3)) code = tp_buf_why(&nb) ? TP_NOMEM : TP_NOTSTEP;
+		if (!code && (tp_whole(&in, &text) || text > 1)) code = TP_NOTSTEP;
+		if (!code && (code = load_ref(c, &in, &l->last, 1))) code = code < 0 ? TP_NOTSTEP : code;
+		if (!code && tp_array(&in, &nr)) code = TP_NOTSTEP;
 		// a run takes 40 bytes at least: no room is made for more than the bytes can hold
 		if (!code && nr > (uint64_t)(in.end - in.p) / 40) code = TP_NOTSTEP;
-		if (code) break;
-		l->key = tp_alloc(mem, key.n ? key.n : 1), l->keyn = key.n;
+		if (code) {
+			tp_buf_free(&nb);
+			break;
+		}
+		l->key = dup(mem, nb.p, nb.len), l->keyn = nb.len;
 		l->room = (size_t)nr + 4, l->runs = tp_alloc(mem, l->room * sizeof *l->runs);
 		if (!l->key || !l->runs) {
+			tp_buf_free(&nb);
 			code = TP_NOMEM;
 			break;
 		}
-		memcpy(l->key, key.p, key.n);
+		{
+			tp_in h = {nb.p, nb.p + nb.len};
+			uint64_t d, nn;
+			tp_whole(&h, &d), tp_whole(&h, &nn);
+			l->by.device = (uint32_t)d, l->by.n = nn;
+		}
+		l->text = (int)text;
+		tp_buf_free(&nb);
 		for (uint64_t j = 0; j < nr && !code; j++) {
 			run *r = &l->runs[l->n];
 			uint64_t flags, len;
@@ -1472,30 +2178,53 @@ int el_load(const el_ctx *c, el_state *st, tp_span bytes) {
 			l->n++;
 		}
 	}
-	if (!code && tp_array(&in, &nb)) code = TP_NOTSTEP;
-	for (uint64_t i = 0; i < nb && !code; i++) {
+	if (!code && tp_array(&in, &ns)) code = TP_NOTSTEP;
+	for (uint64_t i = 0; i < ns && !code; i++) {
+		tp_buf pb = {NULL, 0, 0, (size_t)-1, mem, 0}, sb = pb, nb = pb;
+		el_slot s = {0};
 		tp_span key;
-		el_born b = {0};
-		if (tp_array(&in, &k) || k != 2 || tp_bytes(&in, 0, &key) || (code = load_ref(c, &in, &b.r, 0))) {
-			code = code ? code : TP_NOTSTEP;
-			break;
-		}
-		if (st->nborn == st->roomborn) {
-			size_t room = st->roomborn ? 2 * st->roomborn : 4;
-			el_born *q = tp_grow(mem, st->born, st->roomborn * sizeof *q, room * sizeof *q);
-			if (!q) {
-				code = TP_NOMEM;
-				break;
+		uint64_t b, cc, kk;
+		if (tp_array(&in, &k) || k != 4) code = TP_NOTSTEP;
+		if (!code && (code = load_node(c, &in, &pb))) code = code < 0 ? TP_NOTSTEP : code;
+		if (!code && tp_null(&in)) {
+			// the root: no slot
+		} else if (!code && in.p < in.end && *in.p >> 5 == 4) {
+			// an element
+			tp_span dev;
+			if (tp_array(&in, &k) || k != 4 || tp_bytes(&in, 32, &dev) || tp_whole(&in, &b) || b > 1 || tp_whole(&in, &cc) ||
+				tp_whole(&in, &kk))
+				code = TP_NOTSTEP;
+			else {
+				long d = c->index(c->self, dev.p);
+				if (d < 0) code = TP_NOMEM;
+				else {
+					el_id e = {(uint32_t)d, (uint32_t)b, cc, kk};
+					slot_el(&sb, &e);
+				}
 			}
-			st->born = q, st->roomborn = room;
+		} else if (!code) {
+			if (tp_text(&in, &key)) code = TP_NOTSTEP;
+			else tp_put_head(&sb, 3, key.n), tp_put(&sb, key.p, key.n);
 		}
-		b.key = tp_alloc(mem, key.n ? key.n : 1), b.keyn = key.n;
-		if (!b.key) {
-			code = TP_NOMEM;
-			break;
+		if (!code && (code = load_node(c, &in, &nb))) code = code < 0 ? TP_NOTSTEP : code;
+		el_ref at = {0};
+		if (!code && (code = load_ref(c, &in, &at, 0))) code = code < 0 ? TP_NOTSTEP : code;
+		if (!code && (tp_buf_why(&pb) || tp_buf_why(&sb) || tp_buf_why(&nb))) code = TP_NOMEM;
+		if (!code && slots_room(mem, st)) code = TP_NOMEM;
+		if (!code) {
+			size_t total = pb.len + sb.len + nb.len;
+			s.buf = total ? tp_alloc(mem, total) : NULL;
+			if (total && !s.buf) code = TP_NOMEM;
+			else {
+				if (pb.len) memcpy(s.buf, pb.p, pb.len);
+				if (sb.len) memcpy(s.buf + pb.len, sb.p, sb.len);
+				if (nb.len) memcpy(s.buf + pb.len + sb.len, nb.p, nb.len);
+				s.parentn = (uint32_t)pb.len, s.slotn = (uint32_t)sb.len, s.noden = (uint32_t)nb.len;
+				s.lamport = at.lamport, s.device = at.device;
+				st->slots[st->nslots++] = s;
+			}
 		}
-		memcpy(b.key, key.p, key.n);
-		st->born[st->nborn++] = b;
+		tp_buf_free(&pb), tp_buf_free(&sb), tp_buf_free(&nb);
 	}
 	if (!code && in.p != in.end) code = TP_NOTSTEP;
 	if (code) el_state_free(mem, st);

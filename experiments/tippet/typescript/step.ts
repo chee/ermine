@@ -30,8 +30,24 @@ export type Id = { device: string; c: number; k?: number }
 // true: the one its after element goes before), and takes these away, each an id and how many from
 // it, its c or k on
 export type Anchor = { after: Id | null; gone: readonly [Id, number][]; before?: Id | true }
-// what a patch names by ids: its splice, and through: the array items its path goes through
-export type Named = { splice?: Anchor; through?: readonly Id[] }
+// a container (a map, an array, a string) or a scalar a patch made, as a key: the step that made it
+// (device, n), its patch (i) and its place in that patch's value (rel: map keys, array places), each
+// field after a NUL; see nodeKey
+export type Node = string
+// what a patch names by ids: container, the node its path ends in the container of (null: no root
+// yet); splice: its elements; element: the array item a put at an index replaces
+export type Named = { container: Node | null; splice?: Anchor; element?: Id }
+const NUL = "\0"
+export const nodeKey = (
+	device: string,
+	n: number,
+	i: number,
+	rel: readonly (string | number)[] = [],
+): Node => [device, n, i, ...rel.map((x) => JSON.stringify(x))].join(NUL)
+export const nodeOf = (k: Node) => {
+	const [device, n, i, ...rel] = k.split(NUL)
+	return { device, n: +n, i: +i, rel: rel.map((x) => JSON.parse(x) as string | number) }
+}
 
 export const KEY = /^[0-9a-f]{64}$/
 
@@ -60,64 +76,86 @@ export const readOn = (device: string, n: number, on: unknown[]): On[] =>
 	)
 
 // how many elements a patch inserts: a splice's (a patch with a range) string's code points or
-// array's items
+// array's items, a move's into a slot (a range) the items it moves
 export const inserts = (p: Patch) =>
-	p.range === undefined
+	p.move
+		? p.range === undefined
+			? 0
+			: p.move.range
+			? Math.max(0, p.move.range[1] - p.move.range[0])
+			: 1
+		: p.range === undefined
 		? 0
 		: typeof p.value === "string"
 		? [...p.value].length
 		: Array.isArray(p.value)
 		? p.value.length
 		: 0
-// a patch that names elements: a splice, or a path with an index (a move names none)
-export const needs = (p: Patch) =>
-	!p.move && (p.range !== undefined || p.path.some((x) => typeof x === "number"))
+// a patch that names a container: every patch but a move
+export const needs = (p: Patch) => !p.move
 export const made = (s: Pick<Step, "patches">) => s.patches.reduce((n, p) => n + inserts(p), 0)
 
 // where a step is: its device, its n, and seq: how many elements its device's steps before it insert
 export type At = { device: string; n: number; seq: number }
-// this device's own by how far back: x (seq - x) or [x, k] (step n - x); in a through (abs) by its
-// seq c or [c, k]; another's whole
-const writeId = (s: At, i: Id, abs = false): Value =>
+// this device's own by how far back: x (seq - x) or [x, k] (step n - x); another's whole
+const writeId = (s: At, i: Id): Value =>
 	i.device === s.device
-		? abs
-			? i.k === undefined ? i.c : [i.c, i.k]
-			: i.k === undefined
-			? s.seq - i.c
-			: [s.n - i.c, i.k]
+		? i.k === undefined ? s.seq - i.c : [s.n - i.c, i.k]
 		: i.k === undefined
 		? [unhex(i.device), i.c]
 		: [unhex(i.device), i.c, i.k]
+// a node: this device's [n, i, rel…], another's [device, n, i, rel…]
+const writeNode = (s: At, k: Node | null): Value => {
+	if (k === null) return null
+	const { device, n, i, rel } = nodeOf(k)
+	return device === s.device ? [n, i, ...rel] : [unhex(device), n, i, ...rel]
+}
 export const writeIds = (s: At, ids: readonly (Named | null)[]): Value[] =>
 	ids.map((x) => {
-		const t = x?.through?.map((i) => writeId(s, i, true)), a = x?.splice
-		if (!a) return t ? [t] : null
-		return [
-			a.after && writeId(s, a.after),
-			a.gone.map(([i, c]) => [writeId(s, i), c]),
-			a.before === undefined ? null : a.before === true ? true : writeId(s, a.before),
-			t ?? [],
-		]
+		if (!x) return null
+		const c = writeNode(s, x.container), a = x.splice
+		if (a) {
+			return [
+				c,
+				a.after && writeId(s, a.after),
+				a.gone.map(([i, c]) => [writeId(s, i), c]),
+				a.before === undefined ? null : a.before === true ? true : writeId(s, a.before),
+			]
+		}
+		return x.element ? [c, [], writeId(s, x.element)] : [c, []]
 	})
-const readId = (s: At, i: unknown, abs = false): Id => {
-	if (typeof i === "number") return { device: s.device, c: abs ? i : s.seq - i }
+const readId = (s: At, i: unknown): Id => {
+	if (typeof i === "number") return { device: s.device, c: s.seq - i }
 	const a = i as [unknown, number, number?]
-	if (typeof a[0] === "number") return { device: s.device, c: abs ? a[0] : s.n - a[0], k: a[1] }
+	if (typeof a[0] === "number") return { device: s.device, c: s.n - a[0], k: a[1] }
 	const d = hex(a[0] as Uint8Array)
 	return a.length === 2 ? { device: d, c: a[1] } : { device: d, c: a[1], k: a[2] }
+}
+const readNode = (s: At, v: unknown): Node | null => {
+	if (v === null) return null
+	const a = v as unknown[]
+	return typeof a[0] === "number"
+		? nodeKey(s.device, a[0], a[1] as number, a.slice(2) as (string | number)[])
+		: nodeKey(
+			hex(a[0] as Uint8Array),
+			a[1] as number,
+			a[2] as number,
+			a.slice(3) as (string | number)[],
+		)
 }
 export const readIds = (s: At, ids: readonly Value[]): (Named | null)[] =>
 	ids.map((x) => {
 		if (x === null) return null
-		const w = x as unknown[]
-		if (w.length === 1) return { through: (w[0] as unknown[]).map((i) => readId(s, i, true)) }
-		const [after, gone, before, through] = w as [unknown, [unknown, number][], unknown, unknown[]]
+		const w = x as unknown[], container = readNode(s, w[0])
+		if (w.length === 2) return { container }
+		if (w.length === 3) return { container, element: readId(s, w[2]) }
+		const [, after, gone, before] = w as [unknown, unknown, [unknown, number][], unknown]
 		const a: Anchor = {
 			after: after === null ? null : readId(s, after),
 			gone: gone.map(([i, c]) => [readId(s, i), c] as [Id, number]),
 		}
 		if (before !== null) a.before = before === true ? true : readId(s, before)
-		return { splice: a, through: through.map((i) => readId(s, i, true)) }
+		return { container, splice: a }
 	})
 
 export function encodeStep(s: Step): Uint8Array {
@@ -163,33 +201,58 @@ export const onOf = (device: Uint8Array, n: number) => (o: unknown) =>
 		o[1] >= 1 && !same(o[0], device)
 
 // an element id as written: this device's x (whole or negative) or [x, k] (x whole, below n);
-// another's [device, c] or [device, n, k] (n from 1). in a through (abs): this device's c (whole) or
-// [c, k] (c from 1 to n)
-export const idOf = (device: Uint8Array, n: number, abs = false) => (i: unknown) =>
-	(abs ? whole(i) : Number.isSafeInteger(i)) || Array.isArray(i) &&
+// another's [device, c] or [device, n, k] (n from 1)
+export const idOf = (device: Uint8Array, n: number) => (i: unknown) =>
+	Number.isSafeInteger(i) || Array.isArray(i) &&
 		(typeof i[0] === "number"
-			? i.length === 2 && (abs ? i[0] >= 1 && i[0] <= n : whole(i[0]) && i[0] < n) &&
-				whole(i[0]) && whole(i[1])
+			? i.length === 2 && whole(i[0]) && i[0] < n && whole(i[1])
 			: key(i[0]) && !same(i[0], device) && whole(i[1]) &&
 				(i.length === 2 || (i.length === 3 && i[1] >= 1 && whole(i[2]))))
-// ids as written: one per patch: null for a patch with no splice and no index in its path, [through]
-// for one with an index (one id per whole, at least one), and for a splice (a patch with a range)
-// [after, gone, before, through]: before null for the end, true for after's own (after not null)
+// a node as written: this device's [n, i, rel…] (n from 1 to the step's, and if the step's, i below
+// its patch's index at), another's [device, n, i, rel…] (n from 1); rel: tstr or whole
+export const nodeOfIds = (device: Uint8Array, n: number, at: number) => (v: unknown) => {
+	if (!Array.isArray(v) || v.length < 2) return false
+	const own = typeof v[0] === "number", rel = v.slice(own ? 2 : 3)
+	if (!rel.every((r) => typeof r === "string" || whole(r))) return false
+	if (own) return whole(v[0]) && v[0] >= 1 && v[0] <= n && whole(v[1]) && (v[0] < n || v[1] < at)
+	return v.length >= 3 && key(v[0]) && !same(v[0], device) && whole(v[1]) && v[1] >= 1 &&
+		whole(v[2])
+}
+// ids as written: one per patch, null for a move; else the patch's container (a node; null only for
+// a put of the whole value, the first) and
+//   a put or removal at a key, or the whole: [container, pred]    pred: array of nodes (not acted on)
+//   a put at an index of an array: [container, pred, element]
+//   a splice (a patch with a range), a removal at an index: [container, after, gone, before]
+//   before null for the end, true for after's own (after not null)
 export const idsOf = (device: Uint8Array, n: number, patches: unknown[]) => (ids: unknown) => {
-	const id = idOf(device, n), abs = idOf(device, n, true)
+	const id = idOf(device, n)
 	return Array.isArray(ids) && ids.length === patches.length &&
 		ids.every((x, i) => {
-			const p = patches[i] as Patch
-			if (x === null) return !needs(p)
+			const p = patches[i] as Patch, node = nodeOfIds(device, n, i)
+			if (x === null) return !!p.move
 			if (p.move || !Array.isArray(x)) return false
-			const wholes = p.path.filter((k) => typeof k === "number").length
-			const through = (t: unknown) => Array.isArray(t) && t.length === wholes && t.every(abs)
-			if (p.range === undefined) return x.length === 1 && wholes > 0 && through(x[0])
-			return x.length === 4 && (x[0] === null || id(x[0])) && Array.isArray(x[1]) &&
-				(x[2] === true ? x[0] !== null : x[2] === null || id(x[2])) && through(x[3]) &&
-				x[1].every((g) =>
-					Array.isArray(g) && g.length === 2 && id(g[0]) && whole(g[1]) && g[1] >= 1
-				)
+			const last = p.path[p.path.length - 1]
+			if (!(x[0] === null ? p.path.length === 0 && p.range === undefined : node(x[0]))) {
+				return false
+			}
+			const sliced = p.range !== undefined || (typeof last === "number" && p.value === undefined)
+			if (sliced) {
+				// a removal at an index: no after, the one element, no before
+				if (
+					p.range === undefined &&
+					!(x[1] === null && Array.isArray(x[2]) && x[2].length === 1 && x[3] === null)
+				) return false
+				if (p.range === undefined && !(Array.isArray(x[2][0]) && x[2][0][1] === 1)) return false
+				return x.length === 4 && x[0] !== null && (x[1] === null || id(x[1])) &&
+					Array.isArray(x[2]) &&
+					(x[3] === true ? x[1] !== null : x[3] === null || id(x[3])) &&
+					x[2].every((g) =>
+						Array.isArray(g) && g.length === 2 && id(g[0]) && whole(g[1]) && g[1] >= 1
+					)
+			}
+			if (!Array.isArray(x[1]) || !x[1].every(node)) return false
+			if (typeof last === "number") return x.length === 3 && id(x[2]) && x[0] !== null
+			return x.length === 2
 		})
 }
 

@@ -241,7 +241,7 @@ Deno.test("8. a step is only what tippet writes: others are refused, and write t
 		when: 0,
 		seq: 0,
 		on: [],
-		ids: [[null, [], null, []]],
+		ids: [[[new Uint8Array(32).fill(7), 1, 0, "t"], null, [], null]],
 	}
 	const bad = [
 		{ when: 0.5 },
@@ -285,7 +285,16 @@ Deno.test("8. a step is only what tippet writes: others are refused, and write t
 		[{ path: [], value: { a: [1, { b: null }], f: 1.5 } }],
 	]
 	for (const patches of writes) {
-		const ids = patches.map((p) => p.range && !p.move ? [null, [], null, []] : null)
+		const there = [new Uint8Array(32).fill(7), 1, 0, "t"]
+		const ids = patches.map((p) =>
+			p.move
+				? null
+				: p.range
+				? [there, null, [], null]
+				: p.path.length
+				? [there, []]
+				: [null, []]
+		)
 		a.write({ node: "x", part: "value", patches, ids, when: 1 })
 	}
 	assertEquals(unpack(pack(a.steps(a.device!))), a.steps(a.device!))

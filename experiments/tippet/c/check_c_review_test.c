@@ -1,4 +1,4 @@
-// Tries to break tippet's C; a FAIL line is a bug it found. ONLY=123456789rflhamsxb picks checks, NOA=1
+// Tries to break tippet's C; a FAIL line is a bug it found. ONLY=123456789rflhamsxbk picks checks, NOA=1
 // skips 6a, UNLINK=1 unlinks 7's link, SNAP=n sets s's entries. Run ./tippet-review-test-check dir (build.sh builds
 // it).
 #define _POSIX_C_SOURCE 200809L
@@ -150,7 +150,7 @@ static size_t pack_of(uint8_t *out, size_t cap, const pk *k) {
 		tp_put_text(&b, names[i]), tp_put(&b, k->col[FROM + i], k->len[FROM + i]);
 		if (keys == 8 && i == 4) tp_put_text(&b, names[i]), tp_put(&b, k->col[FROM + i], k->len[FROM + i]);
 	}
-	// on: none for each step; ids: null for each patch, as the count column says
+	// on: none for each step; ids: a put of the whole value ([null, []]) for each patch, as the count column says
 	tp_in in = {k->col[COUNT], k->col[COUNT] + k->len[COUNT]};
 	uint64_t two = 0, patches = 0, steps = 0;
 	int64_t per = 0;
@@ -159,7 +159,7 @@ static size_t pack_of(uint8_t *out, size_t cap, const pk *k) {
 		patches = (uint64_t)per;
 		tp_put_head(&b, 4, 2), tp_put_head(&b, 4, 0), tp_put_head(&b, 0, steps);
 		tp_put_head(&b, 4, 2), tp_put_head(&b, 4, patches);
-		for (uint64_t i = 0; i < patches; i++) tp_put(&b, "\xf6", 1);
+		for (uint64_t i = 0; i < patches; i++) tp_put(&b, "\x82\xf6\x80", 3);
 		tp_put_head(&b, 0, steps);
 	} else tp_put_head(&b, 4, 0), tp_put_head(&b, 4, 0);
 	return b.bad ? 0 : b.len;
@@ -251,7 +251,7 @@ static void claims(void) {
 	for (size_t i = 0; i < npaths; i++) tp_put(&b, "\x80", 1);
 	tp_put_text(&b, "shape"), tp_put(&b, k.col[SHAPE], k.len[SHAPE]);
 	tp_put_text(&b, "value"), tp_put(&b, k.col[VALUE], k.len[VALUE]);
-	tp_put(&b, "\x82\x80\x02\x82\x81\xf6\x02", 7);
+	tp_put(&b, "\x82\x80\x02\x82\x81\x82\xf6\x80\x02", 9);
 	H.peak = H.now, base = H.now;
 	why = tp_unpack(&mem, (tp_span){q, b.len}, 1 << 24, &s);
 	printf("  a %zu-byte pack of %zu unused paths: unpack %s, heap peak +%zu (max 16 MB of steps)\n", b.len,
@@ -283,7 +283,7 @@ static void key33(void) {
 		tp_put_head(&b, 4, 11), tp_put_head(&b, 2, (uint64_t)size), tp_put(&b, k33, (size_t)size);
 		tp_put_head(&b, 0, 1), tp_put(&b, "\xf6", 1), tp_put_text(&b, "pig"), tp_put_text(&b, "value");
 		tp_put(&b, ps, 15), tp_put_head(&b, 0, 1), tp_put_head(&b, 0, 0), tp_put_head(&b, 0, 0);
-		tp_put(&b, "\x80\x81\xf6", 3);
+		tp_put(&b, "\x80\x81\x82\xf6\x80", 5);
 		put(1);
 		int why = tp_step_decode(s, b.len, &t);
 		CHECK(size == 32 ? why == 0 : why == TP_NOTSTEP);
@@ -771,6 +771,8 @@ static void dev_told(void *ctx, const uint8_t key[32], uint64_t from, size_t cou
 	if (d->sync) tp_sync_told(d->sync, key, from, count);
 }
 static int forgets;
+// when set, the history's allocations are counted there (k)
+static tp_mem *history_mem;
 static void inside(void *ctx, void (*f)(void *data), void *data) { sc_run_with_scope(((dev *)ctx)->scope, f, data); }
 static void drop_value(void *value, void *data) {
 	(void)data;
@@ -791,7 +793,7 @@ static int dev_make(dev *d, tp_store *store, uint8_t s) {
 	tp_log_options o = {mem, store, seed, 1, {0, 0, 0, 0}, dev_told, d, NULL};
 	d->log = tp_log_new(&o);
 	tp_log_load(d->log);
-	tp_history_options ho = {mem, d->log, d->table, d->places, NULL, inside, d, forgets, 0};
+	tp_history_options ho = {history_mem ? *history_mem : mem, d->log, d->table, d->places, NULL, inside, d, forgets, 0};
 	d->history = tp_history_new(&ho);
 	return tp_history_load(d->history);
 }
@@ -815,10 +817,28 @@ static size_t failures(dev *d) {
 static const uint8_t x0[] = {0x81, 0xa2, 0x64, 'p', 'a', 't', 'h', 0x80, 0x65, 'v', 'a', 'l', 'u', 'e', 0xa1, 0x61, 'x', 0};
 static const uint8_t x1[] = {0x81, 0xa2, 0x64, 'p', 'a', 't', 'h', 0x81, 0x61, 'x', 0x65, 'v', 'a', 'l', 'u', 'e', 1};
 static const uint8_t y1[] = {0x81, 0xa2, 0x64, 'p', 'a', 't', 'h', 0x81, 0x61, 'y', 0x65, 'v', 'a', 'l', 'u', 'e', 1};
+// the node the last put of the whole value by edit made: a put at a key names it
+static uint8_t root_dev[32];
+static uint64_t root_n;
 static void edit(tp_log *log, const uint8_t *p, size_t n) {
+	uint8_t idb[128];
 	tp_write w = {{(const uint8_t *)"doc", 3}, {(const uint8_t *)"value", 5}, {p, n}, {NULL, 0}, 1, {NULL, 0}, {NULL, 0}};
 	uint64_t s, l;
-	tp_log_write(log, &w, &s, &l);
+	// a put at a path of keys: its container is the root's, then the keys but the last
+	unsigned keys = n > 8 && p[7] > 0x80 && p[7] < 0x90 ? p[7] & 0x1f : 0;
+	int key = keys > 0;
+	if (key) {
+		tp_buf b = {idb, 0, sizeof idb, sizeof idb, NULL, 0};
+		int own = !memcmp(root_dev, tp_log_device(log), 32);
+		const uint8_t *rel = p + 8;
+		size_t relbytes = 0;
+		for (unsigned i = 0; i + 1 < keys; i++) relbytes += 1 + (rel[relbytes] & 0x1f);
+		tp_put_head(&b, 4, 1), tp_put_head(&b, 4, 2), tp_put_head(&b, 4, (own ? 2 : 3) + keys - 1);
+		if (!own) tp_put_head(&b, 2, 32), tp_put(&b, root_dev, 32);
+		tp_put_head(&b, 0, root_n), tp_put_head(&b, 0, 0), tp_put(&b, rel, relbytes), tp_put_head(&b, 4, 0);
+		w.ids = (tp_span){idb, b.len};
+	}
+	if (!tp_log_write(log, &w, &s, &l) && !key) memcpy(root_dev, tp_log_device(log), 32), root_n = s;
 }
 
 static uint64_t forget, fetches;
@@ -922,6 +942,8 @@ static void typescript(const char *dir) {
 		tp_log_free(a), tp_log_free(b);
 	}
 	{
+		// a device that keeps its log but can't read its early steps after a reload can't name the
+		// container of a put at a key: the put is in failed and not in the value, which stays the snapshot's
 		run r1, r2;
 		tp_log *w = writer(57, 0, NULL);
 		edit(w, x0, sizeof x0), edit(w, x1, sizeof x1), run_of(w, 1, &r1);
@@ -937,11 +959,38 @@ static void typescript(const char *dir) {
 		dev_free(&r);
 		forget = 2;
 		int why = dev_make(&r, st, 58);
+		printf("  a keeper that can't read its early steps: loaded %s; %zu failed; doc {x: %lld, y: %lld}\n",
+			why ? tp_why(why) : "ok", failures(&r), (long long)field(&r, "x"), (long long)field(&r, "y"));
+		CHECK(!why && failures(&r) == 1 && field(&r, "x") == 1 && field(&r, "y") == -1);
+		dev_free(&r);
+		forget = 0;
+		shut(st->self);
+		tp_log_free(w);
+	}
+	{
+		run r1, r2;
+		tp_log *w = writer(57, 0, NULL);
+		edit(w, x0, sizeof x0), edit(w, x1, sizeof x1), run_of(w, 1, &r1);
+		tp_store *st = tp_memory_store(&mem, 1 << 20);
+		void (*shut)(void *self) = st->close;
+		held = st->get, st->get = forgetful, st->close = kept_open;
+		dev r;
+		// a put at a key names its container, which a device finds in the snapshot's elements when the
+		// early steps are gone: it forgets
+		forgets = 1;
+		dev_make(&r, st, 58);
+		tp_log_take(r.log, r1.device, r1.spans, r1.n, r1.sig, (tp_span){NULL, 0});
+		CHECK(!tp_history_snapshot(r.history));
+		edit(w, y1, sizeof y1), run_of(w, 3, &r2);
+		tp_log_take(r.log, r2.device, r2.spans, r2.n, r2.sig, (tp_span){NULL, 0});
+		dev_free(&r);
+		forget = 2;
+		int why = dev_make(&r, st, 58);
 		printf("  loaded: %s; %zu failed; doc {x: %lld, y: %lld}\n", why ? tp_why(why) : "ok", failures(&r),
 			(long long)field(&r, "x"), (long long)field(&r, "y"));
 		CHECK(!why && failures(&r) == 0 && field(&r, "x") == 1 && field(&r, "y") == 1);
 		dev_free(&r);
-		forget = 0;
+		forgets = 0, forget = 0;
 		shut(st->self);
 		tp_log_free(w);
 	}
@@ -1819,6 +1868,63 @@ static void small(void) {
 	}
 }
 
+// ---- k. what a forgetting device holds: a record for each key written, a run for each piece of text
+
+static void measure(void) {
+	printf("k. what a forgetting device holds\n");
+	heap P = {0, 0, 0};
+	tp_mem pm = {counted, &P};
+	history_mem = &pm, forgets = 1;
+	{
+		// keys written: each a step of the writer's, a put at a key of the doc
+		enum { K = 300 };
+		tp_log *w = writer(120, 0, NULL);
+		edit(w, x0, sizeof x0);
+		dev r;
+		dev_make(&r, tp_memory_store(&mem, 1 << 24), 121);
+		take_all(r.log, w);
+		size_t base = P.now;
+		for (int i = 0; i < K; i++) {
+			uint8_t p[40];
+			tp_buf b = {p, 0, sizeof p, sizeof p, NULL, 0};
+			char key[16];
+			snprintf(key, sizeof key, "k%d", i);
+			tp_put_head(&b, 4, 1), tp_put_head(&b, 5, 2), tp_put_text(&b, "path"), tp_put_head(&b, 4, 1);
+			tp_put_text(&b, key), tp_put_text(&b, "value"), tp_put_head(&b, 0, (uint64_t)(i % 24));
+			edit(w, p, b.len);
+		}
+		take_all(r.log, w);
+		printf("  %d keys written: %.1f bytes a key held (history's heap above %zu)\n", K,
+			(double)(P.now - base) / K, base);
+		CHECK((P.now - base) / K < 200);
+		dev_free(&r);
+		tp_log_free(w);
+	}
+	{
+		// text in many runs: a put of 400 characters, then a character put between each two
+		enum { R = 200 };
+		tp_log *w = writer(122, 0, NULL);
+		uint8_t p[500];
+		tp_buf b = {p, 0, sizeof p, sizeof p, NULL, 0};
+		tp_put_head(&b, 4, 1), tp_put_head(&b, 5, 2), tp_put_text(&b, "path"), tp_put_head(&b, 4, 0);
+		tp_put_text(&b, "value"), tp_put_head(&b, 3, 400);
+		for (int i = 0; i < 400; i++) tp_put(&b, "a", 1);
+		put_at(w, "t", p, b.len);
+		dev v;
+		dev_make(&v, tp_memory_store(&mem, 1 << 24), 123);
+		take_all(v.log, w);
+		typing(&v, 0, "b");
+		size_t base = P.now;
+		for (int i = 1; i <= R; i++) typing(&v, (unsigned)(2 * i), "b");
+		printf("  %d characters put apart: %.1f bytes a run held (about %d runs; history's heap above %zu)\n", R,
+			(double)(P.now - base) / (2 * R), 2 * R, base);
+		CHECK((P.now - base) / (2 * R) < 200);
+		dev_free(&v);
+		tp_log_free(w);
+	}
+	history_mem = NULL, forgets = 0;
+}
+
 int main(int argc, char **argv) {
 	if (argc != 2) return fprintf(stderr, "usage: check-c-review dir\n"), 2;
 	setvbuf(stdout, NULL, _IONBF, 0);
@@ -1842,6 +1948,7 @@ int main(int argc, char **argv) {
 	if (!only || strchr(only, 's')) seqs(), printf("  heap now %zu\n", H.now);
 	if (!only || strchr(only, 'x')) reloads(argv[1]), printf("  heap now %zu\n", H.now);
 	if (!only || strchr(only, 'b')) small(), printf("  heap now %zu\n", H.now);
+	if (!only || strchr(only, 'k')) measure(), printf("  heap now %zu\n", H.now);
 	rmdir(argv[1]);
 	CHECK(H.now == 0);
 	printf("check-c-review: %s, %d failed\n", failed ? "FAIL" : "ok", failed);

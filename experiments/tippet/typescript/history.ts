@@ -502,8 +502,8 @@ export function createHistory(o: {
 		const me = log.device, known = entries.get(k)?.length
 		const start = (all: boolean): Own => ({ ...fresh(), tail: [], all })
 		const wholly = (ps: Patch[]) => ps[0]?.path.length === 0 && !ps[0].range && !ps[0].move
-		// the write as a step: its splices and the array items its paths go through named from the
-		// entry's own elements, applied there (as the graph has it); a whole value starts them again.
+		// the write as a step: its containers and elements named from the entry's own state, applied
+		// there (as the graph has it); a whole value starts it again.
 		// throws when it can't, with the entry's own value as it was
 		function attempt(patches: Patch[]): Step {
 			const whole = wholly(patches)

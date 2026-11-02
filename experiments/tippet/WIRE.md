@@ -23,42 +23,58 @@ One kept write. Bytes: a cbor array.
   order, puts), and sorts no element
 - when: whole. seconds since 1970, the writer's clock
 - seq: whole. how many elements its device's steps before it insert (a patch with a range inserts
-  its tstr value's code points, its array value's items): 0 at n = 1, else step n - 1's seq plus
-  what step n - 1 inserts (a step that says another is not a chain). seq plus what the step inserts:
-  at most 2^53 - 1
+  its tstr value's code points, its array value's items; a move with a range, the items it moves,
+  one for an item or a key): 0 at n = 1, else step n - 1's seq plus what step n - 1 inserts (a step
+  that says another is not a chain). seq plus what the step inserts: at most 2^53 - 1
 - on: array. what it was written on: its entry's (node and part) heads at the writer, each a step:
   - k, whole from 1, k < n: this device's own step n - k
   - [device, n]: another device's step n; device bstr 32, not this step's; n whole from 1
 
   what is made of it: `typescript/history.ts`, heads and versions
-- ids: array, one per patch: the elements it names:
-  - null: a patch with no range and no index in its path; a move's too
-  - [through]: a patch with an index in its path and no range
-  - [after, gone, before, through]: a splice (a patch with a range, into a string or an array)
+- ids: array, one per patch: the container it changes, and the elements it names:
+  - null: a move
+  - [container, pred]: a put or removal at a key, or of the whole value
+  - [container, pred, element]: a put at an index of an array
+  - [container, after, gone, before]: a splice (a patch with a range, into a string or an array); a
+    removal at an index of an array (a path, no range), where after is null, gone the one element
+    and before null
+  - container: the node of the map, array or string the patch changes (a key put or removal: the
+    map; an index: the array; a splice: the sequence); null for a put of the whole value when the
+    writer holds none. a reader finds the container by this id, not by the patch's path, which it
+    reads only to the last key or index (its length is not looked at)
+  - node: `[device, n, i, rel…]`: the step that made it (device, n), its patch (i), and its place in
+    that patch's value (rel: tstr, a map's key, or whole, an array item's place when the array was
+    made). a put's value is `[device, n, i]`; an item a splice inserts is `[device, n, i, x]`, x its
+    place in the value it inserts; a move makes what it moves new at its target: `[device, n, i]` at
+    a key, an index or the root, `[device, n, i, x]` for the x-th item it puts at a slot. made once,
+    never changes. written: this device's `[n, i, rel…]` (n whole from 1 to the step's; the step's
+    only with i below the patch's own index), another's `[device, n, i, rel…]` (device bstr 32, not
+    this step's)
+  - pred: array of nodes: always `[]` for now, not acted on
+  - element: the array item a put at an index replaces: an element id
   - after: the element it goes after, or null: the start
   - gone: array of [id, count], count whole from 1: the elements it takes away, count of them from
     id on (its seq or k on). one named more than once is taken away once
   - before: the element it goes before, the one right after after at the writer (gone ones too): an
     id; true, after's own before (after not null); null, the end
-  - through: array, one per whole in the patch's path, in order (empty when none): the element of
-    the array item that index named at the writer
   - an element id: made by a step, its device and seq: the step's seq + i, the i-th element the step
-    inserts (from 0, in patch order); or there since a step made its sequence new: that step's
+    inserts (from 0, in patch order); or there since a step made its sequence's node: that step's
     device and n, and k, its place then. written: this device's x, whole or negative, seq the step's
     seq - x; or [x, k], x whole below n, that step n - x. another's [device, seq] or [device, n, k]
-    (device bstr 32, not this step's; n from 1). in a through this device's is c, whole: its seq; or
-    [m, k], m from 1 to n: step m, k its place then
+    (device bstr 32, not this step's; n from 1)
 
-  a sequence's elements are counted from its first splice: those there since the step that made it
-  new are that step's, k their place. a sequence under an array item goes with the item, wherever it
-  is. made new: by a put, a removal or a move at its path or above; by a move out of or into it (an
-  end with a range: the sequence it is in; at an index of an array: that array). a splice into a
-  sequence no put made (its put not held yet: it applies once the put lands): the step doesn't
-  apply. a removal at an index of an array (a path, no range) is a splice of that one element, its
-  through's last, taken away wherever it is now (gone already: nothing)
-
-  a path by through: each index the place now of the element named, among those not gone; one gone
-  (but a removal's last) or not there, or an index not into an array: the step doesn't apply
+  a sequence's elements are counted from its first splice: those there since the step that made its
+  node are that step's, k their place. a patch puts at a slot (a key of a map, an element of an
+  array, the root) and records what it put there (the node, or none for a scalar) and its place in
+  the order; what was there goes with its sequences and records, and what a record holds in turn
+  (the sequences of a replaced node never come back). an item an array loses to a splice goes the
+  same way. a container not held (not made yet, replaced, gone), or a path of records and places
+  that leads to none: the step doesn't apply (its container's maker not held yet: it applies once
+  that lands). a removal at an index of an array is a splice of that one element, taken away
+  wherever it is now (gone already: nothing). a move is by place: it takes what it moves from its
+  source (a range or an index of an array: those elements gone; a key: nothing there) and puts it,
+  new, at its target (a slot: new elements, as many as it moves, after the element at the place; an
+  index: that item replaced; a key); a move into what it moves doesn't apply
 
   applied in the entry's order (history): a splice takes its gone elements away wherever they are
   now, then its first inserted one goes between after and before, among those put there since
@@ -84,14 +100,14 @@ One kept write. Bytes: a cbor array.
   the step's too), or a before not after its after: the step doesn't apply (passed over, as any).
   what is made of it: `typescript/elements.ts`
 
-  a reader that forgets: holds per entry its sequences' elements (in its snapshot too), per path the
-  newest step that made it new, per sequence its newest splice, the place of its newest step that is
-  one put of the whole value, and the graph's value (no steps, no second value). it ends at the same
-  value as a reader that holds every step.
+  a reader that forgets: holds per entry its sequences' elements and a record per slot a patch put,
+  the place of its newest step that is one put of the whole value, and the graph's value (no steps,
+  no second value), all in its snapshot too. it ends at the same value as a reader that holds every
+  step.
 
   a late step (ordered before a step applied) on a reader that forgets:
-  - goes in as it is, unless a step after it made new a path at or above where it goes; it is a
-    move; it is a put, and a step after it made new or spliced a sequence at or under that path
+  - goes in as it is, unless: it is a move; the container it names is not held; it is a put at a
+    slot a step after it put at; it is a put replacing a node a step after it changed inside
   - passed over, as applied: one put of the whole value, when a step ordered after it is one put of
     the whole value and no failed step of its entry is ordered after it (overwritten, as in order;
     nothing read, nothing failed)
@@ -110,15 +126,30 @@ Anything else is not a step: another length, another kind in a place, a key or h
 of 0, a number not whole, a patch with another field, a node array not one rest, an on item not as
 above (k of 0 or of n or more, a pair naming the step's own device, of another length or kind), a
 seq past 2^53 - 1 with what the step inserts, ids not as above (not one per patch, null on a patch
-that names elements, anything but null on one that names none, a through of another count than its
-path's wholes, a before of true with a null after, an id of another shape or naming the step's own
-device, another's seq below 0, a number past 2^53 - 1 either way, an [x, k] with x of n or more, a
-through's [c, k] with c of 0 or past n, a [device, n, k] with n of 0, a count of 0, another length),
-a NUL in node (its rest too) or part, or containers nested 1024 deep (cbor's most; the step's own
-array counts): a run message holds a step's patches one deeper.
+but a move, anything but null on a move, a container null on a patch but a put of the whole value, a
+node of another shape or naming the step's own device whole or a step past its own, an n of 0 or
+past the step's, a pred that is not an array of nodes, an element missing on a put at an index or
+there on another, a before of true with a null after, an id of another shape or naming the step's
+own device, another's seq below 0, a number past 2^53 - 1 either way, an [x, k] with x of n or more,
+a [device, n, k] with n of 0, a count of 0, a removal at an index whose ids are not no after, one
+element once and no before, another length), a NUL in node (its rest too) or part, or containers
+nested 1024 deep (cbor's most; the step's own array counts): a run message holds a step's patches
+one deeper.
 
 ids' shape is mine, not decided: per patch beside it, so a patch stays a changeable patch (squish
 packs it); an element its device and seq (diamond-types), unique by its device's chain alone.
+
+a container id is mine, not decided: a patch names the node it changes by the patch that made it, so
+what a reader holds is keyed by id and no place is held (a node never changes its id; a move makes
+what it moves new); the path stays as the changeable patch has it. this device's node is written by
+its step n, not how far back, so typing into one text is one run in a pack.
+
+a move that takes its source's elements away and puts new ones at its target is mine, not decided:
+it keeps the sequences at both ends (they were made new, losing a concurrent insert beside them),
+and an edit naming the moved node's old id does not follow it (it is a new node).
+
+a record per slot is mine, not decided: a put at a key, an element or the root says which step put
+it, so a late put under a newer one is known, and what a put replaces is dropped with its sequences.
 
 seq is mine, not decided: written after when, the numbers about a step's place together, so no log
 need count it: a run is taken with step n - 1 held (its seq and what it inserts give the next); the
@@ -127,14 +158,10 @@ pack has no column for it.
 sorting by device and seq is mine, not decided: lamport made runs cut whenever a write elsewhere
 came between keystrokes; device and seq (Fugue, Yjs: the replica id) cost no run.
 
-through is mine, not decided: an item by its element, so typing into an item survives an insert, a
-removal or Enter above it; its own as seq c, a whole number, so typing into one item is one run in a
-pack.
-
-a write that can't be named is mine, not decided: a write here whose splices or array items its
-entry's elements can't name (they differ from the graph's, as when host code updates twice before
-one commit) goes as the graph's whole value for the entry, one put, which starts the entry's
-elements again, so later writes name ids; the host is told in `unkept`.
+a write that can't be named is mine, not decided: a write here whose container or elements its
+entry's state can't name (they differ from the graph's, as when host code updates twice before one
+commit) goes as the graph's whole value for the entry, one put, which starts the entry's state
+again, so later writes name ids; the host is told in `unkept`.
 
 forgets is mine, not decided: a late splice by ids commutes (FugueMax), so it needs only the
 elements, which its snapshot holds; the rest is rare, so the log is read for it. elements cost a
