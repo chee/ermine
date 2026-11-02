@@ -2,7 +2,8 @@
 // another of one device, numbered one on (or, back, one down), all gone or none, each element after
 // the one before it in the run (or, back, before the one after it). A sequence gets its elements at
 // the first splice that touches it. State is keyed by container id: a sequence's elements, and a
-// record for each slot a patch assigned (which node is there, and the step that put it).
+// cell for each assignment (put, removal) still visible at a slot (WIRE.md, assignments): its id,
+// the container it holds, the step that made it, and, when another cell shows, its value.
 import type { Value } from "@ermine/encoding/cbor"
 import apply, { type Key as Index, type Patch } from "@ermine/changeable/apply"
 import {
@@ -44,8 +45,6 @@ type List = {
 	dev: string
 	n: number
 	text: boolean
-	// the newest step that spliced it
-	last?: Ref
 	count: number
 	j: number
 	live: number
@@ -54,16 +53,34 @@ type List = {
 // the runs by their lowest id (device, born, number), sorted: made when a lookup walks far, kept up
 // to date by edit; a run's place is found by its lab
 type Ix = { d: string; b: boolean; lo: number; hi: number; run: Run }
-// a record: what a patch assigned at a slot (a key of a map, an element of an array, the root): the
-// container there (null: a scalar, or nothing) and the step that put it, for the order
-type Rec = { parent: Node; slot: string; el?: Id; node: Node | null; at: Ref }
-// an entry's value, its sequences' elements by container id, its records by parent and slot, and
-// the records' nodes by their record
+// a cell: what a patch assigned at a slot (a key of a map, an element of an array, the root) and
+// no assignment has replaced yet. id: the step and patch that made it; node: the container it holds
+// (its id), null for a scalar; at, i: its step's place and its patch, for the order. value: its
+// whole value, held while another cell at the slot shows. ghost: named by an assignment before it
+// landed (no value, no node)
+type Rec = {
+	parent: Node | ""
+	slot: string
+	el?: Id
+	id: Node
+	node: Node | null
+	at: Ref
+	i: number
+	value?: unknown
+	ghost?: true
+}
+// an entry's value (the shown cells'), its sequences' elements by container id, its cells by
+// parent and slot (all visible ones at a slot together), the cells' nodes by their cell, and per
+// device the newest step of it that landed here
 export type State = {
 	value: unknown
 	lists: Map<Node, List>
-	slots: Map<string, Rec>
-	nodes: Map<Node, string>
+	slots: Map<string, Rec[]>
+	nodes: Map<Node, Rec>
+	landed: Map<string, number>
+	// the newest move (by place) applied: it makes what it moves new, which a late step naming the
+	// old is worked out again with
+	moved?: Ref
 }
 
 export const fresh = (): State => ({
@@ -71,6 +88,7 @@ export const fresh = (): State => ({
 	lists: new Map(),
 	slots: new Map(),
 	nodes: new Map(),
+	landed: new Map(),
 })
 // a step applied after newer ones (late) whose effect needs what those did: it is worked out from them
 export const LATE = "late, and the steps after it let go"
@@ -79,9 +97,10 @@ export class Late extends Error {
 		super(LATE)
 	}
 }
-const newer = (a: Ref | undefined, b: Ref) => !!a && (a[0] > b[0] || (a[0] === b[0] && a[1] > b[1]))
 
 const NUL = "\0"
+// whether a is ordered after b
+const newer = (a: Ref | undefined, b: Ref) => !!a && (a[0] > b[0] || (a[0] === b[0] && a[1] > b[1]))
 // a record's key: its parent, then its slot; the root's parent and slot are empty
 const SLOT = "\u0001"
 const ROOT = SLOT
@@ -90,7 +109,7 @@ const elSlot = (e: Id) => e.k === undefined ? `${e.device} ${e.c}` : `${e.device
 const child = (n: Node, rel: string | number): Node => n + NUL + JSON.stringify(rel)
 // key's node is node, or under it
 const under = (key: Node, node: Node) => key === node || key.startsWith(node + NUL)
-const rootOf = (state: State) => state.slots.get(ROOT)?.node ?? undefined
+const rootOf = (state: State) => shownAt(state, "", "")?.node ?? undefined
 
 // sort keys: device, number (a born one's -1)
 type Key = [device: string, c: number]
@@ -306,64 +325,106 @@ const there = (l: List, id: Id, n: number) => {
 	return true
 }
 
-// a record put, or taken (rec undefined), and undone
-function setRec(state: State, key: string, rec: Rec | undefined, back: (() => void)[]) {
-	const was = state.slots.get(key)
-	if (was?.node) state.nodes.delete(was.node)
-	if (rec) {
-		state.slots.set(key, rec)
-		if (rec.node) state.nodes.set(rec.node, key)
-	} else state.slots.delete(key)
-	back.push(() => {
-		if (rec?.node) state.nodes.delete(rec.node)
-		if (was) {
-			state.slots.set(key, was)
-			if (was.node) state.nodes.set(was.node, key)
-		} else state.slots.delete(key)
-	})
+// the cells at a slot, the visible ones, and the one that shows: the greatest by its step's place
+// (lamport, device, n), then its patch
+const key = (parent: Node | "", slot: string) => parent + SLOT + slot
+const greater = (a: Rec, b: Rec) =>
+	a.at[0] !== b.at[0]
+		? a.at[0] > b.at[0]
+		: a.at[1] !== b.at[1]
+		? a.at[1] > b.at[1]
+		: a.at[2] !== b.at[2]
+		? a.at[2] > b.at[2]
+		: a.i > b.i
+const visible = (rs: readonly Rec[] | undefined) => (rs ?? []).filter((r) => !r.ghost)
+const shows = (rs: readonly Rec[]) => rs.reduce<Rec | undefined>((a, r) => !a || greater(r, a) ? r : a, undefined)
+const shownAt = (state: State, parent: Node | "", slot: string) =>
+	shows(visible(state.slots.get(key(parent, slot))))
+// whether the step that made a node (a cell or a container) has landed here
+const landed = (state: State, node: Node) => {
+	const [device, n] = node.split(NUL, 2)
+	return (state.landed.get(device) ?? 0) >= +n
+}
+// the ids of the cells visible at a slot, as a pred names them: oldest first. a key whose value is
+// there with no cell of its own has the cell its parent's value made, named by its place in it
+// (present: the key has a value now)
+export const predAt = (
+	state: State,
+	parent: Node | "",
+	slot: string,
+	present: boolean,
+	el?: Id,
+): Node[] => {
+	const rs = visible(state.slots.get(key(parent, slot)))
+	if (!rs.length && present && !el && parent !== "") return [parent + NUL + slot]
+	return rs.sort((a, b) => greater(a, b) ? 1 : -1).map((r) => r.id)
+}
+// the cell that holds a node or is its parent's value: the longest id of a cell that is a prefix
+const enclosing = (state: State, node: Node) => {
+	const f = node.split(NUL)
+	for (let m = f.length; m >= 3; m--) {
+		const r = state.nodes.get(m === f.length ? node : f.slice(0, m).join(NUL))
+		if (r) return r
+	}
 }
 
-// a node gone, with its sequences and records, and what they hold, in turn
+// a cell added, or taken, and undone
+function addRec(state: State, r: Rec, back: (() => void)[]) {
+	const k = key(r.parent, r.slot)
+	let rs = state.slots.get(k)
+	if (!rs) state.slots.set(k, rs = [])
+	rs.push(r)
+	if (r.node) state.nodes.set(r.node, r)
+	back.push(() => {
+		const rs = state.slots.get(k)!
+		rs.splice(rs.indexOf(r), 1)
+		if (!rs.length) state.slots.delete(k)
+		if (r.node) state.nodes.delete(r.node)
+	})
+}
+function delRec(state: State, r: Rec, back: (() => void)[]) {
+	const k = key(r.parent, r.slot), rs = state.slots.get(k)!, at = rs.indexOf(r)
+	rs.splice(at, 1)
+	if (!rs.length) state.slots.delete(k)
+	if (r.node) state.nodes.delete(r.node)
+	back.push(() => {
+		let rs = state.slots.get(k)
+		if (!rs) state.slots.set(k, rs = [])
+		rs.splice(at, 0, r)
+		if (r.node) state.nodes.set(r.node, r)
+	})
+}
+// a cell's value held, or let go, and undone
+function hold(r: Rec, value: unknown, back: (() => void)[]) {
+	const was = r.value
+	r.value = value
+	back.push(() => void (r.value = was))
+}
+
+// a node gone, with its sequences and cells, and what they hold, in turn
 function drop(state: State, node: Node, back: (() => void)[], leaf = false) {
-	const lists: [Node, List][] = [], recs: [string, Rec][] = []
 	if (leaf) {
 		const l = state.lists.get(node)
-		if (l) lists.push([node, l]), state.lists.delete(node)
-	} else {
-		for (const todo = [node]; todo.length;) {
-			const x = todo.pop()!
-			for (const [k, l] of state.lists) {
-				if (under(k, x)) lists.push([k, l]), state.lists.delete(k)
-			}
-			for (const [k, r] of state.slots) {
-				if (!under(r.parent, x)) continue
-				recs.push([k, r]), state.slots.delete(k)
-				if (r.node) state.nodes.delete(r.node), todo.push(r.node)
-			}
+		if (l) {
+			state.lists.delete(node)
+			back.push(() => void state.lists.set(node, l))
 		}
+		return
 	}
-	if (!lists.length && !recs.length) return
-	back.push(() => {
-		for (const [k, l] of lists) state.lists.set(k, l)
-		for (const [k, r] of recs) {
-			state.slots.set(k, r)
-			if (r.node) state.nodes.set(r.node, k)
-		}
-	})
-}
-
-// late: a step after ref spliced or put inside the node, or what a put inside it holds
-function touched(state: State, node: Node, ref: Ref) {
+	const lists: [Node, List][] = []
 	for (const todo = [node]; todo.length;) {
 		const x = todo.pop()!
-		for (const [k, l] of state.lists) if (under(k, x) && newer(l.last, ref)) return true
-		for (const r of state.slots.values()) {
-			if (!under(r.parent, x)) continue
-			if (newer(r.at, ref)) return true
+		for (const [k, l] of state.lists) {
+			if (under(k, x)) lists.push([k, l]), state.lists.delete(k)
+		}
+		const hit: Rec[] = []
+		for (const rs of state.slots.values()) for (const r of rs) if (under(r.parent, x)) hit.push(r)
+		for (const r of hit) {
 			if (r.node) todo.push(r.node)
+			delRec(state, r, back)
 		}
 	}
-	return false
+	if (lists.length) back.push(() => lists.forEach(([k, l]) => state.lists.set(k, l)))
 }
 
 // the items of the array node taken away by a splice are gone, with what is under them
@@ -374,15 +435,17 @@ function away(
 	taken: readonly (readonly [Id, number])[],
 	back: (() => void)[],
 ) {
-	if (!state.nodes.size) return
-	for (const [key, r] of [...state.slots]) {
-		if (r.parent !== node || !r.el || !r.node) continue
-		const f = find(l, r.el)
-		if (!f || !l.runs[f[0]].gone) continue
-		drop(state, r.node, back)
-		setRec(state, key, undefined, back)
+	if (!state.nodes.size && !state.slots.size) return
+	for (const rs of [...state.slots.values()]) {
+		for (const r of [...rs]) {
+			if (r.parent !== node || !r.el) continue
+			const f = find(l, r.el)
+			if (!f || !l.runs[f[0]].gone) continue
+			if (r.node) drop(state, r.node, back)
+			delRec(state, r, back)
+		}
 	}
-	// the items born with the array have no record: what is under them goes by their place
+	// the items born with the array have no cell: what is under them goes by their place
 	for (const [id, n] of taken) {
 		for (let x = 0; x < n; x++) {
 			const k = plus(id, x).k
@@ -391,28 +454,72 @@ function away(
 	}
 }
 
-// a patch assigns at a slot (a key of the map parent, an element of the array parent, the root): old
-// is what was there, derived the node it was if no record says (made with its parent's value), node
-// the node now. what was there goes, with what is under it; the step is late: a newer one assigned
-// there
+// a patch assigns at a slot (a key of the map parent, an element of the array parent, the root): a
+// put (cell: its id, node: the container it makes, none for a scalar, value) or a removal (no cell).
+// pred names the cells it replaces ("all": every one visible, for a move); a name whose cell has not
+// landed is held at the slot until it does. old is the value at the slot now, derived the container
+// there if no cell says (made with its parent's value). The cells replaced go, with what is under
+// them; the cell made is visible unless named already; the greatest visible shows. returns what the
+// value there is to be: "own" (the patch's), a patch, or none
 function assign(
 	state: State,
 	ref: Ref,
+	i: number,
 	parent: Node | "",
 	slot: string,
 	el: Id | undefined,
 	derived: Node | null,
 	old: unknown,
-	node: Node | null,
+	pred: readonly Node[] | "all",
+	cell: { id: Node; node: Node | null; value: unknown } | null,
 	back: (() => void)[],
-	late = false,
-) {
-	const key = parent + SLOT + slot, was = state.slots.get(key)
-	if (late && was && newer(was.at, ref)) throw new Late()
-	const gone = was ? was.node : derived
-	if (late && gone && touched(state, gone, ref)) throw new Late()
-	if (gone) drop(state, gone, back, typeof old === "string")
-	setRec(state, key, { parent, slot, ...(el && { el }), node, at: ref }, back)
+	path: readonly Index[],
+): "own" | Patch | null {
+	// a key whose value its parent's put made, with no cell of its own, is a cell: held now
+	if (!el && parent !== "" && old !== undefined && !visible(state.slots.get(key(parent, slot))).length) {
+		const from = enclosing(state, parent)
+		if (from) {
+			const id = parent + NUL + slot
+			addRec(state, { parent, slot, id, node: derived && id, at: from.at, i: from.i }, back)
+		}
+	}
+	const was = visible(state.slots.get(key(parent, slot))), top = shows(was)
+	const gone = pred === "all" ? was : []
+	if (pred !== "all") {
+		for (const id of pred) {
+			const r = (state.slots.get(key(parent, slot)) ?? []).find((x) => x.id === id)
+			if (r && !r.ghost) {
+				if (!gone.includes(r)) gone.push(r)
+			} else if (!r && !landed(state, id)) {
+				addRec(state, { parent, slot, ...(el && { el }), id, node: null, at: ref, i, ghost: true }, back)
+			}
+		}
+	}
+	let made: Rec | undefined
+	if (cell) {
+		const ghost = (state.slots.get(key(parent, slot)) ?? []).find((x) => x.ghost && x.id === cell.id)
+		if (ghost) delRec(state, ghost, back)
+		else made = { parent, slot, ...(el && { el }), id: cell.id, node: cell.node, at: ref, i }
+	}
+	if (!was.length && derived && el) drop(state, derived, back, typeof old === "string")
+	for (const r of gone) {
+		const v = r === top ? old : r.value
+		if (r.node) drop(state, r.node, back, typeof v === "string")
+		delRec(state, r, back)
+	}
+	if (made) addRec(state, made, back)
+	const now = visible(state.slots.get(key(parent, slot)))
+	const show = shows(now)
+	if (made && show === made) {
+		if (top && !gone.includes(top)) hold(top, old, back)
+		return "own"
+	}
+	if (made) hold(made, cell!.value, back)
+	if (!show) return old === undefined ? null : { path }
+	if (show === top) return null
+	const value = show.value
+	hold(show, undefined, back)
+	return { path, value }
 }
 
 // the places of the rel items of a node's tail, held, in turn; nothing when a patch assigned over one
@@ -421,11 +528,11 @@ function inside(state: State, held: Node, tail: readonly (string | number)[]) {
 	let ck = held
 	for (const x of tail) {
 		if (typeof x === "string") {
-			if (state.slots.has(ck + SLOT + keySlot(x))) return
+			if (visible(state.slots.get(key(ck, keySlot(x)))).length) return
 			out.push(x)
 		} else {
 			const [device, n] = ck.split(NUL, 2), e: Id = { device, c: +n, k: x }
-			if (state.slots.has(ck + SLOT + elSlot(e))) return
+			if (visible(state.slots.get(key(ck, elSlot(e)))).length) return
 			const l = state.lists.get(ck), f = l && find(l, e)
 			if (l) {
 				if (!f || l.runs[f[0]].gone) return
@@ -437,20 +544,23 @@ function inside(state: State, held: Node, tail: readonly (string | number)[]) {
 	return out
 }
 
-// the path to a container node as it is now, or nothing: not held, replaced, or gone
-function where(state: State, node: Node): Index[] | undefined {
+// the path to a container node as it is now, or nothing: not held, replaced, or gone. host: the
+// cell whose held value it is in, when that cell is not the one showing (the path is in that value)
+type Where = { at: Index[]; host?: Rec }
+function where(state: State, node: Node): Where | undefined {
 	const parts: Index[][] = []
 	for (let cur = node;;) {
-		// the node some record holds that cur is, or is made inside
+		// the node some cell holds that cur is, or is made inside
 		const f = cur.split(NUL)
 		let m = f.length
 		while (m >= 3 && !state.nodes.has(m === f.length ? cur : f.slice(0, m).join(NUL))) m--
 		if (m < 3) return
 		const held = m === f.length ? cur : f.slice(0, m).join(NUL)
-		const rec = state.slots.get(state.nodes.get(held)!)!
+		const rec = state.nodes.get(held)!
 		const rel = inside(state, held, f.slice(m).map((x) => JSON.parse(x)))
 		if (!rel) return
 		parts.push(rel)
+		if (rec !== shownAt(state, rec.parent, rec.slot)) return { at: parts.reverse().flat(), host: rec }
 		if (rec.parent === "") break
 		if (rec.el) {
 			const l = state.lists.get(rec.parent), at = l && find(l, rec.el)
@@ -459,7 +569,7 @@ function where(state: State, node: Node): Index[] | undefined {
 		} else parts.push([JSON.parse(rec.slot)])
 		cur = rec.parent
 	}
-	return parts.reverse().flat()
+	return { at: parts.reverse().flat() }
 }
 
 // the container node at the path's first len items, found by place in value (a write here, a move),
@@ -481,12 +591,12 @@ function nodeAt(
 			if (k >= l.count) return
 			const [j, o] = liveAt(l, k),
 				e = idAt(l, l.runs[j], o),
-				r = state.slots.get(cur + SLOT + elSlot(e))
+				r = shownAt(state, cur, elSlot(e))
 			cur = r ? r.node ?? undefined : e.k !== undefined ? child(cur, e.k) : undefined
 			v = v[k]
 		} else {
 			if (!isMap(v)) return
-			const r = state.slots.get(cur + SLOT + keySlot(k))
+			const r = shownAt(state, cur, keySlot(k))
 			cur = r ? r.node ?? undefined : isContainer(v[k]) ? child(cur, k) : undefined
 			v = v[k]
 		}
@@ -520,6 +630,46 @@ function elements(state: State, node: Node, v: unknown, back: (() => void)[]): L
 	return l
 }
 
+// the cells visible at a path, when more than one: the shown first, then the rest by their order,
+// each with its value and the step that made it
+export function cellsAt(
+	state: State,
+	path: readonly Index[],
+): { value: unknown; device: string; n: number }[] | undefined {
+	const back: (() => void)[] = []
+	try {
+		let parent: Node | "" = "", slot = ""
+		if (path.length) {
+			const cont = nodeAt(state, path, path.length - 1, back)
+			if (cont === undefined) return
+			const v = at(state.value, path.slice(0, -1)), k = path[path.length - 1]
+			if (typeof k === "number") {
+				if (!Array.isArray(v)) return
+				const l = elements(state, cont, v, back)
+				if (k >= l.count) return
+				const [j, o] = liveAt(l, k)
+				slot = elSlot(idAt(l, l.runs[j], o))
+			} else slot = keySlot(k)
+			parent = cont
+		}
+		const rs = visible(state.slots.get(key(parent, slot)))
+		if (!rs.length) {
+			// a key its parent's put made, with no cell of its own: that put's
+			const value = at(state.value, path), from = parent === "" ? undefined : enclosing(state, parent)
+			return value !== undefined && from ? [{ value, device: from.at[1], n: from.at[2] }] : undefined
+		}
+		const show = shows(rs)!
+		const rest = rs.filter((r) => r !== show).sort((a, b) => greater(a, b) ? -1 : 1)
+		return [show, ...rest].map((r) => ({
+			value: r === show ? at(state.value, path) : r.value,
+			device: r.at[1],
+			n: r.at[2],
+		}))
+	} finally {
+		for (const f of back.reverse()) f()
+	}
+}
+
 // a step's patches applied to state in order, all or none, by its ids; a step with none is a write
 // here: its containers and elements are named from state (returned). o.undo gets what undoes the
 // value, o.back what undoes the state (run newest first). o.keep: false for a patch left out (its
@@ -538,11 +688,21 @@ export function step(
 	const { undo = [], back = [], keep } = o
 	const ref: Ref = [s.lamport, s.device, s.n]
 	const applied: Patch[] = [], ids: (Named | null)[] = []
-	const mine: Patch[][] = [], marks = back.length
+	const mine: Patch[][] = []
 	const was = state.value
 	const name = !s.ids, named = s.ids ? readIds(s, s.ids) : undefined
+	// this step has landed, whether or not it applies
+	const heard = state.landed.get(s.device) ?? 0
+	if (heard < s.n) {
+		state.landed.set(s.device, s.n)
+		back.push(() => void (heard ? state.landed.set(s.device, heard) : state.landed.delete(s.device)))
+	}
+	const marks = back.length
 	let made = 0
 	try {
+		// a by-place move replaces what it finds ("all"), not what it names: a late step under one is
+		// worked out again
+		if (o.late && newer(state.moved, ref)) throw new Late()
 		for (let i = 0; i < s.patches.length; i++) {
 			const p = s.patches[i], c = s.seq + made
 			made += inserts(p)
@@ -556,6 +716,13 @@ export function step(
 				: patch(state, ref, c, i, p, named?.[i] ?? null, back, name, o.late)
 			ids.push(out.named)
 			for (const q of out.patches) {
+				const h = "host" in out ? out.host : undefined
+				if (h) {
+					const before = h.value
+					h.value = apply(before, [q])
+					back.push(() => void (h.value = before))
+					continue
+				}
 				const u: Patch[] = []
 				state.value = apply(state.value, [q], { undo: u })
 				mine.push(u), applied.push(q)
@@ -575,8 +742,9 @@ const missing = (late: boolean | undefined, why: string): never => {
 }
 
 // a patch but a move, its container found by its id (given) or by place (a write here, named): a
-// splice, a removal at an index of an array (a splice of that one), a put at an index, or a put at a
-// key or of the whole value
+// splice, a removal at an index of an array (a splice of that one), a put at an index, or a put or
+// removal at a key or of the whole value. a container named that has landed and is not held is
+// gone: the patch is passed over
 function patch(
 	state: State,
 	ref: Ref,
@@ -587,40 +755,57 @@ function patch(
 	back: (() => void)[],
 	name: boolean,
 	late = false,
-): { patches: Patch[]; named: Named } {
+): { patches: Patch[]; named: Named; host?: Rec } {
 	if (!name && !given) throw new RangeError("a patch with no ids")
 	const k = p.path.at(-1), spliced = p.range !== undefined
 	const index = !spliced && typeof k === "number"
-	const made = (isContainer(p.value) ? nodeKey(ref[1], ref[2], i) : null) as Node | null
+	const id = nodeKey(ref[1], ref[2], i)
+	const made = (isContainer(p.value) ? id : null) as Node | null
+	const cell = p.value === undefined ? null : { id, node: made, value: p.value }
 	if (!spliced && !p.path.length) {
 		const container = rootOf(state) ?? null
-		assign(state, ref, "", "", undefined, null, state.value, made, back, late)
-		return { patches: [p], named: { container: name ? container : given!.container } }
+		const pred = name ? predAt(state, "", "", false) : given!.pred ?? []
+		const out = assign(state, ref, i, "", "", undefined, null, state.value, pred, cell, back, [])
+		const patches = out === "own" ? [p] : out ? [out] : []
+		return { patches, named: { container: name ? container : given!.container, pred } }
 	}
 	const len = spliced ? p.path.length : p.path.length - 1
-	let node: Node | undefined = name
+	const node: Node | undefined = name
 		? nodeAt(state, p.path, len, back)
 		: given!.container ?? undefined
 	if (node === undefined) return missing(late, "no container")
-	const up = name ? p.path.slice(0, len) : where(state, node)
-	if (!up) return missing(late, "a container not there")
-	const v = at(state.value, up)
+	const w: Where | undefined = name ? { at: p.path.slice(0, len) } : where(state, node)
+	if (!w) {
+		if (!name && landed(state, node)) {
+			if (late && newer(state.moved, ref)) throw new Late()
+			return { patches: [], named: given! }
+		}
+		return missing(late, "a container not there")
+	}
+	const up = w.at, host = w.host
+	const v = at(host ? host.value : state.value, up)
+	// the path leads to nothing (a key its parent's put made, taken away): gone
+	if (!name && v === undefined) {
+		if (late && newer(state.moved, ref)) throw new Late()
+		return { patches: [], named: given! }
+	}
+	const out = (patches: Patch[], named: Named) => ({ patches, named, ...(host && { host }) })
 	if (spliced) {
 		if (!isSeq(v)) throw new RangeError("wrong-kind")
 		if (!name && !given!.splice) throw new RangeError("a splice with no ids")
-		const out = splice(state, ref, c, i, { ...p, path: up }, node, v, given?.splice ?? null, back)
-		return { patches: out.patches, named: { container: node, splice: out.anchor } }
+		const r = splice(state, ref, c, i, { ...p, path: up }, node, v, given?.splice ?? null, back, late)
+		return out(r.patches, { container: node, splice: r.anchor })
 	}
 	if (index && p.value === undefined) {
 		// a removal: taken away wherever it is now, once
 		if (!Array.isArray(v)) throw new RangeError("wrong-kind")
 		if (!name && !given!.splice) throw new RangeError("a removal with no ids")
 		const q: Patch = { path: up, range: [k as number, (k as number) + 1] }
-		const out = splice(state, ref, c, i, q, node, v, given?.splice ?? null, back)
-		return {
-			patches: out.patches,
-			named: { container: node, splice: { after: null, gone: out.anchor.gone } },
-		}
+		const r = splice(state, ref, c, i, q, node, v, given?.splice ?? null, back, late)
+		return out(r.patches, {
+			container: node,
+			splice: { after: null, gone: r.anchor.gone },
+		})
 	}
 	if (index) {
 		// a put at an index: the item is replaced, its element stays
@@ -634,28 +819,37 @@ function patch(
 		} else {
 			if (!given!.element) throw new RangeError("a put at an index with no element")
 			const f = find(l, e = given!.element)
-			if (!f || l.runs[f[0]].gone) throw new RangeError("an element named is not there")
+			// an element gone takes its item with it: the patch is skipped
+			if (f && l.runs[f[0]].gone) return { patches: [], named: given! }
+			if (!f) throw new RangeError("an element named is not there")
 			x = liveBefore(l, f[0]) + f[1]
 		}
 		const derived = e.k === undefined ? null : child(node, e.k)
-		assign(state, ref, node, elSlot(e), e, derived, v[x], made, back, late)
-		return { patches: [{ ...p, path: [...up, x] }], named: { container: node, element: e } }
+		const pred = name ? predAt(state, node, elSlot(e), false, e) : given!.pred ?? []
+		const spot = [...up, x]
+		const r = assign(state, ref, i, node, elSlot(e), e, derived, v[x], pred, cell, back, spot)
+		const patches = r === "own" ? [{ ...p, path: spot }] : r ? [r] : []
+		return out(patches, { container: node, pred, element: e })
 	}
 	if (!isMap(v)) throw new RangeError("wrong-kind")
-	const key = k as string, old = v[key]
-	assign(
+	const key = k as string, old = v[key], pred = name ? predAt(state, node, keySlot(key), old !== undefined) : given!.pred ?? []
+	const spot = [...up, key]
+	const r = assign(
 		state,
 		ref,
+		i,
 		node,
 		keySlot(key),
 		undefined,
 		isContainer(old) ? child(node, key) : null,
 		old,
-		made,
+		pred,
+		cell,
 		back,
-		late,
+		spot,
 	)
-	return { patches: [{ ...p, path: [...up, key] }], named: { container: node } }
+	const patches = r === "own" ? [{ ...p, path: spot }] : r ? [r] : []
+	return out(patches, { container: node, pred })
 }
 
 // a move, by place: what it moves is taken from where it was and put where it goes, as a new node
@@ -670,6 +864,9 @@ function move(
 ): Patch[] {
 	const f = p.move!, F = f.path, T = p.path
 	if (!F.length) throw new RangeError("range")
+	const was = state.moved
+	if (!newer(was, ref)) state.moved = ref
+	back.push(() => void (state.moved = was))
 	const fk = F[F.length - 1], tk = T[T.length - 1]
 	const src = at(state.value, F)
 	const items = (v: unknown): unknown =>
@@ -697,25 +894,29 @@ function move(
 			assign(
 				state,
 				ref,
+				i,
 				n,
 				keySlot(fk),
 				undefined,
 				isContainer(old) ? child(n, fk) : null,
 				old,
+				"all",
 				null,
 				back,
+				F,
 			)
 		}
 	}
 	const rest = apply(state.value, [cut])
-	const made = (isContainer(moved) ? nodeKey(ref[1], ref[2], i) : null) as Node | null
+	const id = nodeKey(ref[1], ref[2], i)
+	const cell = { id, node: (isContainer(moved) ? id : null) as Node | null, value: moved }
 	if (p.range) {
 		const n = nodeAt(state, T, T.length, back, rest), into = at(rest, T)
 		if (n === undefined || !isSeq(into)) throw new RangeError("wrong-kind")
 		const q: Patch = { path: T, range: p.range, value: f.range ? moved : [moved] }
 		splice(state, ref, c, i, q, n, into, null, back)
 	} else if (!T.length) {
-		assign(state, ref, "", "", undefined, null, rest, made, back)
+		assign(state, ref, i, "", "", undefined, null, rest, "all", cell, back, [])
 	} else {
 		const n = nodeAt(state, T, T.length - 1, back, rest), up = at(rest, T.slice(0, -1))
 		if (n === undefined) throw new RangeError("no-key")
@@ -727,13 +928,16 @@ function move(
 			assign(
 				state,
 				ref,
+				i,
 				n,
 				elSlot(e),
 				e,
 				e.k === undefined ? null : child(n, e.k),
 				up[tk],
-				made,
+				"all",
+				cell,
 				back,
+				T,
 			)
 		} else {
 			if (!isMap(up)) throw new RangeError("wrong-kind")
@@ -741,13 +945,16 @@ function move(
 			assign(
 				state,
 				ref,
+				i,
 				n,
 				keySlot(tk as string),
 				undefined,
 				isContainer(old) ? child(n, tk as string) : null,
 				old,
-				made,
+				"all",
+				cell,
 				back,
+				T,
 			)
 		}
 	}
@@ -766,14 +973,12 @@ function splice(
 	v: unknown,
 	anchor: Anchor | null,
 	back: (() => void)[],
+	late = false,
 ): { patches: Patch[]; anchor: Anchor } {
 	// an insert of another kind than the sequence (a list into a text): doesn't apply, as apply refuses
 	const kind = (v: unknown) => typeof v === "string" ? "text" : Array.isArray(v) ? "list" : "other"
 	if (p.value !== undefined && kind(p.value) !== kind(v)) throw new RangeError("wrong-kind")
 	const l = elements(state, node, v, back)
-	const was = l.last
-	if (!newer(was, ref)) l.last = ref
-	back.push(() => void (l.last = was))
 	const [a, b] = p.range!
 	const value = p.value, m = value === undefined ? 0 : units(value)
 	// what it names: the element it goes after, and those it takes away, as runs
@@ -850,13 +1055,8 @@ function splice(
 			for (let x = 0; x < m; x++) {
 				if (!isContainer(value[x])) continue
 				const e: Id = { device: ref[1], c: c + x }
-				setRec(state, node + SLOT + elSlot(e), {
-					parent: node,
-					slot: elSlot(e),
-					el: e,
-					node: nodeKey(ref[1], ref[2], i, [x]),
-					at: ref,
-				}, back)
+				const id = nodeKey(ref[1], ref[2], i, [x])
+				addRec(state, { parent: node, slot: elSlot(e), el: e, id, node: id, at: ref, i }, back)
 			}
 		}
 	}
@@ -998,7 +1198,6 @@ export function save(state: State): Value {
 	const lists = [...state.lists].map(([node, l]) => [
 		nodeOut(node),
 		l.text ? 1 : 0,
-		l.last ?? null,
 		l.runs.map((r) => [
 			r.device,
 			r.c,
@@ -1008,18 +1207,30 @@ export function save(state: State): Value {
 			idOut(r.right),
 		]),
 	])
-	const slots = [...state.slots.values()].map((r) => [
-		r.parent === "" ? null : nodeOut(r.parent),
-		r.el ? idOut(r.el) : r.slot,
-		nodeOut(r.node),
-		r.at,
-	])
-	return [lists, slots] as unknown as Value
+	const slots: Value[] = []
+	for (const rs of state.slots.values()) {
+		const show = shows(visible(rs))
+		for (const r of rs) {
+			slots.push([
+				r.parent === "" ? null : nodeOut(r.parent),
+				r.el ? idOut(r.el) : r.slot,
+				nodeOut(r.id),
+				nodeOut(r.node),
+				r.at,
+				r.i,
+				r.ghost ? 1 : 0,
+				...(!r.ghost && r !== show ? [r.value as Value] : []),
+			])
+		}
+	}
+	return [lists, slots, [...state.landed], state.moved ?? null] as unknown as Value
 }
 export function load(v: unknown): State {
-	const [lists, slots] = v as [unknown[][], unknown[][]]
+	const [lists, slots, landed, moved] = v as [unknown[][], unknown[][], [string, number][], Ref | null]
 	const state = fresh()
-	for (const [node, text, last, runs] of lists as [unknown, number, Ref | null, unknown[][]][]) {
+	if (moved) state.moved = moved
+	for (const [device, n] of landed) state.landed.set(device, n)
+	for (const [node, text, runs] of lists as [unknown, number, unknown[][]][]) {
 		const key = nodeIn(node)!
 		const rs = runs.map((r, i): Run => ({
 			device: r[0] as string,
@@ -1034,22 +1245,27 @@ export function load(v: unknown): State {
 		}))
 		const count = rs.reduce((n, r) => n + (r.gone ? 0 : r.len), 0)
 		const [dev, n] = key.split(NUL, 2)
-		state.lists.set(key, {
-			runs: rs,
-			dev,
-			n: +n,
-			text: !!text,
-			count,
-			j: 0,
-			live: 0,
-			...(last && { last }),
-		})
+		state.lists.set(key, { runs: rs, dev, n: +n, text: !!text, count, j: 0, live: 0 })
 	}
-	for (const [parent, slot, node, at] of slots as [unknown, unknown, unknown, Ref][]) {
+	for (const f of slots) {
+		const [parent, slot, id, node, at, i, ghost] = f as [unknown, unknown, unknown, unknown, Ref, number, number]
 		const p = nodeIn(parent) ?? "", el = Array.isArray(slot) ? idIn(slot)! : undefined
-		const s = el ? elSlot(el) : (slot as string), key = p + SLOT + s, n = nodeIn(node)
-		state.slots.set(key, { parent: p, slot: s, ...(el && { el }), node: n, at })
-		if (n) state.nodes.set(n, key)
+		const r: Rec = {
+			parent: p,
+			slot: el ? elSlot(el) : (slot as string),
+			...(el && { el }),
+			id: nodeIn(id)!,
+			node: nodeIn(node),
+			at,
+			i,
+			...(ghost && { ghost: true as const }),
+			...(f.length > 7 && { value: f[7] }),
+		}
+		const k = key(r.parent, r.slot)
+		const rs = state.slots.get(k)
+		if (rs) rs.push(r)
+		else state.slots.set(k, [r])
+		if (r.node) state.nodes.set(r.node, r)
 	}
 	return state
 }

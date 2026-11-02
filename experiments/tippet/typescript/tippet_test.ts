@@ -89,9 +89,13 @@ Deno.test("two writes made apart: both sides end the same, both writes kept as v
 	const values = (d: typeof a) => d.history.versions("pig", "value").map((v) => v.value)
 	assertEquals(values(a), values(b))
 	assertEquals(values(a).map((v) => JSON.stringify(v)).sort(), ['{"x":1}', '{"x":2}'])
+	// an edit inside the shown value leaves the other cell visible; a put that saw both replaces both
 	a.edit("pig", [{ path: ["y"], value: 0 }])
+	await until(() => (b.value("pig") as { y?: number }).y === 0)
+	assertEquals(b.history.versions("pig", "value").length, 2)
+	a.put("pig", { z: 1 })
 	await until(() => b.history.versions("pig", "value").length === 1)
-	assertEquals(values(b), [{ ...a.value("pig") as object }])
+	assertEquals(values(b), [{ z: 1 }])
 	closeAll()
 })
 
@@ -124,7 +128,8 @@ Deno.test("writes to different keys both stand", async () => {
 	await until(() => JSON.stringify(a.value("pig")) === JSON.stringify(b.value("pig")))
 	assertEquals(a.value("pig"), { x: 1, y: 1 })
 	assertEquals(a.history.versions("pig", "value").length, 1)
-	assertEquals(a.history.versions("pig", "value")[0].from.heads.length, 2)
+	// one cell at the root, from the put that made it
+	assertEquals(a.history.versions("pig", "value")[0].from.heads.length, 1)
 	closeAll()
 })
 
@@ -254,7 +259,7 @@ Deno.test("a late step is worked in when the log goes quiet, even when the last 
 	assertEquals(a.history.failed, [])
 })
 
-Deno.test("a late step is worked in when the log goes quiet, two devices having put the whole value alone: the later put in the order keeps its own typing, the other's typing is in failed", async () => {
+Deno.test("a late step is worked in when the log goes quiet, two devices having put the whole value alone: the later put in the order shows with its typing, the other's cell holds its own", async () => {
 	const b = await device(), a = await device()
 	b.put("doc", { t: "" })
 	b.edit("doc", [{ path: ["t"], range: [0, 0], value: "b" }])
@@ -266,9 +271,12 @@ Deno.test("a late step is worked in when the log goes quiet, two devices having 
 	const forged = a.log.take({ ...r, device: "ab".repeat(32) })
 	assertEquals(await late, { added: 2 })
 	assert("refused" in await forged)
-	// both puts are at lamport 1: the greater device's is later, and the other's typing names a
-	// root that is gone
+	// both puts are at lamport 1: the greater device's shows, and the other's typing goes into its
+	// own cell, listed second
 	assertEquals(a.value("doc"), { t: dev > a.log.device! ? "b" : "a" })
-	assertEquals(a.history.failed.length, 1)
-	assertEquals(a.history.failed[0].device, dev > a.log.device! ? a.log.device! : dev)
+	assertEquals(a.history.failed.length, 0)
+	assertEquals(
+		a.history.versions("doc", "value", []).map((v) => v.value),
+		dev > a.log.device! ? [{ t: "b" }, { t: "a" }] : [{ t: "a" }, { t: "b" }],
+	)
 })

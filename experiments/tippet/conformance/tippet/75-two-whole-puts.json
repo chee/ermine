@@ -1,5 +1,5 @@
 {
-	"title": "two devices each put the whole value, then each types into its own: the later whole put in the order replaces the other, and the typing into the replaced one doesn't apply (it is listed in failed, on every device, a forgetting one too)",
+	"title": "two devices each put the whole value, then each types into its own: both puts are cells at the root, the greater id shows, and the typing into the other is applied to its cell, held (readAll shows both, on every device, a forgetting one too); nothing fails",
 	"steps": [
 		{
 			"op": "device",
@@ -173,13 +173,72 @@
 			}
 		},
 		{
+			"op": "versions",
+			"device": "a",
+			"node": "doc",
+			"path": [],
+			"expect": {
+				"versions": [
+					{
+						"value": {
+							"t": "x"
+						},
+						"from": [
+							[
+								"a",
+								1
+							]
+						]
+					},
+					{
+						"value": {
+							"t": "y"
+						},
+						"from": [
+							[
+								"b",
+								1
+							]
+						]
+					}
+				]
+			}
+		},
+		{
 			"op": "failed",
 			"device": "a",
 			"expect": {
-				"failed": [
+				"failed": []
+			}
+		},
+		{
+			"op": "versions",
+			"device": "b",
+			"node": "doc",
+			"path": [],
+			"expect": {
+				"versions": [
 					{
-						"device": "b",
-						"n": 2
+						"value": {
+							"t": "x"
+						},
+						"from": [
+							[
+								"a",
+								1
+							]
+						]
+					},
+					{
+						"value": {
+							"t": "y"
+						},
+						"from": [
+							[
+								"b",
+								1
+							]
+						]
 					}
 				]
 			}
@@ -188,10 +247,37 @@
 			"op": "failed",
 			"device": "b",
 			"expect": {
-				"failed": [
+				"failed": []
+			}
+		},
+		{
+			"op": "versions",
+			"device": "f",
+			"node": "doc",
+			"path": [],
+			"expect": {
+				"versions": [
 					{
-						"device": "b",
-						"n": 2
+						"value": {
+							"t": "x"
+						},
+						"from": [
+							[
+								"a",
+								1
+							]
+						]
+					},
+					{
+						"value": {
+							"t": "y"
+						},
+						"from": [
+							[
+								"b",
+								1
+							]
+						]
 					}
 				]
 			}
@@ -200,12 +286,7 @@
 			"op": "failed",
 			"device": "f",
 			"expect": {
-				"failed": [
-					{
-						"device": "b",
-						"n": 2
-					}
-				]
+				"failed": []
 			}
 		}
 	]

@@ -1,5 +1,5 @@
 {
-	"title": "three devices' steps in every order they can come in: the same versions, the merge first, then each head as its side wrote it (c's with b's y, a's own x and y); a write that saw both heads replaces both",
+	"title": "three devices' steps in every order they can come in: the same value and the same one cell on every device; a write that saw both heads replaces both",
 	"steps": [
 		{
 			"op": "device",
@@ -497,36 +497,8 @@
 						},
 						"from": [
 							[
-								"c",
-								1
-							],
-							[
 								"a",
-								2
-							]
-						]
-					},
-					{
-						"value": {
-							"x": 3,
-							"y": 2
-						},
-						"from": [
-							[
-								"c",
 								1
-							]
-						]
-					},
-					{
-						"value": {
-							"x": 1,
-							"y": 1
-						},
-						"from": [
-							[
-								"a",
-								2
 							]
 						]
 					}
@@ -546,36 +518,8 @@
 						},
 						"from": [
 							[
-								"c",
-								1
-							],
-							[
 								"a",
-								2
-							]
-						]
-					},
-					{
-						"value": {
-							"x": 3,
-							"y": 2
-						},
-						"from": [
-							[
-								"c",
 								1
-							]
-						]
-					},
-					{
-						"value": {
-							"x": 1,
-							"y": 1
-						},
-						"from": [
-							[
-								"a",
-								2
 							]
 						]
 					}
@@ -595,36 +539,8 @@
 						},
 						"from": [
 							[
-								"c",
-								1
-							],
-							[
 								"a",
-								2
-							]
-						]
-					},
-					{
-						"value": {
-							"x": 3,
-							"y": 2
-						},
-						"from": [
-							[
-								"c",
 								1
-							]
-						]
-					},
-					{
-						"value": {
-							"x": 1,
-							"y": 1
-						},
-						"from": [
-							[
-								"a",
-								2
 							]
 						]
 					}
@@ -644,36 +560,8 @@
 						},
 						"from": [
 							[
-								"c",
-								1
-							],
-							[
 								"a",
-								2
-							]
-						]
-					},
-					{
-						"value": {
-							"x": 3,
-							"y": 2
-						},
-						"from": [
-							[
-								"c",
 								1
-							]
-						]
-					},
-					{
-						"value": {
-							"x": 1,
-							"y": 1
-						},
-						"from": [
-							[
-								"a",
-								2
 							]
 						]
 					}
@@ -693,36 +581,8 @@
 						},
 						"from": [
 							[
-								"c",
-								1
-							],
-							[
 								"a",
-								2
-							]
-						]
-					},
-					{
-						"value": {
-							"x": 3,
-							"y": 2
-						},
-						"from": [
-							[
-								"c",
 								1
-							]
-						]
-					},
-					{
-						"value": {
-							"x": 1,
-							"y": 1
-						},
-						"from": [
-							[
-								"a",
-								2
 							]
 						]
 					}
@@ -742,36 +602,8 @@
 						},
 						"from": [
 							[
-								"c",
-								1
-							],
-							[
 								"a",
-								2
-							]
-						]
-					},
-					{
-						"value": {
-							"x": 3,
-							"y": 2
-						},
-						"from": [
-							[
-								"c",
 								1
-							]
-						]
-					},
-					{
-						"value": {
-							"x": 1,
-							"y": 1
-						},
-						"from": [
-							[
-								"a",
-								2
 							]
 						]
 					}
@@ -808,7 +640,7 @@
 						},
 						"from": [
 							[
-								"r1",
+								"a",
 								1
 							]
 						]
@@ -839,7 +671,7 @@
 						},
 						"from": [
 							[
-								"r1",
+								"a",
 								1
 							]
 						]

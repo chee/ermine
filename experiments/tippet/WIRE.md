@@ -50,7 +50,7 @@ One kept write. Bytes: a cbor array.
     never changes. written: this device's `[n, i, rel…]` (n whole from 1 to the step's; the step's
     only with i below the patch's own index), another's `[device, n, i, rel…]` (device bstr 32, not
     this step's)
-  - pred: array of nodes: always `[]` for now, not acted on
+  - pred: array of nodes, the cells the patch replaces (assignments, below)
   - element: the array item a put at an index replaces: an element id
   - after: the element it goes after, or null: the start
   - gone: array of [id, count], count whole from 1: the elements it takes away, count of them from
@@ -63,18 +63,37 @@ One kept write. Bytes: a cbor array.
     seq - x; or [x, k], x whole below n, that step n - x. another's [device, seq] or [device, n, k]
     (device bstr 32, not this step's; n from 1)
 
-  a sequence's elements are counted from its first splice: those there since the step that made its
-  node are that step's, k their place. a patch puts at a slot (a key of a map, an element of an
-  array, the root) and records what it put there (the node, or none for a scalar) and its place in
-  the order; what was there goes with its sequences and records, and what a record holds in turn
-  (the sequences of a replaced node never come back). an item an array loses to a splice goes the
-  same way. a container not held (not made yet, replaced, gone), or a path of records and places
-  that leads to none: the step doesn't apply (its container's maker not held yet: it applies once
-  that lands). a removal at an index of an array is a splice of that one element, taken away
-  wherever it is now (gone already: nothing). a move is by place: it takes what it moves from its
-  source (a range or an index of an array: those elements gone; a key: nothing there) and puts it,
-  new, at its target (a slot: new elements, as many as it moves, after the element at the place; an
-  index: that item replaced; a key); a move into what it moves doesn't apply
+  a sequence's elements are counted from its first splice: those there since the step that made
+  its node are that step's, k their place. a container not held (not made yet, replaced, gone), or
+  a path of cells and places that leads to none, or an element gone that a put at an index names:
+  when the maker's step has landed, the patch is skipped and the rest of the step applies; when it
+  has not, the step doesn't apply (it applies once that lands). a removal at an index of an array is a splice of that one
+  element, taken away wherever it is now (gone already: nothing). a move is by place: it takes what
+  it moves from its source (a range or an index of an array: those elements gone; a key: every cell
+  there, as if named) and puts it, new, at its target (a slot: new elements, as many as it moves,
+  after the element at the place; an index: that item replaced; a key: every cell there replaced),
+  a move into what it moves doesn't apply
+
+  assignments. a put or removal at a slot (a key of a map, an element of an array, the root) makes
+  a cell, [cell id, node]: the cell id is the node id of what the patch made there, `[device, n,
+  i]`, a scalar's too; a key a put's value holds has the cell its put made, `[…, key]`, and needs no
+  record until a patch assigns at it. a cell is visible until an assignment names it in pred. many
+  cells at a slot are all visible, a multi-value register: what a read shows is the one with the
+  greatest id (its step's lamport, device, n, then its patch), readAll shows all. pred holds every
+  visible cell at the slot the writer holds, hidden ones too, so one honest put or removal clears
+  them all. a container item a splice inserts has a cell and is named in pred as any; a scalar item
+  has none, and any put at its element supersedes it (its writer saw it). a removal
+  names what it saw and takes away only that: a cell it did not name stays visible. an edit into a
+  container of a cell that does not show applies to that cell's held value; when the cell shown
+  goes, the next greatest shows with it. a cell named before it landed is held at its slot
+  (`named`) and is not visible when it lands; a name whose step has landed and whose cell is not at
+  the slot is ignored. the effect of an assignment is a set (cells in, preds out), so one goes in
+  as is in any order. mine, not decided: a cell is dropped with its sequences, cells and held
+  values when named, as a container replaced is. `readAll` shows conflicts only:
+  `history.versions(node, part, path)` is the cells at the path, the shown first, each
+  from the step that made it (a key its parent's put made, with no cell of its own: that put's);
+  every device, keeper or forgetting, returns the same. `typescript/reading.ts` is the feature for
+  @ermine/system's `onRead`, adding all but the first (read's own)
 
   applied in the entry's order (history): a splice takes its gone elements away wherever they are
   now, then its first inserted one goes between after and before, among those put there since
@@ -100,17 +119,17 @@ One kept write. Bytes: a cbor array.
   the step's too), or a before not after its after: the step doesn't apply (passed over, as any).
   what is made of it: `typescript/elements.ts`
 
-  a reader that forgets: holds per entry its sequences' elements and a record per slot a patch put,
-  the place of its newest step that is one put of the whole value, and the graph's value (no steps,
+  a reader that forgets: holds per entry its sequences' elements, the cells assigned and still
+  visible (about 40 bytes of cell and its id in C, a hidden one and its value more), `named`, the
+  newest step of each device that landed, the newest move applied, and the graph's value (no steps,
   no second value), all in its snapshot too. it ends at the same value as a reader that holds every
-  step.
+  step. a removal leaves no cell, and a put replacing one leaves one: nothing is held for a key
+  taken away.
 
   a late step (ordered before a step applied) on a reader that forgets:
-  - goes in as it is, unless: it is a move; the container it names is not held; it is a put at a
-    slot a step after it put at; it is a put replacing a node a step after it changed inside
-  - passed over, as applied: one put of the whole value, when a step ordered after it is one put of
-    the whole value and no failed step of its entry is ordered after it (overwritten, as in order;
-    nothing read, nothing failed)
+  - goes in as it is: a put, a removal, an edit, a splice commute (cells, preds and elements)
+  - unless it is a move, or a move was applied after it, which replaces every cell it finds and not
+    those it names: the entry is worked out again from the log
   - else the entry is worked out again from every step of it the log holds, once the run landing is
     in: so too a late step that doesn't apply as it is, and one that applies in an entry with a
     failed step ordered after it
@@ -148,8 +167,12 @@ a move that takes its source's elements away and puts new ones at its target is 
 it keeps the sequences at both ends (they were made new, losing a concurrent insert beside them),
 and an edit naming the moved node's old id does not follow it (it is a new node).
 
-a record per slot is mine, not decided: a put at a key, an element or the root says which step put
-it, so a late put under a newer one is known, and what a put replaces is dropped with its sequences.
+cells are mine, not decided (after Da and Kleppmann, "Extending JSON CRDTs with Move Operations",
+PaPoC 2024): every assignment names the cells it replaces, so puts commute and none is lost at a key
+to one that did not see it; a held value per hidden cell has no cap (a cap would let readers
+differ). `named` costs a cell (about 60 bytes in C) for each name whose cell never lands, held for
+good. a pred naming a device a C reader does not know adds its 32-byte key to the reader's device
+table for good.
 
 seq is mine, not decided: written after when, the numbers about a step's place together, so no log
 need count it: a run is taken with step n - 1 held (its seq and what it inserts give the next); the

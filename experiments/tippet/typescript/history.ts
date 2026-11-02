@@ -2,7 +2,7 @@
 // steps from elsewhere into the graph. An entry's value is its steps' patches applied in order of
 // lamport, then device, a splice by ids where its writer meant (elements.ts); a step that lands
 // earlier makes the entry be worked out again, undone back to it when it can be (rebase).
-// versions(node, part) lists the merge, then each head's own value (at most the 16 newest heads).
+// versions(node, part, path) lists the cells at a path, the shown first (WIRE.md, assignments).
 // forgets: a device that holds, per entry, only its newest step and its elements, the value being
 // the graph's; a late step goes into them as is, or, when what it does needs the steps after it,
 // the entry is worked out again from the log. forget(sync) snapshots and lets go the runs that have
@@ -13,8 +13,9 @@ import apply, { type Patch } from "@ermine/changeable/apply"
 import { decode, encode, type Value } from "@ermine/encoding/cbor"
 import type { Places } from "@ermine/places"
 import type { Key, Table } from "@ermine/graph/table"
-import { decodeStep, needs, same, type Step, writeIds } from "./step.ts"
+import { decodeStep, needs, type Step, writeIds } from "./step.ts"
 import {
+	cellsAt,
 	fresh,
 	LATE,
 	Late,
@@ -34,27 +35,13 @@ export type Version = {
 	gone?: true
 	from: { heads: [device: string, n: number][] }
 }
-const MOST = 16
 
 const before = (a: Ref, b: Ref) => a[0] < b[0] || (a[0] === b[0] && a[1] < b[1])
 const name = (part: string, node: string) => `${part}\0${node}`
 const covers = (s: Step, r: Ref) => s.on.some((o) => o.device === r[1] && o.n === r[2])
-const touched = (p: Patch) => p.move ? [p.path, p.move.path] : [p.path]
-const overlap = (a: readonly unknown[], b: readonly unknown[]) => {
-	for (let i = 0; i < a.length && i < b.length; i++) if (a[i] !== b[i]) return false
-	return true
-}
 const whole = (s: Step) => {
 	const p = s.patches[0]
 	return p !== undefined && p.path.length === 0 && !p.range && !p.move
-}
-const puts = (s: Step) => s.patches.length === 1 && whole(s) && s.patches[0].value !== undefined
-const bytesOf = (v: unknown) => {
-	try {
-		return v === undefined ? new Uint8Array() : encode(v as Value)
-	} catch {
-		return new Uint8Array([0xff])
-	}
 }
 
 const clean = (p: Patch): Patch => ({
@@ -72,7 +59,7 @@ export type History = {
 	unkept: readonly Omit<Failed, "device" | "n">[]
 	onChange(f: () => void): () => void
 	snapshot: () => Promise<void>
-	versions: (node: string, part: string) => Version[]
+	versions: (node: string, part: string, path?: readonly (string | number)[]) => Version[]
 	forget(sync: Pick<Sync, "passed">): Promise<void>
 	load(): Promise<void>
 	stop(): void
@@ -114,8 +101,6 @@ export function createHistory(o: {
 
 	// forgets: each failed step's place, and per entry the newest of them: a late step before it may
 	// let it apply, one after it can't
-	// forgets: per entry the place of its newest step that is one put of the whole value
-	const top = new Map<string, Ref>()
 	const failedAt = new WeakMap<Failed, Ref>()
 	const worst = new Map<string, Ref>()
 	function fail(s: Step, e: unknown) {
@@ -150,10 +135,7 @@ export function createHistory(o: {
 			entries.set(k, refs = [])
 			if ((o.forgets || whole(s)) && !own.has(k)) own.set(k, { ...fresh(), tail: [], all: true })
 		}
-		if (o.forgets) {
-			if (puts(s) && !(top.get(k) && before(ref, top.get(k)!))) top.set(k, ref)
-			return refs[0] && before(ref, refs[0]) ? false : (refs[0] = ref, true)
-		}
+		if (o.forgets) return refs[0] && before(ref, refs[0]) ? false : (refs[0] = ref, true)
 		let i = refs.length
 		while (i > 0 && before(ref, refs[i - 1])) i--
 		refs.splice(i, 0, ref)
@@ -191,65 +173,27 @@ export function createHistory(o: {
 		return by !== undefined && before(ref, by)
 	}
 
-	function versions(node: string, part: string): Version[] {
-		const k = name(part, node), refs = entries.get(k)
-		if (!refs?.length) return []
-		const hs = (heads.get(k) ?? []).slice(0, MOST)
-		const item = (value: unknown, from: Ref[]): Version => ({
-			...(value === undefined && { gone: true as const }),
-			value,
-			from: { heads: from.map((r) => [r[1], r[2]]) },
-		})
-		const shown = table.get(part as Key, node)?.value, out = [item(shown, hs)]
-		const known = () => out.some((v) => !v.gone) ? out : []
-		if (o.forgets || hs.length < 2) return known()
-		let steps: Step[]
-		try {
-			steps = refs.map((r) => decodeStep(log.step(r[1], r[2])))
-		} catch {
-			return known()
-		}
-		const at = new Map(refs.map((r, i) => [`${r[1]} ${r[2]}`, i]))
-		const seen = new Array<number>(refs.length).fill(0), all = (1 << hs.length) - 1
-		hs.forEach((h, j) => seen[at.get(`${h[1]} ${h[2]}`)!] |= 1 << j)
-		for (let i = refs.length - 1; i >= 0; i--) {
-			if (!seen[i]) continue
-			for (const x of steps[i].on) {
-				const j = at.get(`${x.device} ${x.n}`)
-				if (j !== undefined) seen[j] |= seen[i]
+	// the cells visible at a path: each a version, the shown first, from the step that made it (a
+	// step's cells are all in its entry's state)
+	function conflicts(k: string, path: readonly (string | number)[]): Version[] | undefined {
+		let mine = own.get(k)
+		if (!mine && !o.forgets) {
+			try {
+				mine = rebuild(k)
+			} catch {
+				return
 			}
 		}
-		let start = 0
-		for (let i = refs.length - 1; i > 0; i--) {
-			if (seen[i] === all && whole(steps[i])) {
-				start = i
-				break
-			}
-		}
-		const listed = [bytesOf(shown)]
-		hs.forEach((h, j) => {
-			const bit = 1 << j
-			const side = steps.flatMap((s, i) =>
-				i >= start && seen[i] & bit && seen[i] !== all ? s.patches.flatMap(touched) : []
-			)
-			const st = fresh()
-			for (let i = start; i < steps.length; i++) {
-				const s = steps[i]
-				const keep = s.patches.map((p) =>
-					!!(seen[i] & bit) || !touched(p).some((a) => side.some((b) => overlap(a, b)))
-				)
-				if (!keep.some(Boolean)) continue
-				try {
-					applyStep(st, s, { keep })
-				} catch {
-					// a step that doesn't apply without the other side's patches: left out
-				}
-			}
-			const value = st.value
-			const b = bytesOf(value)
-			if (!listed.some((x) => same(x, b))) listed.push(b), out.push(item(value, [h]))
-		})
-		return known()
+		if (!mine) return
+		const cells = cellsAt({ ...mine, value: graph(k) }, path)
+		return cells?.map((c) => ({ value: c.value, from: { heads: [[c.device, c.n]] } }))
+	}
+
+	// readAll: the cells at a path, each from the step that made it, the shown first (history.versions)
+	function versions(node: string, part: string, path: readonly (string | number)[] = []): Version[] {
+		const k = name(part, node)
+		if (!entries.get(k)?.length) return []
+		return conflicts(k, path) ?? []
 	}
 
 	function quietly(f: () => void) {
@@ -262,6 +206,7 @@ export function createHistory(o: {
 	}
 
 	function write(s: Step, patches: readonly Patch[]) {
+		if (!patches.length) return
 		quietly(() => {
 			const e = table.get(s.part as Key, s.node)
 			if (e) return void (update(e, patches, header(s)), places.commit([e]))
@@ -284,7 +229,7 @@ export function createHistory(o: {
 			mine.tail.push({ ref: r, undo, back }), trim(mine)
 			return { applied }
 		} catch (error) {
-			mine.tail.push({ ref: r, undo: [], back: [] }), trim(mine)
+			mine.tail.push({ ref: r, undo: [], back }), trim(mine)
 			return { error }
 		}
 	}
@@ -356,9 +301,6 @@ export function createHistory(o: {
 	}
 	function into(k: string, s: Step, r: Ref, last: boolean, again = true) {
 		const mine = own.get(k)!
-		// one put of the whole value, a newer one ordered after it: overwritten, as in order
-		const t = top.get(k), bad = worst.get(k)
-		if (!last && puts(s) && t && before(r, t) && !(bad && before(r, bad))) return
 		if (waiting.has(k)) return void waiting.get(k)!.push(r)
 		mine.value = graph(k)
 		try {
@@ -474,7 +416,7 @@ export function createHistory(o: {
 	}
 
 	async function snapshot() {
-		const out: [string, string, Value | null, Ref[], number[], Value | null, Ref | null][] = []
+		const out: [string, string, Value | null, Ref[], number[], Value | null][] = []
 		for (const [k, refs] of entries) {
 			const [part, node] = k.split("\0")
 			const v = table.get(part as Key, node)?.value
@@ -488,7 +430,6 @@ export function createHistory(o: {
 				refs,
 				hs,
 				o.forgets && own.has(k) ? saveState(own.get(k)!) : null,
-				o.forgets ? top.get(k) ?? null : null,
 			])
 		}
 		const count: Record<string, number> = {}
@@ -612,14 +553,13 @@ export function createHistory(o: {
 			if (bytes) {
 				const snap = decode(bytes) as unknown as {
 					count: Record<string, number>
-					entries: [string, string, unknown, Ref[], number[], unknown, Ref | null][]
+					entries: [string, string, unknown, Ref[], number[], unknown][]
 				}
 				count = snap.count
 				quietly(() => {
-					for (const [part, node, v, refs, hs, elements, put] of snap.entries) {
+					for (const [part, node, v, refs, hs, elements] of snap.entries) {
 						entries.set(name(part, node), refs), namers.delete(name(part, node))
-						own.delete(name(part, node)), top.delete(name(part, node))
-						if (put && o.forgets) top.set(name(part, node), put)
+						own.delete(name(part, node))
 						if (elements) {
 							own.set(name(part, node), {
 								...loadState(elements),

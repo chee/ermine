@@ -29,7 +29,8 @@
 //   tear    { device, file, bytes } -> {}      cut the last bytes off dir/<file> (log, open)
 //   files   { device } -> { log, open, bytes }   frames: ["run", device, first, last], ["step", device, n], ["other"]
 //   value   { device, node, part? } -> { value } | {}
-//   versions { device, node, part? } -> { versions }   each { value } or { gone: true }, and from
+//   versions { device, node, part?, path? } -> { versions }   each { value } or { gone: true }, and from;
+//                                        path: where, when cells at it are many each is a version
 //   failed  { device } -> { failed }     each { device, n }: the steps its history could not apply, by n then device
 //   have    { device } -> { have }       { device: n }
 //   passed  { device } -> { passed }     { device: n }: what its sync says every linked peer holds
@@ -581,7 +582,7 @@ async function one(r: Request): Promise<Answer> {
 			const h = device(r.device).graph?.history
 			if (!h) throw new Error(`${r.device} has no graph`)
 			return {
-				versions: h.versions(r.node, r.part ?? "value").map((v) => ({
+				versions: h.versions(r.node, r.part ?? "value", r.path).map((v) => ({
 					...(v.gone ? { gone: true } : { value: toJson(v.value) }),
 					from: v.from.heads.map(([d, n]) => [nameOf(d), n]),
 				})),
