@@ -1,5 +1,5 @@
 {
-	"title": "a scalar and two maps put at one key by three devices that had not seen each other: three cells; a put that saw all three names them, and one is left. typing into one of the maps made apart from that put (ordered before it, arriving after it on some devices, before it on others) is passed over: nothing fails",
+	"title": "a scalar and two maps put at one key by three devices that had not seen each other: three cells; a put that saw all three names them, and one is left. typing into one of the maps made apart from that put (ordered before it, arriving after it on some devices, before it on others) lands in the map held hidden: nothing fails",
 	"steps": [
 		{
 			"op": "device",

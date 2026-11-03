@@ -64,11 +64,11 @@ One kept write. Bytes: a cbor array.
     (device bstr 32, not this step's; n from 1)
 
   a sequence's elements are counted from its first splice: those there since the step that made
-  its node are that step's, k their place. a container not held (not made yet, replaced, gone), or
-  a path of cells and places that leads to none, or an element gone that a put at an index names:
-  when the maker's step has landed, the patch is skipped and the rest of the step applies; when it
-  has not, the step doesn't apply (it applies once that lands). a removal at an index of an array is a splice of that one
-  element, taken away wherever it is now (gone already: nothing). a move is by place: it takes what
+  its node are that step's, k their place. a container whose maker's step has not landed: the step
+  doesn't apply (it applies once that lands). a container removed or replaced is trash (below), so
+  the patch applies there. with trash only a forged id reaches a path of cells and places that leads
+  to none: the patch is skipped, the rest of the step applies. a removal at an index of an array is
+  a splice of that one element, taken away wherever it is now (gone already: nothing). a move is by place: it takes what
   it moves from its source (a range or an index of an array: those elements gone; a key: every cell
   there, as if named) and puts it, new, at its target (a slot: new elements, as many as it moves,
   after the element at the place; an index: that item replaced; a key: every cell there replaced),
@@ -86,14 +86,49 @@ One kept write. Bytes: a cbor array.
   names what it saw and takes away only that: a cell it did not name stays visible. an edit into a
   container of a cell that does not show applies to that cell's held value; when the cell shown
   goes, the next greatest shows with it. a cell named before it landed is held at its slot
-  (`named`) and is not visible when it lands; a name whose step has landed and whose cell is not at
+  (`named`) and is not visible when it lands (a container it holds is trash); a name whose step has landed and whose cell is not at
   the slot is ignored. the effect of an assignment is a set (cells in, preds out), so one goes in
-  as is in any order. mine, not decided: a cell is dropped with its sequences, cells and held
-  values when named, as a container replaced is. `readAll` shows conflicts only:
+  as is in any order. `readAll` shows conflicts only:
   `history.versions(node, part, path)` is the cells at the path, the shown first, each
   from the step that made it (a key its parent's put made, with no cell of its own: that put's);
   every device, keeper or forgetting, returns the same. `typescript/reading.ts` is the feature for
   @ermine/system's `onRead`, adding all but the first (read's own)
+
+  trash (chee, 11-02: removals hide; only the host empties; readAll never shows it): a container a
+  put replaced, a removal or a splice took away, or a move moved from its place, or that landed
+  after a pred named its cell, is held hidden with its value and what is under it (sequences,
+  cells, held values), like a cell that does not show. a read, readAll and versions never show it.
+  a patch naming a container in trash applies there, to its held value, so a step applies whole;
+  so does a put at an element gone (the container it makes is trash). a scalar replaced or removed
+  leaves nothing. tippet never lets go of trash itself and never decides it from what other
+  devices hold: a device cannot know who still writes into a removed container (documents travel
+  through a server, then peer to peer, then a stick). a device that forgets holds trash too, and its
+  snapshot does
+  - empty: the host lets go of trash: `history.empty()` in TS, `tp_history_empty` in C. every
+    container in trash goes with what is under it; the count returned is every container in trash
+    before, those under another included. a patch naming a container emptied is then skipped on
+    that device alone, the rest of its step applying. values agree after honest steps, since trash
+    never shows; a malformed patch into emptied trash (a splice naming a map) fails where trash is
+    held and applies where it was emptied, so values can differ then. keeping each emptied
+    container's kind would close that, and is not built
+  - trash(): `history.trash()` in TS, `tp_history_trash` in C: how many containers are in trash and
+    the bytes they hold, so a host can decide when to empty. TS counts the contents of the values;
+    C counts memory, each cell and value, a value shared with the graph's structure whole
+  - mine, not decided: a pred naming a cell already in trash is ignored. an item a splice or a move
+    takes away is not made a cell: the containers among a run's items are held as one piece of the
+    run, and a cell is made for one when a patch names it (so K items cost a pointer each, and
+    their values). no cap on trash (a cap would make readers differ). a keeper marks the newest
+    step each entry had at an empty, and working the entry out again applies steps up to it
+    without making trash, so a late step does not bring back what was let go; the mark is not in
+    a snapshot, so after a reload the trash may come back
+  - cost, C on a device that forgets: a container removed or replaced leaves its cell, 40 bytes
+    and its id (17 for a key of five letters, 57 in all), and its value, which stays alive,
+    outside the library's heap counter (tp_mem): a map `{"x": n}` is 208 bytes. a put of the whole
+    value leaves the old root so, and the old value with it: a dens-style map of 87 bytes (five
+    keys and one nested map) put again and again costs about 0.9 KB in trash a put counted by
+    `tp_history_trash` and about 1.1 KB resident, until the host empties. the library's own heap
+    sees 77 bytes a put. an item taken away that holds a container costs a pointer in its piece,
+    and its value
 
   applied in the entry's order (history): a splice takes its gone elements away wherever they are
   now, then its first inserted one goes between after and before, among those put there since
@@ -123,8 +158,8 @@ One kept write. Bytes: a cbor array.
   visible (about 40 bytes of cell and its id in C, a hidden one and its value more), `named`, the
   newest step of each device that landed, the newest move applied, and the graph's value (no steps,
   no second value), all in its snapshot too. it ends at the same value as a reader that holds every
-  step. a removal leaves no cell, and a put replacing one leaves one: nothing is held for a key
-  taken away.
+  step. a removal of a scalar leaves no cell, and a put replacing one leaves one; trash (above)
+  stays until the host empties it.
 
   a late step (ordered before a step applied) on a reader that forgets:
   - goes in as it is: a put, a removal, an edit, a splice commute (cells, preds and elements)

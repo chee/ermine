@@ -1,5 +1,5 @@
 {
-	"title": "a key its parent's put made is taken away, and an edit inside it ordered after the removal: the edit's patch is skipped, the rest of the step applies, nothing fails, on every device",
+	"title": "a key its parent's put made is taken away, and an edit inside it ordered after the removal: the edit lands in the map held hidden and the rest of the step applies, nothing fails, on every device",
 	"steps": [
 		{
 			"op": "device",

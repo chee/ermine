@@ -31,6 +31,8 @@
 //   value   { device, node, part? } -> { value } | {}
 //   versions { device, node, part?, path? } -> { versions }   each { value } or { gone: true }, and from;
 //                                        path: where, when cells at it are many each is a version
+//   empty   { device } -> { emptied }    the trash its history lets go of (containers removed or replaced)
+//   trash   { device } -> { trash }      the containers in trash now
 //   failed  { device } -> { failed }     each { device, n }: the steps its history could not apply, by n then device
 //   have    { device } -> { have }       { device: n }
 //   passed  { device } -> { passed }     { device: n }: what its sync says every linked peer holds
@@ -587,6 +589,16 @@ async function one(r: Request): Promise<Answer> {
 					from: v.from.heads.map(([d, n]) => [nameOf(d), n]),
 				})),
 			}
+		}
+		case "trash": {
+			const h = device(r.device).graph?.history
+			if (!h) throw new Error(`${r.device} has no graph`)
+			return { trash: h.trash().count }
+		}
+		case "empty": {
+			const h = device(r.device).graph?.history
+			if (!h) throw new Error(`${r.device} has no graph`)
+			return { emptied: h.empty() }
 		}
 		case "failed": {
 			const h = device(r.device).graph?.history

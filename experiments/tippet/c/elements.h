@@ -72,18 +72,31 @@ typedef struct el_list el_list;
 // parent empty) and no assignment has replaced. buf holds the parent, the slot (a key as cbor
 // text, an element as a cbor array [device, born, c, k]) and the cell's id, one after another. idn:
 // the id's bytes, and two flags: EL_CELL_NODE, it holds a container (its id is the container's
-// node), EL_CELL_GHOST, an assignment named it before it landed (no value, no container). device,
-// lamport: its step's, for the order, then its id's n and patch. value: its whole value, held
-// while another cell at the slot shows
+// node), EL_CELL_GHOST, an assignment named it before it landed (no value, no container),
+// EL_CELL_TRASH, its container replaced or removed: held hidden with its value, until el_empty.
+// device, lamport: its step's, for the order, then its id's n and patch. value: its whole value,
+// held while another cell at the slot shows, or trash
 #define EL_CELL_GHOST (1u << 31)
 #define EL_CELL_NODE (1u << 30)
-#define EL_CELL_LEN (EL_CELL_NODE - 1)
+#define EL_CELL_TRASH (1u << 29)
+#define EL_CELL_LEN (EL_CELL_TRASH - 1)
 typedef struct {
 	uint8_t *buf;
 	uint32_t parentn, slotn, idn, device;
 	uint64_t lamport;
 	op_value *value;
 } el_slot;
+
+// the containers among the items a splice or move took away at once, as the run took them: their
+// elements from id on, n of them, each one's container or NULL (a cell is made for one only when a
+// patch names it). list: the sequence's node
+typedef struct {
+	uint8_t *list;
+	size_t listn;
+	el_id id;
+	uint64_t n;
+	op_value **values;
+} el_bin;
 
 // an entry's sequences by container, the cells of what patches assigned, per device the newest step
 // of it that landed here, and the newest move applied (lamport 0: none)
@@ -98,6 +111,9 @@ typedef struct {
 	} *landed;
 	size_t nlanded, roomlanded;
 	el_ref moved;
+	el_bin **bins;
+	size_t nbins, roombins;
+	int quiet; // set by the host around a step: no trash is made (a replay of steps before an empty)
 	uint64_t passed; // patches passed over, a container gone (counted, never undone)
 } el_state;
 
@@ -146,6 +162,14 @@ typedef struct {
 			el_ref was; // the newest move before
 		} moved;
 		struct {
+			size_t count; // pieces added to the state's bins
+		} binadd;
+		struct {
+			el_bin *bin; // a container taken from a piece (the record owns it)
+			uint64_t x;
+			op_value *v;
+		} bintake;
+		struct {
 			el_list **lists;
 			size_t nlists;
 			el_slot *slots;
@@ -182,6 +206,12 @@ void el_back_undo(const tp_mem *mem, el_state *st, el_back *back);
 // frees back without undoing
 void el_back_free(const tp_mem *mem, el_back *back);
 void el_state_free(const tp_mem *mem, el_state *st);
+// lets go of the trash in st: every container replaced or removed, with what is under it, whatever
+// undoes it (the caller drops its back). returns how many containers went, or a tp code below 0
+long el_empty(const tp_mem *mem, el_state *st);
+// the trash held: containers (cells in trash, items taken away not yet named) and the bytes of their
+// values in memory
+void el_trash(const el_state *st, size_t *count, size_t *bytes);
 // st's elements as cbor, for a snapshot (the value is the graph's), and st, empty, made from it
 void el_save(tp_buf *b, const el_ctx *c, const el_state *st);
 int el_load(const el_ctx *c, el_state *st, tp_span bytes);

@@ -16,6 +16,7 @@ import type { Key, Table } from "@ermine/graph/table"
 import { decodeStep, needs, type Step, writeIds } from "./step.ts"
 import {
 	cellsAt,
+	empty as emptyState,
 	fresh,
 	LATE,
 	Late,
@@ -23,6 +24,7 @@ import {
 	save as saveState,
 	type State,
 	step as applyStep,
+	trash as trashState,
 } from "./elements.ts"
 import type { Log } from "./log.ts"
 import type { Sync } from "./sync.ts"
@@ -61,6 +63,8 @@ export type History = {
 	snapshot: () => Promise<void>
 	versions: (node: string, part: string, path?: readonly (string | number)[]) => Version[]
 	forget(sync: Pick<Sync, "passed">): Promise<void>
+	empty: () => number
+	trash: () => { count: number; bytes: number }
 	load(): Promise<void>
 	stop(): void
 }
@@ -93,6 +97,13 @@ export function createHistory(o: {
 	const window = o.forgets ? 0 : o.rebase ?? 256
 	const own = new Map<string, Own>()
 	const failed: Failed[] = []
+	// per entry, the newest step it had when the host last emptied it: steps up to it are applied
+	// without making trash, so working the entry out again does not bring back what was let go
+	const emptied = new Map<string, Ref>()
+	const quiet = (k: string, r: Ref) => {
+		const m = emptied.get(k)
+		return !!m && !before(m, r)
+	}
 	const unkept: Omit<Failed, "device" | "n">[] = []
 	let landing = false
 	const broken = new Set<string>()
@@ -190,7 +201,11 @@ export function createHistory(o: {
 	}
 
 	// readAll: the cells at a path, each from the step that made it, the shown first (history.versions)
-	function versions(node: string, part: string, path: readonly (string | number)[] = []): Version[] {
+	function versions(
+		node: string,
+		part: string,
+		path: readonly (string | number)[] = [],
+	): Version[] {
 		const k = name(part, node)
 		if (!entries.get(k)?.length) return []
 		return conflicts(k, path) ?? []
@@ -224,6 +239,7 @@ export function createHistory(o: {
 	// applied there, by position; one that doesn't apply passed over (nothing to undo), its error
 	function onto(mine: Own, r: Ref, s: Step): { applied: Patch[] } | { error: unknown } {
 		const undo: Patch[] = [], back: (() => void)[] = []
+		mine.quiet = quiet(name(s.part, s.node), r)
 		try {
 			const { applied } = applyStep(mine, s, { undo, back })
 			mine.tail.push({ ref: r, undo, back }), trim(mine)
@@ -231,6 +247,8 @@ export function createHistory(o: {
 		} catch (error) {
 			mine.tail.push({ ref: r, undo: [], back }), trim(mine)
 			return { error }
+		} finally {
+			mine.quiet = false
 		}
 	}
 
@@ -303,6 +321,7 @@ export function createHistory(o: {
 		const mine = own.get(k)!
 		if (waiting.has(k)) return void waiting.get(k)!.push(r)
 		mine.value = graph(k)
+		mine.quiet = quiet(k, r)
 		try {
 			const { applied } = applyStep(mine, s, { late: !last })
 			write(s, applied)
@@ -311,6 +330,8 @@ export function createHistory(o: {
 			mine.value = graph(k)
 			if (!last && !cut) return void waiting.set(k, [r])
 			return void fail(s, e instanceof Late ? LATE : e)
+		} finally {
+			mine.quiet = false
 		}
 		const w = worst.get(k)
 		if (last || !again || !w || !before(r, w)) return
@@ -534,6 +555,26 @@ export function createHistory(o: {
 
 		snapshot,
 		versions,
+
+		trash() {
+			let count = 0, bytes = 0
+			for (const mine of own.values()) {
+				const t = trashState(mine)
+				count += t.count, bytes += t.bytes
+			}
+			return { count, bytes }
+		},
+
+		empty() {
+			let n = 0
+			for (const [k, refs] of entries) if (refs.length) emptied.set(k, refs[refs.length - 1])
+			for (const mine of own.values()) {
+				n += emptyState(mine)
+				mine.tail = []
+				if (!o.forgets) mine.all = false
+			}
+			return n
+		},
 
 		async forget(sync: Pick<Sync, "passed">) {
 			if (!o.forgets) throw new Error("this history keeps every run")
