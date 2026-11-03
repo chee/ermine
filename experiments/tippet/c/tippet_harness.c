@@ -1451,6 +1451,19 @@ void hh_answer(const op_value *r, FILE *out) {
 		value(r, out);
 	} else if (!strcmp(op, "versions")) {
 		versions(r, out);
+	} else if (!strcmp(op, "trash")) {
+		device *d = which(r, "device", out);
+		if (!d) return;
+		size_t count, bytes;
+		tp_history_trash(d->history, &count, &bytes);
+		if (getenv("TIPPET_HEAP")) fprintf(stderr, "tippet trash: %zu containers, %zu bytes\n", count, bytes);
+		fprintf(out, "{\"trash\":%zu}", count);
+	} else if (!strcmp(op, "empty")) {
+		device *d = which(r, "device", out);
+		if (!d) return;
+		long n = tp_history_empty(d->history);
+		if (n < 0) { hh_error(out, "%s", tp_why((int)n)); return; }
+		fprintf(out, "{\"emptied\":%ld}", n);
 	} else if (!strcmp(op, "failed")) {
 		failed(r, out);
 	} else if (!strcmp(op, "link")) {

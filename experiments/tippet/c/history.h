@@ -38,6 +38,16 @@ size_t tp_history_unkept(const tp_history *h, size_t i, tp_failed *out);
 
 int tp_history_forget(tp_history *h, const tp_sync *s);
 
+// Lets go of the trash: every container removed or replaced, held hidden with what is under it,
+// until the host asks. After it a step's patch into one is skipped on this device. Returns how many
+// containers went, or a tp code below 0. A device that holds the log and works an entry out again
+// makes its trash again.
+long tp_history_empty(tp_history *h);
+// The trash held now: how many containers, and the bytes they hold in memory (cells and values;
+// a value shared with the graph is counted whole). Values count where the library's heap
+// counter does not see them.
+void tp_history_trash(const tp_history *h, size_t *count, size_t *bytes);
+
 // One of the cells at a path: its value (the caller frees it with op_free) and the step that made it.
 typedef struct {
 	op_value *value;

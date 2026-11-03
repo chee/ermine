@@ -1,0 +1,418 @@
+{
+	"title": "a map holding two cells at a key (neither device having seen the other's) is taken away by a device that saw both: the map is held hidden with its conflict, nothing shows or is read at the key, nothing fails; a device taking the other cell's step after the removal gets the same; emptying lets the map go, once",
+	"steps": [
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "device",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"expect": {
+				"key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
+		},
+		{
+			"op": "device",
+			"name": "k",
+			"seed": "0404040404040404040404040404040404040404040404040404040404040404",
+			"rebase": 0,
+			"expect": {
+				"key": "ca93ac1705187071d67b83c7ff0efe8108e8ec4530575d7726879333dbdabe7c"
+			}
+		},
+		{
+			"op": "device",
+			"name": "m",
+			"seed": "0505050505050505050505050505050505050505050505050505050505050505",
+			"rebase": 256,
+			"expect": {
+				"key": "6e7a1cdd29b0b78fd13af4c5598feff4ef2a97166e3ca6f2e4fbfccd80505bf1"
+			}
+		},
+		{
+			"op": "device",
+			"name": "f",
+			"seed": "0606060606060606060606060606060606060606060606060606060606060606",
+			"forgets": true,
+			"expect": {
+				"key": "8a875fff1eb38451577acd5afee405456568dd7c89e090863a0557bc7af49f17"
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "doc",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"m": {}
+					}
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "b",
+			"of": "a",
+			"at": 1,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "doc",
+			"patches": [
+				{
+					"path": [
+						"m",
+						"k"
+					],
+					"value": {
+						"x": 1
+					}
+				}
+			],
+			"expect": {
+				"n": 2,
+				"lamport": 2
+			}
+		},
+		{
+			"op": "write",
+			"device": "b",
+			"node": "doc",
+			"patches": [
+				{
+					"path": [
+						"m",
+						"k"
+					],
+					"value": {
+						"y": 1
+					}
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 2
+			}
+		},
+		{
+			"op": "pass",
+			"from": "b",
+			"to": "a",
+			"of": "b",
+			"at": 1,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "b",
+			"of": "a",
+			"at": 2,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "doc",
+			"patches": [
+				{
+					"path": [
+						"m"
+					]
+				}
+			],
+			"expect": {
+				"n": 3,
+				"lamport": 3
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "k",
+			"of": "a",
+			"at": 1,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "k",
+			"of": "a",
+			"at": 2,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "b",
+			"to": "k",
+			"of": "b",
+			"at": 1,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "k",
+			"of": "a",
+			"at": 3,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "m",
+			"of": "a",
+			"at": 1,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "b",
+			"to": "m",
+			"of": "b",
+			"at": 1,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "m",
+			"of": "a",
+			"at": 2,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "m",
+			"of": "a",
+			"at": 3,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "f",
+			"of": "a",
+			"at": 1,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "f",
+			"of": "a",
+			"at": 2,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "f",
+			"of": "a",
+			"at": 3,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "b",
+			"to": "f",
+			"of": "b",
+			"at": 1,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "value",
+			"device": "k",
+			"node": "doc",
+			"expect": {
+				"value": {}
+			}
+		},
+		{
+			"op": "versions",
+			"device": "k",
+			"node": "doc",
+			"path": [
+				"m",
+				"k"
+			],
+			"expect": {
+				"versions": []
+			}
+		},
+		{
+			"op": "failed",
+			"device": "k",
+			"expect": {
+				"failed": []
+			}
+		},
+		{
+			"op": "value",
+			"device": "m",
+			"node": "doc",
+			"expect": {
+				"value": {}
+			}
+		},
+		{
+			"op": "versions",
+			"device": "m",
+			"node": "doc",
+			"path": [
+				"m",
+				"k"
+			],
+			"expect": {
+				"versions": []
+			}
+		},
+		{
+			"op": "failed",
+			"device": "m",
+			"expect": {
+				"failed": []
+			}
+		},
+		{
+			"op": "value",
+			"device": "f",
+			"node": "doc",
+			"expect": {
+				"value": {}
+			}
+		},
+		{
+			"op": "versions",
+			"device": "f",
+			"node": "doc",
+			"path": [
+				"m",
+				"k"
+			],
+			"expect": {
+				"versions": []
+			}
+		},
+		{
+			"op": "failed",
+			"device": "f",
+			"expect": {
+				"failed": []
+			}
+		},
+		{
+			"op": "empty",
+			"device": "k",
+			"expect": {
+				"emptied": 1
+			}
+		},
+		{
+			"op": "empty",
+			"device": "m",
+			"expect": {
+				"emptied": 1
+			}
+		},
+		{
+			"op": "empty",
+			"device": "f",
+			"expect": {
+				"emptied": 1
+			}
+		},
+		{
+			"op": "value",
+			"device": "k",
+			"node": "doc",
+			"expect": {
+				"value": {}
+			}
+		},
+		{
+			"op": "failed",
+			"device": "k",
+			"expect": {
+				"failed": []
+			}
+		},
+		{
+			"op": "value",
+			"device": "m",
+			"node": "doc",
+			"expect": {
+				"value": {}
+			}
+		},
+		{
+			"op": "failed",
+			"device": "m",
+			"expect": {
+				"failed": []
+			}
+		},
+		{
+			"op": "value",
+			"device": "f",
+			"node": "doc",
+			"expect": {
+				"value": {}
+			}
+		},
+		{
+			"op": "failed",
+			"device": "f",
+			"expect": {
+				"failed": []
+			}
+		}
+	]
+}

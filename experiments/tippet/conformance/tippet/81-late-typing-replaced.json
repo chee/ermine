@@ -1,5 +1,5 @@
 {
-	"title": "typing into a string that a put has replaced, landing late (ordered before the put, concurrent with it): the string is gone, the typing is passed over, nothing fails, the value is the put's",
+	"title": "typing into a string that a put has replaced, landing late (ordered before the put, concurrent with it): the string is held hidden, the typing lands in it, nothing fails, the value is the put's",
 	"steps": [
 		{
 			"op": "device",

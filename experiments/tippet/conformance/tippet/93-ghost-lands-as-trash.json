@@ -1,0 +1,416 @@
+{
+	"title": "a hostile device puts a key naming c's cell before that cell lands, then splices text into c's map and puts a key beside: the map lands as trash when its step comes, so the splice fails (a map is not a text) and the step fails whole on a keeper of every step, of 256 and a device that forgets alike (it was skipped on one and applied on another); emptying lets the map go",
+	"steps": [
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "device",
+			"name": "c",
+			"seed": "0303030303030303030303030303030303030303030303030303030303030303",
+			"expect": {
+				"key": "ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1"
+			}
+		},
+		{
+			"op": "device",
+			"name": "h",
+			"seed": "0808080808080808080808080808080808080808080808080808080808080808",
+			"expect": {
+				"key": "1398f62c6d1a457c51ba6a4b5f3dbd2f69fca93216218dc8997e416bd17d93ca"
+			}
+		},
+		{
+			"op": "device",
+			"name": "m",
+			"seed": "0505050505050505050505050505050505050505050505050505050505050505",
+			"rebase": 256,
+			"expect": {
+				"key": "6e7a1cdd29b0b78fd13af4c5598feff4ef2a97166e3ca6f2e4fbfccd80505bf1"
+			}
+		},
+		{
+			"op": "device",
+			"name": "f",
+			"seed": "0606060606060606060606060606060606060606060606060606060606060606",
+			"forgets": true,
+			"expect": {
+				"key": "8a875fff1eb38451577acd5afee405456568dd7c89e090863a0557bc7af49f17"
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "doc",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"k": 1,
+						"n": 0
+					}
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "c",
+			"of": "a",
+			"at": 1,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "c",
+			"node": "doc",
+			"patches": [
+				{
+					"path": [
+						"k"
+					],
+					"value": {
+						"x": 1
+					}
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 2
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "m",
+			"of": "a",
+			"at": 1,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "c",
+			"to": "m",
+			"of": "c",
+			"at": 1,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "take",
+			"device": "m",
+			"run": {
+				"device": "h",
+				"steps": [
+					{
+						"n": 1,
+						"node": "doc",
+						"part": "value",
+						"lamport": 3,
+						"when": 0,
+						"on": [],
+						"patches": [
+							{
+								"path": [
+									"k"
+								],
+								"value": 7
+							}
+						],
+						"ids": [
+							{
+								"container": [
+									"a",
+									1,
+									0
+								],
+								"pred": [
+									[
+										"c",
+										1,
+										0
+									]
+								]
+							}
+						]
+					},
+					{
+						"n": 2,
+						"node": "doc",
+						"part": "value",
+						"lamport": 4,
+						"when": 0,
+						"on": [],
+						"patches": [
+							{
+								"path": [
+									"k"
+								],
+								"range": [
+									0,
+									0
+								],
+								"value": "z"
+							},
+							{
+								"path": [
+									"m"
+								],
+								"value": 5
+							}
+						],
+						"ids": [
+							{
+								"container": [
+									"c",
+									1,
+									0
+								],
+								"after": null,
+								"gone": []
+							},
+							{
+								"container": [
+									"a",
+									1,
+									0
+								],
+								"pred": []
+							}
+						]
+					}
+				]
+			},
+			"expect": {
+				"added": 2
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "f",
+			"of": "a",
+			"at": 1,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "take",
+			"device": "f",
+			"run": {
+				"device": "h",
+				"steps": [
+					{
+						"n": 1,
+						"node": "doc",
+						"part": "value",
+						"lamport": 3,
+						"when": 0,
+						"on": [],
+						"patches": [
+							{
+								"path": [
+									"k"
+								],
+								"value": 7
+							}
+						],
+						"ids": [
+							{
+								"container": [
+									"a",
+									1,
+									0
+								],
+								"pred": [
+									[
+										"c",
+										1,
+										0
+									]
+								]
+							}
+						]
+					}
+				]
+			},
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "c",
+			"to": "f",
+			"of": "c",
+			"at": 1,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "take",
+			"device": "f",
+			"run": {
+				"device": "h",
+				"steps": [
+					{
+						"n": 1,
+						"node": "doc",
+						"part": "value",
+						"lamport": 3,
+						"when": 0,
+						"on": [],
+						"patches": [
+							{
+								"path": [
+									"k"
+								],
+								"value": 7
+							}
+						],
+						"ids": [
+							{
+								"container": [
+									"a",
+									1,
+									0
+								],
+								"pred": [
+									[
+										"c",
+										1,
+										0
+									]
+								]
+							}
+						]
+					},
+					{
+						"n": 2,
+						"node": "doc",
+						"part": "value",
+						"lamport": 4,
+						"when": 0,
+						"on": [],
+						"patches": [
+							{
+								"path": [
+									"k"
+								],
+								"range": [
+									0,
+									0
+								],
+								"value": "z"
+							},
+							{
+								"path": [
+									"m"
+								],
+								"value": 5
+							}
+						],
+						"ids": [
+							{
+								"container": [
+									"c",
+									1,
+									0
+								],
+								"after": null,
+								"gone": []
+							},
+							{
+								"container": [
+									"a",
+									1,
+									0
+								],
+								"pred": []
+							}
+						]
+					}
+				]
+			},
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "value",
+			"device": "m",
+			"node": "doc",
+			"expect": {
+				"value": {
+					"k": 7,
+					"n": 0
+				}
+			}
+		},
+		{
+			"op": "value",
+			"device": "f",
+			"node": "doc",
+			"expect": {
+				"value": {
+					"k": 7,
+					"n": 0
+				}
+			}
+		},
+		{
+			"op": "failed",
+			"device": "m",
+			"expect": {
+				"failed": [
+					{
+						"device": "h",
+						"n": 2
+					}
+				]
+			}
+		},
+		{
+			"op": "failed",
+			"device": "f",
+			"expect": {
+				"failed": [
+					{
+						"device": "h",
+						"n": 2
+					}
+				]
+			}
+		},
+		{
+			"op": "empty",
+			"device": "m",
+			"expect": {
+				"emptied": 1
+			}
+		},
+		{
+			"op": "empty",
+			"device": "f",
+			"expect": {
+				"emptied": 1
+			}
+		}
+	]
+}

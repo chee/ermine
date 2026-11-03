@@ -1,0 +1,117 @@
+{
+	"title": "what emptying returns: every container in trash before, those inside another included (here a map and the map in it, each taken away by its own step), the same in TS and C",
+	"steps": [
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "doc",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"a": {
+							"x": {}
+						},
+						"s": 1
+					}
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "doc",
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"value": 2
+				}
+			],
+			"expect": {
+				"n": 2,
+				"lamport": 2
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "doc",
+			"patches": [
+				{
+					"path": [
+						"a",
+						"x"
+					]
+				}
+			],
+			"expect": {
+				"n": 3,
+				"lamport": 3
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "doc",
+			"patches": [
+				{
+					"path": [
+						"a"
+					]
+				}
+			],
+			"expect": {
+				"n": 4,
+				"lamport": 4
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "doc",
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"value": 3
+				}
+			],
+			"expect": {
+				"n": 5,
+				"lamport": 5
+			}
+		},
+		{
+			"op": "value",
+			"device": "a",
+			"node": "doc",
+			"expect": {
+				"value": {
+					"s": 3
+				}
+			}
+		},
+		{
+			"op": "empty",
+			"device": "a",
+			"expect": {
+				"emptied": 2
+			}
+		}
+	]
+}

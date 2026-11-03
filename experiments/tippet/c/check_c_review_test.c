@@ -1902,6 +1902,108 @@ static void measure(void) {
 		tp_log_free(w);
 	}
 	{
+		// containers removed: the same keys put as maps and as numbers in one put of the whole value,
+		// then each taken away; what the maps leave above what the numbers leave is trash held
+		enum { K = 300 };
+		size_t held[2], total[2];
+		for (int map = 0; map < 2; map++) {
+			tp_log *w = writer(124 + map, 0, NULL);
+			uint8_t p[8192];
+			tp_buf b = {p, 0, sizeof p, sizeof p, NULL, 0};
+			tp_put_head(&b, 4, 1), tp_put_head(&b, 5, 2), tp_put_text(&b, "path"), tp_put_head(&b, 4, 0);
+			tp_put_text(&b, "value"), tp_put_head(&b, 5, K);
+			for (int i = 0; i < K; i++) {
+				char key[16];
+				snprintf(key, sizeof key, "k%d", i);
+				tp_put_text(&b, key);
+				if (map) tp_put_head(&b, 5, 1), tp_put_text(&b, "x"), tp_put_head(&b, 0, (uint64_t)i);
+				else tp_put_head(&b, 0, (uint64_t)i);
+			}
+			edit(w, p, b.len);
+			dev r;
+			dev_make(&r, tp_memory_store(&mem, 1 << 24), 126 + map);
+			take_all(r.log, w);
+			size_t base = P.now;
+			for (int i = 0; i < K; i++) {
+				uint8_t q[40], idb[64];
+				tp_buf c = {q, 0, sizeof q, sizeof q, NULL, 0}, d = {idb, 0, sizeof idb, sizeof idb, NULL, 0};
+				char key[16];
+				snprintf(key, sizeof key, "k%d", i);
+				tp_put_head(&c, 4, 1), tp_put_head(&c, 5, 1), tp_put_text(&c, "path"), tp_put_head(&c, 4, 1);
+				tp_put_text(&c, key);
+				// [[container, [the cell the put's value made at the key]]]
+				tp_put_head(&d, 4, 1), tp_put_head(&d, 4, 2), tp_put_head(&d, 4, 2);
+				tp_put_head(&d, 0, root_n), tp_put_head(&d, 0, 0);
+				tp_put_head(&d, 4, 1), tp_put_head(&d, 4, 3), tp_put_head(&d, 0, root_n), tp_put_head(&d, 0, 0);
+				tp_put_text(&d, key);
+				tp_write wr = {{(const uint8_t *)"doc", 3}, {(const uint8_t *)"value", 5}, {q, c.len}, {NULL, 0}, 1,
+					{NULL, 0}, {idb, d.len}};
+				uint64_t sn, lp;
+				CHECK(!tp_log_write(w, &wr, &sn, &lp));
+			}
+			take_all(r.log, w);
+			held[map] = P.now - base;
+			size_t tc, tb;
+			tp_history_trash(r.history, &tc, &tb);
+			total[map] = tb;
+			if (map) {
+				long n = tp_history_empty(r.history);
+				CHECK(n == K);
+				CHECK(P.now - base < held[1]);
+			}
+			dev_free(&r);
+			tp_log_free(w);
+		}
+		printf("  %d containers removed: %.1f bytes a container in the library's heap; trash() says %.1f, value included\n", K,
+			((double)held[1] - (double)held[0]) / K, (double)(total[1] - total[0]) / K);
+		CHECK(held[1] > held[0] && (held[1] - held[0]) / K < 200);
+		CHECK(total[1] > held[1] - held[0]);
+	}
+	{
+		// the whole value put again and again (a dens-style host): each old value stays in trash
+		enum { N = 100 };
+		tp_log *w = writer(130, 0, NULL);
+		dev r;
+		dev_make(&r, tp_memory_store(&mem, 1 << 24), 131);
+		for (int i = 0; i < N; i++) {
+			uint8_t p[400];
+			tp_buf b = {p, 0, sizeof p, sizeof p, NULL, 0};
+			tp_put_head(&b, 4, 1), tp_put_head(&b, 5, 2), tp_put_text(&b, "path"), tp_put_head(&b, 4, 0);
+			tp_put_text(&b, "value"), tp_put_head(&b, 5, 5);
+			tp_put_text(&b, "x"), tp_put_head(&b, 0, (uint64_t)i);
+			tp_put_text(&b, "y"), tp_put_head(&b, 0, (uint64_t)(2 * i));
+			tp_put_text(&b, "at"), tp_put_head(&b, 5, 2), tp_put_text(&b, "room"), tp_put_text(&b, "ACDF");
+			tp_put_text(&b, "seat"), tp_put_head(&b, 0, (uint64_t)(i % 7));
+			tp_put_text(&b, "name"), tp_put_text(&b, "rabbit");
+			tp_put_text(&b, "colour"), tp_put_text(&b, "pink");
+			// [[container, [the cell the last put made]]]: the root the writer holds, named
+			uint8_t idb[32];
+			tp_buf d = {idb, 0, sizeof idb, sizeof idb, NULL, 0};
+			tp_put_head(&d, 4, 1), tp_put_head(&d, 4, 2);
+			if (i) tp_put_head(&d, 4, 2), tp_put_head(&d, 0, root_n), tp_put_head(&d, 0, 0);
+			else tp_put(&d, "\xf6", 1);
+			tp_put_head(&d, 4, i ? 1 : 0);
+			if (i) tp_put_head(&d, 4, 2), tp_put_head(&d, 0, root_n), tp_put_head(&d, 0, 0);
+			tp_write wr = {{(const uint8_t *)"doc", 3}, {(const uint8_t *)"value", 5}, {p, b.len}, {NULL, 0}, 1,
+				{NULL, 0}, {idb, d.len}};
+			uint64_t sn, lp;
+			int why = tp_log_write(w, &wr, &sn, &lp);
+			if (why) printf("  put %d: %s\n", i, tp_why(why));
+			CHECK(!why);
+			root_n = sn;
+			memcpy(root_dev, tp_log_device(w), 32);
+		}
+		size_t base = P.now;
+		take_all(r.log, w);
+		size_t tc, tb;
+		tp_history_trash(r.history, &tc, &tb);
+		printf("  %d whole values put: %zu in trash, %.1f bytes a put (value included); the library's heap %.1f\n", N, tc,
+			(double)tb / N, (double)(P.now - base) / N);
+		CHECK(tc == N - 1);
+		dev_free(&r);
+		tp_log_free(w);
+	}
+	{
 		// text in many runs: a put of 400 characters, then a character put between each two
 		enum { R = 200 };
 		tp_log *w = writer(122, 0, NULL);

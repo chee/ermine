@@ -12,7 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-enum { MADE, SPLICE, ADD, TAKE, DROP, HOLD, LANDED, MOVED };
+enum { MADE, SPLICE, ADD, TAKE, DROP, HOLD, BIN, BINADD, BINTAKE, LANDED, MOVED };
 
 // a run's most elements
 #define MOST ((1u << 29) - 1)
@@ -624,6 +624,9 @@ static uint8_t *dup(const tp_mem *mem, const uint8_t *p, size_t n) {
 static size_t sl_idn(const el_slot *s) { return s->idn & EL_CELL_LEN; }
 static int sl_ghost(const el_slot *s) { return !!(s->idn & EL_CELL_GHOST); }
 static int sl_holds(const el_slot *s) { return !!(s->idn & EL_CELL_NODE); }
+static int sl_trash(const el_slot *s) { return !!(s->idn & EL_CELL_TRASH); }
+// not visible: a ghost or trash
+static int sl_hidden(const el_slot *s) { return !!(s->idn & (EL_CELL_GHOST | EL_CELL_TRASH)); }
 static void slot_free(const tp_mem *mem, el_slot *s) {
 	tp_free(mem, s->buf, (size_t)s->parentn + s->slotn + sl_idn(s));
 	if (s->value) op_free(s->value);
@@ -703,7 +706,7 @@ static long shown_at(const el_ctx *c, const el_state *st, tp_span parent, tp_spa
 	size_t n = 0;
 	for (size_t i = 0; i < st->nslots; i++) {
 		const el_slot *s = &st->slots[i];
-		if (!slot_match(s, parent, slot) || sl_ghost(s)) continue;
+		if (!slot_match(s, parent, slot) || sl_hidden(s)) continue;
 		n++;
 		if (best < 0 || cell_greater(c, s, &st->slots[best])) best = (long)i;
 	}
@@ -794,6 +797,19 @@ static int hold(work *w, const uint8_t *buf, op_value *v) {
 	st->slots[i].value = v;
 	return 0;
 }
+// the cell at buf, its container let go of: hidden, with v its value (owned by the cell now; given up
+// on a failure), and undone
+static int bin_cell(work *w, const uint8_t *buf, op_value *v) {
+	el_state *st = w->st;
+	long i = cell_by(st, buf);
+	if (i < 0 || rec_room(w)) return op_free(v), TP_NOMEM;
+	el_rec *r = &w->back->p[w->back->n++];
+	*r = (el_rec){.kind = BIN};
+	r->hold.buf = buf, r->hold.was = st->slots[i].value;
+	st->slots[i].value = v;
+	st->slots[i].idn |= EL_CELL_TRASH;
+	return 0;
+}
 // a cell made: buf = parent, slot, id; id's flags
 static int make_cell(work *w, tp_span parent, tp_span slot, tp_span id, unsigned flags, el_ref at, el_slot *out) {
 	size_t total = parent.n + slot.n + id.n;
@@ -832,8 +848,62 @@ static int landed_set(work *w, uint32_t device, uint64_t n) {
 	return 0;
 }
 
-// a node gone, with its sequences and cells, and what they hold, in turn. leaf: a string, which holds none
-static int drop_node(work *w, tp_span node, int leaf) {
+// a cell in trash made: a container named before it landed, replaced, or at an element gone (id is
+// its node)
+static int bury_cell(work *w, tp_span parent, tp_span slot, tp_span id, const op_value *value, el_ref at) {
+	if (w->st->quiet) return 0;
+	el_slot s;
+	int code = make_cell(w, parent, slot, id, EL_CELL_NODE | EL_CELL_TRASH, at, &s);
+	if (code) return code;
+	s.value = value ? op_ref((op_value *)value) : NULL;
+	return add_cell(w, s);
+}
+
+// the container of an element gone, from the pieces of its list, taken from them (the record owns
+// the piece's reference, the caller gets one); NULL: none
+static op_value *bin_take(work *w, tp_span list, const el_id *e) {
+	el_state *st = w->st;
+	for (size_t i = 0; i < st->nbins; i++) {
+		el_bin *b = st->bins[i];
+		if (b->listn != list.n || memcmp(b->list, list.p, list.n) || b->id.device != e->device || b->id.born != e->born) continue;
+		uint64_t x = UINT64_MAX;
+		if (e->born ? e->c == b->id.c && e->k >= b->id.k : e->c >= b->id.c) x = e->born ? e->k - b->id.k : e->c - b->id.c;
+		if (x >= b->n || !b->values[x] || rec_room(w)) continue;
+		el_rec *r = &w->back->p[w->back->n++];
+		*r = (el_rec){.kind = BINTAKE};
+		r->bintake.bin = b, r->bintake.x = x, r->bintake.v = b->values[x];
+		b->values[x] = NULL;
+		return op_ref(r->bintake.v);
+	}
+	return NULL;
+}
+static void bin_free(const tp_mem *mem, el_bin *b) {
+	for (uint64_t x = 0; x < b->n; x++) {
+		if (b->values[x]) op_free(b->values[x]);
+	}
+	tp_free(mem, b->values, b->n * sizeof *b->values);
+	tp_free(mem, b->list, b->listn);
+	tp_free(mem, b, sizeof *b);
+}
+
+// bytes of a value in memory, each allocation rounded up to 16 as malloc does
+static size_t blk(size_t n) { return n ? (n + 15) & ~(size_t)15 : 0; }
+static size_t weigh(const op_value *v) {
+	if (!v) return 0;
+	size_t n = blk(sizeof *v);
+	if (v->type == OP_STR || v->type == OP_BYTES || v->type == OP_TYPED) n += blk(v->bytes + 1);
+	else if (v->type == OP_LIST) {
+		n += blk(v->capacity * sizeof *v->items);
+		for (size_t i = 0; i < v->count; i++) n += weigh(v->items[i]);
+	} else if (v->type == OP_MAP) {
+		n += blk(v->capacity * sizeof *v->items) + blk(v->capacity * sizeof *v->keys) + blk(v->slots * sizeof *v->index);
+		for (size_t i = 0; i < v->count; i++) n += blk(strlen(v->keys[i]) + 1) + weigh(v->items[i]);
+	}
+	return n;
+}
+
+// a node gone for good, with its sequences and cells, and what they hold, in turn
+static int drop_node(work *w, tp_span node) {
 	const tp_mem *mem = w->c->mem;
 	el_state *st = w->st;
 	size_t nl = st->n, ns = st->nslots, ngl = 0, ngs = 0, nt = 0, rt = 0;
@@ -850,31 +920,25 @@ static int drop_node(work *w, tp_span node, int leaf) {
 		goto done;
 	}
 	memset(ml, 0, nl), memset(ms, 0, ns);
-	if (leaf) {
+	if (more(mem, (void **)&todo, nt, &rt, sizeof *todo)) {
+		code = TP_NOMEM;
+		goto done;
+	}
+	todo[nt++] = node;
+	while (nt) {
+		tp_span x = todo[--nt];
 		for (size_t i = 0; i < nl; i++) {
-			if (st->lists[i]->keyn == node.n && !memcmp(st->lists[i]->key, node.p, node.n)) ml[i] = 1;
+			if (!ml[i] && under(st->lists[i]->key, st->lists[i]->keyn, x)) ml[i] = 1;
 		}
-	} else {
-		if (more(mem, (void **)&todo, nt, &rt, sizeof *todo)) {
-			code = TP_NOMEM;
-			goto done;
-		}
-		todo[nt++] = node;
-		while (nt) {
-			tp_span x = todo[--nt];
-			for (size_t i = 0; i < nl; i++) {
-				if (!ml[i] && under(st->lists[i]->key, st->lists[i]->keyn, x)) ml[i] = 1;
+		for (size_t i = 0; i < ns; i++) {
+			if (ms[i] || !under(sl_parent(&st->slots[i]), st->slots[i].parentn, x)) continue;
+			ms[i] = 1;
+			if (!sl_holds(&st->slots[i])) continue;
+			if (more(mem, (void **)&todo, nt, &rt, sizeof *todo)) {
+				code = TP_NOMEM;
+				goto done;
 			}
-			for (size_t i = 0; i < ns; i++) {
-				if (ms[i] || !under(sl_parent(&st->slots[i]), st->slots[i].parentn, x)) continue;
-				ms[i] = 1;
-				if (!sl_holds(&st->slots[i])) continue;
-				if (more(mem, (void **)&todo, nt, &rt, sizeof *todo)) {
-					code = TP_NOMEM;
-					goto done;
-				}
-				todo[nt++] = sl_nodespan(&st->slots[i]);
-			}
+			todo[nt++] = sl_nodespan(&st->slots[i]);
 		}
 	}
 	for (size_t i = 0; i < nl; i++) ngl += ml[i];
@@ -941,41 +1005,98 @@ static int elements(work *w, tp_span node, const op_value *v, el_list **out) {
 	return 0;
 }
 
-// the items of the array node taken away by a splice are gone, with what is under them
-static int away(work *w, tp_span node, el_list *l, const el_gone *taken, size_t ntaken) {
+// the containers among the items one run of a splice takes away: their elements from id on
+typedef struct {
+	el_id id;
+	uint64_t n;
+	op_value **values;
+} piece;
+static void pieces_free(const tp_mem *mem, piece *ps, size_t n, size_t room) {
+	for (size_t i = 0; i < n; i++) {
+		for (uint64_t x = 0; ps[i].values && x < ps[i].n; x++) {
+			if (ps[i].values[x]) op_free(ps[i].values[x]);
+		}
+		tp_free(mem, ps[i].values, ps[i].n * sizeof *ps[i].values);
+	}
+	tp_free(mem, ps, room * sizeof *ps);
+}
+static int piece_has(const piece *ps, size_t n, const el_id *e) {
+	for (size_t i = 0; i < n; i++) {
+		if (ps[i].id.device != e->device || ps[i].id.born != e->born) continue;
+		uint64_t x = UINT64_MAX;
+		if (e->born ? e->c == ps[i].id.c && e->k >= ps[i].id.k : e->c >= ps[i].id.c) {
+			x = e->born ? e->k - ps[i].id.k : e->c - ps[i].id.c;
+		}
+		if (x < ps[i].n && ps[i].values[x]) return 1;
+	}
+	return 0;
+}
+
+// the items of the array node taken away by a splice are gone. the cells that hold no container are
+// let go; the containers are held as pieces of the run (they become the state's, pieces[].values
+// NULL), for a patch to name. quiet: let go with what is under them
+static int away(work *w, tp_span node, el_list *l, const el_gone *taken, size_t ntaken, piece *pieces, size_t npieces) {
+	const tp_mem *mem = w->c->mem;
 	el_state *st = w->st;
 	for (size_t i = 0; i < st->nslots;) {
 		el_slot *s = &st->slots[i];
 		size_t j;
 		uint64_t o;
 		el_id e;
-		if (s->parentn != node.n || memcmp(sl_parent(s), node.p, node.n) || !sl_el(s, &e) ||
+		if (s->parentn != node.n || memcmp(sl_parent(s), node.p, node.n) || sl_trash(s) || !sl_el(s, &e) ||
 			!find(l, &e, &j, &o) || !l->runs[j].gone) {
 			i++;
 			continue;
 		}
-		// the cell goes first: dropping packs the cells
-		tp_span held = sl_nodespan(s);
-		const uint8_t *buf = s->buf;
-		int code = 0;
-		if (held.n) code = drop_node(w, held, 0);
-		if (code) return code;
-		long at = cell_by(st, buf);
-		if (at >= 0) code = take_cell(w, (size_t)at);
-		if (code) return code;
-		i = 0;
-	}
-	// the items born with the array have no cell: what is under them goes by their place
-	for (size_t r = 0; r < ntaken; r++) {
-		for (uint64_t x = 0; x < taken[r].count; x++) {
-			el_id e = plus(taken[r].id, x);
-			if (!e.born) continue;
-			tp_buf cb = {NULL, 0, 0, (size_t)-1, w->c->mem, 0};
-			tp_put(&cb, node.p, node.n), rel_num(&cb, e.k);
-			int code = tp_buf_why(&cb) ? TP_NOMEM : drop_node(w, (tp_span){cb.p, cb.len}, 0);
-			tp_buf_free(&cb);
-			if (code) return code;
+		int code;
+		if (st->quiet && sl_holds(s)) {
+			// the cell goes after: dropping packs the cells
+			tp_span held = sl_nodespan(s);
+			const uint8_t *buf = s->buf;
+			if ((code = drop_node(w, held))) return code;
+			long at = cell_by(st, buf);
+			if (at >= 0 && (code = take_cell(w, (size_t)at))) return code;
+			i = 0;
+			continue;
 		}
+		if (!st->quiet && sl_holds(s) && !sl_ghost(s)) {
+			i++;
+			continue;
+		}
+		if ((code = take_cell(w, i))) return code;
+	}
+	if (st->quiet) {
+		// the items born with the array have no cell: what is under them goes by their place
+		for (size_t r = 0; r < ntaken; r++) {
+			for (uint64_t x = 0; x < taken[r].count; x++) {
+				el_id e = plus(taken[r].id, x);
+				if (!e.born) continue;
+				tp_buf cb = {NULL, 0, 0, (size_t)-1, mem, 0};
+				tp_put(&cb, node.p, node.n), rel_num(&cb, e.k);
+				int code = tp_buf_why(&cb) ? TP_NOMEM : drop_node(w, (tp_span){cb.p, cb.len});
+				tp_buf_free(&cb);
+				if (code) return code;
+			}
+		}
+		return 0;
+	}
+	if (!npieces) return 0;
+	if (rec_room(w)) return TP_NOMEM;
+	size_t ri = w->back->n++;
+	w->back->p[ri] = (el_rec){.kind = BINADD};
+	for (size_t q = 0; q < npieces; q++) {
+		el_bin *b = tp_alloc(mem, sizeof *b);
+		if (!b) return TP_NOMEM;
+		b->list = dup(mem, node.p, node.n), b->listn = node.n;
+		if ((node.n && !b->list) || more(mem, (void **)&st->bins, st->nbins, &st->roombins, sizeof *st->bins)) {
+			tp_free(mem, b->list, b->listn);
+			tp_free(mem, b, sizeof *b);
+			return TP_NOMEM;
+		}
+		b->id = pieces[q].id, b->n = pieces[q].n, b->values = pieces[q].values;
+		pieces[q].values = NULL;
+		st->bins[st->nbins++] = b;
+		w->back->p[ri].binadd.count++;
 	}
 	return 0;
 }
@@ -1025,12 +1146,12 @@ static int assign(work *w, tp_span parent, tp_span slot, int is_el, tp_span deri
 	if (ti >= 0) topbuf = st->slots[ti].buf;
 	if (all) {
 		for (size_t i = 0; i < st->nslots; i++) {
-			if (slot_match(&st->slots[i], parent, slot) && !sl_ghost(&st->slots[i])) gone[ngone++] = st->slots[i].buf;
+			if (slot_match(&st->slots[i], parent, slot) && !sl_hidden(&st->slots[i])) gone[ngone++] = st->slots[i].buf;
 		}
 	} else {
 		for (size_t k = 0; k < npred && !code; k++) {
 			long r = cell_named(st, parent, slot, pred[k]);
-			if (r >= 0 && !sl_ghost(&st->slots[r])) {
+			if (r >= 0 && !sl_hidden(&st->slots[r])) {
 				size_t g = 0;
 				while (g < ngone && gone[g] != st->slots[r].buf) g++;
 				if (g == ngone) gone[ngone++] = st->slots[r].buf;
@@ -1046,18 +1167,26 @@ static int assign(work *w, tp_span parent, tp_span slot, int is_el, tp_span deri
 	int has_made = 0;
 	if (!code && cell) {
 		long g = cell_named(st, parent, slot, *cell);
-		if (g >= 0 && sl_ghost(&st->slots[g])) code = take_cell(w, (size_t)g);
-		else code = make_cell(w, parent, slot, *cell, container ? EL_CELL_NODE : 0, w->ref, &made), has_made = !code;
+		if (g >= 0 && sl_ghost(&st->slots[g])) {
+			code = take_cell(w, (size_t)g);
+			if (!code && container) code = bury_cell(w, parent, slot, *cell, cellvalue, w->ref);
+		} else code = make_cell(w, parent, slot, *cell, container ? EL_CELL_NODE : 0, w->ref, &made), has_made = !code;
 	}
-	if (!code && !nvis && derived.n && is_el) code = drop_node(w, derived, old && old->type == OP_STR);
+	if (!code && !nvis && derived.n && is_el && old && is_container(old) && cell_of(st, derived) < 0) {
+		long from = cell_enclosing(st, parent);
+		code = bury_cell(w, parent, slot, derived, old, from >= 0 ? sl_at(&st->slots[from]) : w->ref);
+	}
 	for (size_t g = 0; g < ngone && !code; g++) {
 		long i = cell_by(st, gone[g]);
 		if (i < 0) continue;
 		const el_slot *s = &st->slots[i];
 		const op_value *v = gone[g] == topbuf ? old : s->value;
-		if (sl_holds(s)) code = drop_node(w, sl_nodespan(s), v && v->type == OP_STR);
-		i = cell_by(st, gone[g]);
-		if (!code && i >= 0) code = take_cell(w, (size_t)i);
+		if (sl_holds(s) && !st->quiet) code = bin_cell(w, gone[g], v ? op_ref((op_value *)v) : NULL);
+		else {
+			if (sl_holds(s)) code = drop_node(w, sl_nodespan(s));
+			i = cell_by(st, gone[g]);
+			if (!code && i >= 0) code = take_cell(w, (size_t)i);
+		}
 	}
 	tp_free(mem, gone, (nall + npred) * sizeof *gone);
 	if (code) {
@@ -1070,7 +1199,8 @@ static int assign(work *w, tp_span parent, tp_span slot, int is_el, tp_span deri
 	}
 	long si = shown_at(w->c, st, parent, slot, NULL);
 	const uint8_t *showbuf = si >= 0 ? st->slots[si].buf : NULL;
-	int top_stays = topbuf && cell_by(st, topbuf) >= 0;
+	long tsi = topbuf ? cell_by(st, topbuf) : -1;
+	int top_stays = tsi >= 0 && !sl_trash(&st->slots[tsi]);
 	if (has_made && showbuf == madebuf) {
 		if (top_stays && old && (code = hold(w, topbuf, op_ref((op_value *)old)))) return code;
 		*out = A_OWN;
@@ -1170,12 +1300,17 @@ static size_t item_end(tp_span node, size_t m) {
 // the path to the container node as it is now, root first, in hops (turned at the end); *ok 0: not
 // held, replaced, or gone. *host: the buffer of the cell whose held value it is in, when that cell
 // is not the one showing (the path is in that value), else NULL
+static int revive(work *w, tp_span node);
 static int where(work *w, tp_span node, hops *out, int *ok, const uint8_t **host) {
 	const tp_mem *mem = w->c->mem;
 	el_state *st = w->st;
 	tp_span cur = node;
 	*ok = 1;
 	*host = NULL;
+	{
+		int code = revive(w, node);
+		if (code) return code;
+	}
 	for (;;) {
 		// the node some cell holds that cur is, or is made inside: longest first
 		size_t ne = 0;
@@ -1198,6 +1333,18 @@ static int where(work *w, tp_span node, hops *out, int *ok, const uint8_t **host
 		int good;
 		int code = inside(w, held, tail, out, &good);
 		if (code || !good) return code ? code : (*ok = 0, 0);
+		el_id ee;
+		if (sl_el(rec, &ee) && !sl_trash(rec) &&
+			shown_at(w->c, st, (tp_span){sl_parent(rec), rec->parentn}, (tp_span){sl_slot(rec), rec->slotn}, NULL) == si) {
+			// an item taken away: its container is in the run's pieces
+			el_list *ll = list_at(st, (tp_span){sl_parent(rec), rec->parentn});
+			size_t jj;
+			uint64_t oo;
+			if (ll && find(ll, &ee, &jj, &oo) && ll->runs[jj].gone) {
+				op_value *bv = bin_take(w, (tp_span){sl_parent(rec), rec->parentn}, &ee);
+				if (bv && (code = bin_cell(w, rec->buf, bv))) return code;
+			}
+		}
 		if (shown_at(w->c, st, (tp_span){sl_parent(rec), rec->parentn}, (tp_span){sl_slot(rec), rec->slotn}, NULL) != si) {
 			*host = rec->buf;
 			break;
@@ -1227,6 +1374,57 @@ static int where(work *w, tp_span node, hops *out, int *ok, const uint8_t **host
 	return 0;
 }
 
+// the cell of a container in the item an element gone had, made when a patch names it: by its
+// derived id (born with the array)
+static int revive(work *w, tp_span node) {
+	el_state *st = w->st;
+	size_t ne = 0, end = node.n, m;
+	tp_in in = {node.p, node.p + node.n};
+	tp_span item;
+	long si = -1;
+	while (in.p < in.end) {
+		if (tp_skip(&in, &item) || ++ne > 1024) return OP_RANGE;
+	}
+	for (m = ne; m >= 3; m--) {
+		end = item_end(node, m);
+		si = cell_of(st, (tp_span){node.p, end});
+		if (si >= 0) break;
+	}
+	if (si < 0 || !st->nbins) return 0;
+	tp_in t = {node.p + end, node.p + node.n};
+	while (t.p < t.end) {
+		const uint8_t *from = t.p;
+		int major = *t.p >> 5;
+		if (tp_skip(&t, &item)) return OP_RANGE;
+		tp_span ck = {node.p, end}, next = {node.p, (size_t)(t.p - node.p)};
+		el_list *l = major == 0 ? list_at(st, ck) : NULL;
+		if (l && cell_of(st, next) < 0) {
+			uint32_t dev;
+			uint64_t n, x;
+			tp_in xi = {from, t.p};
+			if (tp_whole(&xi, &x) || node_head(ck, &dev, &n)) return OP_RANGE;
+			el_id e = {dev, 1, n, x};
+			size_t j;
+			uint64_t o;
+			if (find(l, &e, &j, &o) && l->runs[j].gone) {
+				op_value *v = bin_take(w, ck, &e);
+				if (v) {
+					tp_buf sb = {NULL, 0, 0, (size_t)-1, w->c->mem, 0};
+					slot_el(&sb, &e);
+					long fr = cell_enclosing(st, ck);
+					int code = tp_buf_why(&sb) ? TP_NOMEM
+						: bury_cell(w, ck, (tp_span){sb.p, sb.len}, next, v, fr >= 0 ? sl_at(&st->slots[fr]) : w->ref);
+					tp_buf_free(&sb);
+					op_free(v);
+					if (code) return code;
+				}
+			}
+		}
+		end = next.n;
+	}
+	return 0;
+}
+
 // a splice into the sequence node (v its value, p->place.path where it is now), patch w->i of its
 // step, its inserted ones counted from c, by its ids (anchor) or its range, as the patches to apply
 // by position (*qs, *nq)
@@ -1240,8 +1438,9 @@ static int splice(work *w, const op_patch *p, tp_span node, const op_value *v, u
 	if (code) return code;
 	uint64_t a = (uint64_t)p->place.from, b = (uint64_t)p->place.to, o;
 	long m = p->has_value ? units(p->value) : 0;
-	size_t j, ngone = 0, roomgone = 0, nout = 0, qroom = 0;
+	size_t j, ngone = 0, roomgone = 0, nout = 0, qroom = 0, npieces = 0, roompieces = 0;
 	el_gone *gone = NULL;
+	piece *pieces = NULL;
 	const el_gone *names;
 	size_t nnames;
 	op_patch *out = NULL;
@@ -1286,6 +1485,42 @@ static int splice(work *w, const op_patch *p, tp_span node, const op_value *v, u
 	size_t ri = w->back->n++;
 	w->back->p[ri] = (el_rec){.kind = SPLICE, .splice = {.list = l}};
 #define REC (w->back->p[ri].splice)
+	// the containers among the items taken away, before any goes
+	if (!l->text && v->type == OP_LIST && !w->st->quiet) {
+		for (size_t r = 0; r < nnames; r++) {
+			for (uint64_t x = 0; x < names[r].count;) {
+				el_id id = plus(names[r].id, x);
+				find(l, &id, &j, &o);
+				uint64_t m = span(l, j, o, names[r].count - x, &o);
+				x += m;
+				if (l->runs[j].gone) continue;
+				size_t from = live_before(l, j) + (size_t)o;
+				el_id lo = low(l, &l->runs[j], o, m);
+				piece pc = {lo, m, NULL};
+				for (uint64_t q = 0; q < m; q++) {
+					const op_value *it = v->items[from + q];
+					el_id e = id_at(l, &l->runs[j], o + q);
+					if (!is_container(it) || piece_has(pieces, npieces, &e)) continue;
+					if (!pc.values) {
+						pc.values = tp_alloc(mem, m * sizeof *pc.values);
+						if (!pc.values) {
+							code = TP_NOMEM;
+							goto done;
+						}
+						memset(pc.values, 0, m * sizeof *pc.values);
+					}
+					pc.values[e.born ? e.k - lo.k : e.c - lo.c] = op_ref((op_value *)it);
+				}
+				if (!pc.values) continue;
+				if (more(mem, (void **)&pieces, npieces, &roompieces, sizeof *pieces)) {
+					pieces_free(mem, &pc, 1, 0);
+					code = TP_NOMEM;
+					goto done;
+				}
+				pieces[npieces++] = pc;
+			}
+		}
+	}
 	// the gone ones still there taken away, each once however often named, by position
 	for (size_t r = 0; r < nnames; r++) {
 		for (uint64_t x = 0; x < names[r].count;) {
@@ -1311,7 +1546,7 @@ static int splice(work *w, const op_patch *p, tp_span node, const op_value *v, u
 			}
 		}
 	}
-	if (!l->text && REC.ntaken && (code = away(w, node, l, REC.taken, REC.ntaken))) goto done;
+	if (!l->text && REC.ntaken && (code = away(w, node, l, REC.taken, REC.ntaken, pieces, npieces))) goto done;
 	// where the inserted go: right after its element; by ids, past those put there meanwhile
 	pos lp = {0, 0}, rp = {0, 0}, spot = {0, 0};
 	el_id left = has_first ? first : NOWHERE;
@@ -1380,6 +1615,7 @@ static int splice(work *w, const op_patch *p, tp_span node, const op_value *v, u
 	}
 	*qs = out, *nq = nout, *qcap = qroom, out = NULL;
 done:
+	pieces_free(mem, pieces, npieces, roompieces);
 	tp_free(mem, gone, roomgone * sizeof *gone), tp_free(mem, out, qroom * sizeof *out);
 	return code;
 }
@@ -1483,7 +1719,7 @@ static int name_preds(work *w, tp_span parent, tp_span slot, int is_el, int pres
 	const tp_mem *mem = w->c->mem;
 	el_state *st = w->st;
 	size_t n = 0, bytes = 0;
-	for (size_t i = 0; i < st->nslots; i++) n += slot_match(&st->slots[i], parent, slot) && !sl_ghost(&st->slots[i]);
+	for (size_t i = 0; i < st->nslots; i++) n += slot_match(&st->slots[i], parent, slot) && !sl_hidden(&st->slots[i]);
 	if (!n && present && !is_el && parent.n) {
 		named->predbuf = tp_alloc(mem, parent.n + slot.n), named->pred = tp_alloc(mem, sizeof *named->pred);
 		if (!named->predbuf || !named->pred) return TP_NOMEM;
@@ -1496,7 +1732,7 @@ static int name_preds(work *w, tp_span parent, tp_span slot, int is_el, int pres
 	size_t *idx = tp_alloc(mem, n * sizeof *idx);
 	if (!idx) return TP_NOMEM;
 	for (size_t i = 0, k = 0; i < st->nslots; i++) {
-		if (!slot_match(&st->slots[i], parent, slot) || sl_ghost(&st->slots[i])) continue;
+		if (!slot_match(&st->slots[i], parent, slot) || sl_hidden(&st->slots[i])) continue;
 		size_t j = k++;
 		for (; j > 0 && cell_greater(w->c, &st->slots[idx[j - 1]], &st->slots[i]); j--) idx[j] = idx[j - 1];
 		idx[j] = i;
@@ -1669,8 +1905,17 @@ static int patch(work *w, const op_value *cur, const op_patch *p, uint64_t c, co
 				size_t j;
 				uint64_t o;
 				e = given->element;
-				// an element gone takes its item with it: the patch is skipped
-				if (find(l, &e, &j, &o) && l->runs[j].gone) passed = 1, w->st->passed++;
+				// an element gone: what the put makes there is trash
+				if (find(l, &e, &j, &o) && l->runs[j].gone) {
+					if (container) {
+						tp_buf bb = {NULL, 0, 0, (size_t)-1, mem, 0};
+						slot_el(&bb, &e);
+						code = tp_buf_why(&bb) ? TP_NOMEM : cell_named(w->st, node, (tp_span){bb.p, bb.len}, *cell) >= 0 ? 0
+							: bury_cell(w, node, (tp_span){bb.p, bb.len}, *cell, p->value, w->ref);
+						tp_buf_free(&bb);
+					}
+					passed = 1;
+				}
 				else if (!find(l, &e, &j, &o)) code = OP_RANGE;
 				else x = (long)(live_before(l, j) + (size_t)o);
 			}
@@ -1933,6 +2178,17 @@ static void undo_rec(const tp_mem *mem, el_state *st, el_rec *r) {
 			if (st->slots[i].value) op_free(st->slots[i].value);
 			st->slots[i].value = r->hold.was;
 		} else if (r->hold.was) op_free(r->hold.was);
+	} else if (r->kind == BIN) {
+		long i = cell_by(st, r->hold.buf);
+		if (i >= 0) {
+			if (st->slots[i].value) op_free(st->slots[i].value);
+			st->slots[i].value = r->hold.was;
+			st->slots[i].idn &= ~EL_CELL_TRASH;
+		} else if (r->hold.was) op_free(r->hold.was);
+	} else if (r->kind == BINADD) {
+		while (r->binadd.count--) bin_free(mem, st->bins[--st->nbins]);
+	} else if (r->kind == BINTAKE) {
+		r->bintake.bin->values[r->bintake.x] = r->bintake.v;
 	} else if (r->kind == LANDED) {
 		for (size_t i = 0; i < st->nlanded; i++) {
 			if (st->landed[i].device != r->landed.device) continue;
@@ -1953,7 +2209,8 @@ static void undo_rec(const tp_mem *mem, el_state *st, el_rec *r) {
 static void drop_rec(const tp_mem *mem, el_rec *r) {
 	if (r->kind == SPLICE) tp_free(mem, r->splice.taken, r->splice.roomtaken * sizeof *r->splice.taken);
 	else if (r->kind == TAKE) slot_free(mem, &r->slot.cell);
-	else if (r->kind == HOLD) {
+	else if (r->kind == BINTAKE) op_free(r->bintake.v);
+	else if (r->kind == HOLD || r->kind == BIN) {
 		if (r->hold.was) op_free(r->hold.was);
 	} else if (r->kind == DROP) {
 		for (size_t i = 0; i < r->drop.nlists; i++) list_free(mem, r->drop.lists[i]);
@@ -2025,7 +2282,7 @@ int el_cells(const el_ctx *c, el_state *st, const op_value *value, const op_key 
 		}
 		parent = (tp_span){nb.p, nb.len}, slot = (tp_span){sb.p, sb.len};
 	}
-	for (size_t i = 0; i < st->nslots; i++) n += slot_match(&st->slots[i], parent, slot) && !sl_ghost(&st->slots[i]);
+	for (size_t i = 0; i < st->nslots; i++) n += slot_match(&st->slots[i], parent, slot) && !sl_hidden(&st->slots[i]);
 	if (!n) {
 		// a key its parent's put made, with no cell of its own: that put's
 		const op_value *x = length ? at_keys(value, path, length) : NULL;
@@ -2052,7 +2309,7 @@ int el_cells(const el_ctx *c, el_state *st, const op_value *value, const op_key 
 	}
 	// the greatest first
 	for (size_t i = 0, m = 0; i < st->nslots; i++) {
-		if (!slot_match(&st->slots[i], parent, slot) || sl_ghost(&st->slots[i])) continue;
+		if (!slot_match(&st->slots[i], parent, slot) || sl_hidden(&st->slots[i])) continue;
 		size_t j = m++;
 		for (; j > 0 && cell_greater(c, &st->slots[i], &st->slots[idx[j - 1]]); j--) idx[j] = idx[j - 1];
 		idx[j] = i;
@@ -2090,14 +2347,55 @@ int el_lone(const el_state *st, const el_ref *ref) {
 	if (st->nslots != 1 || st->n || st->moved.lamport || st->nlanded != 1 || st->landed[0].device != ref->device) return 0;
 	const el_slot *s = &st->slots[0];
 	uint64_t n, i;
-	if (s->parentn || s->slotn || sl_ghost(s) || s->value || s->device != ref->device) return 0;
+	if (s->parentn || s->slotn || sl_hidden(s) || s->value || s->device != ref->device) return 0;
 	sl_head(s, &n, &i);
 	return n == ref->n && i == 0;
+}
+
+void el_trash(const el_state *st, size_t *count, size_t *bytes) {
+	*count = *bytes = 0;
+	for (size_t i = 0; i < st->nslots; i++) {
+		const el_slot *s = &st->slots[i];
+		if (!sl_trash(s)) continue;
+		(*count)++, *bytes += sizeof *s + s->parentn + s->slotn + sl_idn(s) + weigh(s->value);
+	}
+	for (size_t i = 0; i < st->nbins; i++) {
+		const el_bin *b = st->bins[i];
+		*bytes += sizeof *b + b->listn + b->n * sizeof *b->values;
+		for (uint64_t x = 0; x < b->n; x++) {
+			if (b->values[x]) (*count)++, *bytes += weigh(b->values[x]);
+		}
+	}
+}
+
+long el_empty(const tp_mem *mem, el_state *st) {
+	el_ctx c = {.mem = mem};
+	el_back back = {NULL, 0, 0};
+	work w = {.c = &c, .st = st, .back = &back, .last = -1};
+	size_t count, bytes;
+	el_trash(st, &count, &bytes);
+	int code = 0;
+	for (; !code;) {
+		long i = 0;
+		while ((size_t)i < st->nslots && !sl_trash(&st->slots[i])) i++;
+		if ((size_t)i == st->nslots) break;
+		const uint8_t *buf = st->slots[i].buf;
+		code = drop_node(&w, sl_nodespan(&st->slots[i]));
+		i = cell_by(st, buf);
+		if (!code && i >= 0) code = take_cell(&w, (size_t)i);
+	}
+	el_back_free(mem, &back);
+	for (size_t i = 0; i < st->nbins; i++) bin_free(mem, st->bins[i]);
+	tp_free(mem, st->bins, st->roombins * sizeof *st->bins);
+	st->bins = NULL, st->nbins = st->roombins = 0;
+	return code ? code : (long)count;
 }
 
 void el_state_free(const tp_mem *mem, el_state *st) {
 	for (size_t i = 0; i < st->n; i++) list_free(mem, st->lists[i]);
 	for (size_t i = 0; i < st->nslots; i++) slot_free(mem, &st->slots[i]);
+	for (size_t i = 0; i < st->nbins; i++) bin_free(mem, st->bins[i]);
+	tp_free(mem, st->bins, st->roombins * sizeof *st->bins);
 	tp_free(mem, st->lists, st->room * sizeof *st->lists);
 	tp_free(mem, st->slots, st->roomslots * sizeof *st->slots);
 	tp_free(mem, st->landed, st->roomlanded * sizeof *st->landed);
@@ -2505,7 +2803,7 @@ void el_write(tp_buf *b, const el_ctx *c, const el_anchor *a, size_t count, uint
 // a state's sequences and cells as cbor, for a snapshot (the value is the graph's): [lists, cells,
 // landed, moved], a list [node, text, runs], a run [device, c, len, flags, left, right], an element's
 // origin null or [device, born, number], a node [device, n, patch, rel…], a cell [parent or null,
-// key or an element [device, born, c, k], id, flags (1 holds a container, 2 a ghost), a step's place
+// key or an element [device, born, c, k], id, flags (1 holds a container, 2 a ghost, 4 trash), a step's place
 // [lamport, device, n, seq], its held value as cbor bytes or null], landed [[device, n], …], moved a
 // step's place or null
 static void save_ref(tp_buf *b, const el_ctx *c, const el_ref *r, int none) {
@@ -2535,7 +2833,7 @@ static void save_node(tp_buf *b, const el_ctx *c, const uint8_t *node, size_t no
 	write_node(b, c, node, noden, UINT32_MAX);
 }
 void el_save(tp_buf *b, const el_ctx *c, const el_state *st) {
-	tp_put_head(b, 4, 4), tp_put_head(b, 4, st->n);
+	tp_put_head(b, 4, 5), tp_put_head(b, 4, st->n);
 	for (size_t i = 0; i < st->n; i++) {
 		const el_list *l = st->lists[i];
 		tp_put_head(b, 4, 3), save_node(b, c, l->key, l->keyn), tp_put_head(b, 0, (uint64_t)l->text);
@@ -2559,7 +2857,7 @@ void el_save(tp_buf *b, const el_ctx *c, const el_state *st) {
 		} else if (s->slotn) tp_put(b, sl_slot(s), s->slotn);
 		else tp_put(b, "\xf6", 1);
 		save_node(b, c, sl_id(s), sl_idn(s));
-		tp_put_head(b, 0, (uint64_t)sl_holds(s) | (uint64_t)sl_ghost(s) << 1);
+		tp_put_head(b, 0, (uint64_t)sl_holds(s) | (uint64_t)sl_ghost(s) << 1 | (uint64_t)sl_trash(s) << 2);
 		save_ref(b, c, &at, 0);
 		if (s->value && c->put_value) {
 			tp_buf vb = {NULL, 0, 0, (size_t)-1, b->mem, 0};
@@ -2574,6 +2872,22 @@ void el_save(tp_buf *b, const el_ctx *c, const el_state *st) {
 		tp_put_head(b, 0, st->landed[i].n);
 	}
 	save_ref(b, c, &st->moved, !st->moved.lamport);
+	tp_put_head(b, 4, st->nbins);
+	for (size_t i = 0; i < st->nbins; i++) {
+		const el_bin *g = st->bins[i];
+		tp_put_head(b, 4, 4), save_node(b, c, g->list, g->listn);
+		tp_put_head(b, 4, 4), tp_put_head(b, 2, 32), tp_put(b, c->bytes(c->self, g->id.device), 32);
+		tp_put_head(b, 0, g->id.born), tp_put_head(b, 0, g->id.c), tp_put_head(b, 0, g->id.k);
+		tp_put_head(b, 0, g->n), tp_put_head(b, 4, g->n);
+		for (uint64_t x = 0; x < g->n; x++) {
+			if (g->values[x] && c->put_value) {
+				tp_buf vb = {NULL, 0, 0, (size_t)-1, b->mem, 0};
+				if (c->put_value(c->self, &vb, g->values[x]) || tp_buf_why(&vb)) tp_put(b, "\xf6", 1);
+				else tp_put_head(b, 2, vb.len), tp_put(b, vb.p, vb.len);
+				tp_buf_free(&vb);
+			} else tp_put(b, "\xf6", 1);
+		}
+	}
 }
 
 static int load_ref(const el_ctx *c, tp_in *in, el_ref *r, int maybe_none) {
@@ -2629,7 +2943,8 @@ int el_load(const el_ctx *c, el_state *st, tp_span bytes) {
 	uint64_t k, nl, ns = 0;
 	int code = 0;
 	*st = (el_state){0};
-	if (tp_array(&in, &k) || k != 4 || tp_array(&in, &nl)) return TP_NOTSTEP;
+	if (tp_array(&in, &k) || (k != 4 && k != 5) || tp_array(&in, &nl)) return TP_NOTSTEP;
+	uint64_t top = k;
 	for (uint64_t i = 0; i < nl && !code; i++) {
 		uint64_t nr, text;
 		tp_buf nb = {NULL, 0, 0, (size_t)-1, mem, 0};
@@ -2715,7 +3030,7 @@ int el_load(const el_ctx *c, el_state *st, tp_span bytes) {
 			else tp_put_head(&sb, 3, key.n), tp_put(&sb, key.p, key.n);
 		}
 		if (!code && (code = load_node(c, &in, &nb))) code = code < 0 ? TP_NOTSTEP : code;
-		if (!code && (nb.len < 3 || tp_whole(&in, &flags) || flags > 3)) code = TP_NOTSTEP;
+		if (!code && (nb.len < 3 || tp_whole(&in, &flags) || flags > 7)) code = TP_NOTSTEP;
 		el_ref at = {0};
 		if (!code && (code = load_ref(c, &in, &at, 0))) code = code < 0 ? TP_NOTSTEP : code;
 		if (!code && !tp_null(&in) && (tp_bytes(&in, 0, &held) || !held.n)) code = TP_NOTSTEP;
@@ -2731,7 +3046,7 @@ int el_load(const el_ctx *c, el_state *st, tp_span bytes) {
 				if (sb.len) memcpy(s.buf + pb.len, sb.p, sb.len);
 				memcpy(s.buf + pb.len + sb.len, nb.p, nb.len);
 				s.parentn = (uint32_t)pb.len, s.slotn = (uint32_t)sb.len;
-				s.idn = (uint32_t)nb.len | ((flags & 1) ? EL_CELL_NODE : 0) | ((flags & 2) ? EL_CELL_GHOST : 0);
+				s.idn = (uint32_t)nb.len | ((flags & 1) ? EL_CELL_NODE : 0) | ((flags & 2) ? EL_CELL_GHOST : 0) | ((flags & 4) ? EL_CELL_TRASH : 0);
 				s.lamport = at.lamport, s.device = at.device;
 				st->slots[st->nslots++] = s;
 			}
@@ -2757,6 +3072,45 @@ int el_load(const el_ctx *c, el_state *st, tp_span bytes) {
 		}
 	}
 	if (!code && (code = load_ref(c, &in, &st->moved, 1))) code = code < 0 ? TP_NOTSTEP : code;
+	uint64_t nb = 0;
+	if (!code && top == 5 && tp_array(&in, &nb)) code = TP_NOTSTEP;
+	for (uint64_t i = 0; i < nb && !code; i++) {
+		tp_buf lb = {NULL, 0, 0, (size_t)-1, mem, 0};
+		tp_span dev;
+		uint64_t born = 0, ec = 0, ek = 0, bn = 0, cnt = 0;
+		el_bin *g = NULL;
+		if (tp_array(&in, &k) || k != 4) code = TP_NOTSTEP;
+		if (!code && (code = load_node(c, &in, &lb))) code = code < 0 ? TP_NOTSTEP : code;
+		if (!code && (tp_array(&in, &k) || k != 4 || tp_bytes(&in, 32, &dev) || tp_whole(&in, &born) || born > 1 ||
+			tp_whole(&in, &ec) || tp_whole(&in, &ek) || tp_whole(&in, &bn) || tp_array(&in, &cnt) || cnt != bn || bn < 1 || bn > MOST))
+			code = TP_NOTSTEP;
+		if (!code && (tp_buf_why(&lb) || !(g = tp_alloc(mem, sizeof *g)))) code = TP_NOMEM;
+		if (!code) {
+			memset(g, 0, sizeof *g);
+			long d = c->index(c->self, dev.p);
+			g->list = dup(mem, lb.p, lb.len), g->listn = lb.len;
+			g->values = tp_alloc(mem, bn * sizeof *g->values);
+			if (d < 0 || (lb.len && !g->list) || !g->values) code = TP_NOMEM;
+			else {
+				memset(g->values, 0, bn * sizeof *g->values);
+				g->id = (el_id){(uint32_t)d, (uint32_t)born, ec, ek}, g->n = bn;
+			}
+			if (!code && more(mem, (void **)&st->bins, st->nbins, &st->roombins, sizeof *st->bins)) code = TP_NOMEM;
+			if (!code) st->bins[st->nbins++] = g;
+			else {
+				tp_free(mem, g->list, g->listn);
+				tp_free(mem, g->values, bn * sizeof *g->values);
+				tp_free(mem, g, sizeof *g);
+				g = NULL;
+			}
+		}
+		for (uint64_t x = 0; x < bn && !code; x++) {
+			tp_span held;
+			if (tp_null(&in)) continue;
+			if (tp_bytes(&in, 0, &held) || !held.n || !c->get_value || !(g->values[x] = c->get_value(c->self, held))) code = TP_NOTSTEP;
+		}
+		tp_buf_free(&lb);
+	}
 	if (!code && in.p != in.end) code = TP_NOTSTEP;
 	if (code) el_state_free(mem, st);
 	return code;
