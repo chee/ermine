@@ -35,8 +35,8 @@ export type Anchor = { after: Id | null; gone: readonly [Id, number][]; before?:
 // field after a NUL; see nodeKey
 export type Node = string
 // what a patch names by ids: container, the node its path ends in the container of (null: no root
-// yet); pred: the cells a put or removal replaces; splice: its elements; element: the array item a
-// put at an index replaces
+// yet); pred: the cells a put or removal replaces; splice: its elements (a list move: gone is what it
+// moves, in order); element: the array item a put at an index replaces
 export type Named = { container: Node | null; pred?: Node[]; splice?: Anchor; element?: Id }
 const NUL = "\0"
 export const nodeKey = (
@@ -92,8 +92,26 @@ export const inserts = (p: Patch) =>
 		: Array.isArray(p.value)
 		? p.value.length
 		: 0
-// a patch that names a container: every patch but a move
-export const needs = (p: Patch) => !p.move
+// a list move: one item, or a range of items, of an array to a gap in the same array, at most
+// MOVED of them; the patch is {path: the array, range: [j, j], move: {path: the item, or the array
+// and range}}, j counted in the array without what moves
+export const MOVED = 4096
+const sameKeys = (a: readonly unknown[], b: readonly unknown[]) =>
+	a.length === b.length && a.every((k, i) => k === b[i])
+export const listMove = (p: Patch): boolean => {
+	const m = p.move
+	if (!m || !p.range || p.range[0] !== p.range[1] || p.value !== undefined) return false
+	if (m.range) {
+		const n = m.range[1] - m.range[0]
+		return n >= 1 && n <= MOVED && sameKeys(m.path, p.path)
+	}
+	const k = m.path[m.path.length - 1]
+	return typeof k === "number" && sameKeys(m.path.slice(0, -1), p.path)
+}
+// how many items a list move moves
+export const moved = (p: Patch) => p.move?.range ? p.move.range[1] - p.move.range[0] : 1
+// a patch that names a container: every patch but a move that is no list move
+export const needs = (p: Patch) => !p.move || listMove(p)
 export const made = (s: Pick<Step, "patches">) => s.patches.reduce((n, p) => n + inserts(p), 0)
 
 // where a step is: its device, its n, and seq: how many elements its device's steps before it insert
@@ -222,19 +240,20 @@ export const nodeOfIds = (device: Uint8Array, n: number, at: number) => (v: unkn
 	return v.length >= 3 && key(v[0]) && !same(v[0], device) && whole(v[1]) && v[1] >= 1 &&
 		whole(v[2])
 }
-// ids as written: one per patch, null for a move; else the patch's container (a node; null only for
+// ids as written: one per patch; the patch's container (a node; null only for
 // a put of the whole value, the first) and
 //   a put or removal at a key, or the whole: [container, pred]    pred: array of cells it replaces
 //   a put at an index of an array: [container, pred, element]
-//   a splice (a patch with a range), a removal at an index: [container, after, gone, before]
+//   a splice (a patch with a range), a removal at an index, a list move: [container, after, gone, before]
+//   (a list move's gone: what it moves, in order, their counts summing to what it moves)
 //   before null for the end, true for after's own (after not null)
 export const idsOf = (device: Uint8Array, n: number, patches: unknown[]) => (ids: unknown) => {
 	const id = idOf(device, n)
 	return Array.isArray(ids) && ids.length === patches.length &&
 		ids.every((x, i) => {
 			const p = patches[i] as Patch, node = nodeOfIds(device, n, i)
-			if (x === null) return !!p.move
-			if (p.move || !Array.isArray(x)) return false
+			if (x === null || !Array.isArray(x)) return false
+			if (p.move && !listMove(p)) return false
 			const last = p.path[p.path.length - 1]
 			if (!(x[0] === null ? p.path.length === 0 && p.range === undefined : node(x[0]))) {
 				return false
@@ -252,7 +271,8 @@ export const idsOf = (device: Uint8Array, n: number, patches: unknown[]) => (ids
 					(x[3] === true ? x[1] !== null : x[3] === null || id(x[3])) &&
 					x[2].every((g) =>
 						Array.isArray(g) && g.length === 2 && id(g[0]) && whole(g[1]) && g[1] >= 1
-					)
+					) && (!p.move || x[2].reduce((n: number, g: [unknown, number]) =>
+								n + g[1], 0) === moved(p))
 			}
 			if (!Array.isArray(x[1]) || !x[1].every(node)) return false
 			if (typeof last === "number") return x.length === 3 && id(x[2]) && x[0] !== null

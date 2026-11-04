@@ -355,7 +355,6 @@ class Sim:
             else:
                 i = min(int(o["u"] * n), n - 1)
                 j = min(int(o["u2"] * n), n - 1)
-                self.covered_items(ids(arr[i:i + 1]))
                 self.write(d, "list", [{"path": ["arr"], "range": [j, j], "move": {"path": ["arr", i]}}])
             self.look([d], ["list"])
         elif k == "map":

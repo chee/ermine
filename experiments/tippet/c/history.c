@@ -218,6 +218,74 @@ static int put_patches(CborOut *o, const op_patch *ps, size_t n) {
 	return 1;
 }
 
+
+static int same_path(const op_key *a, const op_key *b, size_t n) {
+	for (size_t i = 0; i < n; i++) {
+		if (a[i].type != b[i].type || (a[i].type == OP_NUM_KEY ? a[i].n != b[i].n : strcmp(a[i].s, b[i].s))) return 0;
+	}
+	return 1;
+}
+static const op_value *value_at(const op_value *v, const op_key *path, size_t n) {
+	for (size_t i = 0; i < n && v; i++) {
+		if (v->type == OP_LIST && path[i].type == OP_NUM_KEY) v = path[i].n >= 0 && (size_t)path[i].n < v->count ? v->items[path[i].n] : NULL;
+		else if (v->type == OP_MAP && path[i].type == OP_STR_KEY) v = op_get(v, path[i].s);
+		else return NULL;
+	}
+	return v;
+}
+// a write's patches as its step has them: a move of a span of a text is a removal and an insertion
+// (it can't be named by ids), a list move that moves nothing is left out. *out (malloc'd) is NULL
+// when they are the patches given; texts holds the values made, for the caller to free
+static void step_patches(const op_value *value, const op_patch *ps, size_t n, op_patch **out, size_t *nout,
+	op_value ***texts, size_t *ntexts) {
+	int any = 0;
+	*out = NULL, *nout = 0, *texts = NULL, *ntexts = 0;
+	for (size_t i = 0; i < n; i++) any |= ps[i].has_move;
+	if (!any || !value) return;
+	op_patch *o = must(2 * n * sizeof *o);
+	op_value **t = must(n * sizeof *t);
+	size_t no = 0, nt = 0;
+	op_value *cur = op_ref((op_value *)value);
+	for (size_t i = 0; i < n; i++) {
+		const op_patch *p = &ps[i];
+		// a move onto its own place changes nothing (as apply has it)
+		if (p->has_move && !p->place.has_range && !p->move.has_range && p->move.length == p->place.length &&
+			same_path(p->move.path, p->place.path, p->place.length))
+			continue;
+		const op_value *sv = cur && p->has_move && p->place.has_range && p->place.from == p->place.to
+			? value_at(cur, p->place.path, p->place.length) : NULL;
+		if (sv && p->move.has_range && p->move.length == p->place.length && same_path(p->move.path, p->place.path, p->place.length) &&
+			sv->type == OP_STR) {
+			size_t x, y;
+			if (op_string_span(sv, p->move.from, p->move.to, &x, &y)) {
+				op_value *text = op_str_n(sv->str + x, y - x);
+				t[nt++] = text;
+				o[no] = (op_patch){0}, o[no].place = p->place, o[no].place.from = p->move.from, o[no++].place.to = p->move.to;
+				o[no] = (op_patch){0}, o[no].place = p->place, o[no].has_value = 1, o[no++].value = text;
+			} else o[no++] = *p;
+		} else if (sv && sv->type == OP_LIST) {
+			int64_t a = p->move.has_range ? p->move.from : p->move.length ? p->move.path[p->move.length - 1].n : -1;
+			if (a == p->place.from && (p->move.has_range || p->move.path[p->move.length - 1].type == OP_NUM_KEY)) {
+				continue;
+			}
+			o[no++] = *p;
+		} else o[no++] = *p;
+		if (cur) {
+			op_value *next = NULL;
+			size_t failed;
+			if (op_apply(cur, p, 1, NULL, &next, &failed)) next = NULL;
+			op_free(cur), cur = next;
+		}
+	}
+	if (cur) op_free(cur);
+	*out = o, *nout = no, *texts = t, *ntexts = nt;
+}
+
+static void drop_texts(op_value **t, size_t n, op_patch *alt) {
+	for (size_t i = 0; i < n; i++) op_free(t[i]);
+	free(t), free(alt);
+}
+
 static void *make(void *self, const CborItem *it) {
 	(void)self;
 	switch (it->what) {
@@ -252,6 +320,9 @@ typedef struct {
 	const char *node, *part;
 	op_patch *patches;
 	size_t count;
+	// values made for the patches, as applied (a list of items a move brings back)
+	op_value **made;
+	size_t nmade;
 	op_key *keys;
 	ch_frame *frame;
 	ch_header header;
@@ -260,8 +331,22 @@ typedef struct {
 static void block_free(void *p) {
 	block *b = p;
 	op_free(b->step), op_free(b->actor), op_free(b->device), op_free(b->whole);
+	for (size_t i = 0; i < b->nmade; i++) op_free(b->made[i]);
+	free(b->made);
 	ch_frame_free(b->frame);
 	free(b->patches), free(b->keys), free(b);
+}
+
+// the values a step made for its patches belong to the block that holds the patches
+static void attach(tp_history *h, block *b, el_made *m) {
+	if (m->n) {
+		op_value **p = realloc(b->made, (b->nmade + m->n) * sizeof *p);
+		if (!p) abort();
+		memcpy(p + b->nmade, m->p, m->n * sizeof *p);
+		b->made = p, b->nmade += m->n;
+	}
+	tp_free(&h->mem, m->p, m->room * sizeof *m->p);
+	*m = (el_made){0};
 }
 
 static int64_t int_of(const op_value *v) {
@@ -784,7 +869,7 @@ static el_ctx elc(tp_history *h) {
 // applied there, by position (*applied, malloc'd). one that does not apply is passed over (nothing
 // to undo): its code. *owned 0: no own value (or no room for its tail: it is dropped), nothing done
 static int onto(tp_history *h, long k, const ref *r, tp_span patches, const op_patch *ps, size_t n,
-	const el_anchor *ids, op_patch **applied, size_t *napplied, int *owned) {
+	const el_anchor *ids, op_patch **applied, size_t *napplied, el_made *made, int *owned) {
 	own *m = h->entries[k].mine;
 	*owned = 0, *applied = NULL, *napplied = 0;
 	if (!m) return 0;
@@ -800,7 +885,7 @@ static int onto(tp_history *h, long k, const ref *r, tp_span patches, const op_p
 	el_ref er = {r->lamport, r->n, r->seq, r->device};
 	m->el.quiet = quiet_at(h, k, r);
 	int code = el_step(&c, &m->el, &m->value, &er, patches, ps, n, NULL, ids, 0, &u, &back, applied,
-		napplied, NULL);
+		napplied, NULL, made);
 	m->el.quiet = 0;
 	// a step that does not apply keeps what notes it landed
 	m->tail[m->n++] = (rung){*r, u, back};
@@ -840,7 +925,7 @@ static int apply_ref(tp_history *h, const ref *r, op_value **value, el_state *es
 	el_ref er = {r->lamport, r->n, r->seq, r->device};
 	es->quiet = quiet;
 	code = el_step(&c, es, value, &er, s.patches, b->patches, b->count, NULL, ids, 0, u, bk, NULL, NULL,
-		NULL);
+		NULL, NULL);
 	es->quiet = 0;
 	el_anchors_free(&h->mem, ids, s.count);
 	return code;
@@ -1115,13 +1200,15 @@ static void into(tp_history *h, long k, block *b, const ref *r, int last, tp_spa
 	el_back back = {NULL, 0, 0};
 	op_patch *applied = NULL;
 	size_t napplied = 0;
+	el_made made = {0};
 	resync(h, k);
 	e->mine->el.quiet = quiet_at(h, k, r);
 	code = el_step(&c, &e->mine->el, &e->mine->value, &er, patches, b->patches, b->count, NULL, ids, !last,
-		NULL, &back, &applied, &napplied, NULL);
+		NULL, &back, &applied, &napplied, NULL, &made);
 	e->mine->el.quiet = 0;
 	el_back_free(&h->mem, &back);
 	if (!code) {
+		attach(h, b, &made);
 		free(b->patches);
 		b->patches = applied ? applied : must(1), b->count = napplied;
 		if (napplied) code = write(h, b);
@@ -1223,7 +1310,7 @@ static void settle(tp_history *h) {
 }
 
 // a patch that names a container: every patch but a move
-static int needs(const op_patch *p) { return !p->has_move; }
+static int needs(const op_patch *p) { return !p->has_move || el_list_move(p); }
 
 static void land(tp_history *h, const uint8_t device[32], uint64_t n) {
 	long length = fetch(h, device, n);
@@ -1269,9 +1356,11 @@ static void land(tp_history *h, const uint8_t device[32], uint64_t n) {
 		int owned;
 		op_patch *applied;
 		size_t napplied;
-		code = onto(h, k, &late, patches, b->patches, b->count, ids, &applied, &napplied, &owned);
+		el_made made = {0};
+		code = onto(h, k, &late, patches, b->patches, b->count, ids, &applied, &napplied, &made, &owned);
 		if (owned && code) block_free(b);
 		else if (owned) {
+			attach(h, b, &made);
 			free(b->patches);
 			b->patches = applied ? applied : must(1), b->count = napplied;
 			if (napplied) code = write(h, b);
@@ -1550,7 +1639,7 @@ static int instead(tp_history *h, const pl_fact *f, long k) {
 // instead (retry), which starts the entry's elements again
 static int record(tp_history *h, const pl_fact *f, long k, int retry) {
 	const char *node = f->id.string, *part = f->part.string;
-	const op_patch *first = f->patches_length ? &f->patches[0] : NULL;
+	const op_patch *first = f->patches_length ? &f->patches[0] : NULL, *ps = f->patches;
 	int whole = first && !first->place.length && !first->place.has_range && !first->has_move;
 	int simple = whole && f->patches_length == 1 && first->has_value;
 	if (h->entries[k].broken && !whole) return retry && instead(h, f, k);
@@ -1559,8 +1648,11 @@ static int record(tp_history *h, const pl_fact *f, long k, int retry) {
 	int64_t when = f->change && f->change->has_time ? f->change->time : (int64_t)time(NULL);
 	CborOut o = {NULL, 0, 0, true};
 	const uint8_t *me = tp_log_device(h->log);
-	int ok = put_patches(&o, f->patches, f->patches_length) && when >= 0;
+	int ok = put_patches(&o, ps, f->patches_length) && when >= 0;
 	size_t np = f->patches_length;
+	op_patch *alt = NULL;
+	op_value **texts = NULL;
+	size_t ntexts = 0;
 	tp_buf on = {NULL, 0, 0, (size_t)-1, &h->mem, 0}, idb = {NULL, 0, 0, (size_t)-1, &h->mem, 0};
 	if (me) put_on(h, &h->entries[k], me, tp_log_count(h->log, me) + 1, &on);
 	// its containers and elements named by ids from the entry's own state,
@@ -1570,7 +1662,7 @@ static int record(tp_history *h, const pl_fact *f, long k, int retry) {
 	op_undo u = {NULL, 0, 0};
 	el_back bk = {NULL, 0, 0};
 	int ids = 0, wants = 0, mistake = 0;
-	for (size_t i = 0; i < np; i++) wants |= needs(&f->patches[i]);
+	for (size_t i = 0; i < np; i++) wants |= needs(&ps[i]);
 	long mei = me ? device_of(h, me) : -1;
 	uint64_t seq = me ? tp_log_seq(h->log, me) : 0;
 	own *mine = NULL;
@@ -1592,16 +1684,33 @@ static int record(tp_history *h, const pl_fact *f, long k, int retry) {
 				if (mine) mine->all = 1;
 			}
 		}
+		if (mine && !whole) {
+			size_t nalt;
+			step_patches(mine->value, ps, np, &alt, &nalt, &texts, &ntexts);
+			if (alt) {
+				ps = alt, np = nalt;
+				free(o.data), o = (CborOut){NULL, 0, 0, true};
+				ok = put_patches(&o, ps, np) && when >= 0;
+				wants = 0;
+				for (size_t i = 0; i < np; i++) wants |= needs(&ps[i]);
+			}
+		}
+		if (alt && !np) {
+			// nothing moved: no step
+			free(o.data), drop_texts(texts, ntexts, alt);
+			el_anchors_free(&h->mem, named, np), tp_buf_free(&idb), tp_buf_free(&on);
+			return 0;
+		}
 		if (mine) {
 			el_ref er = {tp_log_lamport(h->log) + 1, tp_log_count(h->log, me) + 1, seq, (uint32_t)mei};
-			ids = !el_step(&c, &mine->el, &mine->value, &er, (tp_span){o.data, o.length}, f->patches, np,
-				NULL, NULL, 0, &u, &bk, NULL, NULL, &named);
+			ids = !el_step(&c, &mine->el, &mine->value, &er, (tp_span){o.data, o.length}, ps, np,
+				NULL, NULL, 0, &u, &bk, NULL, NULL, &named, NULL);
 			if (!ids) el_back_free(&h->mem, &bk), bk = (el_back){NULL, 0, 0};
 			else if (el_named(named, np)) el_write(&idb, &c, named, np, (uint32_t)mei, er.n, er.seq);
 		}
 		// every patch that names elements has them; nothing else does
 		for (size_t i = 0; i < np && ids; i++) {
-			if (needs(&f->patches[i]) != (named && named[i].kind != 0)) mistake = 1;
+			if (needs(&ps[i]) != (named && named[i].kind != 0)) mistake = 1;
 		}
 		if (!ids && wants) mistake = 1;
 	}
@@ -1620,7 +1729,7 @@ static int record(tp_history *h, const pl_fact *f, long k, int retry) {
 		// its own value has a write no step holds: undone
 		if (ids && mine == h->entries[k].mine) unstep(h, mine, &u, &bk);
 		else if (ids) op_undo_free(&u), el_back_free(&h->mem, &bk);
-		free(o.data);
+		free(o.data), drop_texts(texts, ntexts, alt);
 		if (!whole && retry && instead(h, f, k)) {
 			note(h, &h->unkept, NULL, 0, node, part, "a write it can't name, its whole value was put");
 			return 1;
@@ -1656,11 +1765,13 @@ static int record(tp_history *h, const pl_fact *f, long k, int retry) {
 		int owned;
 		op_patch *applied;
 		size_t napplied;
-		onto(h, k, &late, (tp_span){o.data, o.length}, f->patches, np, NULL, &applied, &napplied, &owned);
+		el_made made = {0};
+		onto(h, k, &late, (tp_span){o.data, o.length}, ps, np, NULL, &applied, &napplied, &made, &owned);
+		el_made_free(&h->mem, &made);
 		free(applied);
 	}
 	if (h->forgets) resync(h, k), refresh(h, k);
-	free(o.data);
+	free(o.data), drop_texts(texts, ntexts, alt);
 	if (code) note(h, &h->failed, me, n, node, part, code < 0 ? tp_why(code) : op_code_name(code));
 	return 1;
 }

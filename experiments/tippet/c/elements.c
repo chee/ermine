@@ -12,7 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-enum { MADE, SPLICE, ADD, TAKE, DROP, HOLD, BIN, BINADD, BINTAKE, LANDED, MOVED };
+enum { MADE, SPLICE, ADD, TAKE, DROP, HOLD, BIN, BINADD, BINTAKE, LANDED, REG, ORG };
 
 // a run's most elements
 #define MOST ((1u << 29) - 1)
@@ -25,6 +25,12 @@ typedef struct {
 	uint32_t lo, hi;
 } org;
 
+// an element a run's first links to, the rest one on each; set 0: none
+typedef struct {
+	uint32_t device : 30, born : 1, set : 1;
+	uint32_t lo, hi;
+} olink;
+
 // made: numbered c on (back: c down); born (there
 // since the list's step): places c on. left: what the first goes after (back: each), right: what each
 // goes before (back: the last); none the start, the end
@@ -35,6 +41,29 @@ typedef struct {
 	org left, right;
 } run;
 
+// the origin of len elements a move made, c on (of device): the item each is a move of, one on each
+typedef struct {
+	uint64_t c;
+	uint32_t device, len;
+	olink org;
+} orgent;
+
+// a move's or a removal's place in the order: lamport, device, n, patch
+typedef struct {
+	uint64_t lamport, n;
+	uint32_t device, i;
+} stamp;
+// the register of items with origins (device, born, lo) one on, len of them: the event with the
+// greatest stamp wins; el is the element that shows, for the first, one on each, or not set when a
+// removal won
+typedef struct {
+	uint64_t lo;
+	uint32_t device : 31, born : 1;
+	uint32_t len;
+	olink el;
+	stamp st;
+} reg;
+
 static const el_id NOWHERE = {EL_NONE, 2, 0, 0};
 static int nowhere(const el_id *i) { return i->born == 2; }
 static org org_of(const el_id *i) {
@@ -44,6 +73,18 @@ static org org_of(const el_id *i) {
 }
 static int org_is(org a, org b) {
 	return a.none == b.none && (a.none || (a.device == b.device && a.born == b.born && a.lo == b.lo && a.hi == b.hi));
+}
+static olink link_of(const el_id *i) {
+	uint64_t x = i->born ? i->k : i->c;
+	return (olink){i->device, i->born, 1, (uint32_t)x, (uint32_t)(x >> 32)};
+}
+static olink link_plus(olink g, uint64_t n) {
+	uint64_t x = ((uint64_t)g.hi << 32 | g.lo) + n;
+	g.lo = (uint32_t)x, g.hi = (uint32_t)(x >> 32);
+	return g;
+}
+static int link_is(olink a, olink b) {
+	return a.set == b.set && (!a.set || (a.device == b.device && a.born == b.born && a.lo == b.lo && a.hi == b.hi));
 }
 
 // a run by its lowest id (device, born, number): sorted, with its place in runs
@@ -67,10 +108,16 @@ struct el_list {
 	} by; // the step that made the container: its born ones are since
 	int text; // a string
 	size_t count, j, live;
+	reg *regs; // the registers of the array's items, sorted by their origins, none overlapping
+	size_t nreg, roomreg;
+	orgent *orgs; // the origins of the elements moves made, sorted by their ids
+	size_t norg, roomorg;
 };
 
 
 static void list_free(const tp_mem *mem, el_list *l) {
+	tp_free(mem, l->regs, l->roomreg * sizeof *l->regs);
+	tp_free(mem, l->orgs, l->roomorg * sizeof *l->orgs);
 	tp_free(mem, l->ix, l->roomix * sizeof *l->ix);
 	tp_free(mem, l->runs, l->room * sizeof *l->runs);
 	tp_free(mem, l->key, l->keyn);
@@ -101,6 +148,10 @@ static el_id id_of(const el_list *l, org g) {
 	uint64_t x = (uint64_t)g.hi << 32 | g.lo;
 	uint32_t d = g.device == ORG_NONE ? EL_NONE : g.device;
 	return g.born ? (el_id){d, 1, l->by.n, x} : (el_id){d, 0, x, 0};
+}
+static el_id link_id(const el_list *l, olink g) {
+	uint64_t x = (uint64_t)g.hi << 32 | g.lo;
+	return g.born ? (el_id){g.device, 1, l->by.n, x} : (el_id){g.device, 0, x, 0};
 }
 static el_id left_of(const el_list *l, const run *r, uint64_t o) {
 	return !r->back && o ? id_at(l, r, o - 1) : id_of(l, r->left);
@@ -278,8 +329,8 @@ static void join(el_list *l, size_t j) {
 	el_id last = id_at(l, &a, a.len - 1), first = id_at(l, &b, 0);
 	int on = (a.len == 1 || !a.back) && (b.len == 1 || !b.back) && a.c + a.len == b.c &&
 		org_is(b.left, org_of(&last)) && org_is(a.right, b.right);
-	int down = !on && !a.born && (a.len == 1 || a.back) && (b.len == 1 || b.back) && a.c >= a.len &&
-		a.c - a.len == b.c && org_is(a.right, org_of(&first)) && org_is(a.left, b.left);
+	int down = !on && !a.born && (a.len == 1 || a.back) && (b.len == 1 || b.back) &&
+		a.c >= a.len && a.c - a.len == b.c && org_is(a.right, org_of(&first)) && org_is(a.left, b.left);
 	if (!on && !down) return;
 	a.len += b.len, a.back = (uint32_t)!!down;
 	if (down) a.right = b.right;
@@ -349,7 +400,6 @@ static const op_value *at_keys(const op_value *v, const op_key *path, size_t len
 	}
 	return v;
 }
-static const op_value *at_path(const op_value *v, const op_target *t) { return at_keys(v, t->path, t->length); }
 
 // a path found by id, as op keys and their strings, that lives on until the step is done
 typedef struct {
@@ -370,6 +420,9 @@ typedef struct {
 	const uint8_t *host;
 	block *blocks;
 	size_t nblocks, roomblocks;
+	// the values made for the patches (lists of items brought back)
+	op_value **made;
+	size_t nmade, roommade;
 } work;
 
 static int devcmp(const el_ctx *c, uint32_t x, uint32_t y) {
@@ -378,12 +431,6 @@ static int devcmp(const el_ctx *c, uint32_t x, uint32_t y) {
 	if (y == EL_NONE) return 1;
 	return memcmp(c->bytes(c->self, x), c->bytes(c->self, y), 32);
 }
-// a step after this one
-static int newer_ref(const el_ctx *c, const el_ref *a, const el_ref *b) {
-	if (a->lamport != b->lamport) return a->lamport > b->lamport;
-	return devcmp(c, a->device, b->device) > 0;
-}
-static int newer(const work *w, const el_ref *a) { return newer_ref(w->c, a, &w->ref); }
 
 // the element at runs[j], place o, sorts after one of this step's at seq c: by device, seq
 // (a born one before what its step inserts)
@@ -586,6 +633,176 @@ static int rec_room(work *w) {
 	el_rec *p = tp_grow(w->c->mem, b->p, b->room * sizeof *p, room * sizeof *p);
 	if (!p) return -1;
 	b->p = p, b->room = room;
+	return 0;
+}
+
+
+// room for k runs more in the list, and 4 for the cuts around
+static int grow_n(const tp_mem *mem, el_list *l, size_t k) {
+	if (l->n + k + 4 <= l->room) return 0;
+	size_t room = l->room ? l->room : 4;
+	while (room < l->n + k + 4) room *= 2;
+	run *r = tp_grow(mem, l->runs, l->room * sizeof *r, room * sizeof *r);
+	if (!r) return -1;
+	l->runs = r, l->room = room;
+	return 0;
+}
+
+// an item's origin: the element it was inserted as. the elements a move made link to it
+static size_t orgs_below(const el_list *l, uint32_t device, uint64_t c) {
+	size_t a = 0, b = l->norg;
+	while (a < b) {
+		size_t m = (a + b) / 2;
+		const orgent *e = &l->orgs[m];
+		if (e->device != device ? e->device < device : e->c <= c) a = m + 1;
+		else b = m;
+	}
+	return a;
+}
+static el_id origin_of(const el_list *l, el_id e) {
+	if (e.born || !l->norg) return e;
+	size_t b = orgs_below(l, e.device, e.c);
+	if (!b) return e;
+	const orgent *g = &l->orgs[b - 1];
+	if (g->device != e.device || e.c - g->c >= g->len) return e;
+	return plus(link_id(l, g->org), e.c - g->c);
+}
+static el_id origin_at(const el_list *l, size_t j, uint64_t o) { return origin_of(l, id_at(l, &l->runs[j], o)); }
+
+// the registers (WIRE.md, list moves): per origin the event with the greatest stamp
+static int stamp_later(const el_ctx *c, const stamp *a, const stamp *b) {
+	if (a->lamport != b->lamport) return a->lamport > b->lamport;
+	int d = devcmp(c, a->device, b->device);
+	if (d) return d > 0;
+	return a->n != b->n ? a->n > b->n : a->i > b->i;
+}
+static int stamp_is(const stamp *a, const stamp *b) {
+	return a->lamport == b->lamport && a->n == b->n && a->device == b->device && a->i == b->i;
+}
+// how many registers sort at or before (device, born, x)
+static size_t reg_below(const el_list *l, uint32_t device, uint32_t born, uint64_t x) {
+	size_t a = 0, b = l->nreg;
+	while (a < b) {
+		size_t m = (a + b) / 2;
+		const reg *e = &l->regs[m];
+		int le = e->device != device ? e->device < device : e->born != born ? e->born < born : e->lo <= x;
+		if (le) a = m + 1;
+		else b = m;
+	}
+	return a;
+}
+// the run and place of the element that shows the item with origin *org: 1, or 0 when it is gone or
+// not known
+static int shown(el_list *l, const el_id *org, size_t *j, uint64_t *o) {
+	uint64_t x = org->born ? org->k : org->c;
+	size_t b = reg_below(l, org->device, org->born, x);
+	el_id id = *org;
+	if (b) {
+		const reg *e = &l->regs[b - 1];
+		if (e->device == org->device && e->born == org->born && x < e->lo + e->len) {
+			if (!e->el.set) return 0;
+			id = plus(link_id(l, e->el), x - e->lo);
+		}
+	}
+	return find(l, &id, j, o) && !l->runs[*j].gone;
+}
+// registers [at, at + del) put in place by ins, and undone
+static int reg_edit(work *w, el_list *l, size_t at, size_t del, const reg *ins, size_t nins) {
+	const tp_mem *mem = w->c->mem;
+	if (rec_room(w)) return TP_NOMEM;
+	if (l->nreg - del + nins > l->roomreg) {
+		size_t room = l->roomreg ? 2 * l->roomreg : 4;
+		while (room < l->nreg - del + nins) room *= 2;
+		reg *p = tp_grow(mem, l->regs, l->roomreg * sizeof *p, room * sizeof *p);
+		if (!p) return TP_NOMEM;
+		l->regs = p, l->roomreg = room;
+	}
+	reg *old = del ? tp_alloc(mem, del * sizeof *old) : NULL;
+	if (del && !old) return TP_NOMEM;
+	if (del) memcpy(old, l->regs + at, del * sizeof *old);
+	memmove(l->regs + at + nins, l->regs + at + del, (l->nreg - at - del) * sizeof *l->regs);
+	if (nins) memcpy(l->regs + at, ins, nins * sizeof *ins);
+	l->nreg = l->nreg - del + nins;
+	el_rec *r = &w->back->p[w->back->n++];
+	*r = (el_rec){.kind = REG};
+	r->reg.list = l, r->reg.at = at, r->reg.nins = nins, r->reg.nold = del, r->reg.old = old;
+	return 0;
+}
+// registers i - 1 and i as one, when one goes on from the other with the same stamp
+static int reg_join(work *w, el_list *l, size_t i, int *joined) {
+	*joined = 0;
+	if (i == 0 || i >= l->nreg) return 0;
+	reg a = l->regs[i - 1], b = l->regs[i];
+	if (a.device != b.device || a.born != b.born || a.lo + a.len != b.lo || !stamp_is(&a.st, &b.st) ||
+		(uint64_t)a.len + b.len > UINT32_MAX || a.el.set != b.el.set ||
+		(a.el.set && !link_is(link_plus(a.el, a.len), b.el)))
+		return 0;
+	a.len += b.len;
+	*joined = 1;
+	return reg_edit(w, l, i - 1, 2, &a, 1);
+}
+
+// ranges of elements, to hide or show
+typedef struct {
+	el_gone *p;
+	size_t n, room;
+} rlist;
+static int rl_push(const tp_mem *mem, rlist *r, el_id id, uint64_t n) {
+	if (more(mem, (void **)&r->p, r->n, &r->room, sizeof *r->p)) return TP_NOMEM;
+	r->p[r->n++] = (el_gone){id, n};
+	return 0;
+}
+// an event at stamp *st for the items with origins org on, len of them: a move (el: the elements it
+// made for them) or a removal (NULL). each register it is after is taken by it; the elements that
+// stop showing and start showing are added to hide and show
+static int event(work *w, el_list *l, el_id org, uint64_t len, const stamp *st, const el_id *el, rlist *hide, rlist *show) {
+	const tp_mem *mem = w->c->mem;
+	uint64_t lo = org.born ? org.k : org.c;
+	int code;
+	for (uint64_t x = 0; x < len;) {
+		uint64_t v = lo + x;
+		size_t i = reg_below(l, org.device, org.born, v);
+		reg e = i ? l->regs[i - 1] : (reg){0};
+		if (i && e.device == org.device && e.born == org.born && v < e.lo + e.len) {
+			uint64_t m = len - x < e.lo + e.len - v ? len - x : e.lo + e.len - v;
+			if (stamp_later(w->c, st, &e.st)) {
+				reg ps[3];
+				size_t np = 0;
+				if (v > e.lo) ps[np] = e, ps[np++].len = (uint32_t)(v - e.lo);
+				ps[np++] = (reg){.lo = v, .device = org.device, .born = org.born, .len = (uint32_t)m,
+					.el = el ? link_plus(link_of(el), x) : (olink){0}, .st = *st};
+				uint64_t rest = e.lo + e.len - v - m;
+				if (rest) {
+					reg t = e;
+					t.lo = v + m, t.len = (uint32_t)rest;
+					if (e.el.set) t.el = link_plus(e.el, v + m - e.lo);
+					ps[np++] = t;
+				}
+				if ((code = reg_edit(w, l, i - 1, 1, ps, np))) return code;
+				if (e.el.set && (code = rl_push(mem, hide, link_id(l, link_plus(e.el, v - e.lo)), m))) return code;
+				if (el && (code = rl_push(mem, show, plus(*el, x), m))) return code;
+			}
+			x += m;
+		} else {
+			uint64_t m = len - x;
+			if (i < l->nreg && l->regs[i].device == org.device && l->regs[i].born == org.born &&
+				l->regs[i].lo - v < m)
+				m = l->regs[i].lo - v;
+			reg g = {.lo = v, .device = org.device, .born = org.born, .len = (uint32_t)m,
+				.el = el ? link_plus(link_of(el), x) : (olink){0}, .st = *st};
+			if ((code = reg_edit(w, l, i, 0, &g, 1))) return code;
+			if ((code = rl_push(mem, hide, plus(org, x), m))) return code;
+			if (el && (code = rl_push(mem, show, plus(*el, x), m))) return code;
+			x += m;
+		}
+	}
+	size_t i = reg_below(l, org.device, org.born, lo);
+	i = i > 1 ? i - 1 : 1;
+	while (i < l->nreg && (l->regs[i - 1].device != org.device || l->regs[i - 1].lo <= lo + len)) {
+		int joined;
+		if ((code = reg_join(w, l, i, &joined))) return code;
+		if (!joined) i++;
+	}
 	return 0;
 }
 
@@ -877,6 +1094,17 @@ static op_value *bin_take(work *w, tp_span list, const el_id *e) {
 	}
 	return NULL;
 }
+// the value of an element gone in the pieces of its list, left there; NULL: none
+static const op_value *bin_peek(const el_state *st, tp_span list, const el_id *e) {
+	for (size_t i = 0; i < st->nbins; i++) {
+		const el_bin *b = st->bins[i];
+		if (b->listn != list.n || memcmp(b->list, list.p, list.n) || b->id.device != e->device || b->id.born != e->born) continue;
+		uint64_t x = UINT64_MAX;
+		if (e->born ? e->c == b->id.c && e->k >= b->id.k : e->c >= b->id.c) x = e->born ? e->k - b->id.k : e->c - b->id.c;
+		if (x < b->n) return b->values[x];
+	}
+	return NULL;
+}
 static void bin_free(const tp_mem *mem, el_bin *b) {
 	for (uint64_t x = 0; x < b->n; x++) {
 		if (b->values[x]) op_free(b->values[x]);
@@ -1032,24 +1260,24 @@ static int piece_has(const piece *ps, size_t n, const el_id *e) {
 	return 0;
 }
 
-// the items of the array node taken away by a splice are gone. the cells that hold no container are
-// let go; the containers are held as pieces of the run (they become the state's, pieces[].values
-// NULL), for a patch to name. quiet: let go with what is under them
-static int away(work *w, tp_span node, el_list *l, const el_gone *taken, size_t ntaken, piece *pieces, size_t npieces) {
+// the items of the array node a splice or move left gone, by origin (lost): the values of those
+// with no cell are held as pieces (they become the state's, pieces[].values NULL), for a move to
+// bring back. quiet: let go with what is under them
+static int away(work *w, tp_span node, el_list *l, const el_gone *lost, size_t nlost, piece *pieces, size_t npieces) {
 	const tp_mem *mem = w->c->mem;
 	el_state *st = w->st;
-	for (size_t i = 0; i < st->nslots;) {
+	for (size_t i = 0; st->quiet && i < st->nslots;) {
 		el_slot *s = &st->slots[i];
 		size_t j;
 		uint64_t o;
 		el_id e;
 		if (s->parentn != node.n || memcmp(sl_parent(s), node.p, node.n) || sl_trash(s) || !sl_el(s, &e) ||
-			!find(l, &e, &j, &o) || !l->runs[j].gone) {
+			!find(l, &e, &j, &o) || shown(l, &e, &j, &o)) {
 			i++;
 			continue;
 		}
 		int code;
-		if (st->quiet && sl_holds(s)) {
+		if (sl_holds(s)) {
 			// the cell goes after: dropping packs the cells
 			tp_span held = sl_nodespan(s);
 			const uint8_t *buf = s->buf;
@@ -1059,17 +1287,13 @@ static int away(work *w, tp_span node, el_list *l, const el_gone *taken, size_t 
 			i = 0;
 			continue;
 		}
-		if (!st->quiet && sl_holds(s) && !sl_ghost(s)) {
-			i++;
-			continue;
-		}
 		if ((code = take_cell(w, i))) return code;
 	}
 	if (st->quiet) {
 		// the items born with the array have no cell: what is under them goes by their place
-		for (size_t r = 0; r < ntaken; r++) {
-			for (uint64_t x = 0; x < taken[r].count; x++) {
-				el_id e = plus(taken[r].id, x);
+		for (size_t r = 0; r < nlost; r++) {
+			for (uint64_t x = 0; x < lost[r].count; x++) {
+				el_id e = plus(lost[r].id, x);
 				if (!e.born) continue;
 				tp_buf cb = {NULL, 0, 0, (size_t)-1, mem, 0};
 				tp_put(&cb, node.p, node.n), rel_num(&cb, e.k);
@@ -1268,7 +1492,7 @@ static int inside(work *w, tp_span held, tp_span tail, hops *out, int *ok) {
 			uint64_t o;
 			h.num = 1;
 			if (l && *ok) {
-				if (!find(l, &e, &j, &o) || l->runs[j].gone) *ok = 0;
+				if (!shown(l, &e, &j, &o)) *ok = 0;
 				else h.n = (long)(live_before(l, j) + (size_t)o);
 			} else if (x > (uint64_t)LONG_MAX) *ok = 0;
 			else h.n = (long)x;
@@ -1333,19 +1557,16 @@ static int where(work *w, tp_span node, hops *out, int *ok, const uint8_t **host
 		int good;
 		int code = inside(w, held, tail, out, &good);
 		if (code || !good) return code ? code : (*ok = 0, 0);
+		// an item gone: its cell holds the value its patches are for
 		el_id ee;
-		if (sl_el(rec, &ee) && !sl_trash(rec) &&
-			shown_at(w->c, st, (tp_span){sl_parent(rec), rec->parentn}, (tp_span){sl_slot(rec), rec->slotn}, NULL) == si) {
-			// an item taken away: its container is in the run's pieces
+		int item_gone = 0;
+		if (sl_el(rec, &ee) && !sl_trash(rec) && !sl_ghost(rec)) {
 			el_list *ll = list_at(st, (tp_span){sl_parent(rec), rec->parentn});
 			size_t jj;
 			uint64_t oo;
-			if (ll && find(ll, &ee, &jj, &oo) && ll->runs[jj].gone) {
-				op_value *bv = bin_take(w, (tp_span){sl_parent(rec), rec->parentn}, &ee);
-				if (bv && (code = bin_cell(w, rec->buf, bv))) return code;
-			}
+			item_gone = ll && find(ll, &ee, &jj, &oo) && !shown(ll, &ee, &jj, &oo);
 		}
-		if (shown_at(w->c, st, (tp_span){sl_parent(rec), rec->parentn}, (tp_span){sl_slot(rec), rec->slotn}, NULL) != si) {
+		if (item_gone || shown_at(w->c, st, (tp_span){sl_parent(rec), rec->parentn}, (tp_span){sl_slot(rec), rec->slotn}, NULL) != si) {
 			*host = rec->buf;
 			break;
 		}
@@ -1356,7 +1577,7 @@ static int where(work *w, tp_span node, hops *out, int *ok, const uint8_t **host
 			el_list *l = list_at(st, (tp_span){sl_parent(rec), rec->parentn});
 			size_t j;
 			uint64_t o;
-			if (!l || !find(l, &e, &j, &o) || l->runs[j].gone) return *ok = 0, 0;
+			if (!l || !shown(l, &e, &j, &o)) return *ok = 0, 0;
 			h.num = 1, h.n = (long)(live_before(l, j) + (size_t)o);
 		} else {
 			tp_in s = {sl_slot(rec), sl_slot(rec) + rec->slotn};
@@ -1406,16 +1627,18 @@ static int revive(work *w, tp_span node) {
 			el_id e = {dev, 1, n, x};
 			size_t j;
 			uint64_t o;
-			if (find(l, &e, &j, &o) && l->runs[j].gone) {
+			if (find(l, &e, &j, &o) && !shown(l, &e, &j, &o)) {
 				op_value *v = bin_take(w, ck, &e);
 				if (v) {
 					tp_buf sb = {NULL, 0, 0, (size_t)-1, w->c->mem, 0};
 					slot_el(&sb, &e);
 					long fr = cell_enclosing(st, ck);
+					el_slot cellv;
 					int code = tp_buf_why(&sb) ? TP_NOMEM
-						: bury_cell(w, ck, (tp_span){sb.p, sb.len}, next, v, fr >= 0 ? sl_at(&st->slots[fr]) : w->ref);
+						: make_cell(w, ck, (tp_span){sb.p, sb.len}, next, EL_CELL_NODE, fr >= 0 ? sl_at(&st->slots[fr]) : w->ref, &cellv);
 					tp_buf_free(&sb);
-					op_free(v);
+					if (!code) cellv.value = v, code = add_cell(w, cellv);
+					else op_free(v);
 					if (code) return code;
 				}
 			}
@@ -1425,43 +1648,270 @@ static int revive(work *w, tp_span node) {
 	return 0;
 }
 
-// a splice into the sequence node (v its value, p->place.path where it is now), patch w->i of its
-// step, its inserted ones counted from c, by its ids (anchor) or its range, as the patches to apply
-// by position (*qs, *nq)
+// what a list move names, from where the writer has the array: the gap's element, and the items'
+// elements in order, as runs of ids (the items of a run that goes back, one by one)
+static int moved_from(el_list *l, const op_patch *p, el_anchor *out) {
+	const tp_mem *mem = l->mem;
+	const op_target *F = &p->move;
+	uint64_t a = F->has_range ? (uint64_t)F->from : (uint64_t)F->path[F->length - 1].n;
+	uint64_t b = F->has_range ? (uint64_t)F->to : a + 1, g = (uint64_t)p->place.from, n = b - a, o;
+	size_t j, room = 0;
+	if (b > l->count || g > l->count - n) return OP_RANGE;
+	out->gone = NULL, out->ngone = 0;
+	for (uint64_t x = a; x < b;) {
+		j = live_at(l, (size_t)x, &o);
+		const run *r = &l->runs[j];
+		uint64_t k = r->back ? 1 : (r->len - o < b - x ? r->len - o : b - x);
+		el_id id = id_at(l, r, o), next = out->ngone ? plus(out->gone[out->ngone - 1].id, out->gone[out->ngone - 1].count) : id;
+		if (out->ngone && same(&next, &id)) out->gone[out->ngone - 1].count += k;
+		else if (more(mem, (void **)&out->gone, out->ngone, &room, sizeof *out->gone)) {
+			tp_free(mem, out->gone, room * sizeof *out->gone);
+			return out->gone = NULL, out->ngone = 0, TP_NOMEM;
+		} else out->gone[out->ngone++] = (el_gone){id, k};
+		x += k;
+	}
+	if (room != out->ngone) {
+		el_gone *t = tp_grow(mem, out->gone, room * sizeof *t, out->ngone * sizeof *t);
+		if (!t) return tp_free(mem, out->gone, room * sizeof *out->gone), out->gone = NULL, out->ngone = 0, TP_NOMEM;
+		out->gone = t;
+	}
+	if (g) {
+		j = live_at(l, (size_t)(g - 1 < a ? g - 1 : g - 1 + n), &o);
+		out->after = id_at(l, &l->runs[j], o), out->has_after = 1;
+	}
+	pos lp = {0, 0}, spot = {0, 0};
+	if (out->has_after) find(l, &out->after, &lp.j, &lp.o), spot = next_pos(l, lp);
+	if (spot.j < l->n) {
+		el_id right = id_at(l, &l->runs[spot.j], spot.o);
+		el_id after_right = out->has_after ? right_of(l, &l->runs[lp.j], lp.o) : NOWHERE;
+		out->has_before = 1, out->before = right, out->same = out->has_after && same(&after_right, &right);
+	}
+	return 0;
+}
+
+// the items named, by origin: len of them from org on, and what each holds while it shows (the
+// reference is the segment's)
+typedef struct {
+	el_id org;
+	uint64_t len;
+	op_value **vals;
+} seg;
+static void segs_free(const tp_mem *mem, seg *sg, size_t n, size_t room) {
+	for (size_t i = 0; i < n; i++) {
+		for (uint64_t x = 0; sg[i].vals && x < sg[i].len; x++) {
+			if (sg[i].vals[x]) op_free(sg[i].vals[x]);
+		}
+		tp_free(mem, sg[i].vals, sg[i].len * sizeof *sg[i].vals);
+	}
+	tp_free(mem, sg, room * sizeof *sg);
+}
+
+// the origin of elements a move made, put in order, and undone
+static int org_put(work *w, el_list *l, orgent g) {
+	const tp_mem *mem = w->c->mem;
+	if (rec_room(w)) return TP_NOMEM;
+	if (l->norg == l->roomorg) {
+		size_t room = l->roomorg ? 2 * l->roomorg : 4;
+		orgent *p = tp_grow(mem, l->orgs, l->roomorg * sizeof *p, room * sizeof *p);
+		if (!p) return TP_NOMEM;
+		l->orgs = p, l->roomorg = room;
+	}
+	size_t at = orgs_below(l, g.device, g.c);
+	memmove(l->orgs + at + 1, l->orgs + at, (l->norg - at) * sizeof *l->orgs);
+	l->orgs[at] = g, l->norg++;
+	el_rec *r = &w->back->p[w->back->n++];
+	*r = (el_rec){.kind = ORG};
+	r->org.list = l, r->org.at = at;
+	return 0;
+}
+
+// a splice or list move in hand: the patches it makes, and its record
+typedef struct {
+	work *w;
+	el_list *l;
+	const op_patch *p;
+	tp_span node;
+	size_t ri;
+	op_patch *out;
+	size_t nout, qroom;
+} spl;
+#define REC(s) ((s)->w->back->p[(s)->ri].splice)
+
+// the elements from id on, n of them, taken away, by position
+static int spl_hide(spl *s, el_id id, uint64_t n) {
+	el_list *l = s->l;
+	const tp_mem *mem = s->w->c->mem;
+	for (uint64_t x = 0; x < n;) {
+		el_id at = plus(id, x);
+		size_t j;
+		uint64_t o;
+		find(l, &at, &j, &o);
+		uint64_t k = span(l, j, o, n - x, &o);
+		x += k;
+		if (l->runs[j].gone) continue;
+		if (grow(mem, l) || more(mem, (void **)&REC(s).taken, REC(s).ntaken, &REC(s).roomtaken, sizeof *REC(s).taken) ||
+			more(mem, (void **)&s->out, s->nout + 1, &s->qroom, sizeof *s->out))
+			return TP_NOMEM;
+		size_t from = live_before(l, j) + (size_t)o;
+		mark(l, j, o, k, 1);
+		REC(s).taken[REC(s).ntaken++] = (el_gone){at, k};
+		op_patch *last = s->nout ? &s->out[s->nout - 1] : NULL;
+		if (last && (size_t)last->place.from == from) last->place.to += (int64_t)k;
+		else if (last && from + k == (size_t)last->place.from) last->place.from = (int64_t)from;
+		else {
+			s->out[s->nout] = (op_patch){0}, s->out[s->nout].place = s->p->place;
+			s->out[s->nout].place.from = (int64_t)from, s->out[s->nout++].place.to = (int64_t)(from + k);
+		}
+	}
+	return 0;
+}
+
+// the value an item gone held, for a move to bring back: the cell that shows (it stops holding it),
+// else its piece. NULL: none
+static int unbin(work *w, tp_span node, const el_id *org, op_value **out) {
+	el_state *st = w->st;
+	tp_buf sb = {NULL, 0, 0, (size_t)-1, w->c->mem, 0};
+	*out = NULL;
+	slot_el(&sb, org);
+	if (tp_buf_why(&sb)) return tp_buf_free(&sb), TP_NOMEM;
+	long ti = shown_at(w->c, st, node, (tp_span){sb.p, sb.len}, NULL);
+	tp_buf_free(&sb);
+	if (ti < 0) return *out = bin_take(w, node, org), 0;
+	const uint8_t *buf = st->slots[ti].buf;
+	*out = st->slots[ti].value ? op_ref(st->slots[ti].value) : NULL;
+	return hold(w, buf, NULL);
+}
+
+// the elements from id on, n of them, start to show, each with the value of its item: held by a
+// segment (it was showing), or brought back. an item with no value stays gone
+static int spl_show(spl *s, el_id id, uint64_t n, const seg *sg, size_t nsg) {
+	work *w = s->w;
+	el_list *l = s->l;
+	const tp_mem *mem = w->c->mem;
+	int code = 0;
+	op_value **vv = tp_alloc(mem, n * sizeof *vv);
+	if (!vv) return TP_NOMEM;
+	memset(vv, 0, n * sizeof *vv);
+	for (uint64_t x = 0; x < n && !code; x++) {
+		el_id e = plus(id, x), org = origin_of(l, e);
+		uint64_t ob = org.born ? org.k : org.c;
+		for (size_t k = 0; k < nsg && !vv[x]; k++) {
+			if (sg[k].org.device != org.device || sg[k].org.born != org.born) continue;
+			uint64_t oa = sg[k].org.born ? sg[k].org.k : sg[k].org.c;
+			if (ob >= oa && ob - oa < sg[k].len && sg[k].vals[ob - oa]) vv[x] = op_ref(sg[k].vals[ob - oa]);
+		}
+		if (!vv[x]) code = unbin(w, s->node, &org, &vv[x]);
+	}
+	for (uint64_t x = 0; x < n && !code;) {
+		if (!vv[x]) {
+			x++;
+			continue;
+		}
+		uint64_t y = x;
+		while (y < n && vv[y]) y++;
+		for (uint64_t z = x; z < y && !code;) {
+			el_id at = plus(id, z);
+			size_t j;
+			uint64_t o;
+			find(l, &at, &j, &o);
+			uint64_t k = span(l, j, o, y - z, &o);
+			if (grow(mem, l) || more(mem, (void **)&REC(s).shown, REC(s).nshown, &REC(s).roomshown, sizeof *REC(s).shown) ||
+				more(mem, (void **)&s->out, s->nout + 1, &s->qroom, sizeof *s->out) ||
+				more(mem, (void **)&w->made, w->nmade, &w->roommade, sizeof *w->made)) {
+				code = TP_NOMEM;
+				break;
+			}
+			op_value *lst = op_list();
+			if (!lst) {
+				code = TP_NOMEM;
+				break;
+			}
+			w->made[w->nmade++] = lst;
+			for (uint64_t q = 0; q < k; q++) op_push(lst, vv[z + q]), vv[z + q] = NULL;
+			size_t to = live_before(l, j);
+			mark(l, j, o, k, 0);
+			REC(s).shown[REC(s).nshown++] = (el_gone){at, k};
+			s->out[s->nout] = (op_patch){0}, s->out[s->nout].place = s->p->place;
+			s->out[s->nout].place.from = s->out[s->nout].place.to = (int64_t)to;
+			s->out[s->nout].has_value = 1, s->out[s->nout++].value = lst;
+			z += k;
+		}
+		x = y;
+	}
+	for (uint64_t x = 0; x < n; x++) {
+		if (vv[x]) op_free(vv[x]);
+	}
+	tp_free(mem, vv, n * sizeof *vv);
+	return code;
+}
+
+// a splice or a list move into the sequence node (v its value, p->place.path where it is now), patch
+// w->i of its step, its inserted ones counted from c, by its ids (anchor) or its range, as the patches
+// to apply by position (*qs, *nq). an array's items taken away or moved are events on their origins'
+// registers (WIRE.md, list moves): the elements that stop showing come out of the value, those that
+// start go in with the value the item had
 static int splice(work *w, const op_patch *p, tp_span node, const op_value *v, uint64_t c,
 	const el_anchor *anchor, op_patch **qs, size_t *nq, size_t *qcap, el_anchor *named) {
 	const tp_mem *mem = w->c->mem;
+	int mv = p->has_move, owned_anchor = !anchor;
 	// an insert of another kind than the sequence (a list into a text): doesn't apply, as apply refuses
 	if (p->has_value && (!p->value || p->value->type != v->type)) return OP_WRONG_KIND;
+	if (mv && v->type != OP_LIST) return OP_WRONG_KIND;
 	el_list *l;
 	int code = elements(w, node, v, &l);
 	if (code) return code;
 	uint64_t a = (uint64_t)p->place.from, b = (uint64_t)p->place.to, o;
-	long m = p->has_value ? units(p->value) : 0;
-	size_t j, ngone = 0, roomgone = 0, nout = 0, qroom = 0, npieces = 0, roompieces = 0;
+	long m = mv ? (long)(p->move.has_range ? p->move.to - p->move.from : 1) : p->has_value ? units(p->value) : 0;
+	size_t j, ngone = 0, roomgone = 0, nsg = 0, roomsg = 0;
 	el_gone *gone = NULL;
+	seg *sg = NULL;
 	piece *pieces = NULL;
+	size_t npieces = 0, roompieces = 0;
+	rlist hide = {0}, show = {0};
+	el_gone *lost = NULL;
+	size_t nlost = 0, roomlost = 0;
 	const el_gone *names;
 	size_t nnames;
-	op_patch *out = NULL;
+	el_anchor mine = {0};
 	el_id first = {0}, right = NOWHERE;
-	int has_first = 0;
-	// what it names: the element it goes after, and those it takes away, as runs
+	int has_first = 0, same_before = 0;
+	stamp st = {w->ref.lamport, w->ref.n, w->ref.device, (uint32_t)w->i};
+	spl s = {w, l, p, node, 0, NULL, 0, 0};
+	if (mv && !anchor) {
+		if ((code = moved_from(l, p, &mine))) goto done;
+		anchor = &mine;
+	}
+	// what it names: the element it goes after, and those it takes away or moves, as runs
 	if (anchor) {
 		has_first = anchor->has_after, first = anchor->after, j = 0, o = 0;
-		if (has_first && !find(l, &first, &j, &o)) return OP_RANGE;
+		if (has_first && !find(l, &first, &j, &o)) {
+			code = OP_RANGE;
+			goto done;
+		}
 		for (size_t r = 0; r < anchor->ngone; r++) {
-			if (!there(l, &anchor->gone[r])) return OP_RANGE;
+			if (!there(l, &anchor->gone[r])) {
+				code = OP_RANGE;
+				goto done;
+			}
 		}
 		// its before: there, and after its after
-		if (anchor->has_before && anchor->same && !has_first) return OP_RANGE;
+		if (anchor->has_before && anchor->same && !has_first) {
+			code = OP_RANGE;
+			goto done;
+		}
 		if (anchor->has_before && anchor->same) right = right_of(l, &l->runs[j], o);
 		else if (anchor->has_before) right = anchor->before;
 		pos f = {j, o}, at;
-		if (!nowhere(&right) && (!find(l, &right, &at.j, &at.o) || (has_first && !ahead(f, at)))) return OP_RANGE;
+		if (!nowhere(&right) && (!find(l, &right, &at.j, &at.o) || (has_first && !ahead(f, at)))) {
+			code = OP_RANGE;
+			goto done;
+		}
 		names = anchor->gone, nnames = anchor->ngone;
 	} else {
-		if (a > b || b > l->count) return OP_RANGE;
+		if (a > b || b > l->count) {
+			code = OP_RANGE;
+			goto done;
+		}
 		if (a) j = live_at(l, (size_t)a - 1, &o), first = id_at(l, &l->runs[j], o), has_first = 1;
 		for (uint64_t x = a; x < b;) {
 			j = live_at(l, (size_t)x, &o);
@@ -1482,144 +1932,255 @@ static int splice(work *w, const op_patch *p, tp_span node, const op_value *v, u
 		code = TP_NOMEM;
 		goto done;
 	}
-	size_t ri = w->back->n++;
-	w->back->p[ri] = (el_rec){.kind = SPLICE, .splice = {.list = l}};
-#define REC (w->back->p[ri].splice)
-	// the containers among the items taken away, before any goes
-	if (!l->text && v->type == OP_LIST && !w->st->quiet) {
+	s.ri = w->back->n++;
+	w->back->p[s.ri] = (el_rec){.kind = SPLICE, .splice = {.list = l, .moved = mv}};
+	// an array's items named, by origin, and what each holds now
+	if (!l->text) {
 		for (size_t r = 0; r < nnames; r++) {
-			for (uint64_t x = 0; x < names[r].count;) {
-				el_id id = plus(names[r].id, x);
-				find(l, &id, &j, &o);
-				uint64_t m = span(l, j, o, names[r].count - x, &o);
-				x += m;
-				if (l->runs[j].gone) continue;
-				size_t from = live_before(l, j) + (size_t)o;
-				el_id lo = low(l, &l->runs[j], o, m);
-				piece pc = {lo, m, NULL};
-				for (uint64_t q = 0; q < m; q++) {
-					const op_value *it = v->items[from + q];
-					el_id e = id_at(l, &l->runs[j], o + q);
-					if (!is_container(it) || piece_has(pieces, npieces, &e)) continue;
-					if (!pc.values) {
-						pc.values = tp_alloc(mem, m * sizeof *pc.values);
-						if (!pc.values) {
-							code = TP_NOMEM;
-							goto done;
-						}
-						memset(pc.values, 0, m * sizeof *pc.values);
+			size_t from = nsg;
+			for (uint64_t x = 0; x < names[r].count; x++) {
+				el_id org = origin_of(l, plus(names[r].id, x));
+				if (nsg > from) {
+					el_id nx = plus(sg[nsg - 1].org, sg[nsg - 1].len);
+					if (same(&nx, &org)) {
+						sg[nsg - 1].len++;
+						continue;
 					}
-					pc.values[e.born ? e.k - lo.k : e.c - lo.c] = op_ref((op_value *)it);
 				}
-				if (!pc.values) continue;
-				if (more(mem, (void **)&pieces, npieces, &roompieces, sizeof *pieces)) {
+				if (more(mem, (void **)&sg, nsg, &roomsg, sizeof *sg)) {
+					code = TP_NOMEM;
+					goto done;
+				}
+				sg[nsg++] = (seg){org, 1, NULL};
+			}
+		}
+		for (size_t k = 0; k < nsg; k++) {
+			sg[k].vals = tp_alloc(mem, sg[k].len * sizeof(op_value *));
+			if (!sg[k].vals) {
+				code = TP_NOMEM;
+				goto done;
+			}
+			memset(sg[k].vals, 0, sg[k].len * sizeof(op_value *));
+			for (uint64_t q = 0; q < sg[k].len; q++) {
+				el_id e = plus(sg[k].org, q);
+				size_t jj;
+				uint64_t oo;
+				if (shown(l, &e, &jj, &oo)) sg[k].vals[q] = op_ref(v->items[live_before(l, jj) + (size_t)oo]);
+			}
+		}
+	}
+	pos lp = {0, 0}, rp = {0, 0}, spot = {0, 0};
+	el_id left = has_first ? first : NOWHERE;
+	if (!mv) {
+		if (l->text) {
+			for (size_t r = 0; r < nnames && !code; r++) code = spl_hide(&s, names[r].id, names[r].count);
+		} else {
+			for (size_t k = 0; k < nsg && !code; k++) {
+				hide.n = show.n = 0;
+				code = event(w, l, sg[k].org, sg[k].len, &st, NULL, &hide, &show);
+				for (size_t r = 0; r < hide.n && !code; r++) code = spl_hide(&s, hide.p[r].id, hide.p[r].count);
+			}
+		}
+		if (code) goto done;
+		// where the inserted go: right after its element; by ids, past those put there meanwhile
+		if (has_first) find(l, &first, &lp.j, &lp.o), spot = next_pos(l, lp);
+		if (anchor) {
+			int has_rp = !nowhere(&right) && find(l, &right, &rp.j, &rp.o);
+			if ((code = scan(w, l, spot, &left, &right, has_rp ? &rp : NULL, c, &spot))) goto done;
+		} else if (m > 0 && spot.j < l->n) {
+			right = id_at(l, &l->runs[spot.j], spot.o);
+			el_id after_right = has_first ? right_of(l, &l->runs[lp.j], lp.o) : NOWHERE;
+			same_before = has_first && same(&after_right, &right);
+		}
+		j = spot.j, o = spot.o;
+		size_t to = live_before(l, j) + (j < l->n && !l->runs[j].gone ? (size_t)o : 0);
+		if (more(mem, (void **)&s.out, s.nout + 1, &s.qroom, sizeof *s.out)) {
+			code = TP_NOMEM;
+			goto done;
+		}
+		if (m > 0) {
+			if ((uint64_t)m > MOST || grow(mem, l)) {
+				code = (uint64_t)m > MOST ? OP_RANGE : TP_NOMEM;
+				goto done;
+			}
+			if (o) j = cut(l, j, o, l->runs[j].len - o);
+			run made = {.c = c, .device = w->ref.device, .len = (uint32_t)m,
+				.left = org_of(&left), .right = org_of(&right)};
+			edit(l, j, 0, &made, 1);
+			l->count += (size_t)m;
+			join(l, j + 1), join(l, j);
+			REC(&s).device = w->ref.device, REC(&s).c = c, REC(&s).m = (uint64_t)m;
+			// the items it inserts that are containers are nodes, each put at its element
+			if (p->value->type == OP_LIST) {
+				for (long x = 0; x < m && !code; x++) {
+					if (!is_container(p->value->items[x])) continue;
+					tp_buf nb = {NULL, 0, 0, (size_t)-1, mem, 0}, sb = {NULL, 0, 0, (size_t)-1, mem, 0};
+					el_id e = {w->ref.device, 0, c + (uint64_t)x, 0};
+					node_make(&nb, w->ref.device, w->ref.n, w->i), rel_num(&nb, (uint64_t)x), slot_el(&sb, &e);
+					el_slot cellv;
+					code = tp_buf_why(&nb) || tp_buf_why(&sb) ? TP_NOMEM
+						: make_cell(w, node, (tp_span){sb.p, sb.len}, (tp_span){nb.p, nb.len}, EL_CELL_NODE, w->ref, &cellv);
+					if (!code) code = add_cell(w, cellv);
+					tp_buf_free(&nb), tp_buf_free(&sb);
+				}
+				if (code) goto done;
+			}
+		}
+		if (m > 0 || !s.nout) {
+			s.out[s.nout] = (op_patch){0};
+			s.out[s.nout].place = p->place;
+			s.out[s.nout].place.from = s.out[s.nout].place.to = (int64_t)to;
+			if (m > 0) s.out[s.nout].has_value = 1, s.out[s.nout].value = p->value;
+			s.nout++;
+		}
+	} else {
+		if (has_first) find(l, &first, &lp.j, &lp.o), spot = next_pos(l, lp);
+		int has_rp = !nowhere(&right) && find(l, &right, &rp.j, &rp.o);
+		if ((code = scan(w, l, spot, &left, &right, has_rp ? &rp : NULL, c, &spot))) goto done;
+		// a run of new elements for each run of items, their origins one on
+		if (grow_n(mem, l, nsg)) {
+			code = TP_NOMEM;
+			goto done;
+		}
+		run *news = tp_alloc(mem, (nsg ? nsg : 1) * sizeof *news);
+		if (!news) {
+			code = TP_NOMEM;
+			goto done;
+		}
+		uint64_t at = c;
+		for (size_t k = 0; k < nsg; k++) {
+			el_id before = {w->ref.device, 0, at ? at - 1 : 0, 0};
+			news[k] = (run){.c = at, .device = w->ref.device, .len = (uint32_t)sg[k].len, .gone = 1,
+				.left = k ? org_of(&before) : org_of(&left), .right = org_of(&right)};
+			at += sg[k].len;
+		}
+		j = spot.j, o = spot.o;
+		if (o) j = cut(l, j, o, l->runs[j].len - o);
+		edit(l, j, 0, news, nsg);
+		tp_free(mem, news, (nsg ? nsg : 1) * sizeof *news);
+		for (size_t k = nsg + 1; k-- > 0;) join(l, j + k);
+		REC(&s).device = w->ref.device, REC(&s).c = c, REC(&s).m = (uint64_t)m;
+		at = c;
+		for (size_t k = 0; k < nsg; k++) {
+			if ((code = org_put(w, l, (orgent){at, w->ref.device, (uint32_t)sg[k].len, link_of(&sg[k].org)}))) goto done;
+			at += sg[k].len;
+		}
+		rlist shows = {0};
+		at = c;
+		for (size_t k = 0; k < nsg && !code; k++) {
+			el_id el = {w->ref.device, 0, at, 0};
+			hide.n = show.n = 0;
+			code = event(w, l, sg[k].org, sg[k].len, &st, &el, &hide, &show);
+			for (size_t r = 0; r < hide.n && !code; r++) code = spl_hide(&s, hide.p[r].id, hide.p[r].count);
+			for (size_t r = 0; r < show.n && !code; r++) code = rl_push(mem, &shows, show.p[r].id, show.p[r].count);
+			at += sg[k].len;
+		}
+		for (size_t r = 0; r < shows.n && !code; r++) code = spl_show(&s, shows.p[r].id, shows.p[r].count, sg, nsg);
+		tp_free(mem, shows.p, shows.room * sizeof *shows.p);
+		if (code) goto done;
+	}
+	// the items now gone, by origin: their values are held as pieces, for a patch to name or a move to
+	// bring back
+	for (size_t k = 0; k < nsg; k++) {
+		for (uint64_t x = 0; x < sg[k].len; x++) {
+			el_id e = plus(sg[k].org, x), nx = nlost ? plus(lost[nlost - 1].id, lost[nlost - 1].count) : e;
+			size_t jj;
+			uint64_t oo;
+			if (shown(l, &e, &jj, &oo)) continue;
+			int dup_e = 0;
+			for (size_t r = 0; r < nlost && !dup_e; r++) {
+				el_id d = lost[r].id;
+				dup_e = d.device == e.device && d.born == e.born && (e.born ? e.c == d.c && e.k >= d.k && e.k - d.k < lost[r].count
+					: e.c >= d.c && e.c - d.c < lost[r].count);
+			}
+			if (dup_e) continue;
+			if (nlost && same(&nx, &e)) lost[nlost - 1].count++;
+			else if (more(mem, (void **)&lost, nlost, &roomlost, sizeof *lost)) {
+				code = TP_NOMEM;
+				goto done;
+			} else lost[nlost++] = (el_gone){e, 1};
+		}
+	}
+	if (!w->st->quiet) {
+		// an item with a cell at its slot has its value held by the cell that shows
+		for (size_t k = 0; k < nsg; k++) {
+			for (uint64_t x = 0; x < sg[k].len; x++) {
+				el_id e = plus(sg[k].org, x);
+				size_t jj;
+				uint64_t oo;
+				if (!sg[k].vals[x] || shown(l, &e, &jj, &oo)) continue;
+				tp_buf sb = {NULL, 0, 0, (size_t)-1, mem, 0};
+				slot_el(&sb, &e);
+				long ti = tp_buf_why(&sb) ? -2 : shown_at(w->c, w->st, node, (tp_span){sb.p, sb.len}, NULL);
+				tp_buf_free(&sb);
+				if (ti == -2) {
+					code = TP_NOMEM;
+					goto done;
+				}
+				if (ti < 0) continue;
+				if ((code = hold(w, w->st->slots[ti].buf, op_ref(sg[k].vals[x])))) goto done;
+				op_free(sg[k].vals[x]), sg[k].vals[x] = NULL;
+			}
+		}
+		for (size_t k = 0; k < nsg; k++) {
+			for (uint64_t x = 0; x < sg[k].len;) {
+				el_id e = plus(sg[k].org, x);
+				size_t jj;
+				uint64_t oo;
+				if (!sg[k].vals[x] || shown(l, &e, &jj, &oo) || piece_has(pieces, npieces, &e)) {
+					x++;
+					continue;
+				}
+				uint64_t y = x;
+				while (y < sg[k].len) {
+					el_id f = plus(sg[k].org, y);
+					if (!sg[k].vals[y] || shown(l, &f, &jj, &oo) || piece_has(pieces, npieces, &f)) break;
+					y++;
+				}
+				piece pc = {e, y - x, tp_alloc(mem, (y - x) * sizeof(op_value *))};
+				if (!pc.values || more(mem, (void **)&pieces, npieces, &roompieces, sizeof *pieces)) {
 					pieces_free(mem, &pc, 1, 0);
 					code = TP_NOMEM;
 					goto done;
 				}
+				for (uint64_t q = x; q < y; q++) pc.values[q - x] = sg[k].vals[q], sg[k].vals[q] = NULL;
 				pieces[npieces++] = pc;
+				x = y;
 			}
 		}
 	}
-	// the gone ones still there taken away, each once however often named, by position
-	for (size_t r = 0; r < nnames; r++) {
-		for (uint64_t x = 0; x < names[r].count;) {
-			el_id id = plus(names[r].id, x);
-			find(l, &id, &j, &o);
-			uint64_t m = span(l, j, o, names[r].count - x, &o);
-			x += m;
-			if (l->runs[j].gone) continue;
-			if (grow(mem, l) || more(mem, (void **)&REC.taken, REC.ntaken, &REC.roomtaken, sizeof *REC.taken) ||
-				more(mem, (void **)&out, nout + 1, &qroom, sizeof *out)) {
+	if (!l->text && nlost && (code = away(w, node, l, lost, nlost, pieces, npieces))) goto done;
+	if (mv && !s.nout) {
+		// nothing shows or goes: no patch
+	}
+	if (owned_anchor && named) {
+		if (mv) {
+			named->kind = 3, named->has_after = mine.has_after, named->after = mine.after, named->gone = mine.gone,
+			named->ngone = mine.ngone, named->has_before = mine.has_before, named->same = mine.same,
+			named->before = mine.before;
+			mine.gone = NULL, mine.ngone = 0;
+		} else {
+			el_gone *g = ngone ? tp_grow(mem, gone, roomgone * sizeof *g, ngone * sizeof *g) : NULL;
+			if (ngone && !g) {
 				code = TP_NOMEM;
 				goto done;
 			}
-			size_t from = live_before(l, j) + (size_t)o;
-			mark(l, j, o, m, 1);
-			REC.taken[REC.ntaken++] = (el_gone){id, m};
-			op_patch *last = nout ? &out[nout - 1] : NULL;
-			if (last && (size_t)last->place.from == from) last->place.to += (int64_t)m;
-			else if (last && from + m == (size_t)last->place.from) last->place.from = (int64_t)from;
-			else {
-				out[nout] = (op_patch){0}, out[nout].place = p->place;
-				out[nout].place.from = (int64_t)from, out[nout++].place.to = (int64_t)(from + m);
-			}
+			if (ngone) gone = g, roomgone = ngone;
+			named->kind = 3, named->has_after = has_first, named->after = first, named->gone = gone, named->ngone = ngone;
+			named->has_before = !nowhere(&right), named->same = same_before, named->before = right;
+			gone = NULL, roomgone = 0;
 		}
 	}
-	if (!l->text && REC.ntaken && (code = away(w, node, l, REC.taken, REC.ntaken, pieces, npieces))) goto done;
-	// where the inserted go: right after its element; by ids, past those put there meanwhile
-	pos lp = {0, 0}, rp = {0, 0}, spot = {0, 0};
-	el_id left = has_first ? first : NOWHERE;
-	int same_before = 0;
-	if (has_first) find(l, &first, &lp.j, &lp.o), spot = next_pos(l, lp);
-	if (anchor) {
-		int has_rp = !nowhere(&right) && find(l, &right, &rp.j, &rp.o);
-		if ((code = scan(w, l, spot, &left, &right, has_rp ? &rp : NULL, c, &spot))) goto done;
-	} else if (m > 0 && spot.j < l->n) {
-		right = id_at(l, &l->runs[spot.j], spot.o);
-		el_id after_right = has_first ? right_of(l, &l->runs[lp.j], lp.o) : NOWHERE;
-		same_before = has_first && same(&after_right, &right);
-	}
-	j = spot.j, o = spot.o;
-	size_t to = live_before(l, j) + (j < l->n && !l->runs[j].gone ? (size_t)o : 0);
-	if (more(mem, (void **)&out, nout + 1, &qroom, sizeof *out)) {
-		code = TP_NOMEM;
-		goto done;
-	}
-	if (m > 0) {
-		if ((uint64_t)m > MOST || grow(mem, l)) {
-			code = (uint64_t)m > MOST ? OP_RANGE : TP_NOMEM;
-			goto done;
-		}
-		if (o) j = cut(l, j, o, l->runs[j].len - o);
-		run made = {.c = c, .device = w->ref.device, .len = (uint32_t)m,
-			.left = org_of(&left), .right = org_of(&right)};
-		edit(l, j, 0, &made, 1);
-		l->count += (size_t)m;
-		join(l, j + 1), join(l, j);
-		REC.device = w->ref.device, REC.c = c, REC.m = (uint64_t)m;
-		// the items it inserts that are containers are nodes, each put at its element
-		if (p->value->type == OP_LIST) {
-			for (long x = 0; x < m && !code; x++) {
-				if (!is_container(p->value->items[x])) continue;
-				tp_buf nb = {NULL, 0, 0, (size_t)-1, mem, 0}, sb = {NULL, 0, 0, (size_t)-1, mem, 0};
-				el_id e = {w->ref.device, 0, c + (uint64_t)x, 0};
-				node_make(&nb, w->ref.device, w->ref.n, w->i), rel_num(&nb, (uint64_t)x), slot_el(&sb, &e);
-				el_slot cellv;
-				code = tp_buf_why(&nb) || tp_buf_why(&sb) ? TP_NOMEM
-					: make_cell(w, node, (tp_span){sb.p, sb.len}, (tp_span){nb.p, nb.len}, EL_CELL_NODE, w->ref, &cellv);
-				if (!code) code = add_cell(w, cellv);
-				tp_buf_free(&nb), tp_buf_free(&sb);
-			}
-			if (code) goto done;
-		}
-	}
-	if (m > 0 || !nout) {
-		out[nout] = (op_patch){0};
-		out[nout].place = p->place;
-		out[nout].place.from = out[nout].place.to = (int64_t)to;
-		if (m > 0) out[nout].has_value = 1, out[nout].value = p->value;
-		nout++;
-	}
-#undef REC
-	if (!anchor && named) {
-		el_gone *g = ngone ? tp_grow(mem, gone, roomgone * sizeof *g, ngone * sizeof *g) : NULL;
-		if (ngone && !g) {
-			code = TP_NOMEM;
-			goto done;
-		}
-		if (ngone) gone = g, roomgone = ngone;
-		named->kind = 3, named->has_after = has_first, named->after = first, named->gone = gone, named->ngone = ngone;
-		named->has_before = !nowhere(&right), named->same = same_before, named->before = right;
-		gone = NULL, roomgone = 0;
-	}
-	*qs = out, *nq = nout, *qcap = qroom, out = NULL;
+	*qs = s.out, *nq = s.nout, *qcap = s.qroom, s.out = NULL;
 done:
 	pieces_free(mem, pieces, npieces, roompieces);
-	tp_free(mem, gone, roomgone * sizeof *gone), tp_free(mem, out, qroom * sizeof *out);
+	segs_free(mem, sg, nsg, roomsg);
+	tp_free(mem, gone, roomgone * sizeof *gone), tp_free(mem, s.out, s.qroom * sizeof *s.out);
+	tp_free(mem, hide.p, hide.room * sizeof *hide.p), tp_free(mem, show.p, show.room * sizeof *show.p);
+	tp_free(mem, lost, roomlost * sizeof *lost);
+	tp_free(mem, mine.gone, mine.ngone ? mine.ngone * sizeof *mine.gone : 0);
 	return code;
 }
-
 
 // the node at the first len keys of the path, found by place in value (a write here, a move), its
 // arrays' elements made as it goes; *found 0 when a scalar or nothing is there. its bytes in out
@@ -1644,7 +2205,7 @@ static int node_at(work *w, const op_value *value, const op_key *path, size_t le
 			if (k->n < 0 || (size_t)k->n >= l->count) return 0;
 			uint64_t o;
 			size_t j = live_at(l, (size_t)k->n, &o);
-			el_id e = id_at(l, &l->runs[j], o);
+			el_id e = origin_at(l, j, o);
 			slot_el(&slot, &e);
 			si = tp_buf_why(&slot) ? -2 : shown_at(w->c, st, (tp_span){out->p, out->len}, (tp_span){slot.p, slot.len}, NULL);
 			if (si == -2) return tp_buf_free(&slot), TP_NOMEM;
@@ -1711,7 +2272,6 @@ static int block_make(work *w, const hops *h, size_t more_keys, op_key **keys) {
 	return 0;
 }
 
-static void drop_qs(const tp_mem *mem, op_patch *qs, size_t cap) { tp_free(mem, qs, cap * sizeof *qs); }
 
 // named->pred: the ids of the cells visible at (parent, slot), oldest first; a key with none and a
 // value now has the cell its parent's value made, named by its place in it
@@ -1766,9 +2326,61 @@ static int outcome(work *w, shape sh, const op_patch *p, const op_value *put, op
 	return 0;
 }
 
-// a patch but a move, its container found by its id (given) or by place (named non-NULL: a write
-// here, and named): a splice, a removal at an index of an array (a splice of that one), a put at an
-// index, a put or removal at a key, or of the whole value. *qs (made) the patches to apply, their
+// a put at an item gone, assigned as at one that shows but with its value held by the cell that
+// shows, not written to the graph
+static int gone_put(work *w, tp_span node, const el_id *e, const tp_span *cell, int container, const op_value *cellvalue,
+	const tp_span *pred, size_t npred) {
+	const tp_mem *mem = w->c->mem;
+	el_state *st = w->st;
+	tp_buf sb = {NULL, 0, 0, (size_t)-1, mem, 0}, db = sb;
+	slot_el(&sb, e);
+	if (e->born) tp_put(&db, node.p, node.n), rel_num(&db, e->k);
+	int code = tp_buf_why(&sb) || tp_buf_why(&db) ? TP_NOMEM : 0;
+	if (!code) {
+		tp_span slot = {sb.p, sb.len};
+		long ti = shown_at(w->c, st, node, slot, NULL);
+		const op_value *had = ti >= 0 ? st->slots[ti].value : bin_peek(st, node, e);
+		shape sh;
+		const op_value *put;
+		code = assign(w, node, slot, 1, e->born ? (tp_span){db.p, db.len} : (tp_span){NULL, 0}, had, pred, npred, 0, cell,
+			container, cellvalue, &sh, &put);
+		long si = code ? -1 : shown_at(w->c, st, node, slot, NULL);
+		if (si >= 0) {
+			const uint8_t *buf = st->slots[si].buf;
+			if (sh == A_OWN) code = hold(w, buf, cellvalue ? op_ref((op_value *)cellvalue) : NULL);
+			else if (sh == A_PUT) code = hold(w, buf, put ? op_ref((op_value *)put) : NULL);
+			if (!code) {
+				op_value *t = bin_take(w, node, e);
+				if (t) op_free(t);
+			}
+		}
+	}
+	tp_buf_free(&sb), tp_buf_free(&db);
+	return code;
+}
+static int same_keys(const op_key *a, const op_key *b, size_t n) {
+	for (size_t i = 0; i < n; i++) {
+		if (a[i].type != b[i].type) return 0;
+		if (a[i].type == OP_NUM_KEY ? a[i].n != b[i].n : strcmp(a[i].s, b[i].s)) return 0;
+	}
+	return 1;
+}
+// a list move: one item, or a range of items, of an array to a gap in the same array, at most
+// 4096 of them (WIRE.md, list moves)
+int el_list_move(const op_patch *p) {
+	if (!p->has_move || !p->place.has_range || p->place.from != p->place.to || p->has_value) return 0;
+	const op_target *F = &p->move;
+	if (F->has_range) {
+		return F->to > F->from && F->to - F->from <= 4096 && F->length == p->place.length &&
+			same_keys(F->path, p->place.path, F->length);
+	}
+	return F->length == p->place.length + 1 && F->path[F->length - 1].type == OP_NUM_KEY &&
+		same_keys(F->path, p->place.path, p->place.length);
+}
+
+// a patch, its container found by its id (given) or by place (named non-NULL: a write here, and
+// named): a splice, a list move, a removal at an index of an array (a splice of that one), a put at
+// an index, a put or removal at a key, or of the whole value. *qs (made) the patches to apply, their
 // path in w->last (a block, if made); w->host, the buffer of the cell whose held value they are
 // for, when it is not the one showing. a container named that has landed and is not held is gone:
 // the patch is passed over (no patches)
@@ -1777,6 +2389,7 @@ static int patch(work *w, const op_value *cur, const op_patch *p, uint64_t c, co
 	const tp_mem *mem = w->c->mem;
 	int reading = !named, code = 0, has_value = p->has_value && p->value;
 	size_t len = p->place.length;
+	if (p->has_move && !el_list_move(p)) return OP_RANGE;
 	int spliced = p->place.has_range;
 	const op_key *last = len ? &p->place.path[len - 1] : NULL;
 	int index = !spliced && len && last->type == OP_NUM_KEY;
@@ -1823,11 +2436,8 @@ static int patch(work *w, const op_value *cur, const op_patch *p, uint64_t c, co
 		int ok;
 		if (!given->noden) code = w->late ? TP_LATE : OP_RANGE;
 		else if (!(code = where(w, (tp_span){given->node, given->noden}, &hp, &ok, &host)) && !ok) {
-			if (landed(w->st, (tp_span){given->node, given->noden})) {
-				// gone: but a move after it may have made it so, which a late step is worked out again with
-				if (w->late && w->st->moved.lamport && newer_ref(w->c, &w->st->moved, &w->ref)) code = TP_LATE;
-				else passed = 1, w->st->passed++;
-			} else code = w->late ? TP_LATE : OP_RANGE;
+			if (landed(w->st, (tp_span){given->node, given->noden})) passed = 1, w->st->passed++;
+			else code = w->late ? TP_LATE : OP_RANGE;
 		}
 		if (code || passed) goto done;
 		node = (tp_span){given->node, given->noden};
@@ -1851,8 +2461,7 @@ static int patch(work *w, const op_value *cur, const op_patch *p, uint64_t c, co
 	const op_value *v = at_keys(base, keys, nup);
 	// the path leads to nothing (a key its parent's put made, taken away): gone
 	if (reading && !v) {
-		if (w->late && w->st->moved.lamport && newer_ref(w->c, &w->st->moved, &w->ref)) code = TP_LATE;
-		else w->st->passed++;
+		w->st->passed++;
 		goto done;
 	}
 	op_patch t = *p;
@@ -1898,26 +2507,21 @@ static int patch(work *w, const op_value *cur, const op_patch *p, uint64_t c, co
 				else {
 					uint64_t o;
 					size_t j = live_at(l, (size_t)last->n, &o);
-					e = id_at(l, &l->runs[j], o), x = last->n;
+					e = origin_at(l, j, o), x = last->n;
 				}
 			} else if (given->kind != 2) code = OP_RANGE;
 			else {
 				size_t j;
 				uint64_t o;
-				e = given->element;
-				// an element gone: what the put makes there is trash
-				if (find(l, &e, &j, &o) && l->runs[j].gone) {
-					if (container) {
-						tp_buf bb = {NULL, 0, 0, (size_t)-1, mem, 0};
-						slot_el(&bb, &e);
-						code = tp_buf_why(&bb) ? TP_NOMEM : cell_named(w->st, node, (tp_span){bb.p, bb.len}, *cell) >= 0 ? 0
-							: bury_cell(w, node, (tp_span){bb.p, bb.len}, *cell, p->value, w->ref);
-						tp_buf_free(&bb);
-					}
-					passed = 1;
+				if (!find(l, &given->element, &j, &o)) code = OP_RANGE;
+				else {
+					e = origin_at(l, j, o);
+					// an item gone: the put is a cell there, its value held, the graph not written
+					if (!shown(l, &e, &j, &o)) {
+						code = gone_put(w, node, &e, cell, container, p->value, pred, npred);
+						passed = 1;
+					} else x = (long)(live_before(l, j) + (size_t)o);
 				}
-				else if (!find(l, &e, &j, &o)) code = OP_RANGE;
-				else x = (long)(live_before(l, j) + (size_t)o);
 			}
 		}
 		if (!code && !passed) {
@@ -1979,155 +2583,21 @@ done:
 	return code;
 }
 
-// a move, by place: what it moves is taken from where it was and put where it goes, as a new node
-// there (a new element for a slot)
-static int move(work *w, const op_value *cur, const op_patch *p, uint64_t c) {
-	const tp_mem *mem = w->c->mem;
-	const op_target *F = &p->move, *T = &p->place;
-	int code = 0, found;
-	op_value *moved = NULL, *rest = NULL, *wrap = NULL;
-	tp_buf nb = {NULL, 0, 0, (size_t)-1, mem, 0}, sb = nb, db = nb, mb = nb;
-	op_patch *qs = NULL;
-	size_t nq = 0, qcap = 0;
-	tp_span none = {0};
-	shape sh;
-	const op_value *put;
-	if (!F->length) return OP_RANGE;
-	// the newest move applied is noted, for a late step naming what this makes new
-	if (rec_room(w)) return TP_NOMEM;
-	{
-		el_rec *r = &w->back->p[w->back->n++];
-		*r = (el_rec){.kind = MOVED};
-		r->moved.was = w->st->moved;
-		if (!w->st->moved.lamport || !newer(w, &w->st->moved)) w->st->moved = w->ref;
+// the elements a splice or move inserted, taken out again
+static void unmake(el_list *l, const el_rec *r) {
+	el_id id = {r->splice.device, 0, r->splice.c, 0};
+	size_t j;
+	uint64_t o;
+	for (uint64_t x = 0, m = r->splice.m; x < m;) {
+		el_id at = plus(id, x);
+		find(l, &at, &j, &o);
+		uint64_t n = span(l, j, o, m - x, &o);
+		size_t i = cut(l, j, o, n);
+		edit(l, i, 1, NULL, 0);
+		if (!r->splice.moved) l->count -= (size_t)n;
+		x += n;
+		join(l, i);
 	}
-	const op_key *fk = &F->path[F->length - 1], *tk = T->length ? &T->path[T->length - 1] : NULL;
-	const op_value *src = at_path(cur, F);
-	if (F->has_range ? !is_seq(src) : !src) return OP_NO_KEY;
-	if (F->has_range) {
-		if (F->from > F->to) return OP_RANGE;
-		if (src->type == OP_STR) {
-			size_t x, y;
-			if (!op_string_span(src, F->from, F->to, &x, &y)) return OP_RANGE;
-			moved = op_str_n(src->str + x, y - x);
-		} else {
-			if ((size_t)F->to > src->count) return OP_RANGE;
-			moved = op_list();
-			for (int64_t i = F->from; i < F->to; i++) op_push(moved, op_ref(src->items[i]));
-		}
-	} else moved = op_ref((op_value *)src);
-	// the source goes
-	op_patch cut = {0};
-	cut.place = *F;
-	size_t failed;
-	if ((code = op_apply(cur, &cut, 1, NULL, &rest, &failed))) goto done;
-	if (F->has_range) {
-		if ((code = node_at(w, cur, F->path, F->length, &nb, &found))) goto done;
-		if (!found) {
-			code = OP_NO_KEY;
-			goto done;
-		}
-		code = splice(w, &cut, (tp_span){nb.p, nb.len}, src, c, NULL, &qs, &nq, &qcap, NULL);
-		drop_qs(mem, qs, qcap), qs = NULL;
-	} else {
-		const op_value *up = at_keys(cur, F->path, F->length - 1);
-		if ((code = node_at(w, cur, F->path, F->length - 1, &nb, &found))) goto done;
-		if (!found) {
-			code = OP_NO_KEY;
-			goto done;
-		}
-		if (fk->type == OP_NUM_KEY) {
-			if (!up || up->type != OP_LIST) code = OP_WRONG_KIND;
-			else {
-				op_patch one = {0};
-				one.place = (op_target){F->path, F->length - 1, 1, fk->n, fk->n + 1};
-				code = splice(w, &one, (tp_span){nb.p, nb.len}, up, c, NULL, &qs, &nq, &qcap, NULL);
-				drop_qs(mem, qs, qcap), qs = NULL;
-			}
-		} else if (!is_map(up)) code = OP_WRONG_KIND;
-		else {
-			const op_value *old = op_get(up, fk->s);
-			slot_key(&sb, fk->s);
-			if (is_container(old)) tp_put(&db, nb.p, nb.len), rel_text(&db, fk->s);
-			code = tp_buf_why(&sb) || tp_buf_why(&db) ? TP_NOMEM
-				: assign(w, (tp_span){nb.p, nb.len}, (tp_span){sb.p, sb.len}, 0,
-					is_container(old) ? (tp_span){db.p, db.len} : none, old, NULL, 0, 1, NULL, 0, NULL, &sh, &put);
-		}
-	}
-	if (code) goto done;
-	// it lands where it goes
-	tp_buf_free(&nb), tp_buf_free(&sb), tp_buf_free(&db);
-	nb = (tp_buf){NULL, 0, 0, (size_t)-1, mem, 0}, sb = nb, db = nb;
-	node_make(&mb, w->ref.device, w->ref.n, w->i);
-	if (tp_buf_why(&mb)) {
-		code = TP_NOMEM;
-		goto done;
-	}
-	tp_span made = {mb.p, mb.len};
-	int container = is_container(moved);
-	if (T->has_range) {
-		const op_value *into = at_path(rest, T);
-		if ((code = node_at(w, rest, T->path, T->length, &nb, &found))) goto done;
-		if (!found || !is_seq(into)) {
-			code = OP_WRONG_KIND;
-			goto done;
-		}
-		op_value *value = moved;
-		if (!F->has_range) {
-			wrap = op_list();
-			op_push(wrap, op_ref(moved));
-			value = wrap;
-		}
-		op_patch q = {0};
-		q.place = *T, q.has_value = 1, q.value = value;
-		code = splice(w, &q, (tp_span){nb.p, nb.len}, into, c, NULL, &qs, &nq, &qcap, NULL);
-		drop_qs(mem, qs, qcap), qs = NULL;
-	} else if (!T->length) {
-		code = assign(w, none, none, 1, none, rest, NULL, 0, 1, &made, container, moved, &sh, &put);
-	} else {
-		const op_value *up = at_keys(rest, T->path, T->length - 1);
-		if ((code = node_at(w, rest, T->path, T->length - 1, &nb, &found))) goto done;
-		if (!found) {
-			code = OP_NO_KEY;
-			goto done;
-		}
-		tp_span parent = {nb.p, nb.len};
-		if (tk->type == OP_NUM_KEY) {
-			el_list *l;
-			if (!up || up->type != OP_LIST) code = OP_WRONG_KIND;
-			else if (!(code = elements(w, parent, up, &l))) {
-				if (tk->n < 0 || (size_t)tk->n >= l->count) code = OP_NO_KEY;
-				else {
-					uint64_t o;
-					size_t j = live_at(l, (size_t)tk->n, &o);
-					el_id e = id_at(l, &l->runs[j], o);
-					slot_el(&sb, &e);
-					if (e.born) tp_put(&db, parent.p, parent.n), rel_num(&db, e.k);
-					tp_span derived = e.born ? (tp_span){db.p, db.len} : none;
-					code = tp_buf_why(&sb) || tp_buf_why(&db) ? TP_NOMEM
-						: assign(w, parent, (tp_span){sb.p, sb.len}, 1, derived, up->items[tk->n], NULL, 0, 1, &made, container,
-							moved, &sh, &put);
-				}
-			}
-		} else if (!is_map(up)) code = OP_WRONG_KIND;
-		else {
-			const op_value *old = op_get(up, tk->s);
-			tp_buf eb = {NULL, 0, 0, (size_t)-1, mem, 0};
-			slot_key(&sb, tk->s);
-			if (is_container(old)) tp_put(&eb, parent.p, parent.n), rel_text(&eb, tk->s);
-			code = tp_buf_why(&sb) || tp_buf_why(&eb) ? TP_NOMEM
-				: assign(w, parent, (tp_span){sb.p, sb.len}, 0, is_container(old) ? (tp_span){eb.p, eb.len} : none, old, NULL, 0, 1,
-					&made, container, moved, &sh, &put);
-			tp_buf_free(&eb);
-		}
-	}
-done:
-	tp_buf_free(&nb), tp_buf_free(&sb), tp_buf_free(&db), tp_buf_free(&mb);
-	drop_qs(mem, qs, qcap);
-	if (moved) op_free(moved);
-	if (rest) op_free(rest);
-	if (wrap) op_free(wrap);
-	return code;
 }
 
 // undoes one record
@@ -2144,15 +2614,16 @@ static void undo_rec(const tp_mem *mem, el_state *st, el_rec *r) {
 		el_list *l = r->splice.list;
 		size_t j;
 		uint64_t o;
-		el_id id = {r->splice.device, 0, r->splice.c, 0};
-		for (uint64_t x = 0, m = r->splice.m; x < m;) {
-			el_id at = plus(id, x);
-			find(l, &at, &j, &o);
-			uint64_t n = span(l, j, o, m - x, &o);
-			size_t i = cut(l, j, o, n);
-			edit(l, i, 1, NULL, 0);
-			l->count -= (size_t)n, x += n;
-			join(l, i);
+		// a splice's inserted elements came last, a move's first (gone at first)
+		if (!r->splice.moved) unmake(l, r);
+		for (size_t g = r->splice.nshown; g-- > 0;) {
+			const el_gone *sh = &r->splice.shown[g];
+			for (uint64_t x = 0; x < sh->count;) {
+				el_id at = plus(sh->id, x);
+				find(l, &at, &j, &o);
+				uint64_t n = span(l, j, o, sh->count - x, &o);
+				mark(l, j, o, n, 1), x += n;
+			}
 		}
 		for (size_t g = r->splice.ntaken; g-- > 0;) {
 			const el_gone *taken = &r->splice.taken[g];
@@ -2163,7 +2634,9 @@ static void undo_rec(const tp_mem *mem, el_state *st, el_rec *r) {
 				mark(l, j, o, n, 0), x += n;
 			}
 		}
+		if (r->splice.moved) unmake(l, r);
 		tp_free(mem, r->splice.taken, r->splice.roomtaken * sizeof *r->splice.taken);
+		tp_free(mem, r->splice.shown, r->splice.roomshown * sizeof *r->splice.shown);
 	} else if (r->kind == ADD) {
 		long i = cell_by(st, r->slot.cell.buf);
 		if (i >= 0) {
@@ -2196,8 +2669,18 @@ static void undo_rec(const tp_mem *mem, el_state *st, el_rec *r) {
 			else st->landed[i] = st->landed[--st->nlanded];
 			break;
 		}
-	} else if (r->kind == MOVED) {
-		st->moved = r->moved.was;
+	} else if (r->kind == REG) {
+		el_list *l = r->reg.list;
+		reg *old = r->reg.old;
+		memmove(l->regs + r->reg.at + r->reg.nold, l->regs + r->reg.at + r->reg.nins,
+			(l->nreg - r->reg.at - r->reg.nins) * sizeof *l->regs);
+		if (r->reg.nold) memcpy(l->regs + r->reg.at, old, r->reg.nold * sizeof *old);
+		l->nreg = l->nreg - r->reg.nins + r->reg.nold;
+		tp_free(mem, old, r->reg.nold * sizeof *old);
+	} else if (r->kind == ORG) {
+		el_list *l = r->org.list;
+		memmove(l->orgs + r->org.at, l->orgs + r->org.at + 1, (l->norg - r->org.at - 1) * sizeof *l->orgs);
+		l->norg--;
 	} else {
 		for (size_t i = 0; i < r->drop.nlists; i++) st->lists[st->n++] = r->drop.lists[i];
 		for (size_t i = 0; i < r->drop.nslots; i++) st->slots[st->nslots++] = r->drop.slots[i];
@@ -2207,7 +2690,10 @@ static void undo_rec(const tp_mem *mem, el_state *st, el_rec *r) {
 }
 
 static void drop_rec(const tp_mem *mem, el_rec *r) {
-	if (r->kind == SPLICE) tp_free(mem, r->splice.taken, r->splice.roomtaken * sizeof *r->splice.taken);
+	if (r->kind == SPLICE) {
+		tp_free(mem, r->splice.taken, r->splice.roomtaken * sizeof *r->splice.taken);
+		tp_free(mem, r->splice.shown, r->splice.roomshown * sizeof *r->splice.shown);
+	} else if (r->kind == REG) tp_free(mem, r->reg.old, r->reg.nold * sizeof(reg));
 	else if (r->kind == TAKE) slot_free(mem, &r->slot.cell);
 	else if (r->kind == BINTAKE) op_free(r->bintake.v);
 	else if (r->kind == HOLD || r->kind == BIN) {
@@ -2273,7 +2759,7 @@ int el_cells(const el_ctx *c, el_state *st, const op_value *value, const op_key 
 			if (k->n < 0 || (size_t)k->n >= l->count) goto done;
 			uint64_t o;
 			size_t j = live_at(l, (size_t)k->n, &o);
-			el_id e = id_at(l, &l->runs[j], o);
+			el_id e = origin_at(l, j, o);
 			slot_el(&sb, &e);
 		} else slot_key(&sb, k->s);
 		if (tp_buf_why(&nb) || tp_buf_why(&sb)) {
@@ -2344,7 +2830,7 @@ void el_cells_free(const tp_mem *mem, el_version *v, size_t count) {
 }
 
 int el_lone(const el_state *st, const el_ref *ref) {
-	if (st->nslots != 1 || st->n || st->moved.lamport || st->nlanded != 1 || st->landed[0].device != ref->device) return 0;
+	if (st->nslots != 1 || st->n || st->nlanded != 1 || st->landed[0].device != ref->device) return 0;
 	const el_slot *s = &st->slots[0];
 	uint64_t n, i;
 	if (s->parentn || s->slotn || sl_hidden(s) || s->value || s->device != ref->device) return 0;
@@ -2352,11 +2838,21 @@ int el_lone(const el_state *st, const el_ref *ref) {
 	return n == ref->n && i == 0;
 }
 
+// whether the cell is the cell of an item gone
+static int cell_gone(const el_state *st, const el_slot *s) {
+	el_id e;
+	size_t j;
+	uint64_t o;
+	if (sl_trash(s) || sl_ghost(s) || !sl_el(s, &e)) return 0;
+	el_list *l = list_at(st, (tp_span){sl_parent(s), s->parentn});
+	return l && find(l, &e, &j, &o) && !shown(l, &e, &j, &o);
+}
+
 void el_trash(const el_state *st, size_t *count, size_t *bytes) {
 	*count = *bytes = 0;
 	for (size_t i = 0; i < st->nslots; i++) {
 		const el_slot *s = &st->slots[i];
-		if (!sl_trash(s)) continue;
+		if (!sl_trash(s) && !(s->value && cell_gone(st, s))) continue;
 		(*count)++, *bytes += sizeof *s + s->parentn + s->slotn + sl_idn(s) + weigh(s->value);
 	}
 	for (size_t i = 0; i < st->nbins; i++) {
@@ -2377,10 +2873,10 @@ long el_empty(const tp_mem *mem, el_state *st) {
 	int code = 0;
 	for (; !code;) {
 		long i = 0;
-		while ((size_t)i < st->nslots && !sl_trash(&st->slots[i])) i++;
+		while ((size_t)i < st->nslots && !sl_trash(&st->slots[i]) && !cell_gone(st, &st->slots[i])) i++;
 		if ((size_t)i == st->nslots) break;
 		const uint8_t *buf = st->slots[i].buf;
-		code = drop_node(&w, sl_nodespan(&st->slots[i]));
+		code = sl_holds(&st->slots[i]) ? drop_node(&w, sl_nodespan(&st->slots[i])) : 0;
 		i = cell_by(st, buf);
 		if (!code && i >= 0) code = take_cell(&w, (size_t)i);
 	}
@@ -2410,7 +2906,8 @@ static void rollback(work *w, size_t marks) {
 
 int el_step(const el_ctx *c, el_state *st, op_value **value, const el_ref *ref, tp_span patches,
 	const op_patch *ps, size_t n, const uint8_t *keep, const el_anchor *ids, int late,
-	op_undo *undo, el_back *back, op_patch **applied, size_t *napplied, el_anchor **named) {
+	op_undo *undo, el_back *back, op_patch **applied, size_t *napplied, el_anchor **named,
+	el_made *made_out) {
 	work w = {.c = c, .st = st, .back = back, .ref = *ref, .late = late, .last = -1};
 	size_t marks, at = 0, nout = 0, roomout = 0, nus = 0, roomus = 0;
 	op_value *cur = *value;
@@ -2427,9 +2924,6 @@ int el_step(const el_ctx *c, el_state *st, op_value **value, const el_ref *ref, 
 	if (!ids && named && n && !(nm = tp_alloc(c->mem, n * sizeof *nm))) return TP_NOMEM;
 	if (nm) memset(nm, 0, n * sizeof *nm);
 	tp_patch tp;
-	// a by-place move replaces what it finds ("all"), not what it names: a late step under one is
-	// worked out again
-	if (late && st->moved.lamport && newer_ref(c, &st->moved, ref)) code = TP_LATE;
 	for (size_t i = 0; i < n && !code; i++) {
 		if (tp_patch_next(patches, &at, &tp)) {
 			code = OP_NOT_A_PATCH;
@@ -2443,12 +2937,8 @@ int el_step(const el_ctx *c, el_state *st, op_value **value, const el_ref *ref, 
 		op_patch *qs = (op_patch *)p, *made_qs = NULL;
 		size_t nq = 1, qcap = 0;
 		w.last = -1, w.host = NULL;
-		if (p->has_move && late) code = TP_LATE;
-		else if (p->has_move) code = move(&w, cur, p, counter);
-		else {
-			code = patch(&w, cur, p, counter, ids ? &ids[i] : NULL, nm ? &nm[i] : NULL, &made_qs, &nq, &qcap);
-			if (!code) qs = made_qs;
-		}
+		code = patch(&w, cur, p, counter, ids ? &ids[i] : NULL, nm ? &nm[i] : NULL, &made_qs, &nq, &qcap);
+		if (!code) qs = made_qs;
 		for (size_t q = 0; q < nq && !code; q++) {
 			op_value *next = NULL;
 			size_t failed;
@@ -2543,6 +3033,7 @@ int el_step(const el_ctx *c, el_state *st, op_value **value, const el_ref *ref, 
 		free(out), free(outblk);
 		if (nm) el_anchors_free(c->mem, nm, n);
 		if (owned) op_free(cur);
+		el_made_free(c->mem, &(el_made){w.made, w.nmade, w.roommade});
 		rollback(&w, marks);
 		return code;
 	}
@@ -2559,8 +3050,17 @@ int el_step(const el_ctx *c, el_state *st, op_value **value, const el_ref *ref, 
 	if (owned) op_free(*value), *value = cur;
 	free(out), free(outblk);
 	if (applied) *applied = whole, *napplied = nout;
+	else free(whole);
+	if (made_out) *made_out = (el_made){w.made, w.nmade, w.roommade};
+	else el_made_free(c->mem, &(el_made){w.made, w.nmade, w.roommade});
 	if (named) *named = nm;
 	return 0;
+}
+
+void el_made_free(const tp_mem *mem, el_made *m) {
+	for (size_t i = 0; i < m->n; i++) op_free(m->p[i]);
+	tp_free(mem, m->p, m->room * sizeof *m->p);
+	*m = (el_made){0};
 }
 
 void el_anchors_free(const tp_mem *mem, el_anchor *a, size_t n) {
@@ -2825,6 +3325,14 @@ static void save_org(tp_buf *b, const el_ctx *c, org g) {
 	else tp_put_head(b, 2, 32), tp_put(b, c->bytes(c->self, g.device), 32);
 	tp_put_head(b, 0, g.born), tp_put_head(b, 0, (uint64_t)g.hi << 32 | g.lo);
 }
+static void save_link(tp_buf *b, const el_ctx *c, olink g) {
+	if (!g.set) {
+		tp_put(b, "\xf6", 1);
+		return;
+	}
+	tp_put_head(b, 4, 3), tp_put_head(b, 2, 32), tp_put(b, c->bytes(c->self, g.device), 32);
+	tp_put_head(b, 0, g.born), tp_put_head(b, 0, (uint64_t)g.hi << 32 | g.lo);
+}
 static void save_node(tp_buf *b, const el_ctx *c, const uint8_t *node, size_t noden) {
 	if (!noden) {
 		tp_put(b, "\xf6", 1);
@@ -2836,13 +3344,28 @@ void el_save(tp_buf *b, const el_ctx *c, const el_state *st) {
 	tp_put_head(b, 4, 5), tp_put_head(b, 4, st->n);
 	for (size_t i = 0; i < st->n; i++) {
 		const el_list *l = st->lists[i];
-		tp_put_head(b, 4, 3), save_node(b, c, l->key, l->keyn), tp_put_head(b, 0, (uint64_t)l->text);
+		tp_put_head(b, 4, 5), save_node(b, c, l->key, l->keyn), tp_put_head(b, 0, (uint64_t)l->text);
 		tp_put_head(b, 4, l->n);
 		for (size_t j = 0; j < l->n; j++) {
 			const run *r = &l->runs[j];
 			tp_put_head(b, 4, 6), tp_put_head(b, 2, 32), tp_put(b, c->bytes(c->self, r->device), 32);
 			tp_put_head(b, 0, r->c), tp_put_head(b, 0, r->len), tp_put_head(b, 0, (uint64_t)r->gone | r->born << 1 | r->back << 2);
 			save_org(b, c, r->left), save_org(b, c, r->right);
+		}
+		tp_put_head(b, 4, l->nreg);
+		for (size_t j = 0; j < l->nreg; j++) {
+			const reg *g = &l->regs[j];
+			tp_put_head(b, 4, 7), tp_put_head(b, 2, 32), tp_put(b, c->bytes(c->self, g->device), 32);
+			tp_put_head(b, 0, g->born), tp_put_head(b, 0, g->lo), tp_put_head(b, 0, g->len), save_link(b, c, g->el);
+			tp_put_head(b, 4, 4), tp_put_head(b, 0, g->st.lamport);
+			tp_put_head(b, 2, 32), tp_put(b, c->bytes(c->self, g->st.device), 32);
+			tp_put_head(b, 0, g->st.n), tp_put_head(b, 0, g->st.i);
+		}
+		tp_put_head(b, 4, l->norg);
+		for (size_t j = 0; j < l->norg; j++) {
+			const orgent *g = &l->orgs[j];
+			tp_put_head(b, 4, 4), tp_put_head(b, 2, 32), tp_put(b, c->bytes(c->self, g->device), 32);
+			tp_put_head(b, 0, g->c), tp_put_head(b, 0, g->len), save_link(b, c, g->org);
 		}
 	}
 	tp_put_head(b, 4, st->nslots);
@@ -2871,7 +3394,7 @@ void el_save(tp_buf *b, const el_ctx *c, const el_state *st) {
 		tp_put_head(b, 4, 2), tp_put_head(b, 2, 32), tp_put(b, c->bytes(c->self, st->landed[i].device), 32);
 		tp_put_head(b, 0, st->landed[i].n);
 	}
-	save_ref(b, c, &st->moved, !st->moved.lamport);
+	tp_put(b, "\xf6", 1);
 	tp_put_head(b, 4, st->nbins);
 	for (size_t i = 0; i < st->nbins; i++) {
 		const el_bin *g = st->bins[i];
@@ -2900,6 +3423,17 @@ static int load_ref(const el_ctx *c, tp_in *in, el_ref *r, int maybe_none) {
 	long d = c->index(c->self, key.p);
 	if (d < 0) return TP_NOMEM;
 	r->device = (uint32_t)d;
+	return 0;
+}
+static int load_link(const el_ctx *c, tp_in *in, olink *g) {
+	uint64_t k, born, x;
+	tp_span key;
+	if (tp_null(in)) return *g = (olink){0}, 0;
+	if (tp_array(in, &k) || k != 3 || tp_bytes(in, 32, &key) || tp_whole(in, &born) || born > 1 || tp_whole(in, &x))
+		return -1;
+	long i = c->index(c->self, key.p);
+	if (i < 0) return TP_NOMEM;
+	*g = (olink){(uint32_t)i, (uint32_t)born, 1, (uint32_t)x, (uint32_t)(x >> 32)};
 	return 0;
 }
 static int load_org(const el_ctx *c, tp_in *in, org *g) {
@@ -2955,7 +3489,7 @@ int el_load(const el_ctx *c, el_state *st, tp_span bytes) {
 		if (lists_room(mem, st)) tp_free(mem, l, sizeof *l), code = TP_NOMEM;
 		else st->lists[st->n++] = l;
 		if (code) break;
-		if (tp_array(&in, &k) || k != 3) code = TP_NOTSTEP;
+		if (tp_array(&in, &k) || k != 5) code = TP_NOTSTEP;
 		if (!code && (code = load_node(c, &in, &nb))) code = code < 0 ? TP_NOTSTEP : code;
 		if (!code && (tp_buf_why(&nb) || nb.len < 3)) code = tp_buf_why(&nb) ? TP_NOMEM : TP_NOTSTEP;
 		if (!code && (tp_whole(&in, &text) || text > 1)) code = TP_NOTSTEP;
@@ -2999,6 +3533,63 @@ int el_load(const el_ctx *c, el_state *st, tp_span bytes) {
 			r->gone = flags & 1, r->born = (flags >> 1) & 1, r->back = (flags >> 2) & 1;
 			if (!r->gone) l->count += len;
 			l->n++;
+		}
+		uint64_t ng = 0;
+		if (!code && (tp_array(&in, &ng) || ng > (uint64_t)(in.end - in.p) / 8)) code = TP_NOTSTEP;
+		if (!code && ng) {
+			l->roomreg = (size_t)ng;
+			if (!(l->regs = tp_alloc(mem, l->roomreg * sizeof *l->regs))) code = TP_NOMEM;
+		}
+		for (uint64_t j = 0; j < ng && !code; j++) {
+			reg *g = &l->regs[l->nreg];
+			uint64_t born, lo, len, sk;
+			tp_span dev, sdev;
+			*g = (reg){0};
+			if (tp_array(&in, &k) || k != 7 || tp_bytes(&in, 32, &dev) || tp_whole(&in, &born) || born > 1 ||
+				tp_whole(&in, &lo) || tp_whole(&in, &len) || len < 1 || len > UINT32_MAX) {
+				code = TP_NOTSTEP;
+				break;
+			}
+			long d = c->index(c->self, dev.p);
+			if (d < 0) code = TP_NOMEM;
+			else if ((code = load_link(c, &in, &g->el))) code = code < 0 && code != TP_NOMEM ? TP_NOTSTEP : code;
+			if (code) break;
+			if (tp_array(&in, &sk) || sk != 4 || tp_whole(&in, &g->st.lamport) || tp_bytes(&in, 32, &sdev) ||
+				tp_whole(&in, &g->st.n) || tp_whole(&in, &sk)) {
+				code = TP_NOTSTEP;
+				break;
+			}
+			long sd = c->index(c->self, sdev.p);
+			if (sd < 0) {
+				code = TP_NOMEM;
+				break;
+			}
+			g->device = (uint32_t)d, g->born = (uint32_t)born, g->lo = lo, g->len = (uint32_t)len;
+			g->st.device = (uint32_t)sd, g->st.i = (uint32_t)sk;
+			l->nreg++;
+		}
+		uint64_t no = 0;
+		if (!code && (tp_array(&in, &no) || no > (uint64_t)(in.end - in.p) / 8)) code = TP_NOTSTEP;
+		if (!code && no) {
+			l->roomorg = (size_t)no;
+			if (!(l->orgs = tp_alloc(mem, l->roomorg * sizeof *l->orgs))) code = TP_NOMEM;
+		}
+		for (uint64_t j = 0; j < no && !code; j++) {
+			orgent *g = &l->orgs[l->norg];
+			tp_span dev;
+			uint64_t len;
+			*g = (orgent){0};
+			if (tp_array(&in, &k) || k != 4 || tp_bytes(&in, 32, &dev) || tp_whole(&in, &g->c) || tp_whole(&in, &len) ||
+				len < 1 || len > UINT32_MAX) {
+				code = TP_NOTSTEP;
+				break;
+			}
+			long d = c->index(c->self, dev.p);
+			if (d < 0) code = TP_NOMEM;
+			else if ((code = load_link(c, &in, &g->org)) || !g->org.set) code = code < 0 && code != TP_NOMEM ? TP_NOTSTEP : code ? code : TP_NOTSTEP;
+			if (code) break;
+			g->device = (uint32_t)d, g->len = (uint32_t)len;
+			l->norg++;
 		}
 	}
 	if (!code && tp_array(&in, &ns)) code = TP_NOTSTEP;
@@ -3071,7 +3662,7 @@ int el_load(const el_ctx *c, el_state *st, tp_span bytes) {
 			if (!code) st->landed[st->nlanded].device = (uint32_t)d, st->landed[st->nlanded++].n = n;
 		}
 	}
-	if (!code && (code = load_ref(c, &in, &st->moved, 1))) code = code < 0 ? TP_NOTSTEP : code;
+	if (!code && !tp_null(&in)) code = TP_NOTSTEP;
 	uint64_t nb = 0;
 	if (!code && top == 5 && tp_array(&in, &nb)) code = TP_NOTSTEP;
 	for (uint64_t i = 0; i < nb && !code; i++) {

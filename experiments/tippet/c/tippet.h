@@ -56,7 +56,7 @@ typedef struct {
 	uint64_t lamport, when, seq; // seq: how many elements its device's steps before it insert
 	int relative;
 	tp_span on;
-	tp_span ids; // per patch: null (a move) or its container and more (WIRE.md, ids); p NULL: none
+	tp_span ids; // per patch: its container and more (WIRE.md, ids); p NULL: none
 } tp_step;
 
 #define TP_OWN_ID 75
@@ -68,7 +68,7 @@ size_t tp_step_node(const tp_step *s, char *out, size_t cap);
 long tp_step_rest(const uint8_t device[32], tp_span node);
 
 typedef struct {
-	tp_span path, value, move;
+	tp_span path, value, move, mpath; // mpath: a move's source path
 	int ranged;
 	uint64_t from, to;
 	int mranged; // a move's source is a range

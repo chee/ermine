@@ -51,7 +51,7 @@ static int move(tp_in *in, tp_patch *q) {
 	for (uint64_t i = 0; i < k; i++) {
 		tp_span key, p;
 		if (tp_text(in, &key)) return -1;
-		if (tp_is(key, "path") && !path(in, &p)) pathed = 1;
+		if (tp_is(key, "path") && !path(in, &p)) pathed = 1, q->mpath = p;
 		else if (!tp_is(key, "range") || range(in, &q->mfrom, &q->mto)) return -1;
 		else q->mranged = 1;
 	}
@@ -181,11 +181,28 @@ static uint64_t path_end(tp_span path, int *whole) {
 	return k;
 }
 
-// the ids: one per patch: null for a move; else its container (a node; null only for a put of the
-// whole value) and
+// the path of a list move's source is the path of its array, then (an item) a place, or the same
+// (a range)
+static int move_paths(const tp_patch *p) {
+	uint64_t k, mk;
+	tp_in a = {p->path.p, p->path.p + p->path.n}, b = {p->mpath.p, p->mpath.p + p->mpath.n};
+	if (tp_array(&a, &k) || tp_array(&b, &mk)) return 0;
+	size_t an = (size_t)(a.end - a.p), bn = (size_t)(b.end - b.p);
+	if (p->mranged) return mk == k && an == bn && !memcmp(a.p, b.p, an);
+	return mk == k + 1 && bn > an && !memcmp(a.p, b.p, an) && b.p[an] >> 5 == 0;
+}
+// a list move: an item, or at most 4096 items, of an array to a gap in the same array
+static int list_move(const tp_patch *p) {
+	if (!p->move.p || !p->ranged || p->from != p->to || p->value.p) return 0;
+	if (p->mranged && !(p->mto > p->mfrom && p->mto - p->mfrom <= 4096)) return 0;
+	return move_paths(p);
+}
+
+// the ids: one per patch: its container (a node; null only for a put of the whole value) and
 //   a put or removal at a key, or of the whole value: [container, pred]    pred: array of nodes
 //   a put at an index of an array: [container, pred, element]
-//   a splice (a patch with a range), a removal at an index: [container, after, gone, before]
+//   a splice (a patch with a range), a removal at an index, a list move: [container, after, gone,
+//   before]; a list move's gone is what it moves, in order, their counts summing to what it moves
 // before null for the end, true for after's own (after not null)
 static int ids_item(tp_in *in, const tp_step *s, const uint8_t *device) {
 	uint64_t k, two, g;
@@ -194,11 +211,8 @@ static int ids_item(tp_in *in, const tp_step *s, const uint8_t *device) {
 	if (tp_array(in, &k) || k != s->count) return -1;
 	for (uint64_t i = 0; i < k; i++) {
 		if (tp_patch_next(s->patches, &at, &p)) return -1;
-		if (tp_null(in)) {
-			if (!p.move.p) return -1;
-			continue;
-		}
-		if (p.move.p || tp_array(in, &two)) return -1;
+		if (tp_null(in) || tp_array(in, &two)) return -1;
+		if (p.move.p && !list_move(&p)) return -1;
 		int whole;
 		uint64_t len = path_end(p.path, &whole);
 		int sliced = p.ranged || (whole && !p.value.p), cnull = tp_null(in);
@@ -215,13 +229,15 @@ static int ids_item(tp_in *in, const tp_step *s, const uint8_t *device) {
 		int after = !tp_null(in);
 		if (after && id_item(in, device, s->n)) return -1;
 		if (tp_array(in, &g)) return -1;
-		uint64_t one = 0;
+		uint64_t one = 0, total = 0;
 		for (uint64_t j = 0; j < g; j++) {
 			uint64_t pair, count;
 			if (tp_array(in, &pair) || pair != 2 || id_item(in, device, s->n) || tp_whole(in, &count) || count < 1)
 				return -1;
 			one = count;
+			total = count > TP_WHOLE - total ? TP_WHOLE : total + count;
 		}
+		if (p.move.p && total != (p.mranged ? p.mto - p.mfrom : 1)) return -1;
 		int before = 0;
 		if (in->p < in->end && *in->p == 0xf5) {
 			if (!after) return -1;
