@@ -1,5 +1,5 @@
 {
-	"about": "what a first boot of ermineOS puts on the SD card (host.c): nodes, each at its parent's names, with a value or a program's source, and its info (attributes: a program's ermine.type, by which ermine/programs finds what runs it); and what boots, in order",
+	"about": "what a first boot of ermineOS puts on the SD card (host.c): nodes, each at its parent's names, with a value or a program's source, and its info (attributes: a program's ermine.type, by which ermine/programs finds what runs it); and what boots, in order: an entry with a runner (a path, /system/den/runners/<name>) started by the den on it, one without by what ermine/programs finds",
 	"nodes": [
 		{
 			"at": [],
@@ -4607,6 +4607,12 @@
 				"display"
 			],
 			"name": "driver",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"driver"
+			],
 			"program": [
 				"drivers",
 				"display"
@@ -4618,6 +4624,12 @@
 				"font"
 			],
 			"name": "driver",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"driver"
+			],
 			"program": [
 				"drivers",
 				"font"
@@ -4629,6 +4641,12 @@
 				"kbd"
 			],
 			"name": "driver",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"driver"
+			],
 			"program": [
 				"drivers",
 				"kbd"
@@ -4640,6 +4658,12 @@
 				"pointer"
 			],
 			"name": "driver",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"driver"
+			],
 			"program": [
 				"drivers",
 				"pointer"
@@ -4651,6 +4675,12 @@
 				"uart0"
 			],
 			"name": "driver",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"driver"
+			],
 			"program": [
 				"drivers",
 				"uart"
@@ -4662,6 +4692,12 @@
 				"power"
 			],
 			"name": "driver",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"driver"
+			],
 			"program": [
 				"drivers",
 				"power"
@@ -4673,6 +4709,12 @@
 				"clip"
 			],
 			"name": "driver",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"driver"
+			],
 			"program": [
 				"drivers",
 				"clip"
@@ -4684,6 +4726,12 @@
 				"link"
 			],
 			"name": "driver",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"driver"
+			],
 			"program": [
 				"drivers",
 				"link"
@@ -4695,6 +4743,12 @@
 				"web"
 			],
 			"name": "driver",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"driver"
+			],
 			"program": [
 				"drivers",
 				"web"
@@ -4706,6 +4760,12 @@
 				"wayland"
 			],
 			"name": "driver",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"driver"
+			],
 			"program": [
 				"drivers",
 				"wayland"
@@ -4717,6 +4777,12 @@
 				"vram"
 			],
 			"name": "driver",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"driver"
+			],
 			"program": [
 				"drivers",
 				"vram"
@@ -4728,6 +4794,12 @@
 				"pty"
 			],
 			"name": "driver",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"driver"
+			],
 			"program": [
 				"drivers",
 				"pty"
@@ -4739,6 +4811,12 @@
 				"sock"
 			],
 			"name": "driver",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"driver"
+			],
 			"program": [
 				"drivers",
 				"sock"
@@ -4750,6 +4828,12 @@
 				"sync"
 			],
 			"name": "driver",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"driver"
+			],
 			"program": [
 				"drivers",
 				"sync"
@@ -4761,6 +4845,12 @@
 				"mac"
 			],
 			"name": "driver",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"driver"
+			],
 			"program": [
 				"drivers",
 				"mac"
@@ -4772,6 +4862,12 @@
 				"vnc"
 			],
 			"name": "driver",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"driver"
+			],
 			"program": [
 				"drivers",
 				"vnc"
@@ -4783,6 +4879,12 @@
 				"hotplug"
 			],
 			"name": "driver",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"driver"
+			],
 			"program": [
 				"drivers",
 				"hotplug"
@@ -4791,6 +4893,12 @@
 		{
 			"start": [],
 			"name": "stack",
+			"runner": [
+				"system",
+				"den",
+				"runners",
+				"driver"
+			],
 			"program": [
 				"drivers",
 				"stack"
