@@ -6,7 +6,7 @@
 // (WIRE.md, list moves). State is keyed by container id: a sequence's elements, and a
 // cell for each assignment (put, removal) still visible at a slot (WIRE.md, assignments): its id,
 // the container it holds, the step that made it, and, when another cell shows, its value.
-import type { Value } from "@ermine/encoding/cbor"
+import { Stand, type Value } from "@ermine/encoding/cbor"
 import apply, { type Key as Index, type Patch } from "@ermine/changeable/apply"
 import {
 	type Anchor,
@@ -101,6 +101,8 @@ export type State = {
 	bins: Map<Node, Piece[]>
 	// set by the host around a step: trash is not made (a replay of steps before an empty)
 	quiet?: boolean
+	// the step that made the container a patch was passed over for (set by the host around a step)
+	passedBy?: [device: string, n: number]
 }
 
 export const fresh = (): State => ({
@@ -144,7 +146,8 @@ type Key = [device: string, c: number]
 const after = (a: Key, b: Key) => a[0] > b[0] || (a[0] === b[0] && a[1] > b[1])
 const isSeq = (v: unknown) => typeof v === "string" || Array.isArray(v)
 const isMap = (v: unknown): v is Record<string, unknown> =>
-	typeof v === "object" && v !== null && !Array.isArray(v) && !ArrayBuffer.isView(v)
+	typeof v === "object" && v !== null && !Array.isArray(v) && !ArrayBuffer.isView(v) &&
+	!(v instanceof Stand)
 // a node: a map, an array or a string
 const isContainer = (v: unknown) => isSeq(v) || isMap(v)
 // a sequence's length: counted once, when its elements are made, and for what a splice inserts
@@ -469,6 +472,8 @@ const greater = (a: Rec, b: Rec) =>
 		: a.at[2] !== b.at[2]
 		? a.at[2] > b.at[2]
 		: a.i > b.i
+// a pred hides only a cell of a lesser step: by lamport, then device
+const hides = (a: Ref, b: Ref) => a[0] !== b[0] ? a[0] > b[0] : a[1] > b[1]
 const visible = (rs: readonly Rec[] | undefined) => (rs ?? []).filter((r) => !r.ghost && !r.trash)
 const shows = (rs: readonly Rec[]) =>
 	rs.reduce<Rec | undefined>((a, r) => !a || greater(r, a) ? r : a, undefined)
@@ -755,8 +760,9 @@ function assign(
 		for (const id of pred) {
 			const r = (state.slots.get(key(parent, slot)) ?? []).find((x) => x.id === id)
 			if (r && !r.ghost && !r.trash) {
-				if (!gone.includes(r)) gone.push(r)
-			} else if (!r && !landed(state, id)) {
+				if (!gone.includes(r) && hides(ref, r.at)) gone.push(r)
+			} else if (!r ? !landed(state, id) : r.ghost && hides(ref, r.at)) {
+				if (r) delRec(state, r, back)
 				addRec(state, {
 					parent,
 					slot,
@@ -775,8 +781,8 @@ function assign(
 		const ghost = (state.slots.get(key(parent, slot)) ?? []).find((x) =>
 			x.ghost && x.id === cell.id
 		)
-		if (ghost) {
-			delRec(state, ghost, back)
+		if (ghost) delRec(state, ghost, back)
+		if (ghost && hides(ghost.at, ref)) {
 			if (cell.node) {
 				bury(state, back, {
 					parent,
@@ -1077,7 +1083,11 @@ function patch(
 	if (node === undefined) return missing(late, "no container")
 	const w: Where | undefined = name ? { at: p.path.slice(0, len) } : where(state, node, back)
 	if (!w) {
-		if (!name && landed(state, node)) return { patches: [], named: given! }
+		if (!name && landed(state, node)) {
+			const [device, n] = node.split(NUL, 2)
+			state.passedBy = [device, +n]
+			return { patches: [], named: given! }
+		}
 		return missing(late, "a container not there")
 	}
 	const up = w.at, host = w.host

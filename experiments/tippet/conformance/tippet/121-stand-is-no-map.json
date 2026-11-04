@@ -1,0 +1,151 @@
+{
+	"title": "a stand-in (tag 0x12345678) in a value is no map: a patch into it fails on every reader",
+	"steps": [
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "device",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"expect": {
+				"key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
+		},
+		{
+			"op": "device",
+			"name": "r",
+			"seed": "0303030303030303030303030303030303030303030303030303030303030303",
+			"expect": {
+				"key": "ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1"
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "doc",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"keep": "old"
+					}
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "doc",
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"value": {
+						"/": {
+							"live": "fn"
+						}
+					}
+				}
+			],
+			"expect": {
+				"n": 2,
+				"lamport": 2
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "r",
+			"of": "a",
+			"at": 1,
+			"expect": {
+				"added": 2
+			}
+		},
+		{
+			"op": "take",
+			"device": "r",
+			"run": {
+				"device": "b",
+				"steps": [
+					{
+						"n": 1,
+						"node": "doc",
+						"part": "value",
+						"lamport": 3,
+						"when": 1760000000,
+						"patches": [
+							{
+								"path": [
+									"s",
+									"x"
+								],
+								"value": 1
+							},
+							{
+								"path": [
+									"keep"
+								],
+								"value": "new"
+							}
+						],
+						"ids": [
+							{
+								"container": [
+									"8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+									2,
+									0
+								],
+								"pred": []
+							},
+							{
+								"container": [
+									"8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+									1,
+									0
+								],
+								"pred": []
+							}
+						]
+					}
+				]
+			},
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "value",
+			"device": "r",
+			"node": "doc",
+			"expect": {
+				"value": {
+					"keep": "new",
+					"s": {
+						"/": {
+							"live": "fn"
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "failed",
+			"device": "r",
+			"expect": {
+				"failed": []
+			}
+		}
+	]
+}

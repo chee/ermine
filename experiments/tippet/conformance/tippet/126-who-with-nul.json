@@ -1,0 +1,62 @@
+{
+	"title": "a who with a NUL is written as a tstr with the NUL, on both",
+	"steps": [
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "doc",
+			"patches": [
+				{
+					"path": [],
+					"value": 1
+				}
+			],
+			"who": "a\u0000b",
+			"expect": {
+				"n": 1,
+				"lamport": 1
+			}
+		},
+		{
+			"op": "value",
+			"device": "a",
+			"node": "doc",
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "count",
+			"device": "a",
+			"of": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+			"expect": {
+				"count": 1
+			}
+		},
+		{
+			"op": "steps",
+			"device": "a",
+			"of": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+			"expect": {
+				"steps": [
+					"8c58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c01f663646f636576616c756581a26470617468806576616c756501011a68e7780000808182f68063610062"
+				]
+			}
+		},
+		{
+			"op": "failed",
+			"device": "a",
+			"expect": {
+				"failed": []
+			}
+		}
+	]
+}

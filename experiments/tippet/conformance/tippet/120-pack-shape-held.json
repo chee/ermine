@@ -1,0 +1,196 @@
+{
+	"title": "a pack that is not shaped as a pack is refused though the steps it would hold are held",
+	"steps": [
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "device",
+			"name": "r",
+			"seed": "0303030303030303030303030303030303030303030303030303030303030303",
+			"expect": {
+				"key": "ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1"
+			}
+		},
+		{
+			"op": "device",
+			"name": "x",
+			"seed": "0404040404040404040404040404040404040404040404040404040404040404",
+			"expect": {
+				"key": "ca93ac1705187071d67b83c7ff0efe8108e8ec4530575d7726879333dbdabe7c"
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "doc",
+			"patches": [
+				{
+					"path": [],
+					"value": 1
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "doc",
+			"patches": [
+				{
+					"path": [],
+					"value": 2
+				}
+			],
+			"expect": {
+				"n": 2,
+				"lamport": 2
+			}
+		},
+		{
+			"op": "write",
+			"device": "r",
+			"node": "doc",
+			"patches": [
+				{
+					"path": [],
+					"value": 9
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "r",
+			"node": "doc",
+			"patches": [
+				{
+					"path": [],
+					"value": 10
+				}
+			],
+			"expect": {
+				"n": 2,
+				"lamport": 2
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "r",
+			"of": "a",
+			"at": 1,
+			"expect": {
+				"added": 2
+			}
+		},
+		{
+			"op": "link",
+			"a": "r",
+			"b": "x",
+			"expect": {}
+		},
+		{
+			"op": "deliver",
+			"from": "r",
+			"to": "x",
+			"expect": {
+				"got": [
+					[
+						"have",
+						{
+							"r": 2,
+							"a": 2
+						}
+					]
+				]
+			}
+		},
+		{
+			"op": "deliver",
+			"from": "x",
+			"to": "r",
+			"expect": {
+				"got": [
+					[
+						"have",
+						{}
+					]
+				]
+			}
+		},
+		{
+			"op": "queued",
+			"from": "r",
+			"to": "x",
+			"expect": {
+				"queued": [
+					[
+						"run",
+						"r",
+						1,
+						2
+					],
+					[
+						"run",
+						"a",
+						1,
+						2
+					]
+				]
+			}
+		},
+		{
+			"op": "inject",
+			"from": "x",
+			"to": "r",
+			"bytes": "846372756e58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c584000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000830282000163626164",
+			"expect": {}
+		},
+		{
+			"op": "queued",
+			"from": "r",
+			"to": "x",
+			"expect": {
+				"queued": [
+					[
+						"run",
+						"r",
+						1,
+						2
+					],
+					[
+						"run",
+						"a",
+						1,
+						2
+					],
+					[
+						"refused",
+						"a",
+						2
+					]
+				]
+			}
+		},
+		{
+			"op": "count",
+			"device": "r",
+			"of": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+			"expect": {
+				"count": 2
+			}
+		}
+	]
+}

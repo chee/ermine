@@ -39,6 +39,7 @@ struct tp_log {
 	void (*forked)(void *ctx, size_t i);
 	fork *forks;
 	size_t nforks, forkroom, proved;
+	uint64_t drops; // runs let go, so far
 	tp_buf scratch;
 };
 
@@ -434,6 +435,11 @@ static int learn(tp_log *log, const uint8_t device[32], const tp_span *a, size_t
 	uint8_t *copy = tp_alloc(&log->mem, length);
 	if (!copy) return tp_buf_free(&m), 0;
 	memcpy(copy, came.p ? came.p : m.p, length);
+	if (came.p && !low) {
+		// the lower hash first: the runs as they came, swapped
+		size_t x = (size_t)(siga - 2 - came.p), y = (size_t)(sigb - 2 - came.p);
+		memcpy(copy + x, came.p + y, length - y), memcpy(copy + x + length - y, came.p + x, y - x);
+	}
 	tp_buf_free(&m);
 	fork *f = &log->forks[log->nforks];
 	memcpy(f->device, device, 32), f->n = na, f->message = copy, f->length = length;
@@ -565,6 +571,7 @@ long tp_log_snapped(const tp_log *log, uint8_t *out, size_t cap) {
 int tp_log_drop(tp_log *log, const uint8_t device[32], uint64_t n) {
 	tp_store *st = log->store;
 	if (!n || !st->drop || st->drop(st->self, device, n) <= 0) return 0;
+	log->drops++;
 	uint8_t record[48];
 	tp_buf b = {record, 0, sizeof record, sizeof record, NULL, 0};
 	tp_put_head(&b, 4, 3), tp_put_text(&b, "drop");
@@ -579,7 +586,7 @@ static int dropped(tp_log *log, const uint8_t *r, size_t length) {
 	if (!length || *r != 0x83) return 0;
 	if (!tp_array(&in, &k) && !tp_text(&in, &t) && tp_is(t, "drop") && !tp_bytes(&in, 32, &device) &&
 		!tp_whole(&in, &n) && log->store->drop)
-		log->store->drop(log->store->self, device.p, n);
+		log->drops += log->store->drop(log->store->self, device.p, n) > 0;
 	return 1;
 }
 
@@ -631,3 +638,5 @@ int tp_log_load(tp_log *log) {
 	log->asked = log->closed;
 	return 0;
 }
+
+uint64_t tp_log_drops(const tp_log *log) { return log->drops; }

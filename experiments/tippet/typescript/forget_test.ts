@@ -1,5 +1,6 @@
 // A device that forgets (history.ts) lets a run go once it is in a snapshot and has passed on.
 import { assert, assertEquals } from "@std/assert"
+import { encode } from "@ermine/encoding/cbor"
 import createEntry from "@ermine/graph/entry"
 import update from "@ermine/changeable/update"
 import { decodeStep, unhex } from "./step.ts"
@@ -430,5 +431,111 @@ Deno.test("forgets: a write its elements can't name goes as the graph's whole va
 		await tick()
 		assertEquals([r.value("doc"), r.history.failed], [{ s: "YXhello12" }, []])
 		assertEquals(f.history.unkept.length, 1)
+	}
+})
+
+// the entry's step that fails for good: a key put into a string
+const bad = (w: Log, y: string) =>
+	w.write({
+		node: "doc",
+		part: "value",
+		patches: [{ path: ["s", "y"], value: 1 }],
+		when: 0,
+		ids: [[[unhex(y), 1, 0, "s"], []]],
+	})
+
+Deno.test("forgets: a null whole value is still there after a reload, with the runs let go", async () => {
+	for (const forgets of [true, false]) {
+		const a = await device(), A = a.log.device!, dir = await Deno.makeTempDir()
+		const f = await device({ store: fileStore(dir), forgets })
+		a.put("doc", null)
+		a.put("other", 1)
+		await all(f, a.log)
+		await f.history.snapshot()
+		f.log.drop({ [A]: 2 })
+		await f.log.saved(), await f.log.close()
+		const g = await device({ store: fileStore(dir), forgets })
+		assertEquals([g.value("doc"), g.value("other")], [null, 1])
+		assertEquals(g.history.versions("doc", "value").map((v) => v.value), forgets ? [null] : [])
+		await g.log.close()
+		await Deno.remove(dir, { recursive: true })
+	}
+})
+
+Deno.test("forgets: after a reload with runs let go a late step that applies is applied once, a failed step after it", async () => {
+	const a = await device(), b = await device(), A = a.log.device!
+	const o = createLog({ writes: true })
+	await o.load()
+	const dir = await Deno.makeTempDir()
+	const f = await device({ store: fileStore(dir), forgets: true })
+	a.put("doc", { s: "hello" })
+	await all(f, a.log), await all(b, a.log)
+	await o.take((await a.log.run(A, 1))!)
+	await f.history.snapshot()
+	f.log.drop({ [A]: 1 })
+	await f.log.saved(), await f.log.close()
+	const g = await device({ store: fileStore(dir), forgets: true })
+	b.patch("doc", [{ path: ["s"], range: [5, 5], value: "!" }])
+	for (let i = 0; i < 9; i++) put(o, "bump", [], i)
+	bad(o, A)
+	await all(g, o)
+	assertEquals(g.history.failed.length, 1)
+	await all(g, b.log)
+	assertEquals(g.value("doc"), { s: "hello!" })
+	await g.log.close()
+	await Deno.remove(dir, { recursive: true })
+})
+
+Deno.test("forgets: a step that failed before a reload is tried again when the step it needed lands", async () => {
+	for (const reload of [false, true]) {
+		const y = createLog({ writes: true }), x = createLog({ writes: true })
+		await y.load(), await x.load()
+		put(y, "doc", [], { a: 1 })
+		await x.take(await last(y))
+		x.write({
+			node: "doc",
+			part: "value",
+			patches: [{ path: ["z"], value: 5 }],
+			when: 0,
+			ids: [[[unhex(y.device!), 1, 0], []]],
+		})
+		for (let i = 0; i < 3; i++) put(x, "bump", [], i)
+		const dir = await Deno.makeTempDir()
+		let f = await device({ store: fileStore(dir), forgets: true })
+		await drain(f.log, x)
+		assertEquals(f.history.failed.length, 1)
+		if (reload) {
+			await f.history.snapshot(), await f.log.saved(), await f.log.close()
+			f = await device({ store: fileStore(dir), forgets: true })
+			assertEquals(f.history.failed.length, 1)
+		}
+		await drain(f.log, y)
+		await tick()
+		assertEquals([f.value("doc"), f.history.failed], [{ a: 1, z: 5 }, []])
+		await f.log.close()
+		await Deno.remove(dir, { recursive: true })
+	}
+})
+
+Deno.test("forgets: a snapshot from before its format mark is still read", async () => {
+	for (const forgets of [true, false]) {
+		const dir = await Deno.makeTempDir()
+		const f = await device({ store: fileStore(dir), forgets })
+		await f.log.snapshot(encode({
+			count: {},
+			entries: [["value", "m", { a: 1 }, [], [], null], ["value", "n", 5, [], [], null], [
+				"value",
+				"x",
+				null,
+				[],
+				[],
+				null,
+			]],
+		} as never))
+		await f.log.saved(), await f.log.close()
+		const g = await device({ store: fileStore(dir), forgets })
+		assertEquals([g.value("m"), g.value("n"), g.value("x")], [{ a: 1 }, 5, undefined])
+		await g.log.close()
+		await Deno.remove(dir, { recursive: true })
 	}
 })

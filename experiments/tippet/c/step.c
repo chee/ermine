@@ -149,7 +149,7 @@ uint64_t tp_step_made(const tp_step *s) {
 }
 
 // a node as written: this device's [n, i, rel…] (n from 1 to the step's, and the step's only with i
-// below the patch's index at), another's [device, n, i, rel…] (n from 1); rel: text or whole
+// below the patch's index at), another's [device, n, i, rel…] (n from 1); rel: text or whole, at most 1021
 static int node_item(tp_in *in, const uint8_t *device, uint64_t n, uint64_t at) {
 	uint64_t k, a, b;
 	tp_span key;
@@ -163,6 +163,7 @@ static int node_item(tp_in *in, const uint8_t *device, uint64_t n, uint64_t at) 
 			return -1;
 		k -= 3;
 	}
+	if (k > 1021) return -1;
 	for (; k; k--) {
 		tp_span t;
 		if (in->p >= in->end) return -1;

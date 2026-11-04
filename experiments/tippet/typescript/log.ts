@@ -85,6 +85,8 @@ export type Store = {
 	sync?(): Promise<void>
 	close?(): void
 	drop?(device: string, n: number): number
+	// whether step n is held, without reading it
+	has?(device: string, n: number): boolean
 }
 
 export type Open = { device: string; first: number; steps: Uint8Array[] }
@@ -147,6 +149,12 @@ export function createIndex<W>(read: (where: W) => Uint8Array) {
 			last = { device, first: r[0], steps: stepsOf(record) }
 			return last.steps[n - r[0]]
 		},
+		has(device: string, n: number) {
+			const o = open, l = last
+			return (o?.device === device && n >= o.first && n < o.first + o.steps.length) ||
+				(l?.device === device && n >= l.first && n < l.first + l.steps.length) ||
+				!!find(device, n)
+		},
 		drop(device: string, n: number) {
 			const list = runs.get(device) ?? [], kept = list.filter((r) => r[1] > n)
 			runs.set(device, kept)
@@ -184,6 +192,7 @@ export function createMemoryStore(): Store {
 		snapshot: (b) => (snap = b, Promise.resolve()),
 		key: (seed) => Promise.resolve(key ??= seed),
 		drop: index.drop,
+		has: index.has,
 	}
 }
 
@@ -228,6 +237,8 @@ export type Log = {
 	// how many elements the device's steps insert (WIRE.md, ids): the seq its next step has
 	seq: (device: string) => number
 	step: (device: string, n: number) => Uint8Array
+	// whether step n is held (a step let go is not)
+	held: (device: string, n: number) => boolean
 	prior: (device: string, n: number) => Prior | undefined
 	steps: (device: string) => Uint8Array[]
 	on(t: Told): () => void
@@ -530,6 +541,15 @@ export function createLog(
 		count,
 		seq: (device: string) => feeds.get(device)?.next ?? 0,
 		step: (device: string, n: number) => store.get(device, n),
+		held(device: string, n: number) {
+			if (store.has) return store.has(device, n)
+			try {
+				store.get(device, n)
+				return true
+			} catch {
+				return false
+			}
+		},
 		prior: (device: string, n: number) => prior_(device, n),
 		steps: (device: string): Uint8Array[] =>
 			Array.from({ length: count(device) }, (_, i) => store.get(device, i + 1)),
@@ -595,7 +615,8 @@ export function createLog(
 				try {
 					const first = firstOf(m.pack)
 					// all held: unpacked still, to see whether it is the same chain
-					const held = first.prior && first.n + stepsIn(m.pack) - 1 <= count(m.device)
+					const k = stepsIn(m.pack)
+					const held = first.prior && k > 0 && first.n + k - 1 <= count(m.device)
 					if (first.prior && first.n - 1 > count(m.device)) return { refused: "gap" }
 					const prior = first.prior ? prior_(m.device, first.n - 1) : undefined
 					if (first.prior && !prior) return held ? { added: 0 } : { refused: "before" }
