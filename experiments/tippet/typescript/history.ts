@@ -31,6 +31,8 @@ import type { Sync } from "./sync.ts"
 
 type Ref = [lamport: number, device: string, n: number]
 type Own = State & { tail: { ref: Ref; undo: Patch[]; back: (() => void)[] }[]; all: boolean }
+// after a cut: a step none of whose patches reached the value, its container gone
+const PASSED = "a container not there, the step passed over"
 export type Failed = { device: string; n: number; node: string; part: string; why: string }
 export type Version = {
 	value: unknown
@@ -160,11 +162,9 @@ export function createHistory(o: {
 	function fail(s: Step, e: unknown) {
 		const f: Failed = { device: s.device, n: s.n, node: s.node, part: s.part, why: String(e) }
 		failed.push(f)
-		if (o.forgets) {
-			const k = name(s.part, s.node), r: Ref = [s.lamport, s.device, s.n], w = worst.get(k)
-			failedAt.set(f, r)
-			if (!w || before(w, r)) worst.set(k, r)
-		}
+		const k = name(s.part, s.node), r: Ref = [s.lamport, s.device, s.n], w = worst.get(k)
+		failedAt.set(f, r)
+		if (o.forgets && (!w || before(w, r))) worst.set(k, r)
 		tell()
 	}
 	// forgets: worst again, after failed steps of entry k went
@@ -366,19 +366,29 @@ export function createHistory(o: {
 		mine.value = graph(k)
 		mine.quiet = quiet(k, r)
 		try {
+			mine.passedBy = undefined
 			const { applied } = applyStep(mine, s, { late: !last })
 			write(s, applied)
 			mine.value = graph(k)
+			// after a cut, a step with nothing of it in the value, its container made by a failed
+			// step, is shown to the host
+			const by = mine.passedBy
+			if (
+				!applied.length && by && cut() &&
+				failed.some((f) => f.device === by[0] && f.n === by[1])
+			) {
+				fail(s, new RangeError(PASSED))
+			}
 		} catch (e) {
 			mine.value = graph(k)
-			if (!last && !cut) return void waiting.set(k, [r])
+			if (!last && !cut()) return void waiting.set(k, [r])
 			return void fail(s, e instanceof Late ? LATE : e)
 		} finally {
 			mine.quiet = false
 		}
 		const w = worst.get(k)
 		if (last || !again || !w || !before(r, w)) return
-		if (!cut) return void waiting.set(k, [r])
+		if (!cut()) return void waiting.set(k, [r])
 		for (const f of failed.filter((f) => name(f.part, f.node) === k)) {
 			let t: Step
 			try {
@@ -396,7 +406,15 @@ export function createHistory(o: {
 	}
 	// forgets: the entry's steps the log holds, in order, applied again from nothing, its value
 	// written whole; none let go. scan: the log read once for all the entries of a catch-up
-	let cut = false
+	let lost = false
+	// whether any device's first step is let go: asked of the log, so a drop by any path counts
+	function cut() {
+		if (lost) return true
+		for (const d of Object.keys(log.have())) {
+			if (log.count(d) && !log.held(d, 1)) return lost = true
+		}
+		return false
+	}
 	function scan(keys: Set<string>) {
 		const out = new Map<string, Ref[]>()
 		for (const d of Object.keys(log.have())) {
@@ -405,7 +423,7 @@ export function createHistory(o: {
 				try {
 					bytes = log.step(d, n)
 				} catch {
-					cut = true
+					lost = true
 					return
 				}
 				try {
@@ -420,7 +438,7 @@ export function createHistory(o: {
 	}
 	function anew(k: string, early: Ref[], refs: Ref[] = []) {
 		// some let go: each as it comes
-		if (cut) {
+		if (cut()) {
 			for (const r of early.sort((a, b) => before(a, b) ? -1 : 1)) {
 				into(k, decodeStep(log.step(r[1], r[2])), r, !before(r, entries.get(k)![0]))
 			}
@@ -468,7 +486,9 @@ export function createHistory(o: {
 	function flush() {
 		const all = [...waiting]
 		waiting.clear()
-		const found = o.forgets && !cut && all.length ? scan(new Set(all.map(([k]) => k))) : undefined
+		const found = o.forgets && !cut() && all.length
+			? scan(new Set(all.map(([k]) => k)))
+			: undefined
 		for (const [k, early] of all) {
 			try {
 				if (o.forgets) anew(k, early, found?.get(k))
@@ -481,6 +501,7 @@ export function createHistory(o: {
 
 	async function snapshot() {
 		const out: [string, string, Value | null, Ref[], number[], Value | null][] = []
+		const lost = failed.map((f) => [f.device, f.n, f.node, f.part, failedAt.get(f)?.[0] ?? null])
 		for (const [k, refs] of entries) {
 			const [part, node] = k.split("\0")
 			const v = table.get(part as Key, node)?.value
@@ -490,7 +511,7 @@ export function createHistory(o: {
 			out.push([
 				part,
 				node,
-				v === undefined ? null : v as Value,
+				v === undefined ? null : [v as Value],
 				refs,
 				hs,
 				o.forgets && own.has(k) ? saveState(own.get(k)!) : null,
@@ -498,7 +519,9 @@ export function createHistory(o: {
 		}
 		const count: Record<string, number> = {}
 		for (const d of Object.keys(log.have())) count[d] = log.count(d)
-		await log.snapshot(encode({ count, entries: out } as unknown as Value))
+		await log.snapshot(encode(
+			{ v: 1, count, ...lost.length && { failed: lost }, entries: out } as unknown as Value,
+		))
 	}
 
 	const unwatch = places.watchAll((f) => {
@@ -629,7 +652,6 @@ export function createHistory(o: {
 			const drop = Object.entries(held).map(([d, n]) =>
 				[d, Math.min(n, passed[d] ?? 0)] as const
 			)
-			cut ||= drop.some(([, n]) => n > 0)
 			log.drop(Object.fromEntries(drop))
 		},
 
@@ -638,24 +660,39 @@ export function createHistory(o: {
 			let count: Record<string, number> = {}
 			if (bytes) {
 				const snap = decode(bytes) as unknown as {
+					v?: number
 					count: Record<string, number>
+					failed?: [string, number, string, string, number | null][]
 					entries: [string, string, unknown, Ref[], number[], unknown][]
 				}
 				count = snap.count
 				quietly(() => {
-					for (const [part, node, v, refs, hs, elements] of snap.entries) {
+					for (const [device, n, node, part, lamport] of snap.failed ?? []) {
+						const f: Failed = { device, n, node, part, why: "failed before a reload" }
+						failed.push(f)
+						if (lamport === null) continue
+						const k = name(part, node), r: Ref = [lamport, device, n], w = worst.get(k)
+						failedAt.set(f, r)
+						if (o.forgets && (!w || before(w, r))) worst.set(k, r)
+					}
+					// v 1: a value is [v]; none: before it, a value, null for none
+					for (const [part, node, given, refs, hs, elements] of snap.entries) {
+						const held = (snap.v === 1 ? given : given === null ? null : [given]) as
+							| [unknown]
+							| null
+						const v = held?.[0]
 						entries.set(name(part, node), refs), namers.delete(name(part, node))
 						own.delete(name(part, node))
 						if (elements) {
 							own.set(name(part, node), {
 								...loadState(elements),
-								value: v ?? undefined,
+								value: v as Value | undefined,
 								tail: [],
 								all: false,
 							})
 						}
 						heads.set(name(part, node), hs.map((i) => refs[i]).filter((r) => r !== undefined))
-						if (v === null) continue
+						if (!held) continue
 						table.sub(
 							part as Key,
 							node,

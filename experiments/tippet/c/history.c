@@ -2,6 +2,7 @@
 // steps that arrive from elsewhere. Entries are merged in order of lamport, then device.
 #include "history.h"
 
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -86,7 +87,8 @@ struct tp_history {
 	void (*run)(void *ctx, void (*f)(void *data), void *data);
 	void *ctx;
 	int forgets;
-	int cut; // forgets: runs let go
+	int cut; // forgets: runs let go (cut())
+	uint64_t seen; // the log's drops when the first steps were last looked at
 	size_t window; // steps of an entry that hold what undoes them; 0: none
 	pl_watch *watch;
 	entry *entries;
@@ -360,8 +362,10 @@ static void target_of(const op_value *m, op_target *t, op_key **keys) {
 	t->path = *keys, t->length = path->count;
 	for (size_t i = 0; i < path->count; i++) {
 		const op_value *k = path->items[i];
+		// an index past what a long holds, less one for the op layer's n + 1, names no item
+		int64_t x = k->type == OP_STR ? 0 : int_of(k);
 		(*keys)[i] = k->type == OP_STR ? (op_key){.type = OP_STR_KEY, .s = k->str}
-					       : (op_key){.type = OP_NUM_KEY, .n = (long)int_of(k)};
+					       : (op_key){.type = OP_NUM_KEY, .n = x > LONG_MAX - 1 ? LONG_MAX - 1 : (long)x};
 	}
 	*keys += path->count;
 	if (range) t->has_range = 1, t->from = int_of(range->items[0]), t->to = int_of(range->items[1]);
@@ -1099,6 +1103,20 @@ static void resync(tp_history *h, long k) {
 	m->value = x && x->value ? op_ref(x->value) : NULL;
 }
 
+// forgets: whether any device's first step is let go, asked of the log (a drop by any path counts)
+// (the first steps are looked at again when the log has dropped since, or on ask: a store may lose
+// steps with no drop)
+static int cut(tp_history *h, int ask) {
+	if (h->cut || (!ask && h->seen == tp_log_drops(h->log))) return h->cut;
+	h->seen = tp_log_drops(h->log);
+	for (size_t i = 0; i < tp_log_devices(h->log) && !h->cut; i++) {
+		uint64_t have;
+		const uint8_t *d = tp_log_have(h->log, i, &have);
+		h->cut = tp_log_count(h->log, d) && tp_log_step(h->log, d, 1, NULL, 0) < 0;
+	}
+	return h->cut;
+}
+
 static void into(tp_history *h, long k, block *b, const ref *r, int last, tp_span patches,
 	const el_anchor *ids, int again);
 
@@ -1182,14 +1200,14 @@ static void into(tp_history *h, long k, block *b, const ref *r, int last, tp_spa
 		early x = {k, *r};
 		tp_put(&h->early, &x, sizeof x);
 		block_free(b);
-		if (h->early.bad) h->early.bad = 0, note(h, &h->failed, device, r->n, node, part, tp_why(TP_NOMEM));
+		if (h->early.bad) h->early.bad = 0, note_at(h, device, r->n, node, part, tp_why(TP_NOMEM), r->lamport);
 		return;
 	}
 	if (!e->mine) {
 		// no elements: a put of the whole value, which needs none; else the entry worked out again
 		// from the log, if none is let go
 		if (last && e->plain) code = write(h, b), refresh(h, k);
-		else if (!h->cut) code = waitfor(h, k, b, r);
+		else if (!cut(h, 0)) code = waitfor(h, k, b, r);
 		else block_free(b), code = TP_LATE;
 		if (code) note_at(h, device, r->n, node, part, code == TP_LATE ? tp_why(TP_LATE)
 			: code < 0 ? tp_why(code) : op_code_name(code), r->lamport);
@@ -1202,6 +1220,7 @@ static void into(tp_history *h, long k, block *b, const ref *r, int last, tp_spa
 	size_t napplied = 0;
 	el_made made = {0};
 	resync(h, k);
+	e->mine->el.by = 0;
 	e->mine->el.quiet = quiet_at(h, k, r);
 	code = el_step(&c, &e->mine->el, &e->mine->value, &er, patches, b->patches, b->count, NULL, ids, !last,
 		NULL, &back, &applied, &napplied, NULL, &made);
@@ -1213,11 +1232,16 @@ static void into(tp_history *h, long k, block *b, const ref *r, int last, tp_spa
 		b->patches = applied ? applied : must(1), b->count = napplied;
 		if (napplied) code = write(h, b);
 		else block_free(b);
+		// after a cut, a step with nothing of it in the value, its container made by a failed step, is shown to the host
+		if (!code && !napplied && e->mine->el.by && cut(h, 0) &&
+			failed_at(h, h->devices[e->mine->el.byd], e->mine->el.byn)) {
+			note_at(h, device, r->n, node, part, op_code_name(OP_RANGE), r->lamport);
+		}
 	} else block_free(b);
 	resync(h, k);
 	if (!code && last) collapse(h, k);
 	int ours = !code && !last && again && enables(h, part, node, r);
-	if (!last && !h->cut && (code || ours)) {
+	if (!last && !cut(h, 0) && (code || ours)) {
 		if (!(code = waitfor(h, k, NULL, r))) return;
 	}
 	if (code) {
@@ -1228,25 +1252,14 @@ static void into(tp_history *h, long k, block *b, const ref *r, int last, tp_spa
 	if (ours) retry(h, k);
 }
 
-// forgets: runs let go are a device's first
-static int letgo(tp_history *h) {
-	for (size_t i = 0; i < tp_log_devices(h->log) && !h->cut; i++) {
-		uint64_t have;
-		const uint8_t *d = tp_log_have(h->log, i, &have);
-		h->cut = tp_log_count(h->log, d) && tp_log_step(h->log, d, 1, NULL, 0) < 0;
-	}
-	return h->cut;
-}
-
 // forgets: the entry worked out again from every step of it the log holds (a cursor at each
 // device's newest step, the walk reading back from there), its value written whole; some let go:
 // each early step as it comes
 static int anew(tp_history *h, long k, block *b, const ref *lates, size_t nlates) {
 	size_t nd = tp_log_devices(h->log);
-	letgo(h);
 	entry *e = &h->entries[k];
 	e->plain = 0;
-	if (h->cut) {
+	if (cut(h, 1)) {
 		block_free(b);
 		uint8_t *done = tp_alloc(&h->mem, nlates);
 		if (!done) return TP_NOMEM;
@@ -1302,7 +1315,7 @@ static void settle(tp_history *h) {
 			: redo(h, k, b, lates ? lates : &first, lates ? m : 1);
 		if (code) {
 			const char *part = h->entries[k].key, *node = part + strlen(part) + 1;
-			note(h, &h->failed, device, first.n, node, part, code < 0 ? tp_why(code) : op_code_name(code));
+			note_at(h, device, first.n, node, part, code < 0 ? tp_why(code) : op_code_name(code), first.lamport);
 		}
 	}
 	tp_free(&h->mem, lates, n * sizeof *lates);
@@ -1327,14 +1340,14 @@ static void land(tp_history *h, const uint8_t device[32], uint64_t n) {
 	int code = el_read(&c, &st, &ids);
 	if (code) {
 		block_free(b);
-		note(h, &h->failed, device, n, "", "", tp_why(code));
+		note_at(h, device, n, "", "", tp_why(code), st.lamport);
 		return;
 	}
 	tp_span patches = st.patches;
 	size_t from = 0;
 	tp_patch first;
 	int whole = !tp_patch_next(patches, &from, &first) && first.path.n == 1 && !first.ranged && !first.move.p;
-	int simple = whole && st.count == 1 && first.value.p;
+	int simple = whole && st.count == 1 && first.value.p && !(ids && ids[0].npred);
 	long k = entry_of(h, b->part, b->node);
 	ref late = {.lamport = (uint64_t)int_of(b->step->items[6]), .n = n, .seq = at};
 	ref replaced = {0};
@@ -1373,8 +1386,8 @@ static void land(tp_history *h, const uint8_t device[32], uint64_t n) {
 	}
 	el_anchors_free(&h->mem, ids, st.count);
 	if (code) {
-		note(h, &h->failed, device, n, s->items[3]->str, s->items[4]->str,
-			code < 0 ? tp_why(code) : op_code_name(code));
+		note_at(h, device, n, s->items[3]->str, s->items[4]->str,
+			code < 0 ? tp_why(code) : op_code_name(code), late.lamport);
 	}
 	op_free(s);
 }
@@ -1389,8 +1402,10 @@ void tp_history_told(void *ctx, const uint8_t device[32], uint64_t from, size_t 
 
 static int put_snapshot(tp_history *h, CborOut *o) {
 	char hex[64];
-	size_t devices = tp_log_devices(h->log), kept = 0;
-	cborPutHead(o, 5, 2), cborPutText(o, "count", 5), cborPutHead(o, 5, devices);
+	size_t devices = tp_log_devices(h->log), kept = 0, lost = 0;
+	for (size_t i = 0; i < h->failed.n; i++) lost += h->failed.items[i].has_device;
+	cborPutHead(o, 5, lost ? 4 : 3), cborPutText(o, "v", 1), cborPutHead(o, 0, 1);
+	cborPutText(o, "count", 5), cborPutHead(o, 5, devices);
 	const uint8_t *last = NULL;
 	for (size_t k = 0; k < devices; k++) {
 		const uint8_t *next = NULL;
@@ -1402,6 +1417,17 @@ static int put_snapshot(tp_history *h, CborOut *o) {
 		tp_hex(hex, next, 32), cborPutText(o, hex, 64), cborPutHead(o, 0, tp_log_count(h->log, next));
 		last = next;
 	}
+	if (lost) {
+		cborPutText(o, "failed", 6), cborPutHead(o, 4, lost);
+		for (size_t i = 0; i < h->failed.n; i++) {
+			const failure *f = &h->failed.items[i];
+			if (!f->has_device) continue;
+			cborPutHead(o, 4, 5), tp_hex(hex, f->device, 32), cborPutText(o, hex, 64), cborPutHead(o, 0, f->n);
+			if (!cborPutText(o, f->node, strlen(f->node)) || !cborPutText(o, f->part, strlen(f->part))) return 0;
+			if (f->ordered) cborPutHead(o, 0, f->lamport);
+			else cborPutNull(o);
+		}
+	}
 	for (size_t i = 0; i < h->nentries; i++) kept += h->entries[i].count > 0;
 	cborPutText(o, "entries", 7), cborPutHead(o, 4, kept);
 	for (size_t i = 0; i < h->nentries; i++) {
@@ -1412,7 +1438,7 @@ static int put_snapshot(tp_history *h, CborOut *o) {
 		cborPutHead(o, 4, 6);
 		if (!cborPutText(o, part, strlen(part)) || !cborPutText(o, node, strlen(node))) return 0;
 		if (!x || !x->value) cborPutNull(o);
-		else if (!put_value(o, x->value)) return 0;
+		else if (cborPutHead(o, 4, 1), !put_value(o, x->value)) return 0;
 		cborPutHead(o, 4, e->count);
 		const ref *was = NULL;
 		for (size_t k = 0; k < e->count; k++) {
@@ -1466,16 +1492,18 @@ typedef struct {
 	tp_in in;
 	tp_buf names;
 	int why;
+	int wrapped; // the snapshot marks its format: a value is [v], not v
 } unsnapping;
 
-static int unsnap(tp_history *h, tp_in *in, tp_buf *names) {
+static int unsnap(tp_history *h, tp_in *in, tp_buf *names, int wrapped) {
 	tp_span part, node, value = {NULL, 0}, hex;
 	uint64_t k, lamport, n;
 	uint8_t device[32];
 	uint64_t items;
 	if (tp_array(in, &items) || items != 6 || tp_text(in, &part) || tp_text(in, &node))
 		return TP_NOTSTEP;
-	if (!tp_null(in) && tp_skip(in, &value)) return TP_NOTSTEP;
+	uint64_t held = 0;
+	if (!tp_null(in) && ((wrapped && (tp_array(in, &held) || held != 1)) || tp_skip(in, &value))) return TP_NOTSTEP;
 	names->len = 0;
 	tp_put(names, part.p, part.n), tp_put(names, "", 1), tp_put(names, node.p, node.n), tp_put(names, "", 1);
 	if (names->bad) return tp_buf_why(names);
@@ -1545,7 +1573,7 @@ static void unsnap_f(void *data) {
 	unsnapping *u = data;
 	uint64_t n = 0;
 	if (tp_array(&u->in, &n)) u->why = TP_NOTSTEP;
-	for (uint64_t i = 0; i < n && !u->why; i++) u->why = unsnap(u->h, &u->in, &u->names);
+	for (uint64_t i = 0; i < n && !u->why; i++) u->why = unsnap(u->h, &u->in, &u->names, u->wrapped);
 }
 
 static uint64_t count_of(tp_span count, const uint8_t device[32]) {
@@ -1561,22 +1589,61 @@ static uint64_t count_of(tp_span count, const uint8_t device[32]) {
 	return 0;
 }
 
+// forgets: the failed steps a snapshot holds
+static int unfail_load(tp_history *h, tp_span list) {
+	tp_in in = {list.p, list.p + list.n};
+	uint64_t k;
+	if (tp_array(&in, &k)) return TP_NOTSTEP;
+	for (uint64_t i = 0; i < k; i++) {
+		uint64_t five, n, lamport;
+		tp_span hex, node, part;
+		uint8_t device[32];
+		if (tp_array(&in, &five) || five != 5 || tp_text(&in, &hex) || hex.n != 64 ||
+			tp_unhex(device, hex.p, 32) || tp_whole(&in, &n) || tp_text(&in, &node) || tp_text(&in, &part))
+			return TP_NOTSTEP;
+		char *nd = tp_alloc(&h->mem, node.n + 1), *pt = tp_alloc(&h->mem, part.n + 1);
+		if (!nd || !pt) return TP_NOMEM;
+		memcpy(nd, node.p, node.n), nd[node.n] = 0, memcpy(pt, part.p, part.n), pt[part.n] = 0;
+		int ordered = !tp_null(&in);
+		if (ordered && tp_whole(&in, &lamport)) return TP_NOTSTEP;
+		if (ordered) note_at(h, device, n, nd, pt, "failed before a reload", lamport);
+		else note(h, &h->failed, device, n, nd, pt, "failed before a reload");
+		tp_free(&h->mem, nd, node.n + 1), tp_free(&h->mem, pt, part.n + 1);
+	}
+	return 0;
+}
+
 int tp_history_load(tp_history *h) {
 	long length = tp_log_snapped(h->log, NULL, 0);
 	uint8_t *bytes = length > 0 ? tp_alloc(&h->mem, (size_t)length) : NULL;
 	if (length > 0 && !bytes) return TP_NOMEM;
-	unsnapping u = {h, {NULL, NULL}, {NULL, 0, 0, 1 << 20, &h->mem, 0}, 0};
+	unsnapping u = {h, {NULL, NULL}, {NULL, 0, 0, 1 << 20, &h->mem, 0}, 0, 0};
 	tp_span count = {NULL, 0}, t;
 	uint64_t k;
 	if (bytes) {
 		tp_log_snapped(h->log, bytes, (size_t)length);
 		u.in = (tp_in){bytes, bytes + length};
-		if (!tp_canonical(bytes, (size_t)length) || tp_map(&u.in, &k) || k != 2 || tp_text(&u.in, &t) ||
-			!tp_is(t, "count") || tp_skip(&u.in, &count) || tp_text(&u.in, &t) || !tp_is(t, "entries"))
+		tp_span lost = {NULL, 0};
+		uint64_t format = 0;
+		int bad = !tp_canonical(bytes, (size_t)length) || tp_map(&u.in, &k) || !k || tp_text(&u.in, &t);
+		// "v" first: the format, 1 (values as [v]); none: before it (a value, null for none)
+		if (!bad && tp_is(t, "v")) bad = tp_whole(&u.in, &format) || format != 1 || --k == 0 || tp_text(&u.in, &t);
+		u.wrapped = (int)format;
+		if (bad || (k != 2 && k != 3) || !tp_is(t, "count") || tp_skip(&u.in, &count) ||
+			(k == 3 && (tp_text(&u.in, &t) || !tp_is(t, "failed") || tp_skip(&u.in, &lost))) ||
+			tp_text(&u.in, &t) || !tp_is(t, "entries"))
 			u.why = TP_NOTSTEP;
-		else quietly(h, unsnap_f, &u);
+		else {
+			quietly(h, unsnap_f, &u);
+			if (!u.why && lost.p) u.why = unfail_load(h, lost);
+		}
 	}
-	for (size_t i = 0; i < tp_log_devices(h->log) && !u.why; i++) {
+	// a snapshot refused: what it made is let go, and every step the log holds lands
+	if (u.why) {
+		for (size_t i = 0; i < h->nentries; i++) unplace(h, &h->entries[i]);
+		count.p = NULL;
+	}
+	for (size_t i = 0; i < tp_log_devices(h->log); i++) {
 		uint8_t device[32];
 		uint64_t have;
 		memcpy(device, tp_log_have(h->log, i, &have), 32);
@@ -1718,12 +1785,22 @@ static int record(tp_history *h, const pl_fact *f, long k, int retry) {
 		tp_put_head(&idb, 4, np);
 		for (size_t i = 0; i < np; i++) tp_put(&idb, "\xf6", 1);
 	}
+	// who as the wire has it: the op layer holds a NUL as the two bytes c0 80
+	size_t wn = who ? strlen(who) : 0, wm = wn;
+	uint8_t *wire = NULL;
+	if (who && strstr(who, "\xc0\x80")) {
+		wire = tp_alloc(&h->mem, wn), wm = 0;
+		for (size_t i = 0; wire && i < wn; i++, wm++) {
+			wire[wm] = (uint8_t)who[i];
+			if ((uint8_t)who[i] == 0xc0 && i + 1 < wn && (uint8_t)who[i + 1] == 0x80) wire[wm] = 0, i++;
+		}
+	}
 	tp_write w = {{(const uint8_t *)node, strlen(node)}, {(const uint8_t *)part, strlen(part)},
-		{o.data, o.length}, {(const uint8_t *)who, who ? strlen(who) : 0}, (uint64_t)when,
-		{on.p, on.len}, {idb.p, idb.len}};
+		{o.data, o.length}, {wire ? wire : (const uint8_t *)who, wm}, (uint64_t)when, {on.p, on.len}, {idb.p, idb.len}};
 	uint64_t n, lamport;
 	int why = !ok ? TP_NOTSTEP : tp_buf_why(&on) ? tp_buf_why(&on) : tp_buf_why(&idb) ? tp_buf_why(&idb)
-		: mistake ? TP_NOTSTEP : tp_log_write(h->log, &w, &n, &lamport);
+		: mistake ? TP_NOTSTEP : wm != wn && !wire ? TP_NOMEM : tp_log_write(h->log, &w, &n, &lamport);
+	if (wire) tp_free(&h->mem, wire, wn);
 	el_anchors_free(&h->mem, named, np), tp_buf_free(&idb), tp_buf_free(&on);
 	if (why) {
 		// its own value has a write no step holds: undone
@@ -1772,7 +1849,7 @@ static int record(tp_history *h, const pl_fact *f, long k, int retry) {
 	}
 	if (h->forgets) resync(h, k), refresh(h, k);
 	free(o.data), drop_texts(texts, ntexts, alt);
-	if (code) note(h, &h->failed, me, n, node, part, code < 0 ? tp_why(code) : op_code_name(code));
+	if (code) note_at(h, me, n, node, part, code < 0 ? tp_why(code) : op_code_name(code), lamport);
 	return 1;
 }
 
@@ -1932,7 +2009,6 @@ int tp_history_forget(tp_history *h, const tp_sync *s) {
 		const uint8_t *device = tp_log_have(h->log, i, &held);
 		uint64_t passed = tp_sync_passed(s, device), drop = passed < held ? passed : held;
 		why = tp_log_drop(h->log, device, drop);
-		h->cut |= drop > 0;
 	}
 	return why;
 }

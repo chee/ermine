@@ -104,6 +104,7 @@ export function fileStore(dir: string): Store {
 		run: index.run,
 		get: index.get,
 		drop: index.drop,
+		has: index.has,
 		async snapshot(bytes) {
 			await ready()
 			await Deno.writeFile(`${snap}.new`, bytes)

@@ -810,6 +810,7 @@ static int64_t field(dev *d, const char *k) {
 	if (e && e->value && e->value->type == OP_MAP && op_get(e->value, k)) op_as_int64(op_get(e->value, k), &n);
 	return n;
 }
+static int64_t field_a(dev *d) { return field(d, "a"); }
 static size_t failures(dev *d) {
 	tp_failed f;
 	return tp_history_failed(d->history, 0, &f);
@@ -1238,7 +1239,8 @@ static uint64_t listed(const uint8_t *b, size_t n, const char *node) {
 	tp_in in = {b, b + n};
 	tp_span t;
 	uint64_t k, entries, four, steps;
-	if (tp_map(&in, &k) || tp_text(&in, &t) || tp_skip(&in, NULL) || tp_text(&in, &t) || tp_array(&in, &entries))
+	if (tp_map(&in, &k) || tp_text(&in, &t) || tp_skip(&in, NULL) || tp_text(&in, &t) || tp_skip(&in, NULL) ||
+		tp_text(&in, &t) || (tp_is(t, "failed") && (tp_skip(&in, NULL) || tp_text(&in, &t))) || tp_array(&in, &entries))
 		return 0;
 	for (uint64_t i = 0; i < entries; i++) {
 		tp_span part, name;
@@ -1308,7 +1310,7 @@ static void late(void) {
 		printf("  %s snapshot: loaded %s, failed %zu, %zu after the restart, %zu after b's late step; "
 			"doc {x: %lld, y: %lld}\n", old ? "an old" : "a", why ? tp_why(why) : "ok", before, again, failures(&r), (long long)field(&r, "x"),
 			(long long)field(&r, "y"));
-		CHECK(!why && before == 1 && again == 0 && failures(&r) == 1 && failed_is(&r, 0, a, 1));
+		CHECK(!why && before == 1 && again == 1 && failures(&r) == 1 && failed_is(&r, 0, a, 1));
 		CHECK(field(&r, "x") == 1 && field(&r, "y") == 1);
 		CHECK(!tp_history_snapshot(r.history));
 		long got = tp_log_snapped(r.log, NULL, 0);
@@ -1710,6 +1712,133 @@ static void reloads(const char *dir) {
 		forgets = 0;
 		dev_free(&v);
 		shut(st->self);
+	}
+	for (forgets = 0; forgets < 2; forgets++) {
+		// a whole value of null is in the snapshot as null, not as no value
+		static const uint8_t nul[] = {0x81, 0xa2, 0x64, 'p', 'a', 't', 'h', 0x80, 0x65, 'v', 'a', 'l', 'u', 'e', 0xf6};
+		tp_log *w = writer(150, 0, NULL);
+		put_at(w, "doc", nul, sizeof nul);
+		put_at(w, "other", nul, sizeof nul);
+		dev v;
+		dev_make(&v, tp_file_store(&mem, rd, 1 << 20), 151);
+		take_all(v.log, w);
+		tp_history_snapshot(v.history);
+		tp_log_drop(v.log, tp_log_device(w), 2);
+		dev_free(&v);
+		dev_make(&v, tp_file_store(&mem, rd, 1 << 20), 151);
+		const nd_entry *e = tb_get(v.table, tb_string("value"), tb_string("doc"));
+		printf("  a null whole value after a reload, %s: %s\n", forgets ? "forgetting" : "holding", e && e->value ? "there" : "gone");
+		CHECK(e && e->value && e->value->type == OP_NULL);
+		dev_free(&v);
+		tp_log_free(w);
+		wipe(rd);
+	}
+	forgets = 0;
+	{
+		// a step that failed before a reload is tried again when the step it needed lands: a put at a
+		// key names the root a lower step made
+		tp_log *y = writer(152, 0, NULL), *x = writer(153, 0, NULL);
+		edit(y, x0, sizeof x0);
+		take_all(x, y);
+		edit(x, x1, sizeof x1);
+		dev v;
+		forgets = 1;
+		dev_make(&v, tp_file_store(&mem, rd, 1 << 20), 154);
+		take_all(v.log, x);
+		size_t before = failures(&v);
+		tp_history_snapshot(v.history);
+		dev_free(&v);
+		dev_make(&v, tp_file_store(&mem, rd, 1 << 20), 154);
+		size_t again = failures(&v);
+		take_all(v.log, y);
+		printf("  a step failed before a reload: %zu failed, %zu after it, then %zu after the step it needed; x %lld\n",
+			before, again, failures(&v), (long long)field(&v, "x"));
+		CHECK(before == 1 && again == 1 && failures(&v) == 0 && field(&v, "x") == 1);
+		forgets = 0;
+		dev_free(&v);
+		tp_log_free(y), tp_log_free(x);
+		wipe(rd);
+	}
+	{
+		// runs let go before a reload: a late typing step with a failed step ordered after it is applied
+		// once, not again from the log
+		tp_log *w = writer(155, 0, NULL), *o = writer(156, 9, NULL);
+		static const uint8_t empty[] = {0x81, 0xa2, 0x64, 'p', 'a', 't', 'h', 0x80, 0x65, 'v', 'a', 'l', 'u', 'e', 0x60};
+		put_at(w, "t", empty, sizeof empty);
+		dev a, b, v;
+		forgets = 0;
+		dev_make(&a, tp_memory_store(&mem, 1 << 20), 157), dev_make(&b, tp_memory_store(&mem, 1 << 20), 158);
+		take_all(a.log, w), take_all(b.log, w), take_all(o, w);
+		typing(&a, 0, "hello");
+		take_all(b.log, a.log), take_all(o, a.log);
+		forgets = 1;
+		dev_make(&v, tp_file_store(&mem, rd, 1 << 20), 159);
+		take_all(v.log, w), take_all(v.log, a.log);
+		tp_history_snapshot(v.history);
+		tp_log_drop(v.log, tp_log_device(w), 1);
+		tp_log_drop(v.log, tp_log_device(a.log), 1);
+		dev_free(&v);
+		dev_make(&v, tp_file_store(&mem, rd, 1 << 20), 159);
+		typing(&b, 5, "!");
+		// a key put into the string t: fails for good
+		static const uint8_t q[] = {0x81, 0xa2, 0x64, 'p', 'a', 't', 'h', 0x81, 0x61, 'q', 0x65, 'v', 'a', 'l', 'u', 'e', 1};
+		uint8_t idb[64];
+		tp_buf ib = {idb, 0, sizeof idb, sizeof idb, NULL, 0};
+		tp_put_head(&ib, 4, 1), tp_put_head(&ib, 4, 2), tp_put_head(&ib, 4, 3), tp_put_head(&ib, 2, 32);
+		tp_put(&ib, tp_log_device(w), 32), tp_put_head(&ib, 0, 1), tp_put_head(&ib, 0, 0), tp_put_head(&ib, 4, 0);
+		tp_write bad = {{(const uint8_t *)"t", 1}, {(const uint8_t *)"value", 5}, {q, sizeof q}, {NULL, 0}, 1, {NULL, 0}, {idb, ib.len}};
+		uint64_t sn, sl;
+		CHECK(!tp_log_write(o, &bad, &sn, &sl));
+		take_all(v.log, o);
+		size_t failing = failures(&v);
+		take_all(v.log, b.log);
+		printf("  runs let go before a reload, a late typing after a failed step: t %s, %zu failed\n", text(&v, "t"),
+			failing);
+		CHECK(!strcmp(text(&v, "t"), "hello!") && failing == 1);
+		forgets = 0;
+		dev_free(&v), dev_free(&a), dev_free(&b);
+		tp_log_free(w), tp_log_free(o);
+		wipe(rd);
+	}
+	{
+		// a snapshot from before the format mark (a value as v, not [v]) is still read
+		static const uint8_t old[] = {0xa2, 0x65, 'c', 'o', 'u', 'n', 't', 0xa0, 0x67, 'e', 'n', 't', 'r', 'i', 'e', 's', 0x81, 0x86,
+			0x65, 'v', 'a', 'l', 'u', 'e', 0x63, 'd', 'o', 'c', 0xa1, 0x61, 'a', 0x01, 0x80, 0x80, 0xf6};
+		for (forgets = 0; forgets < 2; forgets++) {
+			tp_store *st = tp_memory_store(&mem, 1 << 20);
+			void (*shut)(void *self) = st->close;
+			st->close = kept_open;
+			dev v;
+			dev_make(&v, st, 160);
+			CHECK(!tp_log_snapshot(v.log, old, sizeof old));
+			dev_free(&v);
+			int why = dev_make(&v, st, 160);
+			printf("  a snapshot from before the format mark, %s: loaded %s, doc.a %lld\n", forgets ? "forgetting" : "holding",
+				why ? tp_why(why) : "ok", (long long)field_a(&v));
+			CHECK(!why && field_a(&v) == 1);
+			dev_free(&v);
+			shut(st->self);
+		}
+		forgets = 0;
+	}
+	{
+		// a snapshot refused: every step the log holds lands all the same
+		static const uint8_t junk[] = {0xa1, 0x61, 'v', 0x02};
+		tp_log *w = writer(161, 0, NULL);
+		edit(w, x0, sizeof x0);
+		dev v;
+		forgets = 1;
+		dev_make(&v, tp_file_store(&mem, rd, 1 << 20), 162);
+		take_all(v.log, w);
+		CHECK(!tp_log_snapshot(v.log, junk, sizeof junk));
+		dev_free(&v);
+		int why = dev_make(&v, tp_file_store(&mem, rd, 1 << 20), 162);
+		printf("  a snapshot refused: %s, doc.x %lld\n", why ? tp_why(why) : "ok", (long long)field(&v, "x"));
+		CHECK(why == TP_NOTSTEP && field(&v, "x") == 0);
+		forgets = 0;
+		dev_free(&v);
+		tp_log_free(w);
+		wipe(rd);
 	}
 }
 

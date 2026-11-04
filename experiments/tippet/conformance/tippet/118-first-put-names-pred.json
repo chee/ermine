@@ -1,0 +1,118 @@
+{
+	"title": "the first put of the whole value to land on a device that forgets names a cell it replaces: the cell is hidden when its step lands after, and the removal after it leaves no value, as on a device that holds every step",
+	"steps": [
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "device",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"expect": {
+				"key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
+		},
+		{
+			"op": "device",
+			"name": "f",
+			"seed": "0303030303030303030303030303030303030303030303030303030303030303",
+			"forgets": true,
+			"expect": {
+				"key": "ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1"
+			}
+		},
+		{
+			"op": "write",
+			"device": "b",
+			"node": "doc",
+			"patches": [
+				{
+					"path": [],
+					"value": "from_B"
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 1
+			}
+		},
+		{
+			"op": "pass",
+			"from": "b",
+			"to": "a",
+			"of": "b",
+			"at": 1,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "doc",
+			"patches": [
+				{
+					"path": [],
+					"value": "from_A"
+				}
+			],
+			"expect": {
+				"n": 1,
+				"lamport": 2
+			}
+		},
+		{
+			"op": "write",
+			"device": "a",
+			"node": "doc",
+			"patches": [
+				{
+					"path": []
+				}
+			],
+			"expect": {
+				"n": 2,
+				"lamport": 3
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "f",
+			"of": "a",
+			"at": 1,
+			"expect": {
+				"added": 2
+			}
+		},
+		{
+			"op": "pass",
+			"from": "b",
+			"to": "f",
+			"of": "b",
+			"at": 1,
+			"expect": {
+				"added": 1
+			}
+		},
+		{
+			"op": "value",
+			"device": "f",
+			"node": "doc",
+			"expect": {}
+		},
+		{
+			"op": "versions",
+			"device": "f",
+			"node": "doc",
+			"expect": {
+				"versions": []
+			}
+		}
+	]
+}

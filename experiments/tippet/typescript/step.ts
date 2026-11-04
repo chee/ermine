@@ -231,11 +231,11 @@ export const idOf = (device: Uint8Array, n: number) => (i: unknown) =>
 			: key(i[0]) && !same(i[0], device) && whole(i[1]) &&
 				(i.length === 2 || (i.length === 3 && i[1] >= 1 && whole(i[2]))))
 // a node as written: this device's [n, i, rel…] (n from 1 to the step's, and if the step's, i below
-// its patch's index at), another's [device, n, i, rel…] (n from 1); rel: tstr or whole
+// its patch's index at), another's [device, n, i, rel…] (n from 1); rel: tstr or whole, at most 1021
 export const nodeOfIds = (device: Uint8Array, n: number, at: number) => (v: unknown) => {
 	if (!Array.isArray(v) || v.length < 2) return false
 	const own = typeof v[0] === "number", rel = v.slice(own ? 2 : 3)
-	if (!rel.every((r) => typeof r === "string" || whole(r))) return false
+	if (rel.length > 1021 || !rel.every((r) => typeof r === "string" || whole(r))) return false
 	if (own) return whole(v[0]) && v[0] >= 1 && v[0] <= n && whole(v[1]) && (v[0] < n || v[1] < at)
 	return v.length >= 3 && key(v[0]) && !same(v[0], device) && whole(v[1]) && v[1] >= 1 &&
 		whole(v[2])

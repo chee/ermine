@@ -871,6 +871,10 @@ static void sl_head(const el_slot *s, uint64_t *n, uint64_t *i) {
 	*n = *i = 0;
 	if (tp_whole(&in, &d) || tp_whole(&in, n) || tp_whole(&in, i)) *n = *i = 0;
 }
+// a pred hides only a cell of a lesser step: by lamport, then device
+static int hides(const el_ctx *c, el_ref a, el_ref b) {
+	return a.lamport != b.lamport ? a.lamport > b.lamport : devcmp(c, a.device, b.device) > 0;
+}
 // a cell shows over another: by its step's place (lamport, device, n), then its patch
 static int cell_greater(const el_ctx *c, const el_slot *a, const el_slot *b) {
 	if (a->lamport != b->lamport) return a->lamport > b->lamport;
@@ -1378,11 +1382,14 @@ static int assign(work *w, tp_span parent, tp_span slot, int is_el, tp_span deri
 			if (r >= 0 && !sl_hidden(&st->slots[r])) {
 				size_t g = 0;
 				while (g < ngone && gone[g] != st->slots[r].buf) g++;
-				if (g == ngone) gone[ngone++] = st->slots[r].buf;
-			} else if (r < 0 && !landed(st, pred[k])) {
+				if (g == ngone && hides(w->c, w->ref, sl_at(&st->slots[r]))) gone[ngone++] = st->slots[r].buf;
+			} else if (r < 0 ? !landed(st, pred[k])
+					 : sl_ghost(&st->slots[r]) && hides(w->c, w->ref, sl_at(&st->slots[r]))) {
+				// the greatest namer of a cell not landed is the one held
 				el_slot s;
 				el_ref at = w->ref;
-				code = make_cell(w, parent, slot, pred[k], EL_CELL_GHOST, at, &s);
+				if (r >= 0) code = take_cell(w, (size_t)r);
+				if (!code) code = make_cell(w, parent, slot, pred[k], EL_CELL_GHOST, at, &s);
 				if (!code) code = add_cell(w, s);
 			}
 		}
@@ -1391,10 +1398,12 @@ static int assign(work *w, tp_span parent, tp_span slot, int is_el, tp_span deri
 	int has_made = 0;
 	if (!code && cell) {
 		long g = cell_named(st, parent, slot, *cell);
-		if (g >= 0 && sl_ghost(&st->slots[g])) {
-			code = take_cell(w, (size_t)g);
+		int ghost = g >= 0 && sl_ghost(&st->slots[g]);
+		int hidden = ghost && hides(w->c, sl_at(&st->slots[g]), w->ref);
+		if (ghost) code = take_cell(w, (size_t)g);
+		if (ghost && hidden) {
 			if (!code && container) code = bury_cell(w, parent, slot, *cell, cellvalue, w->ref);
-		} else code = make_cell(w, parent, slot, *cell, container ? EL_CELL_NODE : 0, w->ref, &made), has_made = !code;
+		} else if (!code) code = make_cell(w, parent, slot, *cell, container ? EL_CELL_NODE : 0, w->ref, &made), has_made = !code;
 	}
 	if (!code && !nvis && derived.n && is_el && old && is_container(old) && cell_of(st, derived) < 0) {
 		long from = cell_enclosing(st, parent);
@@ -2436,7 +2445,10 @@ static int patch(work *w, const op_value *cur, const op_patch *p, uint64_t c, co
 		int ok;
 		if (!given->noden) code = w->late ? TP_LATE : OP_RANGE;
 		else if (!(code = where(w, (tp_span){given->node, given->noden}, &hp, &ok, &host)) && !ok) {
-			if (landed(w->st, (tp_span){given->node, given->noden})) passed = 1, w->st->passed++;
+			if (landed(w->st, (tp_span){given->node, given->noden})) {
+				passed = 1, w->st->passed++;
+				w->st->by = !node_head((tp_span){given->node, given->noden}, &w->st->byd, &w->st->byn);
+			}
 			else code = w->late ? TP_LATE : OP_RANGE;
 		}
 		if (code || passed) goto done;

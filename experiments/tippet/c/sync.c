@@ -266,10 +266,10 @@ void tp_sync_forked(void *ctx, size_t i) {
 	if (tp_log_fork_at(s->log, i, &f)) return;
 	s->depth++;
 	for (tp_link *l = s->links; l; l = l->next) {
-		if (l->gone || l == s->skip) continue;
+		if (l->gone) continue;
 		long p = peer_of(s, l, f.device);
 		if (p >= 0) l->peers[p].proved = 1;
-		send(s, l, f.message.p, f.message.n);
+		if (l != s->skip) send(s, l, f.message.p, f.message.n);
 	}
 	s->depth--;
 	sweep(s);
@@ -456,10 +456,6 @@ static void receive(tp_sync *s, tp_link *l, const uint8_t *bytes, size_t length)
 	} else if (tp_is(t, "fork") && k == 6) {
 		tp_link *was = s->skip;
 		s->skip = l;
-		if (!tp_bytes(&in, 32, &x)) {
-			long p = peer_of(s, l, x.p);
-			if (p >= 0) l->peers[p].proved = 1;
-		}
 		tp_log_fork(s->log, (tp_span){bytes, length});
 		s->skip = was;
 	} else if (tp_is(t, "refused") && (k == 3 || k == 4) && !tp_bytes(&in, 32, &x) && !tp_whole(&in, &n)) {

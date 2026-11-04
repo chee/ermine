@@ -115,6 +115,9 @@ typedef struct {
 	size_t nbins, roombins;
 	int quiet; // set by the host around a step: no trash is made (a replay of steps before an empty)
 	uint64_t passed; // patches passed over, a container gone (counted, never undone)
+	int by; // set by the host around a step: the last passed over was for a container made by step byn of device byd
+	uint32_t byd;
+	uint64_t byn;
 } el_state;
 
 // st, empty, as after a put of the whole value by ref (its patch 0); container: it makes one

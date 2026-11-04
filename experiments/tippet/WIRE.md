@@ -37,12 +37,12 @@ One kept write. Bytes: a cbor array.
     removal at an index of an array (a path, no range), where after is null, gone the one element
     and before null; a list move, where gone is what it moves
   - container: the node of the map, array or string the patch changes (a key put or removal: the
-    map; an index: the array; a splice: the sequence); null for a put of the whole value when the
-    writer holds none. a reader finds the container by this id, not by the patch's path, which it
+    map; an index: the array; a splice: the sequence); null for a put or removal of the whole value
+    when the writer holds none. a reader finds the container by this id, not by the patch's path, which it
     reads only to the last key or index (its length is not looked at)
   - node: `[device, n, i, rel…]`: the step that made it (device, n), its patch (i), and its place in
     that patch's value (rel: tstr, a map's key, or whole, an array item's place when the array was
-    made). a put's value is `[device, n, i]`; an item a splice inserts is `[device, n, i, x]`, x its
+    made; at most 1021 of them, mine, not decided: C walks a node 1024 parts long). a put's value is `[device, n, i]`; an item a splice inserts is `[device, n, i, x]`, x its
     place in the value it inserts. made once, never changes, a move keeps it. written: this device's `[n, i, rel…]` (n whole from 1 to the step's; the step's
     only with i below the patch's own index), another's `[device, n, i, rel…]` (device bstr 32, not
     this step's)
@@ -120,7 +120,10 @@ One kept write. Bytes: a cbor array.
   goes, the next greatest shows with it. a cell named before it landed is held at its slot
   (`named`) and is not visible when it lands (a container it holds is trash); a name whose step has landed and whose cell is not at
   the slot is ignored. the effect of an assignment is a set (cells in, preds out), so one goes in
-  as is in any order. `readAll` shows conflicts only:
+  as is in any order. a pred hides only a cell of a lesser step (lamport, then device), at a key as
+  at an element, mine, not decided: an honest pred names cells its writer saw, which are lesser, so
+  a put at an item never removes it; preds that name each other leave the greater cell, in any
+  order (a name held for a cell not landed keeps its greatest namer). `readAll` shows conflicts only:
   `history.versions(node, part, path)` is the cells at the path, the shown first, each
   from the step that made it (a key its parent's put made, with no cell of its own: that put's);
   every device, keeper or forgetting, returns the same. `typescript/reading.ts` is the feature for
@@ -199,6 +202,17 @@ One kept write. Bytes: a cbor array.
   step. a removal of a scalar leaves no cell, and a put replacing one leaves one; trash (above)
   stays until the host empties it.
 
+  snapshot (mine, not decided): `v` 1, the format (a value is `[v]`, so a whole value of null is
+  not none); a snapshot with no `v` is read as before it (a value, null for none). `failed`, when
+  there are any, for every reader: [device, n, node, part, lamport], lamport null only for a step
+  that could not be read; they come back with why "failed before a reload", so after a reload a late
+  step still lets the failed steps after it be tried again. a snapshot a reader refuses is let go
+  and every step the log holds lands, its host told. the emptied mark is not saved, so after an empty
+  and a reload a failed list can keep a failure the device had cleared by skipping into emptied
+  trash (only a stale or malformed step does that).
+  cut: the log has let go a device's first step, however it was dropped (`forget`, or the log's
+  `drop`, or a reload), asked of the log each time
+
   a late step (ordered before a step applied) on a reader that forgets:
   - goes in as it is: a put, a removal, an edit, a splice, a list move commute (cells, preds,
     elements and registers)
@@ -206,7 +220,8 @@ One kept write. Bytes: a cbor array.
     in: so too a late step that doesn't apply as it is, and one that applies in an entry with a
     failed step ordered after it
   - after a cut (the log has let go any device's first step): no entry is worked out again. a late
-    step needing that fails (late, and the steps after it let go); when a failed step of an entry is
+    step needing that fails (late, and the steps after it let go); a step with nothing of it in the
+    value, its container gone, fails too (`failed`, so a host sees it); when a failed step of an entry is
     ordered after a late one, the failed steps of its entry are tried again as they are, on that
     reader alone: its value can differ from then on
 
@@ -325,7 +340,9 @@ Taking a run, in order:
    the steps before it
 5. sig good for the last step's hash
 
-Fail 1, 4 or 5, or a pack that does not unpack: refused.
+Fail 1, 4 or 5, or a pack that does not unpack: refused. a pack not shaped as below (columns, its
+first whole from 2 or a step), or whose later steps are not steps, is refused though every step of
+it is held.
 
 That nothing else is checked is mine, not decided: whether a run is taken hangs on the run and its
 device's chain alone, so a run good once is good anywhere, any time. no lamport check: one far past
@@ -342,7 +359,9 @@ Each a cbor array. Anything else is dropped, silently.
     ["fork", device, sig, pack, sig, pack]
 
 - have: per device, how many steps the sender holds through its last signed step (its own: all).
-  sent first on every link. answered with runs of each device the other side lacks, from its n + 1
+  sent first on every link. answered with runs of each device the other side lacks, from its n + 1.
+  at most 4096 devices (C: the log's `tp_limits.devices`, a host's setting; TypeScript takes 4096):
+  a longer one is dropped
 - run: device 32 bytes, sig 64 bytes, pack as below
 - live: id 8 random bytes, data bstr. never kept. ids lately seen (1024) are dropped; a relay sends
   it to its other links
@@ -380,7 +399,8 @@ a backup restored and written on. Nobody is told by a refusal on one link; a for
   the proofs it holds (past it, dropped: a run that would make one is refused `signature`)
 - told: the proof goes to every link but the one a `fork` came from, and, when a link says in its
   have that it holds steps of the device, to it (once); once a device: a second proof of it is
-  dropped and not passed. a taker lists it for its host: `typescript/log.ts` forks and onFork,
+  dropped and not passed. it goes with the lower hash first, as made, whichever order it came in.
+  a link has the proof only once one has checked: a `fork` that does not check stops nothing. a taker lists it for its host: `typescript/log.ts` forks and onFork,
   `c/tippet.h` tp_log_forks, and the `sync` node's forks
 - answered: a run refused `chain` or `signature`, its first n at least 2 and step n - 1 held, is
   answered with the taker's own run of that device from n - 1, a pack with its first whole, once a

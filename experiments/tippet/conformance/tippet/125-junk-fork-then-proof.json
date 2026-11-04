@@ -1,0 +1,453 @@
+{
+	"title": "a fork message that does not check does not stop the real proof being sent to its link",
+	"steps": [
+		{
+			"op": "device",
+			"name": "w",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "device",
+			"name": "w2",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"expect": {
+				"key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
+		},
+		{
+			"op": "device",
+			"name": "b",
+			"seed": "0303030303030303030303030303030303030303030303030303030303030303",
+			"expect": {
+				"key": "ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1"
+			}
+		},
+		{
+			"op": "device",
+			"name": "c",
+			"seed": "0404040404040404040404040404040404040404040404040404040404040404",
+			"expect": {
+				"key": "ca93ac1705187071d67b83c7ff0efe8108e8ec4530575d7726879333dbdabe7c"
+			}
+		},
+		{
+			"op": "device",
+			"name": "d",
+			"seed": "0505050505050505050505050505050505050505050505050505050505050505",
+			"expect": {
+				"key": "6e7a1cdd29b0b78fd13af4c5598feff4ef2a97166e3ca6f2e4fbfccd80505bf1"
+			}
+		},
+		{
+			"op": "device",
+			"name": "e",
+			"seed": "0606060606060606060606060606060606060606060606060606060606060606",
+			"expect": {
+				"key": "8a875fff1eb38451577acd5afee405456568dd7c89e090863a0557bc7af49f17"
+			}
+		},
+		{
+			"op": "device",
+			"name": "g",
+			"seed": "0707070707070707070707070707070707070707070707070707070707070707",
+			"expect": {
+				"key": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c"
+			}
+		},
+		{
+			"op": "take",
+			"device": "a",
+			"run": {
+				"device": "w",
+				"steps": [
+					{
+						"n": 1,
+						"node": "t",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"value": "x1"
+							}
+						],
+						"lamport": 1,
+						"when": 0,
+						"on": [],
+						"ids": [
+							{
+								"container": null,
+								"pred": []
+							}
+						]
+					},
+					{
+						"n": 2,
+						"node": "t",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"value": "x2"
+							}
+						],
+						"lamport": 2,
+						"when": 0,
+						"on": [],
+						"ids": [
+							{
+								"container": null,
+								"pred": []
+							}
+						]
+					},
+					{
+						"n": 3,
+						"node": "t",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"value": "x3"
+							}
+						],
+						"lamport": 3,
+						"when": 0,
+						"on": [],
+						"ids": [
+							{
+								"container": null,
+								"pred": []
+							}
+						]
+					}
+				]
+			},
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "c",
+			"of": "w",
+			"at": 1,
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "e",
+			"of": "w",
+			"at": 1,
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "pass",
+			"from": "a",
+			"to": "g",
+			"of": "w",
+			"at": 1,
+			"expect": {
+				"added": 3
+			}
+		},
+		{
+			"op": "take",
+			"device": "b",
+			"run": {
+				"device": "w",
+				"steps": [
+					{
+						"n": 1,
+						"node": "t",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"value": "y1"
+							}
+						],
+						"lamport": 1,
+						"when": 0,
+						"on": [],
+						"ids": [
+							{
+								"container": null,
+								"pred": []
+							}
+						]
+					},
+					{
+						"n": 2,
+						"node": "t",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"value": "y2"
+							}
+						],
+						"lamport": 2,
+						"when": 0,
+						"on": [],
+						"ids": [
+							{
+								"container": null,
+								"pred": []
+							}
+						]
+					},
+					{
+						"n": 3,
+						"node": "t",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"value": "y3"
+							}
+						],
+						"lamport": 3,
+						"when": 0,
+						"on": [],
+						"ids": [
+							{
+								"container": null,
+								"pred": []
+							}
+						]
+					},
+					{
+						"n": 4,
+						"node": "t",
+						"part": "value",
+						"patches": [
+							{
+								"path": [],
+								"value": "y4"
+							}
+						],
+						"lamport": 4,
+						"when": 0,
+						"on": [],
+						"ids": [
+							{
+								"container": null,
+								"pred": []
+							}
+						]
+					}
+				],
+				"sign": "w2"
+			},
+			"expect": {
+				"added": 4
+			}
+		},
+		{
+			"op": "link",
+			"a": "a",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "link",
+			"a": "b",
+			"b": "c",
+			"expect": {}
+		},
+		{
+			"op": "link",
+			"a": "c",
+			"b": "e",
+			"expect": {}
+		},
+		{
+			"op": "deliver",
+			"from": "b",
+			"to": "a",
+			"expect": {
+				"got": [
+					[
+						"have",
+						{
+							"w": 4
+						}
+					]
+				]
+			}
+		},
+		{
+			"op": "deliver",
+			"from": "a",
+			"to": "b",
+			"expect": {
+				"got": [
+					[
+						"have",
+						{
+							"w": 3
+						}
+					]
+				]
+			}
+		},
+		{
+			"op": "queued",
+			"from": "b",
+			"to": "a",
+			"expect": {
+				"queued": [
+					[
+						"run",
+						"w",
+						4,
+						4
+					]
+				]
+			}
+		},
+		{
+			"op": "deliver",
+			"from": "b",
+			"to": "a",
+			"expect": {
+				"got": [
+					[
+						"run",
+						"w",
+						4,
+						4
+					]
+				]
+			}
+		},
+		{
+			"op": "queued",
+			"from": "a",
+			"to": "b",
+			"expect": {
+				"queued": [
+					[
+						"refused",
+						"w",
+						3
+					],
+					[
+						"run",
+						"w",
+						3,
+						3
+					]
+				]
+			}
+		},
+		{
+			"op": "deliver",
+			"from": "a",
+			"to": "b",
+			"expect": {
+				"got": [
+					[
+						"refused",
+						"w",
+						3
+					],
+					[
+						"run",
+						"w",
+						3,
+						3
+					]
+				]
+			}
+		},
+		{
+			"op": "forks",
+			"device": "b",
+			"expect": {
+				"forks": [
+					{
+						"device": "w",
+						"n": 3,
+						"hashes": [
+							"57270cbd849aa664a49030e8b47496b13bd4e9ac2a0ddec08a9f2463a328248e",
+							"fa7f30d0f5414ff046d88f73bed876f2b2283c4d06555d522f6f4cedc5b5ca7a"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "link",
+			"a": "b",
+			"b": "g",
+			"expect": {}
+		},
+		{
+			"op": "deliver",
+			"from": "b",
+			"to": "g",
+			"expect": {
+				"got": [
+					[
+						"have",
+						{
+							"w": 4
+						}
+					]
+				]
+			}
+		},
+		{
+			"op": "inject",
+			"from": "g",
+			"to": "b",
+			"bytes": "8664666f726b58208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c5840000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008058400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000080",
+			"expect": {}
+		},
+		{
+			"op": "inject",
+			"from": "g",
+			"to": "b",
+			"bytes": "826468617665818258208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c03",
+			"expect": {}
+		},
+		{
+			"op": "queued",
+			"from": "b",
+			"to": "g",
+			"expect": {
+				"queued": [
+					[
+						"fork",
+						"w",
+						3
+					],
+					[
+						"run",
+						"w",
+						4,
+						4
+					]
+				]
+			}
+		}
+	]
+}

@@ -5,6 +5,9 @@ import type { Fork, Log } from "./log.ts"
 import { firstOf, pack, type Packed, RUN, stepsIn, unpack as unpackAll } from "./pack.ts"
 import { hex, key, unhex, whole } from "./step.ts"
 
+// devices a have may name; C's log limit (tp_limits devices), a host's setting
+const HAVE = 4096
+
 export type Link = {
 	send(bytes: Uint8Array): void
 	onMessage(fn: (bytes: Uint8Array) => void): void
@@ -47,7 +50,7 @@ export function read(b: Uint8Array): Message | undefined {
 	}
 	if (!Array.isArray(m)) return undefined
 	const [t, x, y, z] = m
-	if (t === "have" && m.length === 2 && Array.isArray(x)) {
+	if (t === "have" && m.length === 2 && Array.isArray(x) && x.length <= HAVE) {
 		const have: Record<string, number> = {}
 		for (const e of x) {
 			if (!Array.isArray(e) || e.length !== 2 || !key(e[0]) || !whole(e[1])) return undefined

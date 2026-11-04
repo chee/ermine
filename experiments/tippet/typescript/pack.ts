@@ -127,13 +127,27 @@ export function priorOf(bytes: Uint8Array): Prior {
 	}
 }
 export function firstOf(p: Packed): { n: number; prior: boolean } {
-	return typeof p[0] === "number"
-		? { n: p[0], prior: true }
-		: { n: decodeStep(p[0]).n, prior: false }
+	if (!Array.isArray(p) || (p.length !== 10 && p.length !== 11)) throw new TypeError("not a pack")
+	if (typeof p[0] === "number") {
+		if (!Number.isSafeInteger(p[0]) || p[0] < 2) throw new TypeError("not a pack")
+		return { n: p[0], prior: true }
+	}
+	if (!(p[0] instanceof Uint8Array)) throw new TypeError("not a pack")
+	return { n: decodeStep(p[0]).n, prior: false }
 }
 
-export const stepsIn = (p: Packed) =>
-	(typeof p[0] === "number" ? 0 : 1) + (p[1] as number[]).reduce((k, x, i) => i % 2 ? k + x : k, 0)
+// how many steps: 0 for lamports that are not runs
+export function stepsIn(p: Packed): number {
+	const rs = p[1] as unknown[]
+	if (!Array.isArray(rs) || rs.length % 2) return 0
+	let n = typeof p[0] === "number" ? 0 : 1
+	for (let i = 0; i < rs.length; i += 2) {
+		const c = rs[i + 1]
+		if (!Number.isSafeInteger(rs[i]) || !Number.isSafeInteger(c) || (c as number) < 0) return 0
+		n += c as number
+	}
+	return n
+}
 
 // with a devices table when that is shorter
 export function pack(bytes: readonly Uint8Array[], prior?: Prior): Packed {
@@ -279,6 +293,7 @@ export function unpack(p: unknown, prior?: Prior, max = RUN): Uint8Array[] {
 		next += made(s)
 		const b = encodeStep(s)
 		if ((bytes += b.length) > max) throw new Bound("a run past its most bytes")
+		decodeStep(b)
 		out.push(b)
 		prev = s, hash = hashStep(b)
 	}

@@ -223,6 +223,8 @@ int tp_log_forked(const tp_log *log, const uint8_t device[32]);
 int tp_log_fork(tp_log *log, tp_span message);
 // Forget: stop reading device's steps through n, so they are never sent. Survives a reload.
 int tp_log_drop(tp_log *log, const uint8_t device[32], uint64_t n);
+// how many times a drop let steps go, this run and loaded
+uint64_t tp_log_drops(const tp_log *log);
 
 typedef struct tp_sync tp_sync;
 typedef struct tp_link tp_link;
