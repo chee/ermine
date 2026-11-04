@@ -178,8 +178,10 @@ Deno.test("forgets: a late step older than the newest is merged in, as on a devi
 Deno.test("forgets: a late step needing steps after it works the entry out again from the log; once runs are let go it is passed over", async () => {
 	const [w1, w2, w3] = [0, 1, 2].map(() => createLog({ writes: true }))
 	for (const w of [w1, w2, w3]) await w.load()
-	const write = (w: Log, patches: { path: string[]; value?: unknown; move?: { path: string[] } }[]) =>
-		w.write({ node: "pig", part: "value", patches, when: 0, ids: named(w, "pig", patches) })
+	const write = (
+		w: Log,
+		patches: { path: string[]; value?: unknown; move?: { path: string[] } }[],
+	) => w.write({ node: "pig", part: "value", patches, when: 0, ids: named(w, "pig", patches) })
 	const last = async (w: Log) => (await w.run(w.device!, w.count(w.device!)))!
 	write(w2, [{ path: [], value: { a: 1 } }])
 	await w1.take(await last(w2))
@@ -197,7 +199,14 @@ Deno.test("forgets: a late step needing steps after it works the entry out again
 	await gone.history.forget(gone.sync)
 	closeAll()
 	write(w3, [{ path: ["d"], value: 4 }])
-	write(w2, [{ path: ["z"], move: { path: ["a"] } }])
+	// names a container whose maker's step has not landed there
+	w2.write({
+		node: "pig",
+		part: "value",
+		patches: [{ path: ["z"], value: 5 }],
+		when: 0,
+		ids: [[[unhex(w3.device!), 99, 0], []]],
+	})
 	await gone.log.take(await last(w3))
 	await gone.log.take(await last(w2))
 	assertEquals(gone.value("pig"), { a: 2, b: { x: 3 }, d: 4 })

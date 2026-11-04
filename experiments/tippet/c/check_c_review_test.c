@@ -12,6 +12,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "../../../lib/changeable/c/json.h"
 #include "history.h"
 #include "store.h"
 #include "tippet.h"
@@ -1519,6 +1520,42 @@ static void typing(dev *d, unsigned i, const char *s) {
 	sc_run_with_scope(d->scope, type_f, t);
 }
 
+// the item at i of the list node t of d moved to the gap j (in the list without it), as a person writes
+typedef struct {
+	dev *d;
+	op_key key[2];
+	op_patch patch;
+} moving_of;
+static void moved_f(void *data) {
+	moving_of *t = data;
+	nd_entry *e = tb_get(t->d->table, tb_string("value"), tb_string("t"));
+	size_t at;
+	if (!e || nd_update(e, &t->patch, 1, (ch_header){.has_time = 1, .time = 2}, &at)) {
+		free(t);
+		return;
+	}
+	pl_hold(t->d->places, e, t, free);
+	pl_changed changed = {1, {e, NULL}};
+	pl_commit(t->d->places, &changed);
+}
+// the item at i of the list node t of d removed
+static void removing(dev *d, unsigned i) {
+	moving_of *t = calloc(1, sizeof *t);
+	t->d = d, t->key[0] = (op_key){.type = OP_STR_KEY, .s = "a"}, t->key[1] = (op_key){.type = OP_NUM_KEY, .n = i};
+	t->patch.place.path = t->key, t->patch.place.length = 2;
+	sc_run_with_scope(d->scope, moved_f, t);
+}
+// n items from i, to the gap j
+static void moving(dev *d, unsigned i, unsigned n, unsigned j) {
+	moving_of *t = calloc(1, sizeof *t);
+	t->d = d, t->key[0] = (op_key){.type = OP_STR_KEY, .s = "a"}, t->key[1] = (op_key){.type = OP_NUM_KEY, .n = i};
+	t->patch.place.path = t->key, t->patch.place.length = 1;
+	t->patch.place.has_range = 1, t->patch.place.from = t->patch.place.to = j;
+	t->patch.has_move = 1, t->patch.move.path = t->key, t->patch.move.length = 2;
+	if (n > 1) t->patch.move.has_range = 1, t->patch.move.from = i, t->patch.move.to = i + n, t->patch.move.length = 1;
+	sc_run_with_scope(d->scope, moved_f, t);
+}
+
 static void reloads(const char *dir) {
 	printf("x. a forgetting device after a reload; a late put of the whole value\n");
 	static const uint8_t whole[] = {0x81, 0xa2, 0x64, 'p', 'a', 't', 'h', 0x80, 0x65, 'v', 'a', 'l', 'u', 'e', 0x60};
@@ -1676,6 +1713,74 @@ static void reloads(const char *dir) {
 	}
 }
 
+
+// ---- z. a forgetting device with moves and a removal at an index in a list, after a reload
+
+static unsigned zr;
+static unsigned zrand(unsigned n) {
+	zr = zr * 1103515245u + 12345u;
+	return (zr >> 8) % n;
+}
+static char *list_text(dev *d) {
+	const nd_entry *e = tb_get(d->table, tb_string("value"), tb_string("t"));
+	return e && e->value ? op_json_text(e->value) : strdup("(none)");
+}
+// a moves and removes in a list, b moves; a forgetting device takes a's, snapshots, reloads (the
+// runs held, or let go), takes b's late; it ends as a device that took every step in order
+static void zmoves(const char *dir) {
+	printf("z. moves and a removal, a reload, late steps\n");
+	enum { N = 8 };
+	char rd[512];
+	snprintf(rd, sizeof rd, "%s/zmoves", dir);
+	mkdir(rd, 0777);
+	int bad = 0, runs = 0;
+	for (unsigned sd = 0; sd < 20; sd++) {
+		for (int cut = 0; cut < 2; cut++) {
+			zr = sd * 7919 + 1;
+			uint8_t p[400];
+			tp_buf b = {p, 0, sizeof p, sizeof p, NULL, 0};
+			tp_put_head(&b, 4, 1), tp_put_head(&b, 5, 2), tp_put_text(&b, "path"), tp_put_head(&b, 4, 0);
+			tp_put_text(&b, "value"), tp_put_head(&b, 5, 1), tp_put_text(&b, "a"), tp_put_head(&b, 4, N);
+			for (int i = 0; i < N; i++) tp_put_head(&b, 0, (uint64_t)i);
+			tp_log *w = writer(130, 0, NULL);
+			put_at(w, "t", p, b.len);
+			dev a, bb, v, k;
+			forgets = 0;
+			dev_make(&a, tp_memory_store(&mem, 1 << 20), 131), dev_make(&bb, tp_memory_store(&mem, 1 << 20), 132);
+			dev_make(&k, tp_memory_store(&mem, 1 << 20), 134);
+			take_all(a.log, w), take_all(bb.log, w);
+			for (int i = 0; i < 3; i++) {
+				unsigned n = 1 + zrand(3), x = zrand(N - n + 1), j = zrand(N - n + 1);
+				if (j != x) moving(&bb, x, n, j);
+			}
+			for (int i = 0; i < 6; i++) {
+				unsigned n = 1 + zrand(3), x = zrand(N - n + 1), j = zrand(N - n + 1);
+				if (j != x) moving(&a, x, n, j);
+			}
+			removing(&a, 2);
+			forgets = 1;
+			dev_make(&v, tp_file_store(&mem, rd, 1 << 20), 133);
+			take_all(v.log, w), take_all(v.log, a.log);
+			tp_history_snapshot(v.history);
+			if (cut) tp_log_drop(v.log, tp_log_device(w), 1), tp_log_drop(v.log, tp_log_device(a.log), 1);
+			dev_free(&v);
+			int loaded = dev_make(&v, tp_file_store(&mem, rd, 1 << 20), 133);
+			CHECK(!loaded);
+			take_all(v.log, bb.log);
+			forgets = 0;
+			take_all(k.log, w), take_all(k.log, bb.log), take_all(k.log, a.log);
+			char *x = list_text(&v), *y = list_text(&k);
+			runs++;
+			if (strcmp(x, y) || failures(&v)) bad++;
+			CHECK(!strcmp(x, y) && !failures(&v));
+			free(x), free(y);
+			dev_free(&v), dev_free(&a), dev_free(&bb), dev_free(&k);
+			tp_log_free(w);
+			wipe(rd);
+		}
+	}
+	printf("  %d of %d differ from a device that took every step in order\n", bad, runs);
+}
 
 // ---- b. a small device (a Cardputer: ESP32-S3, no PSRAM, about 300 KB of heap)
 
@@ -2025,6 +2130,83 @@ static void measure(void) {
 		dev_free(&v);
 		tp_log_free(w);
 	}
+	{
+		// list moves: a list of 400 numbers, 200 items each moved once, then 20 ranges of 10
+		enum { N = 400, M = 200 };
+		tp_log *w = writer(124, 0, NULL);
+		uint8_t p[2000];
+		tp_buf b = {p, 0, sizeof p, sizeof p, NULL, 0};
+		tp_put_head(&b, 4, 1), tp_put_head(&b, 5, 2), tp_put_text(&b, "path"), tp_put_head(&b, 4, 0);
+		tp_put_text(&b, "value"), tp_put_head(&b, 5, 1), tp_put_text(&b, "a"), tp_put_head(&b, 4, N);
+		for (int i = 0; i < N; i++) tp_put_head(&b, 0, (uint64_t)i);
+		put_at(w, "t", p, b.len);
+		dev v;
+		dev_make(&v, tp_memory_store(&mem, 1 << 24), 125);
+		take_all(v.log, w);
+		moving(&v, 0, 1, N - 1);
+		size_t base = P.now;
+		for (int i = 1; i <= M; i++) moving(&v, (unsigned)(i * 7 % N), 1, (unsigned)((i * 13 + 5) % (N - 1)));
+		printf("  %d list moves of one item: %.1f bytes a move held (history's heap above %zu)\n", M,
+			(double)(P.now - base) / M, base);
+		CHECK((P.now - base) / M < 400);
+		base = P.now;
+		for (int i = 0; i < 20; i++) moving(&v, (unsigned)(i * 15 % (N - 20)), 10, (unsigned)((i * 31 + 3) % (N - 10)));
+		printf("  20 list moves of 10 items: %.1f bytes a move held\n", (double)(P.now - base) / 20);
+		base = P.now;
+		for (unsigned i = 0, at = 5; i < 100; i++) {
+			unsigned to = at == 300 ? 100 : 300;
+			moving(&v, at, 1, to), at = to;
+		}
+		printf("  one item moved 100 times: %.1f bytes a move held\n", (double)(P.now - base) / 100);
+		dev_free(&v);
+		tp_log_free(w);
+	}
+	{
+		// 100 numbers of a list of 400 removed, every other one
+		enum { N = 400 };
+		tp_log *w = writer(128, 0, NULL);
+		uint8_t p[2000];
+		tp_buf b = {p, 0, sizeof p, sizeof p, NULL, 0};
+		tp_put_head(&b, 4, 1), tp_put_head(&b, 5, 2), tp_put_text(&b, "path"), tp_put_head(&b, 4, 0);
+		tp_put_text(&b, "value"), tp_put_head(&b, 5, 1), tp_put_text(&b, "a"), tp_put_head(&b, 4, N);
+		for (int i = 0; i < N; i++) tp_put_head(&b, 0, (uint64_t)i);
+		put_at(w, "t", p, b.len);
+		dev v;
+		dev_make(&v, tp_memory_store(&mem, 1 << 24), 129);
+		take_all(v.log, w);
+		removing(&v, 1);
+		size_t base = P.now;
+		for (int i = 0; i < 100; i++) removing(&v, (unsigned)(i + 1));
+		printf("  100 numbers removed: %.1f bytes a removal held\n", (double)(P.now - base) / 100);
+		size_t tc, tb;
+		tp_history_trash(v.history, &tc, &tb);
+		printf("  trash() says %zu values, %zu bytes\n", tc, tb);
+		CHECK(tc >= 100);
+		dev_free(&v);
+		tp_log_free(w);
+	}
+	{
+		// a range of 4096 items of a list of 8192 moved to the end at once: a run, not 4096 items
+		enum { N = 8192, R = 4096 };
+		tp_log *w = writer(126, 0, NULL);
+		static uint8_t p[N * 3 + 64];
+		tp_buf b = {p, 0, sizeof p, sizeof p, NULL, 0};
+		tp_put_head(&b, 4, 1), tp_put_head(&b, 5, 2), tp_put_text(&b, "path"), tp_put_head(&b, 4, 0);
+		tp_put_text(&b, "value"), tp_put_head(&b, 5, 1), tp_put_text(&b, "a"), tp_put_head(&b, 4, N);
+		for (int i = 0; i < N; i++) tp_put_head(&b, 0, (uint64_t)(i % 24));
+		put_at(w, "t", p, b.len);
+		dev v;
+		dev_make(&v, tp_memory_store(&mem, 1 << 24), 127);
+		take_all(v.log, w);
+		moving(&v, 0, 1, 1);
+		size_t base = P.now;
+		moving(&v, 1, R, N - R);
+		printf("  a range of %d items of %d moved at once: %zu bytes held (history's heap above %zu)\n", R, N,
+			P.now - base, base);
+		CHECK(P.now - base < 1000);
+		dev_free(&v);
+		tp_log_free(w);
+	}
 	history_mem = NULL, forgets = 0;
 }
 
@@ -2050,6 +2232,7 @@ int main(int argc, char **argv) {
 	if (!only || strchr(only, 'm')) long_run(argv[1]), printf("  heap now %zu\n", H.now);
 	if (!only || strchr(only, 's')) seqs(), printf("  heap now %zu\n", H.now);
 	if (!only || strchr(only, 'x')) reloads(argv[1]), printf("  heap now %zu\n", H.now);
+	if (!only || strchr(only, 'z')) zmoves(argv[1]), printf("  heap now %zu\n", H.now);
 	if (!only || strchr(only, 'b')) small(), printf("  heap now %zu\n", H.now);
 	if (!only || strchr(only, 'k')) measure(), printf("  heap now %zu\n", H.now);
 	rmdir(argv[1]);

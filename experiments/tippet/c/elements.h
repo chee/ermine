@@ -1,7 +1,8 @@
 // The elements of an entry's strings and arrays (see typescript/elements.ts, WIRE.md ids), held as
 // runs: elements one after another of one device, numbered one on (or one down), all gone or none.
-// A sequence gets its elements at the first
-// splice that touches it. State is keyed by container (a node: the step and patch that made it, then
+// A sequence gets its elements at the first splice that touches it. An array item is its origin, the
+// element it was inserted as; a move makes new elements that link to it, and a register per origin
+// says which element shows (WIRE.md, list moves). State is keyed by container (a node: the step and patch that made it, then
 // its place in the value); a cell says what a patch assigned at a slot and no assignment has replaced
 // since (WIRE.md, assignments). el_step applies a step's patches to a value, all or none, with that
 // state, and gives what undoes both.
@@ -44,9 +45,9 @@ typedef struct {
 	el_id id;
 	uint64_t count;
 } el_gone;
-// a patch's ids (WIRE.md, ids). kind: 0 none (a move), 1 [container, pred], 2 [container, pred,
+// a patch's ids (WIRE.md, ids). kind: 0 none, 1 [container, pred], 2 [container, pred,
 // element] (a put at an index), 3 [container, after, gone, before] (a splice, a removal at an
-// index). node: the container, as the bytes of cbor items one after another: the device's index,
+// index, a list move: gone is what it moves, in order). node: the container, as the bytes of cbor items one after another: the device's index,
 // n, the patch, and the place in its value (maps' keys, arrays' places); none (a put of the whole
 // value, the first). pred (kinds 1 and 2): the cells it replaces, each a node in the same bytes,
 // spans into predbuf
@@ -98,8 +99,8 @@ typedef struct {
 	op_value **values;
 } el_bin;
 
-// an entry's sequences by container, the cells of what patches assigned, per device the newest step
-// of it that landed here, and the newest move applied (lamport 0: none)
+// an entry's sequences by container, the cells of what patches assigned, and per device the newest
+// step of it that landed here
 typedef struct {
 	el_list **lists;
 	size_t n, room;
@@ -110,7 +111,6 @@ typedef struct {
 		uint64_t n;
 	} *landed;
 	size_t nlanded, roomlanded;
-	el_ref moved;
 	el_bin **bins;
 	size_t nbins, roombins;
 	int quiet; // set by the host around a step: no trash is made (a replay of steps before an empty)
@@ -144,9 +144,21 @@ typedef struct {
 			el_list *list;
 			uint32_t device; // inserted: m from (device, c) on
 			uint64_t c, m;
+			int moved; // a list move: what it inserts is gone at first
 			el_gone *taken; // taken away, as runs
 			size_t ntaken, roomtaken;
+			el_gone *shown; // made to show, as runs
+			size_t nshown, roomshown;
 		} splice;
+		struct {
+			el_list *list; // registers [at, at + nins) put in place of the nold in old
+			size_t at, nins, nold;
+			void *old;
+		} reg;
+		struct {
+			el_list *list; // the origin entry put at at
+			size_t at;
+		} org;
 		struct {
 			el_slot cell; // the cell added (its buffer the state's), or taken (the record owns it)
 		} slot;
@@ -158,9 +170,6 @@ typedef struct {
 			uint32_t device; // landed: the device's n before (0: none)
 			uint64_t n;
 		} landed;
-		struct {
-			el_ref was; // the newest move before
-		} moved;
 		struct {
 			size_t count; // pieces added to the state's bins
 		} binadd;
@@ -190,16 +199,30 @@ int el_named(const el_anchor *a, size_t n);
 void el_write(tp_buf *b, const el_ctx *c, const el_anchor *a, size_t count, uint32_t me, uint64_t n,
 	uint64_t seq);
 
+// values a step made for the patches it applied (the list of items a move brings back): the
+// caller's to op_free once the patches are done with
+typedef struct {
+	op_value **p;
+	size_t n, room;
+} el_made;
+void el_made_free(const tp_mem *mem, el_made *m);
+
+// whether a patch is a list move: one item, or a range of items, of an array to a gap in the same
+// array, at most 4096 of them (WIRE.md, list moves)
+int el_list_move(const op_patch *p);
+
 // patches (their cbor, and as op patches) applied to *value in order, all or none. keep: 0 for a
 // patch to leave out (NULL: all). ids: per patch (NULL: none, a write here: its containers and elements
 // are named from the state, *named, one per patch). late: steps
-// after it may be applied already; one whose effect needs them returns TP_LATE. undo gets what
+// after it may be applied already; one that can't apply as it is returns TP_LATE. undo gets what
 // undoes the value; back gets what undoes the elements. *applied (the patches as applied, by
-// position, sharing the values given, their paths in it) is malloc'd, the caller's to free.
+// position, sharing the values given and *made, their paths in it) is malloc'd, the caller's to free;
+// *made (NULL: freed here, so applied is of no use) the values made for them.
 // Returns 0, a tp code (below 0), or an op code.
 int el_step(const el_ctx *c, el_state *st, op_value **value, const el_ref *ref, tp_span patches,
 	const op_patch *ps, size_t n, const uint8_t *keep, const el_anchor *ids, int late,
-	op_undo *undo, el_back *back, op_patch **applied, size_t *napplied, el_anchor **named);
+	op_undo *undo, el_back *back, op_patch **applied, size_t *napplied, el_anchor **named,
+	el_made *made);
 
 // undoes back, newest first, and frees it
 void el_back_undo(const tp_mem *mem, el_state *st, el_back *back);

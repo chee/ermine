@@ -53,6 +53,49 @@ const clean = (p: Patch): Patch => ({
 	...(p.move && { move: clean(p.move as Patch) }),
 })
 
+const sameKeys = (a: readonly unknown[], b: readonly unknown[]) =>
+	a.length === b.length && a.every((k, i) => k === b[i])
+const valueAt = (v: unknown, path: readonly unknown[]) =>
+	path.reduce<unknown>(
+		(x, k) =>
+			x !== null && typeof x === "object"
+				? (x as Record<string, unknown>)[k as string]
+				: undefined,
+		v,
+	)
+// a write as its steps' patches: a move of a span of a text is a removal and an insertion (it
+// can't be named by ids), a list move that moves nothing is left out
+function patchesOf(value: unknown, patches: Patch[]): Patch[] {
+	if (!patches.some((p) => p.move && (p.range || !p.move.range))) return patches
+	const out: Patch[] = []
+	let v = value
+	for (const p of patches) {
+		const m = p.move, j = p.range?.[0]
+		// a move onto its own place changes nothing (as apply has it)
+		if (m && !p.range && !m.range && sameKeys(m.path, p.path)) continue
+		if (m && p.range && j === p.range[1] && v !== undefined) {
+			const s = valueAt(v, p.path)
+			if (m.range && sameKeys(m.path, p.path) && typeof s === "string") {
+				const [a, b] = m.range, text = [...s].slice(a, b).join("")
+				out.push({ path: p.path, range: [a, b] }, {
+					path: p.path,
+					range: [j!, j!],
+					value: text,
+				})
+				v = apply(v, [p])
+				continue
+			}
+			if (Array.isArray(s)) {
+				const a = m.range ? m.range[0] : m.path[m.path.length - 1]
+				if (a === j && (m.range || typeof a === "number")) continue
+			}
+		}
+		if (v !== undefined) v = apply(v, [p])
+		out.push(p)
+	}
+	return out
+}
+
 export const keptByDefault = (_: string, part: string) =>
 	part === "value" || part === "attributes" || part === "children"
 
@@ -467,8 +510,8 @@ export function createHistory(o: {
 		// the write as a step: its containers and elements named from the entry's own state, applied
 		// there (as the graph has it); a whole value starts it again.
 		// throws when it can't, with the entry's own value as it was
-		function attempt(patches: Patch[]): Step {
-			const whole = wholly(patches)
+		function attempt(given: Patch[]): Step | undefined {
+			const whole = wholly(given)
 			const mine = me === undefined
 				? undefined
 				: whole && (broken.has(k) || !known || (o.forgets && !own.has(k)))
@@ -476,6 +519,8 @@ export function createHistory(o: {
 				: broken.has(k)
 				? undefined
 				: own.get(k) ?? (known ? o.forgets ? undefined : rebuild(k) : start(true))
+			const patches = whole || !mine ? given : patchesOf(mine.value, given)
+			if (!patches.length) return
 			const undo: Patch[] = [], back: (() => void)[] = []
 			const n = me === undefined ? 0 : log.count(me) + 1
 			const at = { device: me ?? "", n, seq: me === undefined ? 0 : log.seq(me) }

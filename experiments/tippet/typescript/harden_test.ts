@@ -278,8 +278,8 @@ Deno.test("8. a step is only what tippet writes: others are refused, and write t
 	assertEquals(a.count(a.device!), 0)
 	const writes: Patch[][] = [
 		[{ path: ["t"], range: [0, 0], value: "héllo 🦊" }],
-		[{ path: ["l", 2], move: { path: ["l", 0] } }],
-		[{ path: ["l"], range: [1, 2], move: { path: ["m"], range: [0, 1] } }],
+		[{ path: ["l"], range: [2, 2], move: { path: ["l", 0] } }],
+		[{ path: ["l"], range: [3, 3], move: { path: ["l"], range: [0, 2] } }],
 		[{ path: ["b"], value: new Uint8Array([1, 2, 3]) }],
 		[{ path: ["big"], value: 2n ** 70n }],
 		[{ path: [], value: { a: [1, { b: null }], f: 1.5 } }],
@@ -288,7 +288,10 @@ Deno.test("8. a step is only what tippet writes: others are refused, and write t
 		const there = [new Uint8Array(32).fill(7), 1, 0, "t"]
 		const ids = patches.map((p) =>
 			p.move
-				? null
+				? [there, null, [[
+					[new Uint8Array(32).fill(7), 1, 0],
+					p.move.range ? p.move.range[1] - p.move.range[0] : 1,
+				]], null]
 				: p.range
 				? [there, null, [], null]
 				: p.path.length

@@ -4,10 +4,10 @@
 // seeds,
 // a write's when is the request's or 1760000000, and the k-th random call gives k big-endian.
 //   encode  { step: { device, n, before, node, relative?, part, patches, lamport, when, on?, ids?, who? } } -> { bytes }
-//           ids: per patch null (a move) or { container: node | null, pred?: [node, …] } (a put, a
+//           ids: per patch { container: node | null, pred?: [node, …] } (a put, a
 //           removal), { container, pred?, element: id } (a put at an index), { container, after:
 //           id | null, gone: [[id, count], …], before?: id | true } (a splice, a removal at an
-//           index); as written (WIRE.md): an element id this device's x or [x, k], another's
+//           index, a list move: gone is what it moves); as written (WIRE.md): an element id this device's x or [x, k], another's
 //           [device, c] or [device, n, k]; a node this device's [n, i, rel…], another's
 //           [device, n, i, rel…]
 //   decode  { bytes } -> { step } | { refused: true }

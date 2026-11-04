@@ -923,7 +923,7 @@ static void written(const op_value *r, FILE *out) {
 	if (x.line) let_go(x.line);
 	if (x.error) { hh_error(out, "%s", x.error); return; }
 	int lost = tp_history_unkept(d->history, unkept, &f) > unkept;
-	if (lost && (!was || tp_log_count(d->log, was) == held)) { hh_error(out, "not kept: %s", f.why); return; }
+	if (!was || tp_log_count(d->log, was) == held) { hh_error(out, "not kept: %s", lost ? f.why : "undefined"); return; }
 	const uint8_t *me = tp_log_device(d->log);
 	tp_step s;
 	tp_span bytes = stepof(d->log, me, tp_log_count(d->log, me));
