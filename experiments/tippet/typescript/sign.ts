@@ -1,4 +1,6 @@
-// A device's key: ed25519 through webcrypto. A device is named by its public key in hex.
+// A device's key: ed25519 through webcrypto, with @ermine/ed25519's strict checks first, as the C
+// does. A device is named by its public key in hex.
+import { strict } from "@ermine/ed25519"
 import { hex, unhex } from "./step.ts"
 
 export type Signer = { device: string; sign: (m: Uint8Array) => Promise<Uint8Array> }
@@ -25,7 +27,7 @@ export async function createSigner(
 const keys = new Map<string, CryptoKey>()
 
 export async function verify(device: string, m: Uint8Array, sig: Uint8Array): Promise<boolean> {
-	if (!/^[0-9a-f]{64}$/.test(device) || sig.length !== 64) return false
+	if (!/^[0-9a-f]{64}$/.test(device) || !strict(sig, unhex(device))) return false
 	try {
 		let k = keys.get(device)
 		if (k === undefined) {
