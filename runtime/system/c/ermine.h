@@ -764,6 +764,8 @@ int es_api_get_process_context(es_feature_api *f, pr_process *process, es_contex
 int es_api_handle_of(es_feature_api *f, const es_node_data *node, es_handle **out);
 int es_api_data_of(es_feature_api *f, const void *x, es_node_data *node);
 int es_api_seen(es_feature_api *f, const char *id, es_context *context, es_names *out);
+// a node id made as the ermine makes them, through onId; free it. ES_NOT_YET during setup
+int es_api_new_id(es_feature_api *f, char **out);
 // 0 and *out when the node is reached from the root; ES_NOTHING_THERE (out empty) when nothing is
 // (the root is a path of no names: tell them apart by the code)
 // a listener a feature added to the scheduler (sc_on_…), taken away at es_close as ermine's own are
@@ -802,9 +804,10 @@ typedef struct {
 	void *now_ctx;
 	const pr_policy *may;
 	const char *root;
-	// the host's node: where it is placed (NULL: nowhere), the host's args
-	// (NULL: none)
+	// the host's node: its id (NULL: a new one; give the same one each start for a saved graph, as
+	// root), where it is placed (NULL: nowhere), the host's args (NULL: none)
 	struct {
+		const char *node;
 		const char *at;
 		const char *const *args;
 		size_t nargs;

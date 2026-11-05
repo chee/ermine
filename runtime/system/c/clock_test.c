@@ -1,5 +1,6 @@
 // The clock es_create is given: every change's time is read from it, for a host write, a patch, a
-// process started and the nodes it makes. make test-clock-system, test-check-clock-system.
+// process started and the nodes it makes. And the ids it is given: the root, the host's node, and a
+// feature's ids made through onId. make test-clock-system, test-check-clock-system.
 #include "ermine.h"
 
 #include <stdio.h>
@@ -85,8 +86,40 @@ static void every_change_takes_the_clock(void) {
 	es_free(e);
 }
 
+typedef struct {
+	ids_t t;
+	es_feature_api *api;
+	int early;
+} api_t;
+static int api_setup(void *ctx, es_feature_api *f) {
+	api_t *a = ctx;
+	char *id = NULL;
+	a->early = es_api_new_id(f, &id);
+	a->api = f;
+	return es_on_id(f, next_id, &a->t);
+}
+
+static void the_host_gives_its_ids(void) {
+	api_t a = {0};
+	es_ermine *e = NULL;
+	es_feature ids = {.name = "ids", .setup = api_setup, .ctx = &a};
+	const es_feature *list[] = {&ids};
+	es_options o = {.features = list, .nfeatures = 1, .root = "R", .host = {.node = "H"}};
+	CHECK(es_create(&o, &e) == 0);
+	CHECK(a.early == ES_NOT_YET);
+	CHECK(strcmp(e->root, "R") == 0);
+	CHECK(strcmp(e->node, "H") == 0);
+	char *id = NULL;
+	CHECK(es_api_new_id(a.api, &id) == 0);
+	CHECK(id != NULL && id[0] == 'n');
+	free(id);
+	CHECK(es_close(e) == 0);
+	es_free(e);
+}
+
 int main(void) {
 	every_change_takes_the_clock();
+	the_host_gives_its_ids();
 	if (!failed) puts("clock ok");
 	return failed;
 }

@@ -138,6 +138,8 @@ export type Options = {
 	may?: Policy
 	root?: Id
 	host?: {
+		// the host's own node id; give the same one each start for a saved graph, as root
+		node?: Id
 		at?: string | Path
 		args?: readonly string[]
 		setup?: () => unknown
@@ -232,6 +234,7 @@ export function createErmine(options: Options = {}): Ermine {
 			viewOf: (change: ChangeHeader) => ChangeView
 		}
 		| undefined
+	let ids: (() => string) | undefined
 	const table: ErmineTable = createTable<Tables & StatusTables>((part, id) =>
 		first.onTableChange(part as Key, id)
 	)
@@ -264,6 +267,7 @@ export function createErmine(options: Options = {}): Ermine {
 		seen: () => made?.seen,
 		calling: () => made?.calling,
 		viewOf: () => made?.viewOf,
+		newId: () => ids,
 	})
 	const { hooks } = features
 	const processId = processIds()
@@ -273,6 +277,7 @@ export function createErmine(options: Options = {}): Ermine {
 		(kind) => kind === "process" ? processId() : uuidv7(),
 	)
 	const newId = () => idFor("node")
+	ids = newId
 	const errored = chain<[unknown, string | undefined], unknown>(hooks.onError, "onError", (e) => e)
 	const toPlaces: Ahead = {
 		onTableChange: (part, id) => places!.onTableChange(part, id),
@@ -297,7 +302,7 @@ export function createErmine(options: Options = {}): Ermine {
 	const offCrow = crowify(s, crow)
 	const p = places
 
-	const node = newId()
+	const node = options.host?.node ?? newId()
 	const hostScope = s.createRootScope({ ...options.info, node: node })
 
 	let queued = false

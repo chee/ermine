@@ -1,5 +1,5 @@
 // What the conformance suite cannot say on the line protocol: the base's own files, a made-up
-// context, close() with every teardown held, and two stacked onTable layers.
+// context, close() with every teardown held, two stacked onTable layers, and the host's ids.
 import {
 	addTeardown,
 	createAction,
@@ -241,4 +241,22 @@ Deno.test("createErmine throwing after it registered its scheduler undoes the re
 	const scheduler = createScheduler()
 	assertThrows(() => createErmine({ features: [manual], scheduler, host: { at: "" } }))
 	assertEquals(registrations(scheduler), 0)
+})
+
+Deno.test("the host gives the root and its own node; a feature makes ids through onId", () => {
+	let api: FeatureAPI | undefined
+	let n = 0
+	const ids: Feature = {
+		name: "ids",
+		setup: (f) => {
+			assertThrows(() => f.newId(), ErmineError, "newId")
+			f.onId((kind, next) => kind === "node" ? `n${n++}` : next(kind))
+			api = f
+		},
+	}
+	const e = createErmine({ root: "R", host: { node: "H" }, features: [ids] })
+	assertEquals([e.places.root, e.id], ["R", "H"])
+	const made = api!.newId()
+	assert(made.startsWith("n"), made)
+	e.close()
 })

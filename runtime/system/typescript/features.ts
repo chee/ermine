@@ -188,6 +188,8 @@ export type FeatureAPI = {
 	calling: () => Calling | undefined
 	// pipe-extension: core gap. A change as a process is shown it, so explain can take it back.
 	viewOf: (change: ChangeHeader) => ChangeView
+	// A node id made as the ermine makes them, through onId. Not available before setup finishes.
+	newId: () => string
 }
 
 export type Calling = Omit<Call, "end" | "reads" | "writes" | "made" | "ended">
@@ -252,6 +254,7 @@ export function install(
 		seen: () => ((id: Id, context: ProcessContext) => Path | undefined) | undefined
 		calling: () => (() => Calling | undefined) | undefined
 		viewOf: () => ((change: ChangeHeader) => ChangeView) | undefined
+		newId: () => (() => string) | undefined
 	},
 ): Installed {
 	const hooks = Object.fromEntries(HOOKS.map((h) => [h, []])) as unknown as {
@@ -301,6 +304,7 @@ export function install(
 			seen: (id, context) => got("seen", parts.seen)(id, context),
 			calling: () => got("calling", parts.calling)(),
 			viewOf: (change) => got("viewOf", parts.viewOf)(change),
+			newId: () => got("newId", parts.newId)(),
 			reserveSlot: <T>(): Slot<T> => {
 				if (!open) throw new ErmineError("setup-only", `${f.name}'s reserveSlot`)
 				const held = new WeakMap<ProcessContext, T>()

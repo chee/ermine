@@ -1275,6 +1275,13 @@ int es_api_places(es_feature_api *f, pl **out) {
 	return 0;
 }
 
+int es_api_new_id(es_feature_api *f, char **out) {
+	fapi *a = f->private_;
+	*out = NULL;
+	TRY(after_setup("newId", a->e->places != NULL));
+	return es_make_id(a->e, "node", out);
+}
+
 int es_api_processes(es_feature_api *f, pr **out) {
 	fapi *a = f->private_;
 	TRY(after_setup("processes", a->e->processes != NULL));
@@ -1739,7 +1746,8 @@ int es_create(const es_options *given, es_ermine **out) {
 	h->tracking_first = sc_on_tracking_start(e->scheduler, pl_tracking, e->places);
 	h->crow = pl_crowify(e->scheduler, pl_crow(e->places), NULL, NULL);
 
-	if ((code = es_make_id(e, "node", &e->node)) != 0) goto fail;
+	if (o->host.node != NULL) e->node = es_dup(o->host.node);
+	else if ((code = es_make_id(e, "node", &e->node)) != 0) goto fail;
 	{
 		sc_pair *info = es_alloc((o->ninfo + 1) * sizeof *info);
 		for (size_t i = 0; i < o->ninfo; i++) info[i] = o->info[i];
