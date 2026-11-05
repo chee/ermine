@@ -10,9 +10,16 @@ import { reading } from "./reading.ts"
 
 async function one(seed: number) {
 	const log = createLog({ writes: true, seed: new Uint8Array(32).fill(seed) })
-	let history!: History
-	const e = createErmine({ root: "world", features: [reading({ versions: (...a) => history.versions(...a) })] })
-	history = createHistory({ log, table: e.table as never, places: e.places as never, run: e.within })
+	const e = createErmine({
+		root: "world",
+		features: [reading({ versions: (...a) => history.versions(...a) })],
+	})
+	const history: History = createHistory({
+		log,
+		table: e.table as never,
+		places: e.places as never,
+		run: e.within,
+	})
 	await history.load()
 	return { e, log, history }
 }

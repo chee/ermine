@@ -23,8 +23,9 @@ One kept write. Bytes: a cbor array.
   order, puts), and sorts no element
 - when: whole. seconds since 1970, the writer's clock
 - seq: whole. how many elements its device's steps before it insert (a patch with a range inserts
-  its tstr value's code points, its array value's items; a list move, the items it moves): 0 at n = 1,
-  else step n - 1's seq plus what step n - 1 inserts (a step that says another is not a chain). seq plus what the step inserts: at most 2^53 - 1
+  its tstr value's code points, its array value's items; a list move, the items it moves): 0 at n =
+  1, else step n - 1's seq plus what step n - 1 inserts (a step that says another is not a chain).
+  seq plus what the step inserts: at most 2^53 - 1
 - on: array. what it was written on: its entry's (node and part) heads at the writer, each a step:
   - k, whole from 1, k < n: this device's own step n - k
   - [device, n]: another device's step n; device bstr 32, not this step's; n whole from 1
@@ -38,21 +39,22 @@ One kept write. Bytes: a cbor array.
     and before null; a list move, where gone is what it moves
   - container: the node of the map, array or string the patch changes (a key put or removal: the
     map; an index: the array; a splice: the sequence); null for a put or removal of the whole value
-    when the writer holds none. a reader finds the container by this id, not by the patch's path, which it
-    reads only to the last key or index (its length is not looked at)
+    when the writer holds none. a reader finds the container by this id, not by the patch's path,
+    which it reads only to the last key or index (its length is not looked at)
   - node: `[device, n, i, rel…]`: the step that made it (device, n), its patch (i), and its place in
     that patch's value (rel: tstr, a map's key, or whole, an array item's place when the array was
-    made; at most 1021 of them, mine, not decided: C walks a node 1024 parts long). a put's value is `[device, n, i]`; an item a splice inserts is `[device, n, i, x]`, x its
-    place in the value it inserts. made once, never changes, a move keeps it. written: this device's `[n, i, rel…]` (n whole from 1 to the step's; the step's
-    only with i below the patch's own index), another's `[device, n, i, rel…]` (device bstr 32, not
-    this step's)
+    made; at most 1021 of them, mine, not decided: C walks a node 1024 parts long). a put's value is
+    `[device, n, i]`; an item a splice inserts is `[device, n, i, x]`, x its place in the value it
+    inserts. made once, never changes, a move keeps it. written: this device's `[n, i, rel…]` (n
+    whole from 1 to the step's; the step's only with i below the patch's own index), another's
+    `[device, n, i, rel…]` (device bstr 32, not this step's)
   - pred: array of nodes, the cells the patch replaces (assignments, below)
   - element: the array item a put at an index replaces: an element id
   - after: the element it goes after, or null: the start
   - gone: array of [id, count], count whole from 1: the elements it takes away, count of them from
     id on (its seq or k on). one named more than once is taken away once. a list move's: the
-    elements that show the items it moves at its writer, in the array's order (a run that goes
-    back, one by one), their counts summing to the items it moves
+    elements that show the items it moves at its writer, in the array's order (a run that goes back,
+    one by one), their counts summing to the items it moves
   - before: the element it goes before, the one right after after at the writer (gone ones too): an
     id; true, after's own before (after not null); null, the end
   - an element id: made by a step, its device and seq: the step's seq + i, the i-th element the step
@@ -61,23 +63,22 @@ One kept write. Bytes: a cbor array.
     seq - x; or [x, k], x whole below n, that step n - x. another's [device, seq] or [device, n, k]
     (device bstr 32, not this step's; n from 1)
 
-  a sequence's elements are counted from its first splice: those there since the step that made
-  its node are that step's, k their place. a container whose maker's step has not landed: the step
+  a sequence's elements are counted from its first splice: those there since the step that made its
+  node are that step's, k their place. a container whose maker's step has not landed: the step
   doesn't apply (it applies once that lands). a container removed or replaced is trash (below), so
   the patch applies there. with trash only a forged id reaches a path of cells and places that leads
   to none: the patch is skipped, the rest of the step applies. a removal at an index of an array is
   a splice of that one element, taken away wherever its item is now (gone already: nothing)
 
-  list move (a patch with a range [j, j] and a move; the only kind of move a step has, and a step may hold several): one item of an array
-  ({path: the array, range: [j, j], move: {path: the array and the item's place}}) or 1 to 4096 of
-  them (move: {path: the array, range: [a, b]}), to the gap j, counted in the array without them.
-  its ids are a splice's: it makes as many elements as it moves, after and before as a splice's,
-  gone at first, and they show an item by its register (below). a move of a key, of an item to
-  another place than its array or of a span of a text is no step: a span of a text is a removal and
-  an insertion (chee, 11-01), so typing into the span meanwhile is dropped, written so by a writer;
-  any other
-  the writer puts the whole value instead (unkept). a list move that moves nothing at its writer
-  is not written
+  list move (a patch with a range [j, j] and a move; the only kind of move a step has, and a step
+  may hold several): one item of an array ({path: the array, range: [j, j], move: {path: the array
+  and the item's place}}) or 1 to 4096 of them (move: {path: the array, range: [a, b]}), to the gap
+  j, counted in the array without them. its ids are a splice's: it makes as many elements as it
+  moves, after and before as a splice's, gone at first, and they show an item by its register
+  (below). a move of a key, of an item to another place than its array or of a span of a text is no
+  step: a span of a text is a removal and an insertion (chee, 11-01), so typing into the span
+  meanwhile is dropped, written so by a writer; any other the writer puts the whole value instead
+  (unkept). a list move that moves nothing at its writer is not written
 
   items and registers (Kleppmann 2020's move register, as Da and Kleppmann 2024 use it for lists):
   - origin: the element an item was inserted as, its own or a splice's. every element a move makes
@@ -99,76 +100,76 @@ One kept write. Bytes: a cbor array.
     (was 38). C on a device that forgets: a move of one item holds 321 bytes (was 126): its source
     run cut in two, its new run 40, a register 56, an origin 32 (the elements it made are linked to
     their item by a table, so a run stays 40 bytes), and the run index (32 a run) once the list has
-    more than 32; ten items 410 (was 787); a range of 4096 of 8192 at once 400, a run and a register,
-    not an item each. the same item moved again and again holds 169 bytes a move for good (was
-    157): each move leaves its new run and origin, and its gone runs stay, since another device may
-    name any of them; its register is one (the origin's) and is taken over, not added. a removal at
-    an index or of a range of an array holds a register (56) beside its cut runs and its piece; a
+    more than 32; ten items 410 (was 787); a range of 4096 of 8192 at once 400, a run and a
+    register, not an item each. the same item moved again and again holds 169 bytes a move for good
+    (was 157): each move leaves its new run and origin, and its gone runs stay, since another device
+    may name any of them; its register is one (the origin's) and is taken over, not added. a removal
+    at an index or of a range of an array holds a register (56) beside its cut runs and its piece; a
     string holds none
 
-  assignments. a put or removal at a slot (a key of a map, an element of an array, the root) makes
-  a cell, [cell id, node]: the cell id is the node id of what the patch made there, `[device, n,
-  i]`, a scalar's too; a key a put's value holds has the cell its put made, `[…, key]`, and needs no
-  record until a patch assigns at it. a cell is visible until an assignment names it in pred. many
-  cells at a slot are all visible, a multi-value register: what a read shows is the one with the
-  greatest id (its step's lamport, device, n, then its patch), readAll shows all. pred holds every
-  visible cell at the slot the writer holds, hidden ones too, so one honest put or removal clears
-  them all. a container item a splice inserts has a cell and is named in pred as any; a scalar item
-  has none, and any put at its element supersedes it (its writer saw it). a removal
-  names what it saw and takes away only that: a cell it did not name stays visible. an edit into a
-  container of a cell that does not show applies to that cell's held value; when the cell shown
-  goes, the next greatest shows with it. a cell named before it landed is held at its slot
-  (`named`) and is not visible when it lands (a container it holds is trash); a name whose step has landed and whose cell is not at
-  the slot is ignored. the effect of an assignment is a set (cells in, preds out), so one goes in
-  as is in any order. a pred hides only a cell of a lesser step (lamport, then device), at a key as
-  at an element, mine, not decided: an honest pred names cells its writer saw, which are lesser, so
-  a put at an item never removes it; preds that name each other leave the greater cell, in any
-  order (a name held for a cell not landed keeps its greatest namer). `readAll` shows conflicts only:
-  `history.versions(node, part, path)` is the cells at the path, the shown first, each
-  from the step that made it (a key its parent's put made, with no cell of its own: that put's);
-  every device, keeper or forgetting, returns the same. `typescript/reading.ts` is the feature for
-  @ermine/system's `onRead`, adding all but the first (read's own)
+  assignments. a put or removal at a slot (a key of a map, an element of an array, the root) makes a
+  cell, [cell id, node]: the cell id is the node id of what the patch made there,
+  `[device, n,
+  i]`, a scalar's too; a key a put's value holds has the cell its put made,
+  `[…, key]`, and needs no record until a patch assigns at it. a cell is visible until an assignment
+  names it in pred. many cells at a slot are all visible, a multi-value register: what a read shows
+  is the one with the greatest id (its step's lamport, device, n, then its patch), readAll shows
+  all. pred holds every visible cell at the slot the writer holds, hidden ones too, so one honest
+  put or removal clears them all. a container item a splice inserts has a cell and is named in pred
+  as any; a scalar item has none, and any put at its element supersedes it (its writer saw it). a
+  removal names what it saw and takes away only that: a cell it did not name stays visible. an edit
+  into a container of a cell that does not show applies to that cell's held value; when the cell
+  shown goes, the next greatest shows with it. a cell named before it landed is held at its slot
+  (`named`) and is not visible when it lands (a container it holds is trash); a name whose step has
+  landed and whose cell is not at the slot is ignored. the effect of an assignment is a set (cells
+  in, preds out), so one goes in as is in any order. a pred hides only a cell of a lesser step
+  (lamport, then device), at a key as at an element, mine, not decided: an honest pred names cells
+  its writer saw, which are lesser, so a put at an item never removes it; preds that name each other
+  leave the greater cell, in any order (a name held for a cell not landed keeps its greatest namer).
+  `readAll` shows conflicts only: `history.versions(node, part, path)` is the cells at the path, the
+  shown first, each from the step that made it (a key its parent's put made, with no cell of its
+  own: that put's); every device, keeper or forgetting, returns the same. `typescript/reading.ts` is
+  the feature for @ermine/system's `onRead`, adding all but the first (read's own)
 
   trash (chee, 11-02: removals hide; only the host empties; readAll never shows it): a container a
-  put replaced, a removal or a splice took away, or that landed
-  after a pred named its cell, is held hidden with its value and what is under it (sequences,
-  cells, held values), like a cell that does not show. a read, readAll and versions never show it.
-  a patch naming a container in trash applies there, to its held value, so a step applies whole;
-  so does a put at an element gone (an item a move may bring back, below). a scalar replaced or
-  removed in a map leaves nothing. tippet never lets go of trash itself and never decides it from what other
-  devices hold: a device cannot know who still writes into a removed container (documents travel
-  through a server, then peer to peer, then a stick). a device that forgets holds trash too, and its
-  snapshot does
+  put replaced, a removal or a splice took away, or that landed after a pred named its cell, is held
+  hidden with its value and what is under it (sequences, cells, held values), like a cell that does
+  not show. a read, readAll and versions never show it. a patch naming a container in trash applies
+  there, to its held value, so a step applies whole; so does a put at an element gone (an item a
+  move may bring back, below). a scalar replaced or removed in a map leaves nothing. tippet never
+  lets go of trash itself and never decides it from what other devices hold: a device cannot know
+  who still writes into a removed container (documents travel through a server, then peer to peer,
+  then a stick). a device that forgets holds trash too, and its snapshot does
   - empty: the host lets go of trash: `history.empty()` in TS, `tp_history_empty` in C. every
     container in trash goes with what is under it; the count returned is every container in trash
-    before, those under another included. a patch naming a container emptied is then skipped on
-    that device alone, the rest of its step applying. values agree after honest steps, since trash
-    never shows; a malformed patch into emptied trash (a splice naming a map) fails where trash is
-    held and applies where it was emptied, so values can differ then. keeping each emptied
-    container's kind would close that, and is not built
+    before, those under another included. a patch naming a container emptied is then skipped on that
+    device alone, the rest of its step applying. values agree after honest steps, since trash never
+    shows; a malformed patch into emptied trash (a splice naming a map) fails where trash is held
+    and applies where it was emptied, so values can differ then. keeping each emptied container's
+    kind would close that, and is not built
   - trash(): `history.trash()` in TS, `tp_history_trash` in C: how many values are in trash (cells
     in trash, the values held for items gone, in their cells or in pieces, a scalar's too) and the
-    bytes they hold, so a host can decide when to empty. TS counts the contents of the values;
-    C counts memory, each cell and value, a value shared with the graph's structure whole
+    bytes they hold, so a host can decide when to empty. TS counts the contents of the values; C
+    counts memory, each cell and value, a value shared with the graph's structure whole
   - mine, not decided: a pred naming a cell already in trash is ignored. an item a splice or a move
     leaves gone holds its value (a move may bring it back): in the cell that shows at its slot, if a
-    patch assigned there, else in a piece of the origins (a cell is made for a container when a patch
-    names it). a put at a gone item assigns as at one that shows, pred and cells, a scalar too,
-    its value held by the cell that shows and the graph not written; a move brings back the cell
-    that shows, the piece only when the slot has no cell. emptying lets all of these go. no cap on
-    trash (a cap would make readers differ). a keeper marks the newest
-    step each entry had at an empty, and working the entry out again applies steps up to it
-    without making trash, so a late step does not bring back what was let go; the mark is not in
-    a snapshot, so after a reload the trash may come back
-  - cost, C on a device that forgets: a container removed or replaced leaves its cell, 40 bytes
-    and its id (17 for a key of five letters, 57 in all), and its value, which stays alive,
-    outside the library's heap counter (tp_mem): a map `{"x": n}` is 208 bytes. a put of the whole
-    value leaves the old root so, and the old value with it: a dens-style map of 87 bytes (five
-    keys and one nested map) put again and again costs about 0.9 KB in trash a put counted by
-    `tp_history_trash` and about 1.1 KB resident, until the host empties. the library's own heap
-    sees 77 bytes a put. an item taken away holds a piece: a number removed from a list holds 274
-    bytes in the library's heap (126 for its runs; 56 a register, the rest its piece, which names
-    its list), and its value, which stays alive, is in `tp_history_trash`
+    patch assigned there, else in a piece of the origins (a cell is made for a container when a
+    patch names it). a put at a gone item assigns as at one that shows, pred and cells, a scalar
+    too, its value held by the cell that shows and the graph not written; a move brings back the
+    cell that shows, the piece only when the slot has no cell. emptying lets all of these go. no cap
+    on trash (a cap would make readers differ). a keeper marks the newest step each entry had at an
+    empty, and working the entry out again applies steps up to it without making trash, so a late
+    step does not bring back what was let go; the mark is not in a snapshot, so after a reload the
+    trash may come back
+  - cost, C on a device that forgets: a container removed or replaced leaves its cell, 40 bytes and
+    its id (17 for a key of five letters, 57 in all), and its value, which stays alive, outside the
+    library's heap counter (tp_mem): a map `{"x": n}` is 208 bytes. a put of the whole value leaves
+    the old root so, and the old value with it: a dens-style map of 87 bytes (five keys and one
+    nested map) put again and again costs about 0.9 KB in trash a put counted by `tp_history_trash`
+    and about 1.1 KB resident, until the host empties. the library's own heap sees 77 bytes a put.
+    an item taken away holds a piece: a number removed from a list holds 274 bytes in the library's
+    heap (126 for its runs; 56 a register, the rest its piece, which names its list), and its value,
+    which stays alive, is in `tp_history_trash`
 
   applied in the entry's order (history): a splice takes its gone elements away (an array's items:
   an event on each one's register), then its first inserted one goes between after and before, among
@@ -198,20 +199,19 @@ One kept write. Bytes: a cbor array.
   a reader that forgets: holds per entry its sequences' elements, the cells assigned and still
   visible (about 40 bytes of cell and its id in C, a hidden one and its value more), `named`, the
   newest step of each device that landed, the registers of its arrays' items, and the graph's value
-  (no steps, no second value), all in its snapshot too. it ends at the same value as a reader that holds every
-  step. a removal of a scalar leaves no cell, and a put replacing one leaves one; trash (above)
-  stays until the host empties it.
+  (no steps, no second value), all in its snapshot too. it ends at the same value as a reader that
+  holds every step. a removal of a scalar leaves no cell, and a put replacing one leaves one; trash
+  (above) stays until the host empties it.
 
-  snapshot (mine, not decided): `v` 1, the format (a value is `[v]`, so a whole value of null is
-  not none); a snapshot with no `v` is read as before it (a value, null for none). `failed`, when
-  there are any, for every reader: [device, n, node, part, lamport], lamport null only for a step
-  that could not be read; they come back with why "failed before a reload", so after a reload a late
-  step still lets the failed steps after it be tried again. a snapshot a reader refuses is let go
-  and every step the log holds lands, its host told. the emptied mark is not saved, so after an empty
+  snapshot (mine, not decided): `v` 1, the format (a value is `[v]`, so a whole value of null is not
+  none); a snapshot with no `v` is read as before it (a value, null for none). `failed`, when there
+  are any, for every reader: [device, n, node, part, lamport], lamport null only for a step that
+  could not be read; they come back with why "failed before a reload", so after a reload a late step
+  still lets the failed steps after it be tried again. a snapshot a reader refuses is let go and
+  every step the log holds lands, its host told. the emptied mark is not saved, so after an empty
   and a reload a failed list can keep a failure the device had cleared by skipping into emptied
-  trash (only a stale or malformed step does that).
-  cut: the log has let go a device's first step, however it was dropped (`forget`, or the log's
-  `drop`, or a reload), asked of the log each time
+  trash (only a stale or malformed step does that). cut: the log has let go a device's first step,
+  however it was dropped (`forget`, or the log's `drop`, or a reload), asked of the log each time
 
   a late step (ordered before a step applied) on a reader that forgets:
   - goes in as it is: a put, a removal, an edit, a splice, a list move commute (cells, preds,
@@ -221,9 +221,9 @@ One kept write. Bytes: a cbor array.
     failed step ordered after it
   - after a cut (the log has let go any device's first step): no entry is worked out again. a late
     step needing that fails (late, and the steps after it let go); a step with nothing of it in the
-    value, its container gone, fails too (`failed`, so a host sees it); when a failed step of an entry is
-    ordered after a late one, the failed steps of its entry are tried again as they are, on that
-    reader alone: its value can differ from then on
+    value, its container gone, fails too (`failed`, so a host sees it); when a failed step of an
+    entry is ordered after a late one, the failed steps of its entry are tried again as they are, on
+    that reader alone: its value can differ from then on
 
   what is made of it: `typescript/history.ts`
 - who: tstr, only when there is one
@@ -233,32 +233,32 @@ of 0, a number not whole, a patch with another field, a node array not one rest,
 above (k of 0 or of n or more, a pair naming the step's own device, of another length or kind), a
 seq past 2^53 - 1 with what the step inserts, ids not as above (not one per patch, null on a patch,
 a container null on a patch but a put of the whole value, a move that is no list move or whose
-elements don't sum to its items, a node of another shape or naming the step's own device whole or a step past its own, an n of 0 or
-past the step's, a pred that is not an array of nodes, an element missing on a put at an index or
-there on another, a before of true with a null after, an id of another shape or naming the step's
-own device, another's seq below 0, a number past 2^53 - 1 either way, an [x, k] with x of n or more,
-a [device, n, k] with n of 0, a count of 0, a removal at an index whose ids are not no after, one
-element once and no before, another length), a NUL in node (its rest too) or part, or containers
-nested 1024 deep (cbor's most; the step's own array counts): a run message holds a step's patches
-one deeper.
+elements don't sum to its items, a node of another shape or naming the step's own device whole or a
+step past its own, an n of 0 or past the step's, a pred that is not an array of nodes, an element
+missing on a put at an index or there on another, a before of true with a null after, an id of
+another shape or naming the step's own device, another's seq below 0, a number past 2^53 - 1 either
+way, an [x, k] with x of n or more, a [device, n, k] with n of 0, a count of 0, a removal at an
+index whose ids are not no after, one element once and no before, another length), a NUL in node
+(its rest too) or part, or containers nested 1024 deep (cbor's most; the step's own array counts): a
+run message holds a step's patches one deeper.
 
 ids' shape is mine, not decided: per patch beside it, so a patch stays a changeable patch (squish
 packs it); an element its device and seq (diamond-types), unique by its device's chain alone.
 
 a container id is mine, not decided: a patch names the node it changes by the patch that made it, so
 what a reader holds is keyed by id and no place is held (a node never changes its id; a move keeps
-it); the path stays as the changeable patch has it. this device's node is written by
-its step n, not how far back, so typing into one text is one run in a pack.
+it); the path stays as the changeable patch has it. this device's node is written by its step n, not
+how far back, so typing into one text is one run in a pack.
 
 list moves are mine, not decided (after Kleppmann, "A highly-available move operation for replicated
 trees", 2020, and Da and Kleppmann, PaPoC 2024): a move keeps its item (its slot, container and
 cells), so an edit, a put and a pred follow it and an insert beside its old place stays beside it;
-it makes new elements for FugueMax to place and a register per origin to show one. what a move
-takes of a run is an event on a register, and the trash and pieces above hold the values an item
-gone had (a scalar's too). a move of anything else than an item or items of an array is put as the
-whole value by its writer (unkept), and one that moves nothing is not written. a move that finds the
-value of the item it brings back let go (emptied) takes the register and shows nothing there: values
-can differ from devices that hold the trash.
+it makes new elements for FugueMax to place and a register per origin to show one. what a move takes
+of a run is an event on a register, and the trash and pieces above hold the values an item gone had
+(a scalar's too). a move of anything else than an item or items of an array is put as the whole
+value by its writer (unkept), and one that moves nothing is not written. a move that finds the value
+of the item it brings back let go (emptied) takes the register and shows nothing there: values can
+differ from devices that hold the trash.
 
 cells are mine, not decided (after Da and Kleppmann, "Extending JSON CRDTs with Move Operations",
 PaPoC 2024): every assignment names the cells it replaces, so puts commute and none is lost at a key
@@ -399,9 +399,10 @@ a backup restored and written on. Nobody is told by a refusal on one link; a for
   the proofs it holds (past it, dropped: a run that would make one is refused `signature`)
 - told: the proof goes to every link but the one a `fork` came from, and, when a link says in its
   have that it holds steps of the device, to it (once); once a device: a second proof of it is
-  dropped and not passed. it goes with the lower hash first, as made, whichever order it came in.
-  a link has the proof only once one has checked: a `fork` that does not check stops nothing. a taker lists it for its host: `typescript/log.ts` forks and onFork,
-  `c/tippet.h` tp_log_forks, and the `sync` node's forks
+  dropped and not passed. it goes with the lower hash first, as made, whichever order it came in. a
+  link has the proof only once one has checked: a `fork` that does not check stops nothing. a taker
+  lists it for its host: `typescript/log.ts` forks and onFork, `c/tippet.h` tp_log_forks, and the
+  `sync` node's forks
 - answered: a run refused `chain` or `signature`, its first n at least 2 and step n - 1 held, is
   answered with the taker's own run of that device from n - 1, a pack with its first whole, once a
   device a link, unless a fork of it is known. the other side meets steps of another hash there: the

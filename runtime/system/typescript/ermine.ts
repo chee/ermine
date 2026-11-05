@@ -234,7 +234,7 @@ export function createErmine(options: Options = {}): Ermine {
 			viewOf: (change: ChangeHeader) => ChangeView
 		}
 		| undefined
-	let ids: (() => string) | undefined
+	let ids: (() => string) | undefined = undefined
 	const table: ErmineTable = createTable<Tables & StatusTables>((part, id) =>
 		first.onTableChange(part as Key, id)
 	)

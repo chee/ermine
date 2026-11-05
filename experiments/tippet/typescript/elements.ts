@@ -133,7 +133,6 @@ const later = (a: Stamp, b: Stamp) =>
 		: a[3] > b[3]
 // a record's key: its parent, then its slot; the root's parent and slot are empty
 const SLOT = "\u0001"
-const ROOT = SLOT
 const keySlot = (k: string) => JSON.stringify(k)
 const elSlot = (e: Id) => e.k === undefined ? `${e.device} ${e.c}` : `${e.device} ${e.c} ${e.k}`
 const child = (n: Node, rel: string | number): Node => n + NUL + JSON.stringify(rel)
@@ -1108,7 +1107,6 @@ function patch(
 			v,
 			given?.splice ?? null,
 			back,
-			late,
 		)
 		return out(r.patches, { container: node, splice: r.anchor })
 	}
@@ -1117,7 +1115,7 @@ function patch(
 		if (!Array.isArray(v)) throw new RangeError("wrong-kind")
 		if (!name && !given!.splice) throw new RangeError("a removal with no ids")
 		const q: Patch = { path: up, range: [k as number, (k as number) + 1] }
-		const r = splice(state, ref, c, i, q, node, v, given?.splice ?? null, back, late)
+		const r = splice(state, ref, c, i, q, node, v, given?.splice ?? null, back)
 		return out(r.patches, {
 			container: node,
 			splice: { after: null, gone: r.anchor.gone },
@@ -1248,7 +1246,6 @@ function splice(
 	v: unknown,
 	anchor: Anchor | null,
 	back: (() => void)[],
-	late = false,
 ): { patches: Patch[]; anchor: Anchor } {
 	// an insert of another kind than the sequence (a list into a text): doesn't apply, as apply refuses
 	const kind = (v: unknown) => typeof v === "string" ? "text" : Array.isArray(v) ? "list" : "other"
