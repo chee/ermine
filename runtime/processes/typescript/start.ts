@@ -5,7 +5,7 @@ import { type Id, type Path, type Places, PlacesError } from "@ermine/places"
 import type { Writer } from "@ermine/places/children"
 import { parse } from "@ermine/places/path"
 import { createChangeHeader, locationsHere } from "@ermine/places/header"
-import { createStatus, STATUS, type StatusTables, TABLE } from "./status.ts"
+import { createStatus, STATUS, type Statuses, type StatusTables, TABLE } from "./status.ts"
 import { type Computer, PENDING, type Scheduler, type Scope } from "@ermine/reactivity"
 import type { Table, Tables } from "@ermine/graph/table"
 import type { Location } from "@ermine/changeable/stacktrace"
@@ -50,6 +50,9 @@ export type Setup = {
 	scopes: Pick<ScopeNodes, "give">
 	owner?: Scope
 	write?: Writer
+	// what each process's computers' status is written through; made here, and stopped with the
+	// owner, when not given
+	statuses?: Statuses
 	id?: () => Id
 	now?: () => number
 }
@@ -99,7 +102,7 @@ export function createProcesses(setup: Setup): Processes {
 	const { scheduler: s, table, places, scopes } = setup
 	const owner = setup.owner ?? s.createScope({ processes: "start" })
 	const makeId = setup.id ?? processIds()
-	const statuses = createStatus({
+	const statuses = setup.statuses ?? createStatus({
 		places,
 		table,
 		scheduler: s,
@@ -111,7 +114,7 @@ export function createProcesses(setup: Setup): Processes {
 		? createRuns({ places: { describe, watchAll }, table, scheduler: s })
 		: undefined
 	s.registerTeardown(owner, () => {
-		statuses.stop()
+		if (setup.statuses === undefined) statuses.stop()
 		runs?.stop()
 	})
 	const states = new WeakMap<Process, State>()

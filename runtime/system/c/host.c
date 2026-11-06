@@ -1611,6 +1611,8 @@ int es_create(const es_options *given, es_ermine **out) {
 
 	e->table = tb_new();
 	if ((code = install(e, o)) != 0) goto fail;
+	// hooks and slots are added in setup only, as TS: nothing after this adds
+	h->adding = 0;
 
 	if (o->root != NULL) e->root = es_dup(o->root);
 	else if ((code = es_make_id(e, "node", &e->root)) != 0) goto fail;
@@ -1656,6 +1658,8 @@ int es_create(const es_options *given, es_ermine **out) {
 	}
 
 	e->scopes = sn_new(e->scheduler, e->table, e->places);
+	e->statuses = cst_new(&(cst_setup){.places = e->places, .table = e->table, .scheduler = e->scheduler,
+		.write = status_write, .write_ctx = e});
 	{
 		op_value *start = op_str("start");
 		keep_value(h, start);
@@ -1664,10 +1668,8 @@ int es_create(const es_options *given, es_ermine **out) {
 		e->processes = pr_new(&(pr_setup){.scheduler = e->scheduler, .table = e->table,
 			.places = e->places, .scopes = e->scopes, .commit = commit_changed, .commit_ctx = e,
 			.owner = owner, .id = process_id, .id_ctx = e,
-			.write = host_write, .write_ctx = e});
+			.write = host_write, .write_ctx = e, .statuses = e->statuses});
 	}
-	e->statuses = cst_new(&(cst_setup){.places = e->places, .table = e->table, .scheduler = e->scheduler,
-		.write = status_write, .write_ctx = e});
 	e->runs = crn_new(&(crn_setup){.places = e->places, .table = e->table, .scheduler = e->scheduler,
 		.hold = run_hold, .hold_ctx = e});
 	e->calls = es_calls_new(e, !o->calls_never);
@@ -1675,7 +1677,6 @@ int es_create(const es_options *given, es_ermine **out) {
 	sched_add(e->scheduler);
 	h->registered = 1;
 	es_register_scope(e->host_scope, e->host_context);
-	h->adding = 0;
 
 	if (o->host.at != NULL) {
 		es_node_data node = {.id = e->node, .part = (char *)PART_VALUE};

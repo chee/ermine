@@ -11,6 +11,7 @@
 
 #include "processes.h"
 #include "scopes.h"
+#include "status.h"
 
 #define PR_ARGS "ermine.process.args"
 #define PR_FOLDER "ermine.process.folder"
@@ -32,6 +33,9 @@ typedef struct {
 	void *commit_ctx;
 	pr_writer write;
 	void *write_ctx;
+	// what each process's computers' status is written through; made, halted and freed here when
+	// NULL
+	cst *statuses;
 	int runs;
 	sc_scope *owner;
 	const ch_location *(*site)(void *ctx, ch_location *buf);

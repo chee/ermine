@@ -286,6 +286,8 @@ function make(options: Options, undo: (() => void)[]): Ermine {
 		viewOf: () => made?.viewOf,
 		newId: () => ids,
 	})
+	// Hooks and slots are added in setup only: every chain below is built from them as they are now.
+	features.done()
 	const { hooks } = features
 	const processId = processIds()
 	const idFor = chain<[IdKind], string>(
@@ -544,6 +546,14 @@ function make(options: Options, undo: (() => void)[]): Ermine {
 				hostInner.put({ part, id, patches: [], gone: true })) as never,
 		},
 	})
+	const statuses = createStatus({
+		places: { commit: p.commit, tables: p.tables },
+		table,
+		scheduler: s,
+		write: (part, id, patches, header) =>
+			(computerAt(madeNodes, id)?.inner ?? hostInner).writer(part, id, patches, header),
+		now: options.now,
+	})
 	const owner = s.createScope({ processes: "start" }, hostScope)
 	processes = createProcesses({
 		scheduler: s,
@@ -552,15 +562,8 @@ function make(options: Options, undo: (() => void)[]): Ermine {
 		scopes,
 		owner,
 		write: hostInner.writer,
+		statuses,
 		id: () => idFor("process"),
-		now: options.now,
-	})
-	const statuses = createStatus({
-		places: { commit: p.commit, tables: p.tables },
-		table,
-		scheduler: s,
-		write: (part, id, patches, header) =>
-			(computerAt(madeNodes, id)?.inner ?? hostInner).writer(part, id, patches, header),
 		now: options.now,
 	})
 	const runs = createRuns({
@@ -634,7 +637,6 @@ function make(options: Options, undo: (() => void)[]): Ermine {
 	// undone last: the teardown before it finds its context through the registration
 	undo.unshift(unregister)
 	registerScope(hostScope, hostInner)
-	features.done()
 
 	if (options.host?.at !== undefined) {
 		const at = options.host.at

@@ -108,8 +108,10 @@ pr *pr_new_at(const pr_setup *setup, const char *file, int line, const char *fun
 		s->owner_info = (sc_pair){"processes", op_str("start")};
 		s->owner = sc_create_scope(setup->scheduler, &s->owner_info, 1, NULL);
 	}
-	s->statuses = cst_new(&(cst_setup){.places = setup->places, .table = setup->table,
-		.scheduler = setup->scheduler, .write = setup->write, .write_ctx = setup->write_ctx});
+	s->statuses = setup->statuses != NULL
+		? setup->statuses
+		: cst_new(&(cst_setup){.places = setup->places, .table = setup->table,
+			.scheduler = setup->scheduler, .write = setup->write, .write_ctx = setup->write_ctx});
 	if (setup->runs) {
 		s->runs = crn_new(&(crn_setup){
 			.places = setup->places, .table = setup->table, .scheduler = setup->scheduler});
@@ -540,13 +542,13 @@ void pr_halt(pr *s) {
 	s->halted = 1;
 	if (s->freed != NULL) sc_remove_listener(s->freed);
 	s->freed = NULL;
-	cst_stop(s->statuses);
+	if (s->s.statuses == NULL) cst_stop(s->statuses);
 	crn_stop(s->runs);
 }
 
 void pr_free(pr *s) {
 	if (s == NULL) return;
-	cst_free(s->statuses);
+	if (s->s.statuses == NULL) cst_free(s->statuses);
 	crn_free(s->runs);
 	for (size_t i = 0; i < s->n; i++) {
 		pr_process *p = s->all[i];

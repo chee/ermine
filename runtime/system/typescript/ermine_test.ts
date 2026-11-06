@@ -299,3 +299,17 @@ Deno.test("the host gives the root and its own node; a feature makes ids through
 	assert(made.startsWith("n"), made)
 	e.close()
 })
+
+Deno.test("a hook added while createErmine is making is refused setup-only, not kept by some chains", () => {
+	const scheduler = counting()
+	const late: Feature = {
+		name: "late",
+		setup: (f) =>
+			f.onId((kind, next) => {
+				f.onWrite((o, w, next) => next(o, w))
+				return next(kind)
+			}),
+	}
+	assertThrows(() => createErmine({ features: [late, manual], scheduler }), Error, "setup-only")
+	assertEquals(scheduler.live, 0)
+})

@@ -26,10 +26,12 @@ export type Setup = {
 	now?: () => number
 }
 
-export function createStatus(setup: Setup): {
+export type Statuses = {
 	give: (computer: Computer, id: Id) => void
 	stop: () => void
-} {
+}
+
+export function createStatus(setup: Setup): Statuses {
 	const { places, table, scheduler } = setup
 	const ids = new WeakMap<Computer, Id>()
 	const acted = new WeakSet<Computer>()
