@@ -1,7 +1,8 @@
 // A process's life and its stop at a path in places. A process is a scheduler scope with one
 // path. It knows no programs, loaders or types.
 import createEntry, { type ChangeHeader } from "@ermine/graph/entry"
-import { type Id, type Path, type Places, PlacesError, type Writer } from "@ermine/places"
+import { type Id, type Path, type Places, PlacesError } from "@ermine/places"
+import type { Writer } from "@ermine/places/children"
 import { parse } from "@ermine/places/path"
 import { createChangeHeader, locationsHere } from "@ermine/places/header"
 import { createStatus, STATUS, type StatusTables, TABLE } from "./status.ts"

@@ -34,7 +34,8 @@
 import type { Key as Step } from "@ermine/changeable/apply"
 import { type Computer, PENDING } from "@ermine/reactivity"
 import type { Key } from "@ermine/graph/table"
-import { asId, at, children, type Contributor, none, type Places } from "./places.ts"
+import { asId, at, type Contributor, none, type Places } from "./places.ts"
+import { children } from "./children.ts"
 import {
 	answered,
 	basic,

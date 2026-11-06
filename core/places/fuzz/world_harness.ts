@@ -1,16 +1,8 @@
 // A small graph for the cross-library fuzz tests: a table of children entries and places over it.
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/graph/entry"
 import { createTable, type Id, type Tables } from "@ermine/graph/table"
-import {
-	createPlaces,
-	move,
-	type Path,
-	place,
-	type Places,
-	PlacesError,
-	rename,
-	unplace,
-} from "@ermine/places"
+import { createPlaces, type Path, type Places, PlacesError } from "@ermine/places"
+import { move, place, rename, unplace } from "@ermine/places/children"
 import { createPaths, type Spot } from "@ermine/reactivity/paths"
 import type { Pick } from "../../../meta/conformance/typescript/gen.ts"
 

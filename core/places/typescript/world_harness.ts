@@ -34,16 +34,8 @@ import { type Computer, createScheduler, type Info, type Scope } from "@ermine/r
 import { type Told, trace } from "../../reactivity/typescript/scheduler_harness.ts"
 import { createPaths } from "@ermine/reactivity/paths"
 import { createTable, type Id, type Key } from "@ermine/graph/table"
-import {
-	type Contributor,
-	createPlaces,
-	move,
-	place,
-	PlacesError,
-	rename,
-	unplace,
-	type Where,
-} from "./places.ts"
+import { type Contributor, createPlaces, PlacesError, type Where } from "./places.ts"
+import { move, place, rename, unplace } from "./children.ts"
 
 import type { Answer, Request } from "../../../meta/conformance/typescript/harness.ts"
 import { toJson } from "../../../meta/conformance/typescript/form.ts"

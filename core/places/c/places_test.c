@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "children.h"
 #include "places.h"
 
 #define CHECK(x) \

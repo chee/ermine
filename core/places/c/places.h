@@ -4,8 +4,7 @@
 //   sc_scheduler *s = sc_new((sc_options){..});
 //   sc_on_tracking_end(s, pl_forget, p);
 //   pl_connect(p, &(pl_setup){tb_string("R"), table, paths, s});
-//   pl_place(p, children, name, id, header, &changed);
-//   pl_commit(p, &changed);
+//   pl_commit(p, &changed);  // after a write from children.h
 //
 // Returned values and names are borrowed from the table. Out of memory aborts.
 #ifndef PLACES_H
@@ -57,7 +56,6 @@ typedef struct {
 #define PL_NONE 2
 
 tb_key pl_level(void);
-extern const pl_contributor pl_children;
 
 typedef struct {
 	tb_key root;
@@ -92,17 +90,6 @@ const char *pl_code_name(int code);
 
 // Valid: any string except "", ".", ".." and "/".
 int pl_is_name(const char *name);
-
-// Writes return 0 or a code, and on a code nothing changed. Strings are copied; header pieces
-// are borrowed. A name that holds something is never written over.
-int pl_place(pl *p, nd_entry *children, const char *name, tb_key id, ch_header header,
-	pl_changed *changed);
-int pl_unplace(pl *p, nd_entry *children, const char *name, ch_header header, pl_changed *changed);
-int pl_rename(pl *p, nd_entry *children, const char *name, const char *to, ch_header header,
-	pl_changed *changed);
-// Two entries get one change each, the one it goes into first.
-int pl_move(pl *p, nd_entry *from, const char *name, nd_entry *into, const char *to,
-	ch_header header, pl_changed *changed);
 
 void pl_own(pl *p, nd_entry *node);
 // Like pl_own, but pl_sweep frees it once the table no longer holds it. Sweep after the pulse.

@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "children.h"
 #include "places_harness.h"
 
 #define PUSH(v, n, cap, x) \

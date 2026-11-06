@@ -8,6 +8,7 @@
 #ifndef PROCESSES_H
 #define PROCESSES_H
 
+#include "../../../core/places/c/children.h"
 #include "../../../core/places/c/places.h"
 
 #define PR_PART "process"

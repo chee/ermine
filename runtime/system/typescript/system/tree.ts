@@ -1,5 +1,6 @@
 import type { Entry } from "@ermine/graph/entry"
-import { type Id, type Path, PlacesError, placing, unplacing } from "@ermine/places"
+import { type Id, type Path, PlacesError } from "@ermine/places"
+import { placing, unplacing } from "@ermine/places/children"
 import { get } from "@ermine/places/lib"
 import { type Inner, whole } from "../context.ts"
 import { slotAt } from "./addressing.ts"

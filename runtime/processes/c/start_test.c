@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "../../../core/places/c/children.h"
 #include "../../../core/places/c/places.h"
 #include "../../../core/reactivity/c/paths.h"
 #include "../../../core/reactivity/c/scheduler.h"

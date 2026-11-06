@@ -28,14 +28,8 @@ import createEntry from "@ermine/graph/entry"
 import { type Computer, createScheduler, type Scope } from "@ermine/reactivity"
 import { createPaths } from "@ermine/reactivity/paths"
 import { createTable, type Key } from "@ermine/graph/table"
-import {
-	children,
-	type Contributor,
-	createPlaces,
-	place,
-	PlacesError,
-	rename,
-} from "@ermine/places"
+import { type Contributor, createPlaces, PlacesError } from "@ermine/places"
+import { children, place, rename } from "@ermine/places/children"
 import { get, gets, list, lookup, members } from "@ermine/places/lib"
 import { createChangeHeader } from "@ermine/places/header"
 import { type Request, serve } from "../../../meta/conformance/typescript/harness.ts"

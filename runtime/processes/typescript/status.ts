@@ -6,7 +6,8 @@ import update from "@ermine/changeable/update"
 import type { Patch } from "@ermine/changeable/apply"
 import { type Computer, type Ended, PENDING, type Scheduler } from "@ermine/reactivity"
 import { createChangeHeader } from "@ermine/places/header"
-import type { Places, Writer } from "@ermine/places"
+import type { Places } from "@ermine/places"
+import type { Writer } from "@ermine/places/children"
 
 export type StatusTables = { status: Record<string, unknown> }
 

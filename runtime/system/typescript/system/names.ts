@@ -1,4 +1,5 @@
-import { moving, type Path } from "@ermine/places"
+import type { Path } from "@ermine/places"
+import { moving } from "@ermine/places/children"
 import { get } from "@ermine/places/lib"
 import type { Inner, Target } from "../context.ts"
 import { go } from "../acting.ts"

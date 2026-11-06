@@ -18,7 +18,8 @@
 // // process pending, with what it waits on in ermine.process.waiting. Setup runs once.
 // // close() stops every process ermine started, newest first, then the host's scope.
 import type { ChangeHeader } from "@ermine/graph/entry"
-import { children, createPlaces, crow, type Id, type Path, type Places } from "@ermine/places"
+import { createPlaces, type Id, type Path, type Places } from "@ermine/places"
+import { children, crow } from "@ermine/places/children"
 import { crowify } from "@ermine/places/crowify"
 import { keepStackTraceLimit } from "@ermine/changeable/stacktrace"
 import { place } from "./system/names.ts"

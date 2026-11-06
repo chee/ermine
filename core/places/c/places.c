@@ -137,7 +137,10 @@ pl *pl_new(void) {
 	return l;
 }
 
-static const pl_contributor *const alone[] = {&pl_children};
+static int plain_step(void *ctx, const pl_here *here, const char *name, pl *l, tb_key *out);
+static void plain_names(void *ctx, const pl_here *here, pl *l, pl_namelist *out);
+static const pl_contributor plain = {"children", plain_step, plain_names, NULL, NULL};
+static const pl_contributor *const alone[] = {&plain};
 
 static void ask(pl *l, const pl_contributor *const *contributors, size_t n) {
 	l->given = n > 0;
@@ -941,7 +944,7 @@ void pl_keys(pl *l, tb_key part, tb_key id, const op_key *path, size_t n, int id
 	}
 }
 
-static int children_step(void *ctx, const pl_here *here, const char *name, pl *l, tb_key *out) {
+static int plain_step(void *ctx, const pl_here *here, const char *name, pl *l, tb_key *out) {
 	(void)ctx;
 	if (same_key(here->id, pl_level())) return 0;
 	op_key key = {.type = OP_STR_KEY, .s = name};
@@ -951,13 +954,11 @@ static int children_step(void *ctx, const pl_here *here, const char *name, pl *l
 	return 1;
 }
 
-static void children_names(void *ctx, const pl_here *here, pl *l, pl_namelist *out) {
+static void plain_names(void *ctx, const pl_here *here, pl *l, pl_namelist *out) {
 	(void)ctx;
 	if (same_key(here->id, pl_level())) return;
 	pl_keys(l, tb_string(children_part), here->id, NULL, 0, 0, out);
 }
-
-const pl_contributor pl_children = {"children", children_step, children_names, NULL, NULL};
 
 static const char level_tag;
 tb_key pl_level(void) { return tb_symbol(&level_tag); }
@@ -1278,124 +1279,6 @@ int pl_is_name(const char *name) {
 	return name != NULL && strcmp(name, "") != 0 && strcmp(name, ".") != 0 &&
 		strcmp(name, "..") != 0 && strcmp(name, "/") != 0;
 }
-
-static int taken(const nd_entry *children, const char *name) {
-	return is_map(children->value) && op_get(children->value, name) != NULL;
-}
-
-typedef struct {
-	op_patch patches[2];
-	op_key keys[3];
-	char *names[2];
-	op_value *values[2];
-	size_t n;
-} block;
-
-static void block_free(void *b) {
-	block *k = b;
-	for (size_t i = 0; i < 2; i++) {
-		free(k->names[i]);
-		op_free(k->values[i]);
-	}
-	free(k);
-}
-
-static void write(pl *l, nd_entry *entry, block *b, ch_header header, pl_changed *changed) {
-	size_t failed;
-	int code = pl_update_entry(l->s->crow, entry, b->patches, b->n, header, &failed);
-	if (code != OP_OK) {
-		fprintf(stderr, "places: write: %s\n", op_code_name(code));
-		abort();
-	}
-	pl_hold(l, entry, b, block_free);
-	changed->entries[changed->n++] = entry;
-}
-
-static block *start(const nd_entry *children) {
-	block *b = xalloc(sizeof *b);
-	if (!is_map(children->value)) {
-		b->values[0] = op_map();
-		b->patches[b->n++] = (op_patch){.place = {.path = b->keys}, .has_value = 1, .value = b->values[0]};
-	}
-	return b;
-}
-
-static int do_place(pl *l, nd_entry *children, const char *name, tb_key id, ch_header header,
-	pl_changed *changed) {
-	if (!pl_is_name(name)) return PL_NOT_A_NAME;
-	if (taken(children, name)) return PL_ALREADY_THERE;
-	block *b = start(children);
-	b->names[0] = xdup(name);
-	b->values[1] = op_str(id.string);
-	b->keys[1] = (op_key){.type = OP_STR_KEY, .s = b->names[0]};
-	b->patches[b->n++] = (op_patch){.place = {.path = &b->keys[1], .length = 1}, .has_value = 1, .value = b->values[1]};
-	write(l, children, b, header, changed);
-	return 0;
-}
-
-static int do_unplace(pl *l, nd_entry *children, const char *name, ch_header header,
-	pl_changed *changed) {
-	tb_key id;
-	if (!child_of(children, name, &id)) return PL_NOTHING_THERE;
-	block *b = xalloc(sizeof *b);
-	b->names[0] = xdup(name);
-	b->keys[0] = (op_key){.type = OP_STR_KEY, .s = b->names[0]};
-	b->patches[b->n++] = (op_patch){.place = {.path = &b->keys[0], .length = 1}};
-	write(l, children, b, header, changed);
-	return 0;
-}
-
-static void do_move(pl *l, nd_entry *children, const char *name, const char *to, ch_header header,
-	pl_changed *changed) {
-	block *b = xalloc(sizeof *b);
-	b->names[0] = xdup(name);
-	b->names[1] = xdup(to);
-	b->keys[0] = (op_key){.type = OP_STR_KEY, .s = b->names[0]};
-	b->keys[1] = (op_key){.type = OP_STR_KEY, .s = b->names[1]};
-	b->patches[b->n++] = (op_patch){.place = {.path = &b->keys[1], .length = 1}, .has_move = 1, .move = {.path = &b->keys[0], .length = 1}};
-	write(l, children, b, header, changed);
-}
-
-int pl_place(pl *l, nd_entry *children, const char *name, tb_key id, ch_header header,
-	pl_changed *changed) {
-	*changed = (pl_changed){0};
-	return do_place(l, children, name, id, header, changed);
-}
-
-int pl_unplace(pl *l, nd_entry *children, const char *name, ch_header header, pl_changed *changed) {
-	*changed = (pl_changed){0};
-	return do_unplace(l, children, name, header, changed);
-}
-
-int pl_rename(pl *l, nd_entry *children, const char *name, const char *to, ch_header header,
-	pl_changed *changed) {
-	*changed = (pl_changed){0};
-	if (!pl_is_name(to)) return PL_NOT_A_NAME;
-	tb_key id;
-	if (!child_of(children, name, &id)) return PL_NOTHING_THERE;
-	if (strcmp(to, name) == 0) return 0;
-	if (taken(children, to)) return PL_ALREADY_THERE;
-	do_move(l, children, name, to, header, changed);
-	return 0;
-}
-
-int pl_move(pl *l, nd_entry *from, const char *name, nd_entry *into, const char *to,
-	ch_header header, pl_changed *changed) {
-	*changed = (pl_changed){0};
-	if (!pl_is_name(to)) return PL_NOT_A_NAME;
-	tb_key id;
-	if (!child_of(from, name, &id)) return PL_NOTHING_THERE;
-	if (from == into) {
-		if (strcmp(name, to) == 0) return 0;
-		if (taken(from, to)) return PL_ALREADY_THERE;
-		do_move(l, from, name, to, header, changed);
-		return 0;
-	}
-	int code = do_place(l, into, to, id, header, changed);
-	if (code) return code;
-	return do_unplace(l, from, name, header, changed);
-}
-
 
 void pl_own_in(pl *l, nd_entry *node, tb_table *in) {
 	if (l->s->nowned == l->s->capowned) {

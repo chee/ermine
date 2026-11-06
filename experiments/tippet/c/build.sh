@@ -20,7 +20,7 @@ own="wire step pack sign log store store_file sync http"
 graph="history elements"
 reused="lib/ed25519/c/ed25519 lib/ed25519/c/sha2 core/encoding/c/cbor core/encoding/c/json lib/blake3/c/blake3/blake3 lib/blake3/c/blake3/blake3_dispatch lib/blake3/c/blake3/blake3_portable"
 # the graph: table, node, op, places, scheduler (the root Makefile's places_src, but its harnesses)
-places="core/places/c/places lib/crow/c/crow core/places/c/crowify runtime/processes/c/status core/graph/c/table core/graph/c/node core/graph/c/update lib/changeable/c/value lib/changeable/c/frame lib/changeable/c/apply lib/changeable/c/invert core/reactivity/c/paths core/reactivity/c/scheduler core/reactivity/c/order core/reactivity/c/rank core/reactivity/c/causes lib/changeable/c/ptrmap core/reactivity/c/tracker"
+places="core/places/c/places core/places/c/children lib/crow/c/crow core/places/c/crowify runtime/processes/c/status core/graph/c/table core/graph/c/node core/graph/c/update lib/changeable/c/value lib/changeable/c/frame lib/changeable/c/apply lib/changeable/c/invert core/reactivity/c/paths core/reactivity/c/scheduler core/reactivity/c/order core/reactivity/c/rank core/reactivity/c/causes lib/changeable/c/ptrmap core/reactivity/c/tracker"
 harness="meta/conformance/c/harness meta/conformance/c/protocol_harness lib/changeable/c/json"
 STRICT="-std=c99 -Wall -Wextra -Wpedantic -Werror"
 LOOSE="-std=c11 -Wall -Wextra -Wpedantic"

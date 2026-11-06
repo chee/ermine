@@ -9,6 +9,7 @@
 //
 // Scope nodes going is done by libraries with no write hook, so onWrite does not see them and
 // cannot hold them back.
+#include "../../../core/places/c/children.h"
 #include "ermine.h"
 
 #include <stdio.h>

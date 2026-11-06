@@ -1,17 +1,8 @@
 // Running processes at paths: the rows of a root's process part, a trie, and the contributor
 // that walks it. The rows are never saved: they are the processes running now on this device.
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/graph/entry"
-import {
-	asId,
-	type Contributor,
-	crow,
-	type Id,
-	map,
-	none,
-	type Path,
-	PlacesError,
-	type Writer,
-} from "@ermine/places"
+import { asId, type Contributor, type Id, map, none, type Path, PlacesError } from "@ermine/places"
+import { crow, type Writer } from "@ermine/places/children"
 import { updateEntry } from "@ermine/places/crowify"
 import type { Key, Table } from "@ermine/graph/table"
 import { isPojo } from "@ermine/changeable/kinds"

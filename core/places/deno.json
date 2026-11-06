@@ -5,6 +5,7 @@
 	"exports": {
 		".": "./typescript/places.ts",
 		"./lib": "./typescript/lib.ts",
+		"./children": "./typescript/children.ts",
 		"./crowify": "./typescript/crowify.ts",
 		"./header": "./typescript/header.ts",
 		"./path": "./typescript/path.ts"
