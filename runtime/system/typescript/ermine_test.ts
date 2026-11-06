@@ -207,6 +207,81 @@ Deno.test("createErmine throwing after it registered its scheduler undoes the re
 	assertEquals(registrations(scheduler), 0)
 })
 
+// A scheduler that counts what is listening on it. The first off of a listener on throwing (an on…
+// name) throws after it took its listener out.
+function counting(throwing?: string) {
+	const real = createScheduler()
+	const s = { ...real } as Scheduler & { live: number }
+	s.live = 0
+	for (const k of Object.keys(real)) {
+		const on = (real as unknown as Record<string, unknown>)[k]
+		if (!/^on[A-Z]/.test(k) || typeof on !== "function") continue
+		;(s as unknown as Record<string, unknown>)[k] = (...a: unknown[]) => {
+			const off = (on as (...a: unknown[]) => () => void)(...a)
+			const kind = k
+			s.live++
+			let done = false
+			return () => {
+				if (!done) s.live--
+				done = true
+				off()
+				if (throwing === kind) {
+					throwing = undefined
+					throw new Error("off")
+				}
+			}
+		}
+	}
+	return s
+}
+
+Deno.test("createErmine throwing leaves nothing listening on a scheduler it was given", () => {
+	const placing = counting()
+	assertThrows(() => createErmine({ features: [manual], scheduler: placing, host: { at: "" } }))
+	assertEquals(placing.live, 0)
+	assertEquals(registrations(placing), 0)
+
+	const setting = counting()
+	const late: Feature = {
+		name: "late",
+		setup: (f) => {
+			f.scheduler.onAfterPulse(() => {})
+			throw new Error("late")
+		},
+	}
+	const early: Feature = { name: "early", setup: (f) => void f.scheduler.onSettle(() => {}) }
+	assertThrows(() => createErmine({ features: [early, late, manual], scheduler: setting }), Error)
+	assertEquals(setting.live, 0)
+
+	// only features listen after a pulse, so the off that throws is a feature's
+	const throwing = counting("onAfterPulse")
+	const one: Feature = { name: "one", setup: (f) => void f.scheduler.onAfterPulse(() => {}) }
+	const two: Feature = { name: "two", setup: (f) => void f.scheduler.onAfterPulse(() => {}) }
+	assertThrows(
+		() => createErmine({ features: [one, two, manual], scheduler: throwing, host: { at: "" } }),
+		Error,
+	)
+	assertEquals(throwing.live, 0)
+
+	const set = counting()
+	const host = {
+		setup: () => {
+			throw new Error("host")
+		},
+	}
+	assertThrows(
+		() => createErmine({ features: [early, manual], scheduler: set, host }),
+		Error,
+		"host",
+	)
+	assertEquals(set.live, 0)
+	assertEquals(registrations(set), 0)
+
+	const closing = counting()
+	createErmine({ features: [early, manual], scheduler: closing }).close()
+	assertEquals(closing.live, 0)
+})
+
 Deno.test("the host gives the root and its own node; a feature makes ids through onId", () => {
 	let api: FeatureAPI | undefined
 	let n = 0

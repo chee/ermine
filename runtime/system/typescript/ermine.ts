@@ -204,7 +204,28 @@ export function uuidv7(): string {
 	return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`
 }
 
+// A throw while making undoes what was set up so far, newest first, since a scheduler passed in
+// options outlives ermine.
 export function createErmine(options: Options = {}): Ermine {
+	const undo: (() => void)[] = []
+	try {
+		return make(options, undo)
+	} catch (e) {
+		for (const f of undo.reverse()) quietly(f)
+		throw e
+	}
+}
+
+// A throw while undoing is dropped: the throw that stopped the making is the one to see.
+function quietly(f: () => void) {
+	try {
+		f()
+	} catch {
+		// dropped
+	}
+}
+
+function make(options: Options, undo: (() => void)[]): Ermine {
 	let closed = false
 	const alive = () => {
 		if (closed) throw errored(new ErmineError("closed", "ermine is closed"), undefined)
@@ -234,6 +255,9 @@ export function createErmine(options: Options = {}): Ermine {
 	// A copy of the scheduler for features. Each on... function is wrapped so its off runs at close,
 	// because a scheduler passed in options outlives ermine.
 	const listening = new Set<() => void>()
+	undo.push(() => {
+		for (const off of [...listening]) quietly(off)
+	})
 	const heard: Scheduler = { ...s }
 	for (const k of Object.keys(s)) {
 		const on = (s as unknown as Record<string, unknown>)[k]
@@ -283,14 +307,24 @@ export function createErmine(options: Options = {}): Ermine {
 		now: options.now,
 	})
 	const offRelease = s.onTrackingEnd((key) => places!.release(key))
+	undo.push(offRelease)
 	// Each run borrows what it reads: crow lets go of what outlives the run, so a later write copies
 	// it rather than changing it in place.
 	const offCrow = crowify(s, crow)
+	undo.push(offCrow)
 	const p = places
 	const names = createNames(p)
 
 	const node = options.host?.node ?? newId()
 	const hostScope = s.createRootScope({ ...options.info, node: node })
+	undo.push(() => {
+		enterScheduler(s)
+		try {
+			s.teardown(hostScope)
+		} finally {
+			leaveScheduler()
+		}
+	})
 
 	let queued = false
 	const schedule = chain<[() => void], void>(hooks.onSchedule, "onSchedule", queueMicrotask)
@@ -309,6 +343,7 @@ export function createErmine(options: Options = {}): Ermine {
 		})
 	}
 	const offSettle = s.onSettle(queuePulse)
+	undo.push(offSettle)
 
 	const header = (): ChangeHeader => createChangeHeader(s, { now: options.now })
 	// A call from outside the graph captures its locations once and runs f in a frame holding them,
@@ -548,6 +583,7 @@ export function createErmine(options: Options = {}): Ermine {
 				if (r.call !== undefined) keep(r.call)
 			}),
 	})
+	undo.push(() => statuses.stop(), () => runs.stop(), () => calls.stop())
 	const contexts = new Map<Id, Inner>()
 	const whys = new Map<Id, Why>()
 	const base: Base = {
@@ -595,284 +631,281 @@ export function createErmine(options: Options = {}): Ermine {
 
 	attach(base, hostInner)
 	const unregister = registerScheduler(s, hooks.onError.length ? errored : undefined)
-	try {
-		registerScope(hostScope, hostInner)
-		features.done()
+	// undone last: the teardown before it finds its context through the registration
+	undo.unshift(unregister)
+	registerScope(hostScope, hostInner)
+	features.done()
 
-		if (options.host?.at !== undefined) {
-			const at = options.host.at
-			hostInner.context.within(() => place(at, mint(base.handles, { id: node, part: "value" })))
-		}
-
-		const started: Process[] = []
-
-		const stop = (process: Process, why: Why = "ended") => {
-			whys.set(process.id, why)
-			try {
-				processes!.stop(process)
-			} finally {
-				whys.delete(process.id)
-				dropHeld(process.id)
-				const i = started.indexOf(process)
-				if (i !== -1) started.splice(i, 1)
-			}
-			const h = heldOf(PROCESS, root)
-			if (rowAt(process.at) === process.id && h !== undefined) {
-				heldRows.set(process.id, { feature: h.feature, at: process.at })
-				s.mark([heldKey])
-			}
-		}
-
-		base.start = (fn, at, o, under) => start(fn, at, o, under)
-
-		base.stop = (id) => {
-			const process = started.find((p) => p.id === id)
-			if (process !== undefined) stop(process)
-		}
-
-		const start = (
-			fn: () => unknown,
-			at: string | Path,
-			o: StartOptions = {},
-			under?: Scope,
-			cut?: unknown,
-		): Started | (Refused & { held?: { process: Id; feature: string } }) => {
-			alive()
-			if (typeof fn !== "function") {
-				throw errored(
-					new ErmineError("not-a-function", "start takes the program: its function"),
-					"start",
-				)
-			}
-			const paths = pathsOf(at)
-			enterScheduler(s)
-			let made: ReturnType<Processes["start"]>
-			try {
-				made = processes!.start(
-					p,
-					paths.at,
-					{
-						args: o.args,
-						folder: paths.folder,
-						...under !== undefined && { under },
-						...cut !== undefined && { cut },
-					},
-					(inside) => {
-						const pid = inside.id
-						const inner = createProcessContext(parts, {
-							scope: inside.scope,
-							places: p,
-							folder: inside.folder,
-							at: inside.at,
-							args: inside.args,
-							process: {
-								id: pid,
-								at: inside.at,
-								folder: inside.folder,
-								scope: inside.scope,
-							},
-							node: pid,
-						})
-						contexts.set(pid, inner)
-						attach(base, inner)
-						registerScope(inside.scope, inner)
-						s.registerTeardown(inside.scope, () => {
-							contexts.delete(pid)
-						})
-						let setupFrame = inside.scope.frame
-						const done = (v: unknown) => {
-							if (inside.scope.state !== "alive") return
-							// A promise settles with nothing open, so the scope is reopened with the setup's frame.
-							s.runWith(inside.scope, setupFrame, () => {
-								if (v !== undefined) {
-									inner.put({ part: "value", id: pid, patches: whole(v) })
-								}
-								putStatus(inner, pid, [setKey(STATUS), setKey(WAITING)])
-							})
-							queuePulse()
-						}
-						const failed = (e: unknown) => {
-							if (inside.scope.state !== "alive") return
-							const error = e === undefined ? new Error("undefined") : e
-							s.runWith(
-								inside.scope,
-								setupFrame,
-								() => putStatus(inner, pid, [setKey(STATUS, error), setKey(WAITING)]),
-							)
-							queuePulse()
-						}
-						// Setup runs once, untracked, in its own scope. Throwing PENDING leaves the process pending.
-						const run = (setup: () => unknown) => {
-							const at = s.createScope({ process: inside.at }, inside.scope)
-							setupFrame = at.frame
-							let out: unknown
-							base.setting.add(pid)
-							const missed = () => {
-								base.setting.delete(pid)
-								const paths = base.missing.get(pid)?.paths ?? []
-								base.missing.delete(pid)
-								return paths
-							}
-							try {
-								out = s.runWithScope(at, () => setup())
-							} catch (e) {
-								const paths = missed()
-								if (e !== PENDING) return failed(e)
-								const ws = calls.waits(pid)
-								const waits: unknown[] = ws.map((w) => ({
-									send: w.path ?? w.id,
-									since: w.since,
-								}))
-								for (const p of paths) waits.push({ missing: p })
-								putStatus(inner, pid, [setKey(WAITING, waits.length ? waits : ["PENDING"])])
-								return
-							}
-							missed()
-							if (!isPromise(out)) return done(out)
-							putStatus(inner, pid, [setKey(WAITING, ["a promise"])])
-							out.then(done, failed)
-						}
-						run(fn)
-					},
-				)
-			} finally {
-				leaveScheduler()
-			}
-			if ("refused" in made) {
-				const under = (a: Path, b: Path) => a.every((n, i) => b[i] === n)
-				for (const process of [...heldRows.keys()]) {
-					const r = rowHeld(process)
-					if (r === undefined) continue
-					if (!(under(r.at, made.at) || under(made.at, r.at))) continue
-					return { ...made, held: { process, feature: r.feature } }
-				}
-				return made
-			}
-			started.push(made)
-			s.registerTeardown(made.scope, () => {
-				const i = started.indexOf(made)
-				if (i !== -1) started.splice(i, 1)
-			})
-			return {
-				process: made,
-				stop: (why?: Why) => {
-					enterScheduler(s)
-					try {
-						stop(made, why)
-					} finally {
-						leaveScheduler()
-					}
-				},
-				status: () =>
-					hostInner.context.within(() =>
-						getStatus(mint(base.handles, { id: made.id, part: "value" }))
-					),
-			}
-		}
-
-		// Every step runs even if an earlier one threw; the first error is thrown at the end.
-		const close = () => {
-			if (closed) return
-			let first: { e: unknown } | undefined
-			const step = (f: () => void) => {
-				try {
-					f()
-				} catch (e) {
-					first ??= { e }
-				}
-			}
-			enterScheduler(s)
-			try {
-				for (const p of [...started].reverse()) step(() => stop(p, "ended"))
-				step(() => s.teardown(hostScope))
-			} finally {
-				leaveScheduler()
-			}
-			step(() => statuses.stop())
-			step(() => runs.stop())
-			step(() => calls.stop())
-			step(offSettle)
-			step(offRelease)
-			step(offCrow)
-			for (const off of [...listening]) step(off)
-			step(unregister)
-			closed = true
-			if (first) throw first.e
-		}
-
-		const part = <T>(v: T) => () => {
-			alive()
-			return v
-		}
-		const ermine = Object.defineProperties({}, {
-			within: { value: <T>(f: () => T): T => hostInner.context.within(f) },
-			start: {
-				value: function startFrom(fn: () => unknown, at: string | Path, o?: StartOptions) {
-					return start(fn, at, o, undefined, startFrom)
-				},
-			},
-			close: { value: close },
-			getProcessContext: {
-				value: (process?: Process): ProcessContext | undefined => {
-					alive()
-					return process === undefined ? hostInner.context : contexts.get(process.id)?.context
-				},
-			},
-			scheduler: { get: part(s) },
-			table: { get: part({ get: table.get, who: table.who }) },
-			places: { get: part(p) },
-			features: { get: part(features.shown) },
-			id: { get: part(node) },
-			handleOf: {
-				value: (node: NodeData): Node => {
-					alive()
-					return mint(base.handles, node)
-				},
-			},
-			dataOf: {
-				value: (x: unknown) => {
-					alive()
-					const d = isHandle(x) ? base.handles.get(x) : undefined
-					return d === undefined ? undefined : { node: d.node }
-				},
-			},
-			records: {
-				value: {
-					run: (id: Id) => (alive(), runs.read(id)),
-					call: (id: Id) => (alive(), calls.latest(id)),
-					waits: () => (alive(), calls.waits()),
-				},
-			},
-		}) as unknown as Ermine
-		made = {
-			getProcessContext: (process) => ermine.getProcessContext(process),
-			handleOf: (node) => ermine.handleOf(node),
-			dataOf: (x) => ermine.dataOf(x),
-			seen: (id, context) => {
-				const inner = innerOf(context, base)
-				return inner === undefined ? undefined : seenIn(base, inner, id)
-			},
-			calling: () => {
-				alive()
-				return calls.calling(s.getCurrentFrame())
-			},
-			// pipe-extension: core gap
-			viewOf: (change) => (alive(), viewOf(base, change)),
-		}
-		// A throw in the host's setup closes ermine and is thrown from here.
-		const setup = options.host?.setup
-		if (setup !== undefined) {
-			try {
-				hostInner.context.within(setup)
-			} catch (e) {
-				close()
-				throw e
-			}
-		}
-		return ermine
-	} catch (e) {
-		// A throw after registration is undone.
-		unregister()
-		throw e
+	if (options.host?.at !== undefined) {
+		const at = options.host.at
+		hostInner.context.within(() => place(at, mint(base.handles, { id: node, part: "value" })))
 	}
+
+	const started: Process[] = []
+
+	const stop = (process: Process, why: Why = "ended") => {
+		whys.set(process.id, why)
+		try {
+			processes!.stop(process)
+		} finally {
+			whys.delete(process.id)
+			dropHeld(process.id)
+			const i = started.indexOf(process)
+			if (i !== -1) started.splice(i, 1)
+		}
+		const h = heldOf(PROCESS, root)
+		if (rowAt(process.at) === process.id && h !== undefined) {
+			heldRows.set(process.id, { feature: h.feature, at: process.at })
+			s.mark([heldKey])
+		}
+	}
+
+	base.start = (fn, at, o, under) => start(fn, at, o, under)
+
+	base.stop = (id) => {
+		const process = started.find((p) => p.id === id)
+		if (process !== undefined) stop(process)
+	}
+
+	const start = (
+		fn: () => unknown,
+		at: string | Path,
+		o: StartOptions = {},
+		under?: Scope,
+		cut?: unknown,
+	): Started | (Refused & { held?: { process: Id; feature: string } }) => {
+		alive()
+		if (typeof fn !== "function") {
+			throw errored(
+				new ErmineError("not-a-function", "start takes the program: its function"),
+				"start",
+			)
+		}
+		const paths = pathsOf(at)
+		enterScheduler(s)
+		let made: ReturnType<Processes["start"]>
+		try {
+			made = processes!.start(
+				p,
+				paths.at,
+				{
+					args: o.args,
+					folder: paths.folder,
+					...under !== undefined && { under },
+					...cut !== undefined && { cut },
+				},
+				(inside) => {
+					const pid = inside.id
+					const inner = createProcessContext(parts, {
+						scope: inside.scope,
+						places: p,
+						folder: inside.folder,
+						at: inside.at,
+						args: inside.args,
+						process: {
+							id: pid,
+							at: inside.at,
+							folder: inside.folder,
+							scope: inside.scope,
+						},
+						node: pid,
+					})
+					contexts.set(pid, inner)
+					attach(base, inner)
+					registerScope(inside.scope, inner)
+					s.registerTeardown(inside.scope, () => {
+						contexts.delete(pid)
+					})
+					let setupFrame = inside.scope.frame
+					const done = (v: unknown) => {
+						if (inside.scope.state !== "alive") return
+						// A promise settles with nothing open, so the scope is reopened with the setup's frame.
+						s.runWith(inside.scope, setupFrame, () => {
+							if (v !== undefined) {
+								inner.put({ part: "value", id: pid, patches: whole(v) })
+							}
+							putStatus(inner, pid, [setKey(STATUS), setKey(WAITING)])
+						})
+						queuePulse()
+					}
+					const failed = (e: unknown) => {
+						if (inside.scope.state !== "alive") return
+						const error = e === undefined ? new Error("undefined") : e
+						s.runWith(
+							inside.scope,
+							setupFrame,
+							() => putStatus(inner, pid, [setKey(STATUS, error), setKey(WAITING)]),
+						)
+						queuePulse()
+					}
+					// Setup runs once, untracked, in its own scope. Throwing PENDING leaves the process pending.
+					const run = (setup: () => unknown) => {
+						const at = s.createScope({ process: inside.at }, inside.scope)
+						setupFrame = at.frame
+						let out: unknown
+						base.setting.add(pid)
+						const missed = () => {
+							base.setting.delete(pid)
+							const paths = base.missing.get(pid)?.paths ?? []
+							base.missing.delete(pid)
+							return paths
+						}
+						try {
+							out = s.runWithScope(at, () => setup())
+						} catch (e) {
+							const paths = missed()
+							if (e !== PENDING) return failed(e)
+							const ws = calls.waits(pid)
+							const waits: unknown[] = ws.map((w) => ({
+								send: w.path ?? w.id,
+								since: w.since,
+							}))
+							for (const p of paths) waits.push({ missing: p })
+							putStatus(inner, pid, [setKey(WAITING, waits.length ? waits : ["PENDING"])])
+							return
+						}
+						missed()
+						if (!isPromise(out)) return done(out)
+						putStatus(inner, pid, [setKey(WAITING, ["a promise"])])
+						out.then(done, failed)
+					}
+					run(fn)
+				},
+			)
+		} finally {
+			leaveScheduler()
+		}
+		if ("refused" in made) {
+			const under = (a: Path, b: Path) => a.every((n, i) => b[i] === n)
+			for (const process of [...heldRows.keys()]) {
+				const r = rowHeld(process)
+				if (r === undefined) continue
+				if (!(under(r.at, made.at) || under(made.at, r.at))) continue
+				return { ...made, held: { process, feature: r.feature } }
+			}
+			return made
+		}
+		started.push(made)
+		s.registerTeardown(made.scope, () => {
+			const i = started.indexOf(made)
+			if (i !== -1) started.splice(i, 1)
+		})
+		return {
+			process: made,
+			stop: (why?: Why) => {
+				enterScheduler(s)
+				try {
+					stop(made, why)
+				} finally {
+					leaveScheduler()
+				}
+			},
+			status: () =>
+				hostInner.context.within(() =>
+					getStatus(mint(base.handles, { id: made.id, part: "value" }))
+				),
+		}
+	}
+
+	// Every step runs even if an earlier one threw; the first error is thrown at the end.
+	const close = () => {
+		if (closed) return
+		let first: { e: unknown } | undefined
+		const step = (f: () => void) => {
+			try {
+				f()
+			} catch (e) {
+				first ??= { e }
+			}
+		}
+		enterScheduler(s)
+		try {
+			for (const p of [...started].reverse()) step(() => stop(p, "ended"))
+			step(() => s.teardown(hostScope))
+		} finally {
+			leaveScheduler()
+		}
+		step(() => statuses.stop())
+		step(() => runs.stop())
+		step(() => calls.stop())
+		step(offSettle)
+		step(offRelease)
+		step(offCrow)
+		for (const off of [...listening]) step(off)
+		step(unregister)
+		closed = true
+		undo.length = 0
+		if (first) throw first.e
+	}
+
+	const part = <T>(v: T) => () => {
+		alive()
+		return v
+	}
+	const ermine = Object.defineProperties({}, {
+		within: { value: <T>(f: () => T): T => hostInner.context.within(f) },
+		start: {
+			value: function startFrom(fn: () => unknown, at: string | Path, o?: StartOptions) {
+				return start(fn, at, o, undefined, startFrom)
+			},
+		},
+		close: { value: close },
+		getProcessContext: {
+			value: (process?: Process): ProcessContext | undefined => {
+				alive()
+				return process === undefined ? hostInner.context : contexts.get(process.id)?.context
+			},
+		},
+		scheduler: { get: part(s) },
+		table: { get: part({ get: table.get, who: table.who }) },
+		places: { get: part(p) },
+		features: { get: part(features.shown) },
+		id: { get: part(node) },
+		handleOf: {
+			value: (node: NodeData): Node => {
+				alive()
+				return mint(base.handles, node)
+			},
+		},
+		dataOf: {
+			value: (x: unknown) => {
+				alive()
+				const d = isHandle(x) ? base.handles.get(x) : undefined
+				return d === undefined ? undefined : { node: d.node }
+			},
+		},
+		records: {
+			value: {
+				run: (id: Id) => (alive(), runs.read(id)),
+				call: (id: Id) => (alive(), calls.latest(id)),
+				waits: () => (alive(), calls.waits()),
+			},
+		},
+	}) as unknown as Ermine
+	made = {
+		getProcessContext: (process) => ermine.getProcessContext(process),
+		handleOf: (node) => ermine.handleOf(node),
+		dataOf: (x) => ermine.dataOf(x),
+		seen: (id, context) => {
+			const inner = innerOf(context, base)
+			return inner === undefined ? undefined : seenIn(base, inner, id)
+		},
+		calling: () => {
+			alive()
+			return calls.calling(s.getCurrentFrame())
+		},
+		// pipe-extension: core gap
+		viewOf: (change) => (alive(), viewOf(base, change)),
+	}
+	// A throw in the host's setup closes ermine and is thrown from here.
+	const setup = options.host?.setup
+	if (setup !== undefined) {
+		try {
+			hostInner.context.within(setup)
+		} catch (e) {
+			close()
+			throw e
+		}
+	}
+	return ermine
 }
