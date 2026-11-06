@@ -1,5 +1,6 @@
 // places: walks names from a root through the children table and ties reads to the scheduler.
-// Writes are plain functions on a children entry, announced with commit.
+// A whole entry goes in with tables.add, tables.sub or tables.del, which write the table and tell. A change in place is a
+// plain function on the entry, announced with commit.
 //
 //   const places = createPlaces({ root, table, paths, scheduler, contributors: [other, children] })
 //   places.commit(place(table.get("children", id)!, name, entry, createChangeHeader(scheduler)))
@@ -23,7 +24,7 @@ export type Path = readonly string[]
 
 export type Setup = {
 	root: Id
-	table: Pick<Table, "get" | "who"> & Partial<Pick<Table, "del">>
+	table: Table
 	paths: Paths
 	scheduler:
 		& Pick<Scheduler, "track" | "mark" | "getRun">
@@ -144,7 +145,8 @@ function child(children: Entry<unknown> | undefined, name: string): Id | undefin
 }
 
 export function createPlaces(setup: Setup): Places {
-	const { table, paths, scheduler } = setup
+	const { paths, scheduler } = setup
+	const table = setup.table
 
 	const firsts = new Map<Key, { part: Key }>()
 	function first(part: Key) {
@@ -271,7 +273,24 @@ export function createPlaces(setup: Setup): Places {
 	}
 	const namesOf = (id: Id): readonly Slot[] => named.get(id) ?? []
 
-	function onTableChange(part: Key, id: Id) {
+	function add(part: Key, id: Id, entry: Entry<unknown>) {
+		if (table.get(part, id) === entry) return
+		table.add(part, id, entry)
+		landed(part, id)
+	}
+
+	function sub(part: Key, id: Id, entry: Entry<unknown>) {
+		if (table.get(part, id) === entry) return
+		table.sub(part, id, entry)
+		landed(part, id)
+	}
+
+	function del(part: Key, id: Id) {
+		table.del(part, id)
+		landed(part, id)
+	}
+
+	function landed(part: Key, id: Id) {
 		if (part === "children") reindex(id)
 		say(paths.event(first(part), id))
 		if (alls.length === 0) return
@@ -466,7 +485,7 @@ export function createPlaces(setup: Setup): Places {
 	return {
 		root,
 		contributors: given,
-		onTableChange,
+		tables: { add, sub, del },
 		release,
 		describe,
 		commit,
@@ -488,7 +507,11 @@ export function createPlaces(setup: Setup): Places {
 export type Places = {
 	readonly root: Id
 
-	onTableChange: (part: Key, id: Id) => void
+	tables: {
+		add: (part: Key, id: Id, entry: Entry<unknown>) => void
+		sub: (part: Key, id: Id, entry: Entry<unknown>) => void
+		del: (part: Key, id: Id) => void
+	}
 	release: (key: unknown) => void
 	describe: (key: unknown) => Where | undefined
 

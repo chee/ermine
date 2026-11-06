@@ -422,7 +422,7 @@ static void make_attributes(void *data) {
 		op_free(attrs);
 		pl_own(s->s.places, node);
 		pl_hold(s->s.places, node, made, pl_made_free);
-		tb_add(s->s.table, tb_string("attributes"), tb_string(p->id), node);
+		pl_add(s->s.places, tb_string("attributes"), tb_string(p->id), node);
 	}
 	ch_header sh;
 	pl_made *smade;
@@ -443,7 +443,7 @@ static void make_attributes(void *data) {
 	op_free(st);
 	pl_own(s->s.places, status);
 	pl_hold(s->s.places, status, smade, pl_made_free);
-	tb_add(s->s.table, tb_string(CST_TABLE), tb_string(p->id), status);
+	pl_add(s->s.places, tb_string(CST_TABLE), tb_string(p->id), status);
 }
 
 static void call_body(void *data) {

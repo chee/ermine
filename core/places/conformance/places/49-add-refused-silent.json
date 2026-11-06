@@ -1,0 +1,122 @@
+{
+	"title": "an add refused for a different entry there tells nobody: no reader reruns, no watchAll fact",
+	"steps": [
+		{
+			"op": "share",
+			"value": 1,
+			"keys": [
+				[
+					"value",
+					"A"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "o",
+			"info": {
+				"actor": "o"
+			},
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "w",
+			"scope": "o",
+			"f": {
+				"read": [
+					"value",
+					"A"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "watchAll",
+			"name": "all",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 1,
+				"value": 1
+			}
+		},
+		{
+			"op": "share",
+			"value": 9,
+			"keys": [
+				[
+					"value",
+					"A"
+				]
+			],
+			"expect": {
+				"error": "already-there"
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 1,
+				"value": 1
+			}
+		},
+		{
+			"op": "watched",
+			"name": "all",
+			"expect": {
+				"facts": []
+			}
+		},
+		{
+			"op": "value",
+			"id": "A",
+			"value": 2,
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 2,
+				"value": 2
+			}
+		},
+		{
+			"op": "watched",
+			"name": "all",
+			"expect": {
+				"facts": [
+					{
+						"part": "value",
+						"id": "A",
+						"patches": [
+							{
+								"path": [],
+								"value": 2
+							}
+						],
+						"actor": "test"
+					}
+				]
+			}
+		}
+	]
+}

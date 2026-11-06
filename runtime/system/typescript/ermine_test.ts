@@ -1,5 +1,5 @@
 // What the conformance suite cannot say on the line protocol: the base's own files, a made-up
-// context, close() with every teardown held, two stacked onTable layers, and the host's ids.
+// context, close() with every teardown held, and the host's ids.
 import {
 	addTeardown,
 	createAction,
@@ -19,7 +19,6 @@ import {
 	ErmineError,
 	type Feature,
 	type FeatureAPI,
-	type Layer,
 	type ProcessContext,
 } from "./ermine.ts"
 import { manual } from "./manual_fixture.ts"
@@ -63,41 +62,6 @@ Deno.test("close() finishes when a feature holds every teardown back", () => {
 	assertEquals(held, ["ended", "ended"])
 	assertEquals(p.process.scope.state, "gone")
 	assertThrows(() => e.within(() => read("/")), ErmineError, "closed")
-})
-
-Deno.test("two onTable layers stack: table events and commits go through both, inner first", () => {
-	const seen: string[] = []
-	const counting = (name: string): Feature => ({
-		name,
-		setup: (f) =>
-			f.onTable((table, next) => {
-				const under = next(table)
-				const layer: Layer = {
-					get: under.get,
-					who: under.who,
-					onTableChange: (part, id) => {
-						seen.push(`${name} event`)
-						table.ahead().onTableChange(part, id)
-					},
-					commit: (changed) => {
-						seen.push(`${name} commit`)
-						table.ahead().commit(changed)
-					},
-				}
-				return layer
-			}),
-	})
-	const e = createErmine({ features: [counting("outer"), counting("inner"), manual] })
-	seen.length = 0
-	e.within(() => ensureNode("/x", { n: 1 }))
-	e.within(() => patch("/x", [{ path: ["n"], value: 2 }]))
-	assertEquals(e.within(() => read("/x", ["n"])), 2)
-	assert(seen.length > 0)
-	for (let i = 0; i < seen.length; i += 2) {
-		assertEquals(seen[i].split(" ")[0], "inner")
-		assertEquals(seen[i + 1], seen[i].replace("inner", "outer"))
-	}
-	e.close()
 })
 
 function counted() {

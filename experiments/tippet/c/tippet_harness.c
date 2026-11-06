@@ -771,7 +771,7 @@ static device *made(const char *name, const uint8_t *seed, long rebase, int forg
 		d->places = pl_new();
 		d->scheduler = sc_new((sc_options){.drop = drop_value});
 		sc_on_tracking_end(d->scheduler, pl_forget, d->places);
-		d->table = tb_make(pl_event, d->places);
+		d->table = tb_new();
 		d->paths = pt_new();
 		pl_connect(d->places, &(pl_setup){.root = tb_string("root"), .table = d->table,
 			.paths = d->paths, .scheduler = d->scheduler});
@@ -892,7 +892,7 @@ static void write_f(void *data) {
 	if (!(e = nd_make_entry((op_value *)p->value, &x->header))) hh_fail("out of memory");
 	pl_own(d->places, e);
 	pl_hold(d->places, e, x->line, let_go), x->line = NULL;
-	tb_sub(d->table, part, id, e);
+	pl_sub(d->places, part, id, e);
 }
 
 static void write_disk(device *d, const op_value *r, FILE *out);

@@ -33,7 +33,7 @@ Deno.test("crowify: through places and a scheduler with crowify, what a computat
 			},
 		)
 		s.onTrackingEnd((key) => places.release(key))
-		const table = createTable((part, id) => places.onTableChange(part, id))
+		const table = createTable()
 		const places: Places = createPlaces({
 			root: "R",
 			table,
@@ -42,7 +42,7 @@ Deno.test("crowify: through places and a scheduler with crowify, what a computat
 		})
 		const host = s.createRootScope({ actor: "host" })
 		const header = () => s.runWithScope(host, () => createChangeHeader(s))
-		table.sub("value", "N", createEntry(start(p), header()) as never)
+		places.tables.sub("value", "N", createEntry(start(p), header()) as never)
 		const e = table.get("value", "N")! as Entry<unknown>
 		type Watch = { path: (string | number)[]; how: number; kept?: unknown; was?: unknown }
 		const watches: Watch[] = []

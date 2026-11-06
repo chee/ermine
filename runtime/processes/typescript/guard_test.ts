@@ -14,7 +14,7 @@ import { createChangeHeader } from "@ermine/places/header"
 function world() {
 	const s = createScheduler()
 	s.onTrackingEnd((key) => l.release(key))
-	const table = createTable((part, id) => l.onTableChange(part as Key, id))
+	const table = createTable()
 	const l = createPlaces({ root: "R", table, paths: createPaths<unknown>(), scheduler: s })
 	const places = l
 	const host = s.createRootScope({ actor: "host" })
@@ -27,16 +27,16 @@ function world() {
 		if (there === undefined) {
 			const node = createEntry<unknown>(undefined, h)
 			update(node, patches, h)
-			table.add(part, id, node)
+			places.tables.add(part, id, node)
 		} else {
 			update(there, patches, h)
 			l.commit([there])
 		}
 	}
 	const kids = (id: Id, v: Record<string, unknown>) =>
-		hosted(() => table.sub("children", id, createEntry(v, createChangeHeader(s))))
+		hosted(() => places.tables.sub("children", id, createEntry(v, createChangeHeader(s))))
 	const value = (id: Id, v: unknown) =>
-		hosted(() => table.sub("value", id, createEntry<unknown>(v, createChangeHeader(s))))
+		hosted(() => places.tables.sub("value", id, createEntry<unknown>(v, createChangeHeader(s))))
 	const reset = (id: Id, v: unknown) => hosted(() => edit("value", id, [{ path: [], value: v }]))
 	const thing = (x: Thing | Id): Thing => typeof x === "object" ? x : { id: x }
 	const read = (g: ReturnType<typeof guard>, x: Thing | Id) => {

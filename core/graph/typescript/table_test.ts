@@ -1,6 +1,6 @@
 import { assertEquals, assertStrictEquals, assertThrows } from "@std/assert"
 import createEntry, { type Entry } from "@ermine/graph/entry"
-import { createTable, type Event, type Id, TableError } from "./table.ts"
+import { createTable, type Id, TableError } from "./table.ts"
 
 // Any key is a table name and any entry goes.
 type Loose = {
@@ -18,8 +18,7 @@ type Loose = {
 		(node: Entry<unknown>): void
 	}
 }
-const loose = (event?: (part: Id, id: Id) => void) =>
-	createTable(event as Event | undefined) as unknown as Loose
+const loose = () => createTable() as unknown as Loose
 
 const code = (f: () => unknown) => (assertThrows(f, TableError) as TableError).code
 const node = (value?: unknown) =>
@@ -101,31 +100,4 @@ Deno.test("table: symbols as parts and ids", () => {
 	assertEquals(t.who(n), [[part, id]])
 	t.del(part, id)
 	assertEquals(t.who(n), [])
-})
-
-Deno.test("table: one listener told of every event, after it landed; the same node again, none", () => {
-	const told: [unknown, unknown, unknown][] = []
-	const t = loose((part, id) => told.push([part, id, t.get(part, id)?.value]))
-	const a = createEntry(1, { time: 0, actor: "me", frame: { info: {}, parent: undefined } }),
-		b = createEntry(2, { time: 0, actor: "me", frame: { info: {}, parent: undefined } })
-	t.add("value", "x", a)
-	t.add("value", "x", a)
-	t.sub("value", "x", a)
-	t.sub("value", "x", b)
-	t.add("children", "x", a)
-	t.add("value", "y", a)
-	t.del("value", "x")
-	t.del("value", a)
-	t.add("value", "z", b)
-	t.del(b)
-	assertEquals(told, [
-		["value", "x", 1],
-		["value", "x", 2],
-		["children", "x", 1],
-		["value", "y", 1],
-		["value", "x", undefined],
-		["value", "y", undefined],
-		["value", "z", 2],
-		["value", "z", undefined],
-	])
 })

@@ -1,5 +1,5 @@
 import { assert, assertEquals, assertInstanceOf } from "@std/assert"
-import { createTable, type Key } from "@ermine/graph/table"
+import { createTable } from "@ermine/graph/table"
 import { createScheduler, PENDING as WAIT } from "@ermine/reactivity"
 import { createPaths } from "@ermine/reactivity/paths"
 import { createPlaces } from "@ermine/places"
@@ -8,7 +8,7 @@ import { createStatus, isPending, PENDING, status } from "./status.ts"
 function world() {
 	const s = createScheduler()
 	s.onTrackingEnd((k) => places.release(k))
-	const table = createTable((part, id) => places.onTableChange(part as Key, id))
+	const table = createTable()
 	const places = createPlaces({ root: "R", table, paths: createPaths<unknown>(), scheduler: s })
 	const statuses = createStatus({ places, table, scheduler: s })
 	const o = s.createRootScope({ actor: "host" })
@@ -33,8 +33,8 @@ Deno.test("status: pending while a run waits, gone when it is done; a reader of 
 })
 
 Deno.test("status: an Error when a run fails, the error itself; gone at the next done", () => {
-	const { s, table, places, statuses, o } = world()
-	table.add("value", "k", {
+	const { s, places, statuses, o } = world()
+	places.tables.add("value", "k", {
 		value: 0,
 		change: { time: 0, actor: "host", frame: { info: {}, parent: undefined } },
 	})
@@ -48,10 +48,11 @@ Deno.test("status: an Error when a run fails, the error itself; gone at the next
 	s.pulse()
 	assertEquals(status(places, "C"), undefined)
 	const set = (v: number) =>
-		s.runWithScope(o, () => {
-			table.get("value", "k")!.value = v
-			places.onTableChange("value", "k")
-		})
+		s.runWithScope(o, () =>
+			places.tables.sub("value", "k", {
+				value: v,
+				change: { time: 0, actor: "host", frame: { info: {}, parent: undefined } },
+			}))
 	set(1)
 	s.pulse()
 	const e = status(places, "C")

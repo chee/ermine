@@ -135,7 +135,7 @@ int es_fail_ermine(int code, const char *fmt, ...) {
 
 
 static const char *const HOOK_NAMES[ES_HOOKS] = {
-	"onTable", "onRead", "onWrite", "onTeardown", "onRecord", "onStatus",
+	"onRead", "onWrite", "onTeardown", "onRecord", "onStatus",
 	"onId", "onSchedule", "onCreateFunction", "onError",
 };
 
@@ -196,7 +196,6 @@ static op_patch patch_unset(const op_key *key) {
 typedef struct {
 	const char *feature;
 	union {
-		es_on_table_fn table;
 		es_on_read_fn read;
 		es_on_write_fn write;
 		es_on_teardown_fn teardown;
@@ -221,14 +220,6 @@ typedef struct {
 	es_hook *used;
 	size_t nused, cap;
 } fapi;
-
-typedef struct layer_rec {
-	es_ermine *e;
-	const char *feature;
-	es_layer out;
-	int made;
-	struct layer_rec *ahead;
-} layer_rec;
 
 typedef struct {
 	const char *feature;
@@ -283,9 +274,6 @@ struct es_hosting {
 	size_t napis, capapis;
 	es_shown *shown;
 	size_t nshown, capshown;
-	layer_rec **layers;
-	size_t nlayers, caplayers;
-	layer_rec *innermost;
 	sc_listener *settle, *tracking, *tracking_first, *pulsed;
 	sc_listener **listened;
 	size_t nlistened, caplistened;
@@ -686,103 +674,8 @@ static int own(const char *feature, const char *hook, int code, int passed) {
 }
 
 
-struct es_table_next {
-	es_ermine *e;
-	size_t i;
-	int passed;
-};
-
-static void dispatch_event(es_ermine *e, layer_rec *r, tb_key part, tb_key id) {
-	for (; r != NULL; r = r->ahead) {
-		if (r->out.event != NULL) {
-			r->out.event(r->out.ctx, part, id);
-			return;
-		}
-	}
-	if (e->places != NULL) pl_event(e->places, part, id);
-}
-static void dispatch_commit(es_ermine *e, layer_rec *r, const pl_changed *changed) {
-	for (; r != NULL; r = r->ahead) {
-		if (r->out.commit != NULL) {
-			r->out.commit(r->out.ctx, changed);
-			return;
-		}
-	}
-	if (e->places != NULL) pl_commit(e->places, changed);
-}
-
-static void table_event(void *ctx, tb_key part, tb_key id) {
-	es_ermine *e = ctx;
-	dispatch_event(e, host_of(e)->innermost, part, id);
-}
-void es_commit_changed(es_ermine *e, const pl_changed *changed) {
-	dispatch_commit(e, host_of(e)->innermost, changed);
-}
+void es_commit_changed(es_ermine *e, const pl_changed *changed) { pl_commit(e->places, changed); }
 static void commit_changed(void *ctx, const pl_changed *changed) { es_commit_changed(ctx, changed); }
-static void ahead_event(void *ctx, tb_key part, tb_key id) {
-	layer_rec *r = ctx;
-	if (!r->made) {
-		if (r->e->places != NULL) pl_event(r->e->places, part, id);
-	} else {
-		dispatch_event(r->e, r->ahead, part, id);
-	}
-}
-static void ahead_commit(void *ctx, const pl_changed *changed) {
-	layer_rec *r = ctx;
-	if (!r->made) {
-		if (r->e->places != NULL) pl_commit(r->e->places, changed);
-	} else {
-		dispatch_commit(r->e, r->ahead, changed);
-	}
-}
-
-static int table_at(es_ermine *e, size_t i, tb_table *t, es_layer *out) {
-	hosting *h = host_of(e);
-	hook_list *l = &h->hooks[ES_ON_TABLE];
-	if (i == l->n) {
-		*out = (es_layer){.front = t};
-		return 0;
-	}
-	hook_rec *r = &l->items[i];
-	layer_rec *rec = es_alloc(sizeof *rec);
-	rec->e = e;
-	rec->feature = r->feature;
-	ES_PUSH(h->layers, h->nlayers, h->caplayers, rec);
-	es_under under = {t, ahead_event, ahead_commit, rec};
-	es_table_next next = {e, i, 0};
-	*out = (es_layer){0};
-	int code = r->fn.table(r->ctx, &under, &next, out);
-	code = own(r->feature, "onTable", code, next.passed);
-	if (code != 0) return code;
-	rec->out = *out;
-	rec->made = 1;
-	return 0;
-}
-
-int es_next_table(es_table_next *next, const es_under *under, es_layer *out) {
-	int code = table_at(next->e, next->i + 1, under->table, out);
-	next->passed = code;
-	return code;
-}
-
-static void link_layers(es_ermine *e) {
-	hosting *h = host_of(e);
-	h->innermost = NULL;
-	for (size_t k = h->nlayers; k-- > 0;) {
-		layer_rec *rec = h->layers[k];
-		rec->ahead = NULL;
-		for (size_t j = k; j-- > 0;) {
-			if (h->layers[j]->out.event != NULL || h->layers[j]->out.commit != NULL) {
-				rec->ahead = h->layers[j];
-				break;
-			}
-		}
-		if (h->innermost == NULL && (rec->out.event != NULL || rec->out.commit != NULL)) {
-			h->innermost = rec;
-		}
-	}
-}
-
 
 typedef struct {
 	es_ermine *e;
@@ -1205,11 +1098,6 @@ static int add_hook(es_feature_api *f, es_hook kind, hook_rec rec) {
 	return 0;
 }
 
-int es_on_table(es_feature_api *f, es_on_table_fn fn, void *ctx) {
-	hook_rec r = {.ctx = ctx};
-	r.fn.table = fn;
-	return add_hook(f, ES_ON_TABLE, r);
-}
 int es_on_read(es_feature_api *f, es_on_read_fn fn, void *ctx) {
 	hook_rec r = {.ctx = ctx};
 	r.fn.read = fn;
@@ -1544,7 +1432,7 @@ static void release(es_ermine *e) {
 	if (e->statuses != NULL) cst_free(e->statuses);
 	if (e->runs != NULL) crn_free(e->runs);
 	if (e->scopes != NULL) sn_free(e->scopes);
-	e->table = e->front = NULL;
+	e->table = NULL;
 	e->paths = NULL;
 	e->places = NULL;
 	e->processes = NULL;
@@ -1557,9 +1445,6 @@ static void release(es_ermine *e) {
 	}
 	for (size_t i = 0; i < h->nblocks; i++) pl_made_free(h->blocks[i]);
 	h->nblocks = 0;
-	for (size_t i = 0; i < h->nlayers; i++) free(h->layers[i]);
-	h->nlayers = 0;
-	h->innermost = NULL;
 	for (size_t k = 0; k < ES_HOOKS; k++) h->hooks[k].n = 0;
 	for (size_t i = 0; i < h->nshown; i++) {
 		free(h->shown[i].name);
@@ -1640,7 +1525,6 @@ static void free_hosting(es_ermine *e) {
 	for (size_t k = 0; k < ES_HOOKS; k++) free(h->hooks[k].items);
 	free(h->apis);
 	free(h->shown);
-	free(h->layers);
 	free(h->listened);
 	free(h->all);
 	free(h->scopes);
@@ -1723,15 +1607,8 @@ int es_create(const es_options *given, es_ermine **out) {
 	e->scheduler = o->scheduler != NULL ? o->scheduler : sc_new((sc_options){.drop = es_drop, .data = e});
 
 
-	e->table = tb_make(table_event, e);
-	e->front = e->table;
+	e->table = tb_new();
 	if ((code = install(e, o)) != 0) goto fail;
-	{
-		es_layer top;
-		if ((code = table_at(e, 0, e->table, &top)) != 0) goto fail;
-		link_layers(e);
-		e->front = top.front;
-	}
 
 	if (o->root != NULL) e->root = es_dup(o->root);
 	else if ((code = es_make_id(e, "node", &e->root)) != 0) goto fail;
@@ -1740,7 +1617,7 @@ int es_create(const es_options *given, es_ermine **out) {
 	pr_processes_init(&h->rows_walk, tb_string(e->root));
 	h->contributors[0] = &h->rows_walk.contributor;
 	h->contributors[1] = &pl_children;
-	pl_connect(e->places, &(pl_setup){.root = tb_string(e->root), .table = e->front, .paths = e->paths,
+	pl_connect(e->places, &(pl_setup){.root = tb_string(e->root), .table = e->table, .paths = e->paths,
 		.scheduler = e->scheduler, .contributors = h->contributors, .ncontributors = 2, .tracking = 1,
 		.now = o->now, .now_ctx = o->now_ctx});
 	h->tracking = sc_on_tracking_end(e->scheduler, pl_forget, e->places);
@@ -1775,7 +1652,7 @@ int es_create(const es_options *given, es_ermine **out) {
 		if ((code = es_within(e->host_context, init_nodes, &args)) != 0) goto fail;
 	}
 
-	e->scopes = sn_new(e->scheduler, e->table);
+	e->scopes = sn_new(e->scheduler, e->table, e->places);
 	{
 		op_value *start = op_str("start");
 		keep_value(h, start);

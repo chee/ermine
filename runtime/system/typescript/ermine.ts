@@ -52,7 +52,6 @@ import { createPaths } from "@ermine/reactivity/paths"
 import { createTable, type Key, type Table, type Tables } from "@ermine/graph/table"
 import { type Call, createCalls, type Wait } from "./calls.ts"
 import {
-	type Ahead,
 	type Asked,
 	type Calling,
 	chain,
@@ -60,7 +59,6 @@ import {
 	type Feature,
 	type IdKind,
 	install,
-	layer,
 	type Reading,
 	type Recorded,
 	type Shown,
@@ -95,11 +93,9 @@ export type {
 	FeatureAPI,
 	Hook,
 	Hooks,
-	Layer,
 	Reading,
 	Recorded,
 	Slot,
-	Under,
 } from "./features.ts"
 export type {
 	At,
@@ -175,7 +171,7 @@ export type Ermine = {
 	handleOf: (node: NodeData) => Node
 	dataOf: (x: unknown) => { node: NodeData } | undefined
 	readonly scheduler: Scheduler
-	readonly table: ErmineTable
+	readonly table: Pick<ErmineTable, "get" | "who">
 	readonly places: Places
 	readonly features: readonly Shown[]
 	readonly id: Id
@@ -222,8 +218,6 @@ export function createErmine(options: Options = {}): Ermine {
 	let places: Places | undefined
 	// deno-lint-ignore prefer-const
 	let processes: Processes | undefined
-	// deno-lint-ignore prefer-const
-	let first: Ahead
 	let made:
 		| {
 			getProcessContext: (process?: Process) => ProcessContext | undefined
@@ -236,9 +230,7 @@ export function createErmine(options: Options = {}): Ermine {
 		}
 		| undefined
 	let ids: (() => string) | undefined = undefined
-	const table: ErmineTable = createTable<Tables & StatusTables>((part, id) =>
-		first.onTableChange(part as Key, id)
-	)
+	const table: ErmineTable = createTable<Tables & StatusTables>()
 	// A copy of the scheduler for features. Each on... function is wrapped so its off runs at close,
 	// because a scheduler passed in options outlives ermine.
 	const listening = new Set<() => void>()
@@ -259,7 +251,7 @@ export function createErmine(options: Options = {}): Ermine {
 	}
 	const features = install(options.features ?? [], {
 		scheduler: heard,
-		table,
+		table: { get: table.get, who: table.who },
 		places: () => places,
 		processes: () => processes,
 		getProcessContext: () => made?.getProcessContext,
@@ -280,18 +272,11 @@ export function createErmine(options: Options = {}): Ermine {
 	const newId = () => idFor("node")
 	ids = newId
 	const errored = chain<[unknown, string | undefined], unknown>(hooks.onError, "onError", (e) => e)
-	const toPlaces: Ahead = {
-		onTableChange: (part, id) => places!.onTableChange(part, id),
-		commit: (changed) => places!.commit(changed),
-	}
-	const layered = layer(hooks.onTable, table, () => toPlaces)
-	first = layered.first
-	const commit = (changed: Parameters<Places["commit"]>[0]) => first.commit(changed)
 
 	const root = options.root ?? newId()
 	places = createPlaces({
 		root,
-		table: layered.front as Table,
+		table: table as Table,
 		paths: createPaths<unknown>(),
 		scheduler: s,
 		contributors: [rows(root), children],
@@ -419,7 +404,7 @@ export function createErmine(options: Options = {}): Ermine {
 	const parts: Parts = {
 		scheduler: s,
 		table,
-		commit,
+		commit: p.commit,
 		may: options.may,
 		caller,
 		header,
@@ -527,7 +512,7 @@ export function createErmine(options: Options = {}): Ermine {
 	processes = createProcesses({
 		scheduler: s,
 		table,
-		places: { commit },
+		places: { commit: p.commit, tables: p.tables },
 		scopes,
 		owner,
 		write: hostInner.writer,
@@ -535,7 +520,7 @@ export function createErmine(options: Options = {}): Ermine {
 		now: options.now,
 	})
 	const statuses = createStatus({
-		places: { commit },
+		places: { commit: p.commit, tables: p.tables },
 		table,
 		scheduler: s,
 		write: (part, id, patches, header) =>
@@ -832,7 +817,7 @@ export function createErmine(options: Options = {}): Ermine {
 				},
 			},
 			scheduler: { get: part(s) },
-			table: { get: part(table) },
+			table: { get: part({ get: table.get, who: table.who }) },
 			places: { get: part(p) },
 			features: { get: part(features.shown) },
 			id: { get: part(node) },

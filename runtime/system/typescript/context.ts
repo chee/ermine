@@ -153,13 +153,13 @@ export function createProcessContext(
 	function land(w: Write) {
 		const entry = table.get(w.part, w.id) as Entry<unknown> | undefined
 		if (w.gone) {
-			if (entry !== undefined) table.del(w.part, w.id)
+			if (entry !== undefined) places.tables.del(w.part, w.id)
 			return
 		}
 		const header = headerOf(w)
 		if (entry === undefined) {
 			const v = apply(empty(w.part), w.patches)
-			if (v !== undefined) table.add(w.part, w.id, createEntry(v, header) as never)
+			if (v !== undefined) places.tables.add(w.part, w.id, createEntry(v, header) as never)
 			return
 		}
 		if (w.part === "children" || w.part === PROCESS) updateEntry(crow, entry, w.patches, header)

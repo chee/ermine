@@ -18,14 +18,14 @@ const rows: Contributor = {
 
 function world(contributors?: Contributor[]) {
 	const s = createScheduler()
-	const table = createTable((part, id) => places.onTableChange(part as Key, id))
+	const table = createTable()
 	const paths = createPaths<unknown>()
 	const places = createPlaces({ root: "R", table, paths, scheduler: s, contributors })
 	s.onTrackingEnd((key) => places.release(key))
 	const host = s.createRootScope({ actor: "host" })
 	const hosted = <T>(f: () => T) => s.runWithScope(host, f)
 	const put = (part: Key, id: Id, v: unknown) =>
-		hosted(() => table.sub(part, id, createEntry(v as never, createChangeHeader(s))))
+		hosted(() => places.tables.sub(part, id, createEntry(v as never, createChangeHeader(s))))
 	put("children", "R", { work: "W" })
 	put("children", "W", { clock: "C0", notes: "N", junk: 1 })
 	put("children", "C0", { on: "ON0" })

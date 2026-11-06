@@ -2,7 +2,7 @@ import { assert, assertEquals, assertStrictEquals } from "@std/assert"
 import type { Entry } from "@ermine/graph/entry"
 import { createScheduler, PENDING, type Scope } from "@ermine/reactivity"
 import { createPaths } from "@ermine/reactivity/paths"
-import { createTable, type Key, type Tables } from "@ermine/graph/table"
+import { createTable, type Table, type Tables } from "@ermine/graph/table"
 import { createPlaces } from "@ermine/places"
 import { children } from "@ermine/places/children"
 import { STATUS, type StatusTables } from "./status.ts"
@@ -12,23 +12,26 @@ import { ARGS, createProcesses, FOLDER, type Inside, PIN, type Process } from ".
 
 function world() {
 	const s = createScheduler()
-	const table = createTable<Tables & StatusTables>((part, id) =>
-		places.onTableChange(part as Key, id)
-	)
+	const table = createTable<Tables & StatusTables>()
 	const paths = createPaths<unknown>()
 	const places = createPlaces({
 		root: "R",
-		table,
+		table: table as unknown as Table,
 		paths,
 		scheduler: s,
 		contributors: [rows("R"), children],
 	})
 	s.onTrackingEnd((key) => places.release(key))
-	const scopes = createScopeNodes({ scheduler: s, table })
+	const scopes = createScopeNodes({
+		scheduler: s,
+		table: { get: table.get, del: places.tables.del },
+	})
 	const host = s.createRootScope({ actor: "host" })
 	const hosted = <T>(f: () => T) => s.runWithScope(host, f)
 	const commit = (changed: readonly Entry<unknown>[]) => places.commit(changed)
-	const life = hosted(() => createProcesses({ scheduler: s, table, places: { commit }, scopes }))
+	const life = hosted(() =>
+		createProcesses({ scheduler: s, table, places: { commit, tables: places.tables }, scopes })
+	)
 	const start = (...a: Parameters<typeof life.start>) => {
 		const p = hosted(() => life.start(...a))
 		if ("refused" in p) throw new Error(p.refused)

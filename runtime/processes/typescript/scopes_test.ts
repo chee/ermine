@@ -2,15 +2,22 @@ import { assertEquals, assertMatch } from "@std/assert"
 import createEntry from "@ermine/graph/entry"
 import { createScheduler } from "@ermine/reactivity"
 import { createTable } from "@ermine/graph/table"
+import { createPlaces } from "@ermine/places"
+import { createPaths } from "@ermine/reactivity/paths"
 import { createScopeNodes } from "./scopes.ts"
 
 function world() {
 	const events: string[] = []
 	const s = createScheduler()
-	const table = createTable((part, id) => void events.push(`${String(part)} ${String(id)}`))
-	const nodes = createScopeNodes({ scheduler: s, table })
+	const table = createTable()
+	const places = createPlaces({ root: "R", table, paths: createPaths<unknown>(), scheduler: s })
+	places.watchAll((f) => void events.push(`${String(f.part)} ${String(f.id)}`))
+	const nodes = createScopeNodes({
+		scheduler: s,
+		table: { get: table.get, del: places.tables.del },
+	})
 	const host = s.createRootScope({ actor: "host" })
-	return { s, table, nodes, host, events }
+	return { s, table, places, nodes, host, events }
 }
 
 Deno.test("scope nodes: give makes one id, the same after; given or a uuid", () => {
@@ -23,11 +30,11 @@ Deno.test("scope nodes: give makes one id, the same after; given or a uuid", () 
 })
 
 Deno.test("scope nodes: at the scope's teardown its node's entries go, as table events", () => {
-	const { s, table, nodes, host, events } = world()
+	const { s, places, table, nodes, host, events } = world()
 	const p = s.createScope({ process: ["p"] }, host)
 	const id = nodes.give(p)!
 	s.runWithScope(host, () => {
-		table.add(
+		places.tables.add(
 			"value",
 			id,
 			createEntry<unknown>({ title: "clock" }, {
@@ -36,7 +43,7 @@ Deno.test("scope nodes: at the scope's teardown its node's entries go, as table 
 				frame: { info: {}, parent: undefined },
 			}),
 		)
-		table.add(
+		places.tables.add(
 			"attributes",
 			id,
 			createEntry<Record<string, unknown>>({ pin: "x" }, {

@@ -14,7 +14,6 @@
 //     },
 //   }
 //
-//   onTable(table, next)           the table places reads; table.ahead is what lies in front of it
 //   onRead(x, items, next)         adds items to what reads show
 //   onWrite(context, write, next)  every table write, as the context it is for
 //   onTeardown(scope, why, next)   each teardown as its scope goes
@@ -28,14 +27,14 @@
 //
 // A hook that throws is rethrown as a FeatureError naming the feature and hook. PENDING and
 // whatever next threw pass through, and a Refusal passes with its feature and hook named.
-import type { ChangeHeader, Entry } from "@ermine/graph/entry"
+import type { ChangeHeader } from "@ermine/graph/entry"
 import type { Key as Step } from "@ermine/changeable/apply"
 import type { Id, Path, Places } from "@ermine/places"
 import type { Process, Processes } from "@ermine/processes/start"
 import type { Call } from "./calls.ts"
 import type { Run } from "@ermine/processes/runs"
 import { PENDING, type Scheduler, type Scope } from "@ermine/reactivity"
-import type { Key, Table } from "@ermine/graph/table"
+import type { Key } from "@ermine/graph/table"
 import { Refusal } from "@ermine/processes/guard"
 import type {
 	CreatedFunction,
@@ -89,13 +88,6 @@ export class FeatureError extends Error {
 	}
 }
 
-export type Layer = Pick<Table, "get" | "who"> & {
-	onTableChange: (part: Key, id: Id) => void
-	commit: (changed: readonly Entry<unknown>[]) => void
-}
-export type Ahead = Pick<Layer, "onTableChange" | "commit">
-export type Under = Pick<Table, "get" | "who"> & { ahead: () => Ahead }
-
 export type Reading = {
 	readonly node: NodeData
 	readonly part: Key
@@ -115,7 +107,6 @@ export type Recorded =
 	| { readonly id: Id; readonly call: Call; readonly run?: undefined }
 
 export type Hooks = {
-	onTable: (table: Under, next: (table: Under) => Layer) => Layer
 	onRead: (
 		x: Reading,
 		items: readonly Version[],
@@ -139,7 +130,6 @@ export type IdKind = "node" | "process"
 export type Hook = keyof Hooks
 // Every hook is listed once, so a hook added to Hooks and missed here is a type error.
 const HOOK_KEYS: Record<Hook, true> = {
-	onTable: true,
 	onRead: true,
 	onWrite: true,
 	onTeardown: true,
@@ -159,10 +149,9 @@ export type Slot<T> = {
 
 export type FeatureAPI = {
 	readonly scheduler: Scheduler
-	readonly table: ErmineTable
+	readonly table: Pick<ErmineTable, "get" | "who">
 	readonly places: Places
 	readonly processes: Processes
-	onTable: (hook: Hooks["onTable"]) => void
 	onRead: (hook: Hooks["onRead"]) => void
 	onWrite: (hook: Hooks["onWrite"]) => void
 	onTeardown: (hook: Hooks["onTeardown"]) => void
@@ -243,7 +232,7 @@ export function install(
 	features: readonly Feature[],
 	parts: {
 		scheduler: Scheduler
-		table: ErmineTable
+		table: Pick<ErmineTable, "get" | "who">
 		places: () => Places | undefined
 		processes: () => Processes | undefined
 		getProcessContext: () => ((process?: Process) => ProcessContext | undefined) | undefined
@@ -363,59 +352,4 @@ export function chain<A extends unknown[], R>(
 		return after ? after(h.feature, a, got, out) : out
 	}
 	return (...a: A) => at(0, a)
-}
-
-// The onTable hooks laid over the table in chain order.
-export function layer(
-	hooks: readonly Hooked<"onTable">[],
-	table: Pick<Table, "get" | "who">,
-	places: () => Pick<Layer, "onTableChange" | "commit">,
-): { front: Pick<Table, "get" | "who">; first: Pick<Layer, "onTableChange" | "commit"> } {
-	const ahead = new Map<object, Pick<Layer, "onTableChange" | "commit">>()
-	const aheadOf = (l: object) => ahead.get(l) ?? places()
-	const asAhead = (l: Partial<Layer> & object): Pick<Layer, "onTableChange" | "commit"> => ({
-		onTableChange: (part, id) =>
-			l.onTableChange ? l.onTableChange(part, id) : aheadOf(l).onTableChange(part, id),
-		commit: (changed) => l.commit ? l.commit(changed) : aheadOf(l).commit(changed),
-	})
-	const raw = { get: table.get, who: table.who } as Pick<Table, "get" | "who">
-	const wraps = new Map<object, object>()
-	const unwrap = (l: object) => {
-		while (wraps.has(l)) l = wraps.get(l)!
-		return l
-	}
-	const at = (i: number, t: Pick<Table, "get" | "who">): Pick<Table, "get" | "who"> => {
-		if (i === hooks.length) return t
-		const h = hooks[i]
-		// deno-lint-ignore prefer-const
-		let made: object | undefined
-		const under: Under = {
-			get: t.get,
-			who: t.who,
-			ahead: () => made === undefined ? places() : aheadOf(made),
-		}
-		wraps.set(under, t)
-		let inner: object | undefined
-		let passed: { e: unknown } | undefined
-		let out: Layer
-		try {
-			out = h.fn(under, (u) => {
-				try {
-					const got = at(i + 1, u)
-					inner = unwrap(got)
-					return got as Layer
-				} catch (e) {
-					passed = { e }
-					throw e
-				}
-			})
-		} catch (e) {
-			throw own(h.feature, "onTable", e, passed)
-		}
-		made = unwrap(out)
-		if (inner !== undefined && inner !== made) ahead.set(inner, asAhead(made as Layer))
-		return out
-	}
-	const front = at(0, raw)
-	return { front, first: asAhead(raw) }
 }

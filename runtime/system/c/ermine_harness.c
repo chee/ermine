@@ -1976,12 +1976,6 @@ static int is_how(const tf_t *t, const char *hook, const char *how) {
 	return x != NULL && strcmp(x, how) == 0;
 }
 
-static int tf_table(void *ctx, const es_under *under, es_table_next *next, es_layer *out) {
-	tf_t *t = ctx;
-	say(t, "onTable", NULL, NULL, NULL);
-	if (is_how(t, "onTable", "throw")) return boom(t);
-	return es_next_table(next, under, out);
-}
 static int tf_read(void *ctx, const es_reading *x, const es_versions *items, es_read_next *next,
 	es_versions *out) {
 	tf_t *t = ctx;
@@ -2168,7 +2162,6 @@ static int tf_setup(void *ctx, es_feature_api *f) {
 		pl *places;
 		TRY(es_api_places(f, &places));
 	}
-	if (flag(t->spec, "onTable")) TRY(es_on_table(f, tf_table, t));
 	if (flag(t->spec, "onRead")) TRY(es_on_read(f, tf_read, t));
 	if (flag(t->spec, "slot")) {
 		TRY(es_reserve_slot(f, &t->slot));
@@ -2713,7 +2706,7 @@ static int op_features(op_value **res) {
 	TRY(es_alive(W->e));
 	size_t n;
 	const es_shown *shown = es_features(W->e, &n);
-	static const char *const hooks[] = {"onTable", "onRead", "onWrite", "onTeardown", "onRecord", "onStatus",
+	static const char *const hooks[] = {"onRead", "onWrite", "onTeardown", "onRecord", "onStatus",
 		"onId", "onSchedule", "onCreateFunction", "onError"};
 	op_value *list = op_list();
 	for (size_t i = 0; i < n; i++) {
@@ -2805,7 +2798,7 @@ static int put_run(void *ctx) {
 	pl_made *made;
 	TRY(es_header(e, &h, &made));
 	nd_entry *entry = nd_make_entry((op_value *)k->value, &h);
-	tb_sub(e->table, tb_string(k->part), tb_string(k->id), entry);
+	pl_sub(e->places, tb_string(k->part), tb_string(k->id), entry);
 	pl_own(e->places, entry);
 	if (made != NULL) pl_hold(e->places, entry, made, pl_made_free);
 	return 0;

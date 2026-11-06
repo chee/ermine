@@ -20,7 +20,7 @@ function world(way: "copy" | "in place" | "crow") {
 	const u = createCrow()
 	const s = createScheduler()
 	s.onTrackingEnd((key) => places.release(key))
-	const table = createTable((part, id) => places.onTableChange(part, id))
+	const table = createTable()
 	const places: Places = createPlaces({
 		root: "R",
 		table: way === "crow" ? crowifyTable(table, u) : table,
@@ -29,7 +29,7 @@ function world(way: "copy" | "in place" | "crow") {
 	})
 	const host = s.createRootScope({ actor: "host" })
 	const header = s.runWithScope(host, () => createChangeHeader(s))
-	table.sub("children", "F", createEntry(folder(1000)(), header) as never)
+	places.tables.sub("children", "F", createEntry(folder(1000)(), header) as never)
 	const e = table.get("children", "F")! as Entry<unknown>
 	s.runWithScope(
 		s.createRootScope({ actor: "r" }),

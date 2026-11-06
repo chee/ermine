@@ -746,22 +746,6 @@
 			"op": "ermine",
 			"features": [
 				{
-					"name": "t",
-					"onTable": "throw"
-				}
-			],
-			"fails": true,
-			"expect": {
-				"error": "feature",
-				"feature": "t",
-				"hook": "onTable",
-				"cause": "t threw"
-			}
-		},
-		{
-			"op": "ermine",
-			"features": [
-				{
 					"name": "a",
 					"onWrite": "log"
 				},

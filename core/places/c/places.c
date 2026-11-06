@@ -751,9 +751,28 @@ static void names_free(shared *s) {
 }
 
 static void tell_alls(pl *l, const pl_fact *facts, size_t n);
+static void landed(pl *l, tb_key part, tb_key id);
 
-void pl_event(void *ctx, tb_key part, tb_key id) {
-	pl *l = ctx;
+int pl_add(pl *l, tb_key part, tb_key id, nd_entry *entry) {
+	if (tb_get(l->s->table, part, id) == entry) return 0;
+	int code = tb_add(l->s->table, part, id, entry);
+	if (code == 0) landed(l, part, id);
+	return code;
+}
+
+void pl_sub(pl *l, tb_key part, tb_key id, nd_entry *entry) {
+	if (tb_get(l->s->table, part, id) == entry) return;
+	tb_sub(l->s->table, part, id, entry);
+	landed(l, part, id);
+}
+
+int pl_del(pl *l, tb_key part, tb_key id) {
+	int code = tb_del(l->s->table, part, id);
+	if (code == 0) landed(l, part, id);
+	return code;
+}
+
+static void landed(pl *l, tb_key part, tb_key id) {
 	if (same_key(part, tb_string(children_part))) names_again(l, id);
 	size_t n;
 	pt_spot *const *spots = pt_event(l->s->paths, pair_key(l, part), paths_key(id), &n);
@@ -769,8 +788,7 @@ void pl_event(void *ctx, tb_key part, tb_key id) {
 		patch.value = op_ref(entry->value);
 	}
 	// Take the value and change as they are now, since a function that writes the entry changes
-	// them. For a take-out, make a change from the open scope (if any) with the site here, because
-	// the table's hook gives no caller of tb_del.
+	// them. For a take-out, make a change from the open scope (if any) with the site here.
 	ch_header change = entry != NULL ? entry->change : (ch_header){0};
 	pl_made *made = NULL;
 	int changed = entry != NULL;

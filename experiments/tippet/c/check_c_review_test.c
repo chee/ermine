@@ -784,7 +784,7 @@ static int dev_make(dev *d, tp_store *store, uint8_t s) {
 	d->places = pl_new();
 	d->s = sc_new((sc_options){.drop = drop_value});
 	sc_on_tracking_end(d->s, pl_forget, d->places);
-	d->table = tb_make(pl_event, d->places);
+	d->table = tb_new();
 	d->paths = pt_new();
 	pl_connect(d->places, &(pl_setup){.root = tb_string("R"), .table = d->table, .paths = d->paths, .scheduler = d->s});
 	d->info = (sc_pair){"actor", op_str("test")};

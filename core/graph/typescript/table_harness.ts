@@ -16,16 +16,10 @@
 // { op: "del", part, node }              → {}  the node from every id under the part
 // { op: "del", node }                    → {}  the node from every key
 //                                          (a del of nothing: { error: "nothing-there" })
-// { op: "events" }                       → { events }   [[part, id]], every event since last asked
-// { op: "events", at: true }             → { events }   [[part, id, entries]], each with every part
-//                                                       at its id as it was when told
 //
-// Adding the node already there changes nothing and tells nothing; so does a sub of it. A sub of
-// a different node removes the old node's key only, with one event. An error changes nothing. A
-// node or id with no keys is not there.
-//
-// Events: one per key added, replaced or removed, told after it landed. A del of many keys takes
-// them all, then tells one event per key, in who's order (for del part node, the ids order).
+// Adding the node already there changes nothing; so does a sub of it. A sub of a different node
+// removes the old node's key only. An error changes nothing. A node or id with no keys is not
+// there.
 //
 // Lists are never sorted:
 //   ids  the order each id was put under the node and part
@@ -36,7 +30,7 @@
 //
 // Anything not understood (unknown or missing op, missing field, bad key or node): { error: why },
 // why being any text. The next line is answered as usual.
-import { createTable, type Event, type Id, TableError } from "./table.ts"
+import { createTable, type Id, TableError } from "./table.ts"
 import { type Answer, type Request, serve } from "../../../meta/conformance/typescript/harness.ts"
 import type { Entry } from "@ermine/graph/entry"
 
@@ -56,15 +50,12 @@ type Loose = {
 		(node: Entry<unknown>): void
 	}
 }
-const loose = (event?: (part: Id, id: Id) => void) =>
-	createTable(event as Event | undefined) as unknown as Loose
+const loose = () => createTable() as unknown as Loose
 
 // A node by name: an object the table never reads.
 type N = Entry<unknown>
 
-// Every table event until asked, with every part at its id as it was when told.
-const events: [Id, Id, [Id, N][]][] = []
-const table: Loose = loose((part, id) => events.push([part, id, table.get(id)]))
+const table: Loose = loose()
 const nodes = new Map<string, N>()
 const names = new Map<object, string>()
 const symbols = new Map<string, symbol>()
@@ -111,14 +102,6 @@ function answer(r: Request): Answer {
 				}
 			case "who":
 				return { keys: table.who(node(r.node)).map(([p, i]) => [text(p), text(i)]) }
-			case "events":
-				return {
-					events: events.splice(0).map(([p, i, at]) =>
-						r.at === true
-							? [text(p), text(i), at.map(([q, n]) => [text(q), names.get(n as object)])]
-							: [text(p), text(i)]
-					),
-				}
 			case "del":
 				if (r.part === undefined) table.del(node(r.node))
 				else if (r.node !== undefined) table.del(key(r.part), node(r.node))

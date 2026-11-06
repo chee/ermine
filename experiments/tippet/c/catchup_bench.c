@@ -159,7 +159,7 @@ static void own_f(void *data) {
 		e = nd_make_entry(v, &header);
 		op_free(v);
 		pl_own(d->places, e);
-		tb_sub(d->table, part, id, e);
+		pl_sub(d->places, part, id, e);
 		return;
 	}
 	held *h = malloc(sizeof *h);
@@ -196,7 +196,7 @@ static void bench(tp_log *w, const messages *m, int file, int forgets) {
 	pl *places = pl_new();
 	sc_scheduler *s = sc_new((sc_options){.drop = drop_value});
 	sc_on_tracking_end(s, pl_forget, places);
-	tb_table *table = tb_make(pl_event, places);
+	tb_table *table = tb_new();
 	pt_paths *paths = pt_new();
 	pl_connect(places, &(pl_setup){.root = tb_string("R"), .table = table, .paths = paths, .scheduler = s});
 	sc_pair info = {"actor", op_str("cardputer")};

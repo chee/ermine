@@ -1,6 +1,6 @@
 // An in-memory table of entries, each under keys of a table name and an id. One id can have
-// several tables, and one entry can sit under any number of keys. One listener, given at making,
-// hears every event after it landed. Putting the same entry again is no event.
+// several tables, and one entry can sit under any number of keys. It calls nobody: writes go in by
+// places, which tells.
 import type { Entry } from "@ermine/graph/entry"
 
 // The tables the graph has, each a name and the shape of its value. Packages with tables of
@@ -26,8 +26,6 @@ export class TableError extends Error {
 	}
 }
 
-export type Event = (part: Key, id: Id) => void
-
 // A table holding T's tables. add and sub are methods so Table<Tables & StatusTables> is a Table.
 export type Table<T extends Tables = Tables> = {
 	add<K extends Key>(part: K, id: Id, node: Entry<Shape<T, K>>): void
@@ -45,7 +43,7 @@ export type Table<T extends Tables = Tables> = {
 	}
 }
 
-export function createTable<T extends Tables = Tables>(event?: Event): Table<T> {
+export function createTable<T extends Tables = Tables>(): Table<T> {
 	type N = Entry<unknown>
 	const at = new Map<Id, Map<Key, N>>()
 	const where = new Map<N, Map<Key, Set<Id>>>()
@@ -77,7 +75,6 @@ export function createTable<T extends Tables = Tables>(event?: Event): Table<T> 
 		if (there === node) return
 		if (there !== undefined) throw new TableError("already-there", part, id)
 		put(part, id, node)
-		event?.(part, id)
 	}
 
 	function sub(part: Key, id: Id, node: N) {
@@ -85,7 +82,6 @@ export function createTable<T extends Tables = Tables>(event?: Event): Table<T> 
 		if (there === node) return
 		if (there !== undefined) take(part, id, there)
 		put(part, id, node)
-		event?.(part, id)
 	}
 
 	function get(part: Key, id: Id): N | undefined
@@ -112,17 +108,14 @@ export function createTable<T extends Tables = Tables>(event?: Event): Table<T> 
 			const keys = who(a)
 			if (keys.length === 0) throw new TableError("nothing-there")
 			for (const [part, id] of keys) take(part, id, a)
-			if (event) { for (const [part, id] of keys) event(part, id) }
 		} else if (typeof b === "object") {
 			const ids = get(a, b)
 			if (ids.length === 0) throw new TableError("nothing-there", a)
 			for (const id of ids) take(a, id, b)
-			if (event) { for (const id of ids) event(a, id) }
 		} else {
 			const there = at.get(b!)?.get(a)
 			if (there === undefined) throw new TableError("nothing-there", a, b!)
 			take(a, b!, there)
-			event?.(a, b!)
 		}
 	}
 

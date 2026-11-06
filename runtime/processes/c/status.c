@@ -127,7 +127,7 @@ static void write_in_scope(void *data) {
 		}
 		s->nodes[s->nnodes++] = node;
 		pl_hold(s->places, node, made, pl_made_free);
-		tb_add(s->table, tb_string(CST_TABLE), id, node);
+		pl_add(s->places, tb_string(CST_TABLE), id, node);
 		return;
 	}
 	block *b = xalloc(sizeof *b);

@@ -4,6 +4,7 @@
 // { op: "kids", id, value }                  → {}   the children entry replaced (a table event)
 // { op: "value", id, value }                 → {}   the value entry replaced
 // { op: "share", value, keys: [[part, id]..] } → {}   one entry under all those keys (table.add)
+// { op: "again", how: "add"|"sub", part, id } → {} | { error: "nothing-there" }   the entry already there put back
 // { op: "del", part, id }                    → {} | { error: "nothing-there" }
 // { op: "node", part, id }                   → { value? }   the table's, told to no one
 // { op: "namesOf", id }                      → { names }   each { folder, name }
@@ -60,7 +61,7 @@ trace(s, (m) => {
 	if ("ends" in m) spotted.set(m.ends, m.reads.map((k) => where(places.describe(k))))
 })
 s.onTrackingEnd((key) => places.release(key))
-export const table = createTable((part, id) => places.onTableChange(part as Key, id))
+export const table = createTable()
 export const paths = createPaths<unknown>()
 export let places = createPlaces({ root: "R", table, paths, scheduler: s })
 // From here on, places walks with these contributors (the same table, paths and scheduler).
@@ -131,7 +132,7 @@ export function edit(part: Key, id: Id, patches: Patch[]) {
 	if (there === undefined) {
 		const node = createEntry<unknown>(undefined, h)
 		update(node, patches, h)
-		table.add(part, id, node)
+		places.tables.add(part, id, node)
 		return node
 	}
 	update(there, patches, h)
@@ -200,20 +201,26 @@ export function worldAnswer(r: Request): Json | undefined {
 	const hosted = <T>(f: () => T) => s.runWithScope(host, f)
 	switch (r.op) {
 		case "kids":
-			hosted(() => table.sub("children", r.id, createEntry(r.value, header())))
+			hosted(() => places.tables.sub("children", r.id, createEntry(r.value, header())))
 			return {}
 		case "value":
-			hosted(() => table.sub("value", r.id, createEntry<unknown>(r.value, header())))
+			hosted(() => places.tables.sub("value", r.id, createEntry<unknown>(r.value, header())))
 			return {}
 		case "share": {
 			hosted(() => {
 				const node = createEntry<unknown>(r.value, header())
-				for (const [part, id] of r.keys) table.add(part, id, node)
+				for (const [part, id] of r.keys) places.tables.add(part, id, node)
 			})
 			return {}
 		}
+		case "again": {
+			const n = table.get(r.part, r.id)
+			if (n === undefined) return { error: "nothing-there" }
+			hosted(() => places.tables[r.how as "add" | "sub"](r.part, r.id, n))
+			return {}
+		}
 		case "del":
-			hosted(() => table.del(r.part, r.id))
+			hosted(() => places.tables.del(r.part, r.id))
 			return {}
 		case "node": {
 			const n = table.get(r.part, r.id)

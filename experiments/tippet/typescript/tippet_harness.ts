@@ -165,7 +165,7 @@ async function createDevice(
 	max?: number,
 ): Promise<Device> {
 	const s = createScheduler()
-	const table = createTable((part, id) => places.onTableChange(part as Key, id))
+	const table = createTable()
 	const places = createPlaces({
 		root: "root",
 		table,
@@ -196,7 +196,7 @@ async function createDevice(
 				if (patches.length !== 1 || p.path.length || p.range || p.move || !("value" in p)) {
 					throw new Error("a first write is one whole value")
 				}
-				table.sub(part as Key, node, createEntry(p.value, change))
+				places.tables.sub(part as Key, node, createEntry(p.value, change))
 			})
 			return history.unkept.length > unkept ? history.unkept[unkept].why : undefined
 		},

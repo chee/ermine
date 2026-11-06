@@ -1,7 +1,16 @@
 // Running processes at paths: the rows of a root's process part, a trie, and the contributor
 // that walks it. The rows are never saved: they are the processes running now on this device.
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/graph/entry"
-import { asId, type Contributor, type Id, map, none, type Path, PlacesError } from "@ermine/places"
+import {
+	asId,
+	type Contributor,
+	type Id,
+	map,
+	none,
+	type Path,
+	type Places,
+	PlacesError,
+} from "@ermine/places"
 import { crow, type Writer } from "@ermine/places/children"
 import { updateEntry } from "@ermine/places/crowify"
 import type { Key, Table } from "@ermine/graph/table"
@@ -64,7 +73,7 @@ export function trie(part: Key, root: Id, from: string): Contributor {
 // The entry is written through places' crow, as children are, because copying on a start made
 // 300 starts take 0.4 s.
 export const addProcess = (
-	table: Pick<Table, "get" | "add">,
+	table: Pick<Table, "get"> & Pick<Places["tables"], "add">,
 	root: Id,
 	path: Path,
 	id: Id,
@@ -73,7 +82,7 @@ export const addProcess = (
 ): Entry<unknown>[] => put(table, PROCESS, root, path, id, header, write, true)
 
 export const addLeaf = (
-	table: Pick<Table, "get" | "add">,
+	table: Pick<Table, "get"> & Pick<Places["tables"], "add">,
 	part: Key,
 	root: Id,
 	path: Path,
@@ -86,7 +95,7 @@ const nest = (names: Path, value: unknown): unknown =>
 	names.reduceRight<unknown>((v, k) => ({ [k]: v }), value)
 
 function put(
-	table: Pick<Table, "get" | "add">,
+	table: Pick<Table, "get"> & Pick<Places["tables"], "add">,
 	part: Key,
 	root: Id,
 	path: Path,
@@ -101,7 +110,7 @@ function put(
 	if (there === undefined) {
 		const trie = nest(path, id)
 		if (write !== undefined) write(part, root, [{ path: [], value: trie }], header)
-		else table.add(part, root, createEntry(trie, header) as never)
+		else table.add(part, root, createEntry(trie, header))
 		return []
 	}
 	let v: unknown = there.value

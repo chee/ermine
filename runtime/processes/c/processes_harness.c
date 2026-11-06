@@ -225,7 +225,7 @@ static void put(void *data) {
 	nd_entry *node = nd_make_entry((op_value *)op_get(c->request, "value"), &h);
 	pl_hold(world_places, node, made, pl_made_free);
 	world_keep_node(node);
-	tb_sub(world_table, tb_string(world_part(op_get(c->request, "part"))),
+	pl_sub(world_places, tb_string(world_part(op_get(c->request, "part"))),
 		world_key(op_get(c->request, "id")), node);
 }
 
@@ -306,7 +306,7 @@ static op_value *answer(const op_value *r) {
 	if (strcmp(op, "give") == 0) {
 		sc_scope *o = world_scope(world_text(op_get(r, "scope")));
 		if (o == NULL) return world_error("no such scope");
-		if (nodes == NULL) nodes = sn_new(world_scheduler, world_table);
+		if (nodes == NULL) nodes = sn_new(world_scheduler, world_table, world_places);
 		return id_answer(sn_give(nodes, o, world_text(op_get(r, "id"))));
 	}
 	if (strcmp(op, "write") == 0) {

@@ -116,8 +116,8 @@ export type History = {
 
 export function createHistory(o: {
 	log: Log
-	table: Table
-	places: Pick<Places, "commit" | "watchAll">
+	table: Pick<Table, "get" | "who">
+	places: Pick<Places, "tables" | "commit" | "watchAll">
 	kept?: (node: string, part: string) => boolean
 	run?: <T>(f: () => T) => T
 	// per entry its elements only, the value the graph's (WIRE.md, ids: a reader that forgets)
@@ -269,7 +269,9 @@ export function createHistory(o: {
 			const e = table.get(s.part as Key, s.node)
 			if (e) return void (update(e, patches, header(s)), places.commit([e]))
 			const v = apply(undefined, patches)
-			if (v !== undefined) table.add(s.part as Key, s.node, createEntry(v as never, header(s)))
+			if (v !== undefined) {
+				places.tables.add(s.part as Key, s.node, createEntry(v as never, header(s)))
+			}
 		})
 	}
 
@@ -693,7 +695,7 @@ export function createHistory(o: {
 						}
 						heads.set(name(part, node), hs.map((i) => refs[i]).filter((r) => r !== undefined))
 						if (!held) continue
-						table.sub(
+						places.tables.sub(
 							part as Key,
 							node,
 							createEntry(v as never, {

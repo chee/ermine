@@ -35,7 +35,7 @@
 //     { op: "callframe", id } -> { frame }   where the handler's latest call was made from
 // A call that gave a promise logs how it settled to "promised".
 //
-// A test feature: { name, needs?, onTable?, onRead?, onWrite?, onTeardown?, onRecord?, onStatus?,
+// A test feature: { name, needs?, onRead?, onWrite?, onTeardown?, onRecord?, onStatus?,
 // onId?, onSchedule?, onCreateFunction?, onError?, slot?, early?, late? }. Each hook logs [name, hook, ...] to "hooks", then does what its value says:
 // "log" calls next, "drop" does not, "throw" throws "<name> threw", onWrite "refuse" throws a
 // Refusal, onRead "add" adds an item, onWrite "copy" passes a copy, onTeardown "why" prefixes why
@@ -905,7 +905,7 @@ async function answer(r: Request): Promise<Record<string, unknown>> {
 			const part = r.op === "kids" ? "children" : r.part
 			const s = e.scheduler
 			e.getProcessContext()!.within(() =>
-				e.table.sub(part, r.id, createEntry(r.value, createChangeHeader(s)))
+				e.places.tables.sub(part, r.id, createEntry(r.value, createChangeHeader(s)))
 			)
 			return {}
 		}

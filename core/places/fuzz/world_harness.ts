@@ -28,7 +28,7 @@ export function createWorld(
 		mark: (keys: readonly unknown[]) => marked?.(keys),
 		getRun: () => undefined,
 	} as unknown as Parameters<typeof createPlaces>[0]["scheduler"]
-	const table = createTable((part, id) => p.onTableChange(part, id))
+	const table = createTable()
 	const p: Places = createPlaces({ root: "R", table, paths, scheduler })
 	const children = (id: Id) => table.get("children", id)
 	let time = 0
@@ -55,7 +55,7 @@ export function createWorld(
 	}
 	for (const id of IDS) {
 		if (id === "D") continue
-		table.add("children", id, createEntry(value() as Children, header()))
+		p.tables.add("children", id, createEntry(value() as Children, header()))
 	}
 
 	const nodes = () => IDS.map((id) => ({ id, node: children(id) }))
@@ -111,8 +111,8 @@ export function createWorld(
 		}
 		const id = one(IDS)
 		const there = children(id)
-		if (there && pick(3) === 0) table.del("children", id)
-		else table.sub("children", id, createEntry((pick(4) ? value() : undefined) as Children, h))
+		if (there && pick(3) === 0) p.tables.del("children", id)
+		else p.tables.sub("children", id, createEntry((pick(4) ? value() : undefined) as Children, h))
 		return { what: `event ${String(id)}`, changed: [], events: [{ id }] }
 	}
 

@@ -17,8 +17,8 @@ export { PENDING }
 
 export type Setup = {
 	write?: Writer
-	places: Pick<Places, "commit">
-	table: Pick<Table, "get" | "add">
+	places: Pick<Places, "commit" | "tables">
+	table: Pick<Table, "get">
 	scheduler: Pick<
 		Scheduler,
 		"runWithScope" | "getCurrentScope" | "getCurrentFrame" | "getRun" | "onRunEnd" | "onEffect"
@@ -68,7 +68,7 @@ export function createStatus(setup: Setup): {
 			}
 			if (there === undefined) {
 				const made = createEntry<Record<string, unknown>>({ [STATUS]: status }, header)
-				table.add(TABLE, id, made)
+				places.tables.add(TABLE, id, made)
 				return
 			}
 			const patches: Patch[] = []

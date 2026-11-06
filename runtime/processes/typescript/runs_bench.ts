@@ -2,7 +2,7 @@
 // What recording each run costs: a pulse rerunning computers, with nothing recorded, status.ts, runs.ts, both.
 import createEntry, { type ChangeHeader } from "@ermine/graph/entry"
 import update from "@ermine/changeable/update"
-import { createTable, type Key } from "@ermine/graph/table"
+import { createTable } from "@ermine/graph/table"
 import { createScheduler } from "@ermine/reactivity"
 import { createPaths } from "@ermine/reactivity/paths"
 import { createPlaces } from "@ermine/places"
@@ -14,7 +14,7 @@ type Shape = "none" | "status" | "runs" | "both"
 function world(n: number, shape: Shape) {
 	const s = createScheduler()
 	s.onTrackingEnd((k) => places.release(k))
-	const table = createTable((part, id) => places.onTableChange(part as Key, id))
+	const table = createTable()
 	const places = createPlaces({ root: "R", table, paths: createPaths<unknown>(), scheduler: s })
 	const o = s.createRootScope({ actor: "bench" })
 	const h = (): ChangeHeader => ({
@@ -22,7 +22,7 @@ function world(n: number, shape: Shape) {
 		actor: "bench",
 		frame: { info: {}, parent: undefined },
 	})
-	for (const k of ["a", "b"]) table.add("value", k, createEntry<unknown>({ x: 0 }, h()))
+	for (const k of ["a", "b"]) places.tables.add("value", k, createEntry<unknown>({ x: 0 }, h()))
 	const statuses = shape === "status" || shape === "both"
 		? createStatus({ places, table, scheduler: s })
 		: undefined
@@ -30,7 +30,7 @@ function world(n: number, shape: Shape) {
 		? createRuns({ places, table, scheduler: s })
 		: undefined
 	for (let i = 0; i < n; i++) {
-		table.add("value", `own${i}`, createEntry<unknown>({ x: i }, h()))
+		places.tables.add("value", `own${i}`, createEntry<unknown>({ x: i }, h()))
 		const f = () =>
 			(places.readValue("value", "a", ["x"]) as number) +
 			(places.readValue("value", `own${i}`, ["x"]) as number) +

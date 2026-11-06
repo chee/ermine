@@ -46,7 +46,7 @@ export type Refused = { readonly refused: "taken"; readonly at: Path }
 export type Setup = {
 	scheduler: Scheduler
 	table: Table<Tables & StatusTables>
-	places: Pick<Places, "commit"> & Partial<Pick<Places, "describe" | "watchAll">>
+	places: Pick<Places, "commit" | "tables"> & Partial<Pick<Places, "describe" | "watchAll">>
 	scopes: Pick<ScopeNodes, "give">
 	owner?: Scope
 	write?: Writer
@@ -139,7 +139,17 @@ export function createProcesses(setup: Setup): Processes {
 		try {
 			s.runWithScope(
 				scope,
-				() => places.commit(addProcess(table, places.root, at, id, header(), setup.write)),
+				() =>
+					places.commit(
+						addProcess(
+							{ get: table.get, add: places.tables.add },
+							places.root,
+							at,
+							id,
+							header(),
+							setup.write,
+						),
+					),
 			)
 		} catch (e) {
 			s.teardown(scope)
@@ -164,8 +174,8 @@ export function createProcesses(setup: Setup): Processes {
 					setup.write(TABLE, id, [{ path: [], value: status }], header())
 					return
 				}
-				table.add("attributes", id, createEntry(attrs, header()))
-				table.add(TABLE, id, createEntry(status, header()))
+				setup.places.tables.add("attributes", id, createEntry(attrs, header()))
+				setup.places.tables.add(TABLE, id, createEntry(status, header()))
 			})
 		} catch (e) {
 			stop(process)

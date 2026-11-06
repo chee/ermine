@@ -672,7 +672,7 @@ static int land(void *ctx, const es_write *w) {
 	void *held = entry != NULL && strcmp(w->part, "value") == 0
 		? es_action_held(e, entry->value) : NULL;
 	if (w->gone) {
-		if (entry != NULL) tb_del(e->table, part, id);
+		if (entry != NULL) pl_del(e->places, part, id);
 		es_action_let_go(e, held, NULL);
 		return 0;
 	}
@@ -698,7 +698,7 @@ static int land(void *ctx, const es_write *w) {
 		}
 		nd_entry *fresh = nd_make_entry(v, &h);
 		op_free(v);
-		tb_add(e->table, part, id, fresh);
+		pl_add(e->places, part, id, fresh);
 		// the places' till it is out of the table (taken out, or written over whole), then let go after a
 		// pulse (pl_sweep)
 		pl_own_in(e->places, fresh, e->table);

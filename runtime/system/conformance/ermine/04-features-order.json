@@ -70,8 +70,7 @@
 				{
 					"name": "c",
 					"onWrite": "log",
-					"onRead": "log",
-					"onTable": "log"
+					"onRead": "log"
 				}
 			],
 			"expect": {}
@@ -101,7 +100,6 @@
 						"name": "c",
 						"needs": [],
 						"hooks": [
-							"onTable",
 							"onRead",
 							"onWrite"
 						]
@@ -137,7 +135,6 @@
 							"name": "c",
 							"needs": [],
 							"hooks": [
-								"onTable",
 								"onRead",
 								"onWrite"
 							]
@@ -151,10 +148,6 @@
 			"name": "hooks",
 			"expect": {
 				"values": [
-					[
-						"c",
-						"onTable"
-					],
 					[
 						"a",
 						"onWrite",
@@ -275,10 +268,6 @@
 			"name": "hooks",
 			"expect": {
 				"values": [
-					[
-						"c",
-						"onTable"
-					],
 					[
 						"a",
 						"onWrite",

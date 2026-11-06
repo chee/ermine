@@ -20,10 +20,6 @@ static void *xrealloc(void *p, size_t n) {
 	}
 	return q;
 }
-static char *xdup(const char *s) {
-	size_t n = strlen(s) + 1;
-	return memcpy(xrealloc(NULL, n), s, n);
-}
 #define GROW(p, count, capacity) \
 	do { \
 		if ((count) == (capacity)) { \
@@ -67,10 +63,6 @@ static size_t hash_node(const void *p) { return mix((uintptr_t)p ^ 0x51ed27); }
 static int same(tb_key a, tb_key b) {
 	if (a.symbol != NULL || b.symbol != NULL) return a.symbol == b.symbol;
 	return strcmp(a.string, b.string) == 0;
-}
-static tb_key keep(tb_key k) { return k.symbol != NULL ? k : tb_string(xdup(k.string)); }
-static void drop(tb_key k) {
-	if (k.symbol == NULL) free((char *)k.string);
 }
 
 typedef struct link link;
@@ -157,8 +149,6 @@ struct noderec {
 
 struct tb_table {
 	map entries, ids, nodes, groups, parts;
-	tb_event event;
-	void *ctx;
 	tb_key *ids_out;
 	size_t ids_count, ids_cap;
 	tb_entry *at_out;
@@ -167,12 +157,11 @@ struct tb_table {
 	size_t who_count, who_cap;
 };
 
-tb_table *tb_make(tb_event event, void *ctx) {
+tb_table *tb_new(void) {
 	tb_table *t = xrealloc(NULL, sizeof *t);
-	*t = (tb_table){.event = event, .ctx = ctx};
+	*t = (tb_table){0};
 	return t;
 }
-tb_table *tb_new(void) { return tb_make(NULL, NULL); }
 
 static void free_map(map *m) { free(m->buckets); }
 void tb_free(tb_table *t) {
@@ -370,7 +359,6 @@ int tb_add(tb_table *t, tb_key part, tb_key id, void *node) {
 	entry *e = find_entry(t, part, id);
 	if (e != NULL) return e->node == node ? 0 : TB_ALREADY_THERE;
 	place(t, part, id, node);
-	if (t->event) t->event(t->ctx, part, id);
 	return 0;
 }
 
@@ -385,11 +373,9 @@ void tb_sub(tb_table *t, tb_key part, tb_key id, void *node) {
 		unlink_entry(e);
 		link_entry(e, e->id, g);
 		if (old->first == NULL) group_free(t, old);
-		if (t->event) t->event(t->ctx, part, id);
 		return;
 	}
 	place(t, part, id, node);
-	if (t->event) t->event(t->ctx, part, id);
 }
 
 void *tb_get(const tb_table *t, tb_key part, tb_key id) {
@@ -397,7 +383,8 @@ void *tb_get(const tb_table *t, tb_key part, tb_key id) {
 	return e ? (void *)e->node : NULL;
 }
 
-const tb_key *tb_ids(tb_table *t, tb_key part, const void *node, size_t *length) {
+const tb_key *tb_ids(const tb_table *c, tb_key part, const void *node, size_t *length) {
+	tb_table *t = (tb_table *)c;
 	t->ids_count = 0;
 	group *g = find_group(t, node, part);
 	for (entry *e = g ? g->first : NULL; e; e = e->group_next) {
@@ -408,7 +395,8 @@ const tb_key *tb_ids(tb_table *t, tb_key part, const void *node, size_t *length)
 	return t->ids_out;
 }
 
-const tb_entry *tb_at(tb_table *t, tb_key id, size_t *length) {
+const tb_entry *tb_at(const tb_table *c, tb_key id, size_t *length) {
+	tb_table *t = (tb_table *)c;
 	t->at_count = 0;
 	idrec *i = find_id(t, id);
 	for (entry *e = i ? i->first : NULL; e; e = e->id_next) {
@@ -419,7 +407,8 @@ const tb_entry *tb_at(tb_table *t, tb_key id, size_t *length) {
 	return t->at_out;
 }
 
-const tb_where *tb_who(tb_table *t, const void *node, size_t *length) {
+const tb_where *tb_who(const tb_table *c, const void *node, size_t *length) {
+	tb_table *t = (tb_table *)c;
 	t->who_count = 0;
 	noderec *n = find_node(t, node);
 	for (group *g = n ? n->first : NULL; g; g = g->next) {
@@ -432,67 +421,29 @@ const tb_where *tb_who(tb_table *t, const void *node, size_t *length) {
 	return t->who_out;
 }
 
-typedef struct {
-	tb_key part, id;
-} told;
-static void told_free(told *v, size_t n) {
-	for (size_t i = 0; i < n; i++) drop(v[i].part), drop(v[i].id);
-	free(v);
-}
-static void told_all(tb_table *t, told *v, size_t n) {
-	for (size_t i = 0; i < n; i++) t->event(t->ctx, v[i].part, v[i].id);
-	told_free(v, n);
-}
-
 int tb_del(tb_table *t, tb_key part, tb_key id) {
 	entry *e = find_entry(t, part, id);
 	if (e == NULL) return TB_NOTHING_THERE;
-	if (t->event == NULL) {
-		take(t, e);
-		return 0;
-	}
-	tb_key p = keep(part), i = keep(id);
 	take(t, e);
-	t->event(t->ctx, p, i);
-	drop(p);
-	drop(i);
 	return 0;
 }
 
 int tb_del_part(tb_table *t, tb_key part, const void *node) {
 	group *g = find_group(t, node, part);
 	if (g == NULL) return TB_NOTHING_THERE;
-	told *v = NULL;
-	size_t n = 0;
-	if (t->event) {
-		v = xrealloc(NULL, g->count * sizeof *v);
-		for (entry *e = g->first; e; e = e->group_next) v[n++] = (told){keep(g->part), keep(e->id->id)};
-	}
 	while (g->first->group_next != NULL) take(t, g->first);
 	take(t, g->first);
-	if (t->event) told_all(t, v, n);
 	return 0;
 }
 
 int tb_del_node(tb_table *t, const void *node) {
 	noderec *n = find_node(t, node);
 	if (n == NULL) return TB_NOTHING_THERE;
-	told *v = NULL;
-	size_t count = 0, cap = 0;
-	if (t->event) {
-		for (group *g = n->first; g; g = g->next) {
-			for (entry *e = g->first; e; e = e->group_next) {
-				GROW(v, count, cap);
-				v[count++] = (told){keep(g->part), keep(e->id->id)};
-			}
-		}
-	}
 	for (;;) {
 		group *g = n->first;
 		if (g->first->group_next == NULL && g->next == NULL) break;
 		take(t, g->first);
 	}
 	take(t, n->first->first);
-	if (t->event) told_all(t, v, count);
 	return 0;
 }

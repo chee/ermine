@@ -6,7 +6,7 @@ import update from "@ermine/changeable/update"
 import type { Patch } from "@ermine/changeable/apply"
 import { createScheduler } from "@ermine/reactivity"
 import { createPaths } from "@ermine/reactivity/paths"
-import { createTable, type Key } from "@ermine/graph/table"
+import { createTable } from "@ermine/graph/table"
 import { createPlaces } from "@ermine/places"
 import { children } from "@ermine/places/children"
 import { createChangeHeader } from "@ermine/places/header"
@@ -42,7 +42,7 @@ const size = (b: Run) => b.steps.reduce((n, s) => n + s.length, 0)
 
 async function device(o: { store?: Store; run?: <T>(f: () => T) => T } = {}) {
 	const s = createScheduler()
-	const table = createTable((part, id) => places.onTableChange(part as Key, id))
+	const table = createTable()
 	const places = createPlaces({
 		root: "root",
 		table,
@@ -63,7 +63,7 @@ async function device(o: { store?: Store; run?: <T>(f: () => T) => T } = {}) {
 		sync,
 		value: (id: string) => table.get("value", id)?.value,
 		put: (id: string, v: unknown) =>
-			run(() => table.sub("value", id, createEntry(v, createChangeHeader(s)))),
+			run(() => places.tables.sub("value", id, createEntry(v, createChangeHeader(s)))),
 		edit: (id: string, patches: Patch[]) =>
 			run(() => {
 				const e = table.get("value", id)!

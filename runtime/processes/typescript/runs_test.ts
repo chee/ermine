@@ -12,7 +12,7 @@ import { createPlaces } from "@ermine/places"
 import { createGuard, Refusal } from "./guard.ts"
 import { createChangeHeader } from "@ermine/places/header"
 import { no, yes } from "@ermine/protect"
-import { createTable, type Key } from "@ermine/graph/table"
+import { createTable } from "@ermine/graph/table"
 import { createScheduler, PENDING } from "@ermine/reactivity"
 import { createPaths } from "@ermine/reactivity/paths"
 import { createRuns, type Read } from "./runs.ts"
@@ -20,13 +20,13 @@ import { createRuns, type Read } from "./runs.ts"
 function world() {
 	const s = createScheduler()
 	s.onTrackingEnd((k) => places.release(k))
-	const table = createTable((part, id) => places.onTableChange(part as Key, id))
+	const table = createTable()
 	const places = createPlaces({ root: "R", table, paths: createPaths<unknown>(), scheduler: s })
 	const runs = createRuns({ places, table, scheduler: s })
 	const o = s.createRootScope({ actor: "host" })
 	const other = s.createRootScope({ actor: "other" })
 	for (const k of ["a", "b"]) {
-		table.add(
+		places.tables.add(
 			"value",
 			k,
 			createEntry<unknown>({ x: 0, y: 0 }, {

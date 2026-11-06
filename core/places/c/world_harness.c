@@ -99,14 +99,6 @@ void world_contribute(const pl_contributor *const *list, size_t n) {
 		.paths = world_paths, .scheduler = world_scheduler, .contributors = list, .ncontributors = n});
 }
 
-static tb_event table_event;
-static void *table_ctx;
-
-void world_event(tb_event event, void *ctx) {
-	table_event = event;
-	table_ctx = ctx;
-}
-
 #define PUSH(v, n, cap, x) \
 	do { \
 		if ((n) == (cap)) { \
@@ -482,7 +474,7 @@ int world_edit(const char *part, tb_key id, const op_value *patches, nd_entry **
 		if (code != OP_OK) nd_free_entry(node);
 		else {
 			world_keep_node(node);
-			tb_add(world_table, tb_string(part), id, node);
+			pl_add(world_places, tb_string(part), id, node);
 		}
 	} else {
 		code = nd_update(node, list, count, h, failed);
@@ -701,7 +693,7 @@ static void in_host(void *data) {
 	if (strcmp(op, "kids") == 0 || strcmp(op, "value") == 0) {
 		nd_entry *node = made_node(op_get(r, "value"), &c->out);
 		if (node == NULL) return;
-		tb_sub(world_table, tb_string(op[0] == 'k' ? "children" : "value"), world_key(op_get(r, "id")),
+		pl_sub(world_places, tb_string(op[0] == 'k' ? "children" : "value"), world_key(op_get(r, "id")),
 			node);
 		c->out = op_map();
 	} else if (strcmp(op, "share") == 0) {
@@ -712,15 +704,26 @@ static void in_host(void *data) {
 		for (size_t i = 0; i < keys->count; i++) {
 			const op_value *k = keys->items[i];
 			int code =
-				tb_add(world_table, tb_string(world_part(k->items[0])), world_key(k->items[1]), node);
+				pl_add(world_places, tb_string(world_part(k->items[0])), world_key(k->items[1]), node);
 			if (code) {
 				c->out = world_error(tb_code_name(code));
 				return;
 			}
 		}
 		c->out = op_map();
+	} else if (strcmp(op, "again") == 0) {
+		tb_key part = tb_string(world_part(op_get(r, "part")));
+		tb_key id = world_key(op_get(r, "id"));
+		nd_entry *node = tb_get(world_table, part, id);
+		if (node == NULL) {
+			c->out = world_error("nothing-there");
+			return;
+		}
+		if (strcmp(world_text(op_get(r, "how")), "add") == 0) pl_add(world_places, part, id, node);
+		else pl_sub(world_places, part, id, node);
+		c->out = op_map();
 	} else if (strcmp(op, "del") == 0) {
-		int code = tb_del(world_table, tb_string(world_part(op_get(r, "part"))),
+		int code = pl_del(world_places, tb_string(world_part(op_get(r, "part"))),
 			world_key(op_get(r, "id")));
 		c->out = code ? world_error(tb_code_name(code)) : op_map();
 	} else {
@@ -812,7 +815,7 @@ static op_value *watch_all(const op_value *r) {
 static op_value *world_answer(const op_value *r) {
 	const char *op = world_text(op_get(r, "op"));
 	if (op == NULL) return world_error("no op");
-	const char *hosted[] = {"kids", "value", "share", "del", "edit",
+	const char *hosted[] = {"kids", "value", "share", "again", "del", "edit",
 		"place", "unplace", "rename", "move"};
 	for (size_t i = 0; i < sizeof hosted / sizeof *hosted; i++) {
 		if (strcmp(op, hosted[i]) != 0) continue;
@@ -945,7 +948,7 @@ static void world_start(void) {
 	world_scheduler = sc_new((sc_options){.drop = world_drop});
 	sc_trace_start(world_scheduler, &trace, told_moment, NULL);
 	sc_on_tracking_end(world_scheduler, pl_forget, world_places);
-	world_table = table_event ? tb_make(table_event, table_ctx) : tb_make(pl_event, world_places);
+	world_table = tb_new();
 	world_paths = pt_new();
 	pl_connect(world_places, &(pl_setup){.root = tb_string("R"), .table = world_table, .paths = world_paths,
 		.scheduler = world_scheduler, .contributors = contributors,

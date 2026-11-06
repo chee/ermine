@@ -24,7 +24,7 @@ function world(options?: SchedulerOptions) {
 	const s = createScheduler(options)
 	s.onTrackingEnd((key) => l.release(key))
 	trace(s, (m) => void moments.push(m))
-	const table = createTable((part, id) => l.onTableChange(part as Key, id))
+	const table = createTable()
 	const paths = createPaths<unknown>()
 	const l = createPlaces({ root: "R", table, paths, scheduler: s })
 	const places = l
@@ -38,7 +38,7 @@ function world(options?: SchedulerOptions) {
 		if (there === undefined) {
 			const node = createEntry<unknown>(undefined, h)
 			update(node, patches, h)
-			table.add(part, id, node)
+			places.tables.add(part, id, node)
 			return node
 		}
 		update(there, patches, h)
@@ -46,9 +46,9 @@ function world(options?: SchedulerOptions) {
 		return there
 	}
 	const kids = (id: Id, v: Record<string, unknown>) =>
-		hosted(() => table.sub("children", id, createEntry(v, createChangeHeader(s))))
+		hosted(() => places.tables.sub("children", id, createEntry(v, createChangeHeader(s))))
 	const value = (id: Id, v: unknown) =>
-		hosted(() => table.sub("value", id, createEntry<unknown>(v, createChangeHeader(s))))
+		hosted(() => places.tables.sub("value", id, createEntry<unknown>(v, createChangeHeader(s))))
 	function watch<T>(f: () => T) {
 		const w = { runs: 0, value: undefined as T | undefined }
 		s.runWithScope(
@@ -164,12 +164,12 @@ Deno.test("places: a node added where a walk stopped (a table event): the reader
 })
 
 Deno.test("places: one children node under two keys, written through one: both readers rerun", () => {
-	const { s, l, table, hosted, kids, watch, walk, kid } = world()
+	const { s, l, hosted, kids, watch, walk, kid } = world()
 	kids("R", { p: "P", q: "Q" })
 	hosted(() => {
 		const k = createEntry({}, createChangeHeader(s))
-		table.add("children", "P", k)
-		table.add("children", "Q", k)
+		l.tables.add("children", "P", k)
+		l.tables.add("children", "Q", k)
 	})
 	const p = watch(() => walk(["p", "n"]))
 	const q = watch(() => walk(["q", "n"]))
@@ -374,7 +374,7 @@ Deno.test("places: a write of the host's, outside any run, is from outside: no w
 })
 
 Deno.test("places: a place write, and a table event, in a run are the run's own too", () => {
-	const { s, l, table, places, notes, kids, moments, kid } = world()
+	const { s, l, places, notes, kids, moments, kid } = world()
 	kids("R", {})
 	const c = s.runWithScope(notes, () =>
 		s.createComputer(() => {
@@ -386,7 +386,7 @@ Deno.test("places: a place write, and a table event, in a run are the run's own 
 		s.createComputer(() => {
 			const v = l.readValue("value", "Y")
 			if (v === undefined) {
-				table.add("value", "Y", createEntry<unknown>(1, createChangeHeader(s)))
+				places.tables.add("value", "Y", createEntry<unknown>(1, createChangeHeader(s)))
 			}
 			return v
 		}, () => {}))
@@ -587,14 +587,14 @@ Deno.test("places: a click dispatched in a run is the process's: its scope is un
 })
 
 Deno.test("places: eachEntryChange gives a fact at every key a written entry is under", () => {
-	const { s, l, table, hosted } = world()
+	const { s, l, hosted } = world()
 	const shared = createEntry<unknown>({ a: 1 }, {
 		time: 0,
 		actor: "host",
 		frame: { info: {}, parent: undefined },
 	})
-	table.add("value", "A", shared)
-	table.add("value", "B", shared)
+	l.tables.add("value", "A", shared)
+	l.tables.add("value", "B", shared)
 	hosted(() => update(shared, [{ path: ["a"], value: 2 }], createChangeHeader(s)))
 	const facts = [...l.eachEntryChange([shared])]
 	assertEquals(facts.map((f) => [f.part, f.id, f.patches]), [
@@ -634,14 +634,14 @@ Deno.test("places: a watchAll that writes lands in the writer's run: a pipe's re
 })
 
 Deno.test("places: an entry taken out is told with a change made then, from the scope open, its locations the stack of del's caller; none open, none", () => {
-	const { s, table, places, value, host } = world()
+	const { s, places, value, host } = world()
 	const facts: { id: Id; change?: ChangeHeader }[] = []
 	places.watchAll((f) => void facts.push({ id: f.id, change: f.change }))
 	value("a", 1)
 	value("b", 2)
 	const line = Number(new Error().stack!.split("\n")[1].split(":").at(-2)) + 1
-	s.runWithScope(host, () => table.del("value", "a"))
-	table.del("value", "b")
+	s.runWithScope(host, () => places.tables.del("value", "a"))
+	places.tables.del("value", "b")
 	const [, , a, b] = facts
 	assertEquals(a.id, "a")
 	assertEquals(a.change?.actor, "host")

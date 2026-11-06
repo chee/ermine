@@ -23,13 +23,15 @@ typedef struct {
 struct sn {
 	sc_scheduler *scheduler;
 	tb_table *table;
+	pl *places;
 	pm ids;
 };
 
-sn *sn_new(sc_scheduler *scheduler, tb_table *table) {
+sn *sn_new(sc_scheduler *scheduler, tb_table *table, pl *places) {
 	sn *s = xalloc(sizeof *s);
 	s->scheduler = scheduler;
 	s->table = table;
+	s->places = places;
 	return s;
 }
 
@@ -57,7 +59,7 @@ static char *teardown(void *data) {
 		if (parts[i].symbol == NULL) parts[i].string = xdup(parts[i].string);
 	}
 	for (size_t i = 0; i < n; i++) {
-		tb_del(s->table, parts[i], tb_string(g->id));
+		pl_del(s->places, parts[i], tb_string(g->id));
 		if (parts[i].symbol == NULL) free((char *)parts[i].string);
 	}
 	free(parts);

@@ -824,7 +824,7 @@ static void write_f(void *data) {
 	if (!e) abort();
 	pl_own(h->places, e);
 	pl_hold(h->places, e, b, block_free), w->held = 1;
-	tb_add(h->table, part, id, e);
+	pl_add(h->places, part, id, e);
 }
 
 static void quietly(tp_history *h, void (*f)(void *data), void *data) {
@@ -1563,7 +1563,7 @@ static int unsnap(tp_history *h, tp_in *in, tp_buf *names, int wrapped) {
 	if (!x) abort();
 	pl_own(h->places, x);
 	pl_hold(h->places, x, b, block_free);
-	tb_sub(h->table, tb_string(p), tb_string(id), x);
+	pl_sub(h->places, tb_string(p), tb_string(id), x);
 	refresh(h, e);
 	if (h->forgets) resync(h, e);
 	return 0;

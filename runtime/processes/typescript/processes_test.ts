@@ -2,7 +2,7 @@ import { assertEquals, assertThrows } from "@std/assert"
 import createEntry from "@ermine/graph/entry"
 import { type Computer, createScheduler } from "@ermine/reactivity"
 import { createPaths } from "@ermine/reactivity/paths"
-import { createTable, type Id, type Key } from "@ermine/graph/table"
+import { createTable, type Id } from "@ermine/graph/table"
 import { type Contributor, createPlaces, PlacesError } from "@ermine/places"
 import { children, rename } from "@ermine/places/children"
 import { get, gets, list, lookup, members } from "@ermine/places/lib"
@@ -11,7 +11,7 @@ import { addProcess, PROCESS, processes, removeProcess } from "./processes.ts"
 
 function world() {
 	const s = createScheduler()
-	const table = createTable((part, id) => places.onTableChange(part as Key, id))
+	const table = createTable()
 	const paths = createPaths<unknown>()
 	let steps = 0
 	const trie = processes("R")
@@ -32,7 +32,7 @@ function world() {
 	const hosted = <T>(f: () => T) => s.runWithScope(host, f)
 	const header = () => createChangeHeader(s)
 	const kids = (id: Id, v: Record<string, unknown>) =>
-		hosted(() => table.sub("children", id, createEntry(v, header())))
+		hosted(() => places.tables.sub("children", id, createEntry(v, header())))
 	type W<T> = { runs: number; value: T | undefined; values: T[]; c: Computer }
 	function watch<T>(f: () => T): W<T> {
 		const w = { runs: 0, value: undefined, values: [] } as unknown as W<T>
@@ -53,7 +53,11 @@ function world() {
 		kids("PON", { reset: "PRS" })
 	}
 	const start = (path: string[], id: Id) =>
-		hosted(() => places.commit(addProcess(table, "R", path, id, header())))
+		hosted(() =>
+			places.commit(
+				addProcess({ get: table.get, add: places.tables.add }, "R", path, id, header()),
+			)
+		)
 	const stop = (path: string[]) =>
 		hosted(() => places.commit(removeProcess(table, "R", path, header())))
 	const rows = () => table.get(PROCESS, "R")?.value

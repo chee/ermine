@@ -91,7 +91,7 @@ Deno.test("crowify: crowify through places stops at what a run was handed; a run
 	const u = createCrow()
 	const s = createScheduler()
 	s.onTrackingEnd((key) => places.release(key))
-	const table = createTable((part, id) => places.onTableChange(part, id))
+	const table = createTable()
 	const places: Places = createPlaces({
 		root: "R",
 		table,
@@ -104,7 +104,7 @@ Deno.test("crowify: crowify through places stops at what a run was handed; a run
 	})
 	const host = s.createRootScope({ actor: "host" })
 	const header = () => s.runWithScope(host, () => createChangeHeader(s))
-	table.sub("value", "N", createEntry({ folder: { a: "A" }, n: 0 }, header()) as never)
+	places.tables.sub("value", "N", createEntry({ folder: { a: "A" }, n: 0 }, header()) as never)
 	const e = table.get("value", "N")!
 	updateEntry(u, e, [{ path: ["folder", "b"], value: "B" }], header())
 	places.commit([e])
@@ -138,7 +138,7 @@ Deno.test("crowify: through places, a reader's value never changes under it, and
 	const u = createCrow()
 	const s = createScheduler()
 	s.onTrackingEnd((key) => places.release(key))
-	const table = createTable((part, id) => places.onTableChange(part, id))
+	const table = createTable()
 	const places: Places = createPlaces({
 		root: "R",
 		table: crowifyTable(table, u),
@@ -147,7 +147,7 @@ Deno.test("crowify: through places, a reader's value never changes under it, and
 	})
 	const host = s.createRootScope({ actor: "host" })
 	const header = () => s.runWithScope(host, () => createChangeHeader(s))
-	table.sub("children", "F", createEntry({ a: "A" }, header()) as never)
+	places.tables.sub("children", "F", createEntry({ a: "A" }, header()) as never)
 	const held: unknown[] = []
 	s.runWithScope(
 		s.createRootScope({ actor: "r" }),

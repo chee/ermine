@@ -18,8 +18,6 @@ extern sc_scope *world_host;
 
 void world_contribute(const pl_contributor *const *list, size_t n);
 
-void world_event(tb_event event, void *ctx);
-
 void world_line(const op_value *request, FILE *out, op_value *(*answer)(const op_value *request));
 void world_finish(void);
 

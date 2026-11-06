@@ -5,7 +5,7 @@ import type { Id, Key, Table } from "@ermine/graph/table"
 
 export type Setup = {
 	scheduler: Pick<Scheduler, "registerTeardown">
-	table: Pick<Table, "get" | "del">
+	table: Pick<Table, "get"> & { del: (part: Key, id: Id) => void }
 }
 
 export type ScopeNodes = {

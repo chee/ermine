@@ -148,17 +148,6 @@
 			"expect": {
 				"entries": []
 			}
-		},
-		{
-			"op": "events",
-			"expect": {
-				"events": [
-					[
-						"value",
-						"a"
-					]
-				]
-			}
 		}
 	]
 }

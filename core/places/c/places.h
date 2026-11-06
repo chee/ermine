@@ -1,6 +1,6 @@
 // places.h: the C version of places.ts. Owns none of the table, paths or scheduler it wires.
 //   pl *p = pl_new();
-//   tb_table *table = tb_make(pl_event, p);
+//   tb_table *table = tb_new();
 //   sc_scheduler *s = sc_new((sc_options){..});
 //   sc_on_tracking_end(s, pl_forget, p);
 //   pl_connect(p, &(pl_setup){tb_string("R"), table, paths, s});
@@ -72,7 +72,12 @@ void pl_connect(pl *p, const pl_setup *setup);
 tb_key pl_root(const pl *p);
 const pl_contributor *const *pl_contributors(const pl *p, size_t *n);
 
-void pl_event(void *ctx, tb_key part, tb_key id);
+// The one door for whole entries: write the table, then tell. Nothing is told when the entry is
+// already there. pl_add returns 0 or tb_add's code, pl_del 0 or TB_NOTHING_THERE; on a code
+// nothing changed or was told. Keys are borrowed for the call, and not the table's own copies.
+int pl_add(pl *p, tb_key part, tb_key id, nd_entry *entry);
+void pl_sub(pl *p, tb_key part, tb_key id, nd_entry *entry);
+int pl_del(pl *p, tb_key part, tb_key id);
 // A spot held by pl_keep is not released until its last keep is given back.
 void pl_forget(const void *key, void *ctx);
 void pl_tracking(const void *key, sc_run *run, void *ctx);

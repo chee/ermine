@@ -2,7 +2,7 @@ import { assert, assertEquals } from "@std/assert"
 import createEntry from "@ermine/graph/entry"
 import { createScheduler } from "@ermine/reactivity"
 import { createPaths } from "@ermine/reactivity/paths"
-import { createTable, type Key } from "@ermine/graph/table"
+import { createTable } from "@ermine/graph/table"
 import { createPlaces } from "@ermine/places"
 import { children } from "@ermine/places/children"
 import { createChangeHeader } from "@ermine/places/header"
@@ -15,7 +15,7 @@ import { notKept, show, type Shown } from "./nodes.ts"
 
 async function device() {
 	const s = createScheduler()
-	const table = createTable((part, id) => places.onTableChange(part as Key, id))
+	const table = createTable()
 	const places = createPlaces({
 		root: "root",
 		table,
@@ -36,7 +36,7 @@ async function device() {
 		sync,
 		value: (id: string) => table.get("value", id)?.value,
 		put: (id: string, v: unknown) =>
-			run(() => table.sub("value", id, createEntry(v, createChangeHeader(s)))),
+			run(() => places.tables.sub("value", id, createEntry(v, createChangeHeader(s)))),
 	}
 }
 

@@ -69,12 +69,12 @@ static void setup(void *ctx, sc_scheduler **s, pt_paths **paths) {
 	p = pl_new();
 	*s = sc_new((sc_options){0});
 	sc_on_tracking_end(*s, pl_forget, p);
-	table = tb_make(pl_event, p);
+	table = tb_new();
 	*paths = pt_new();
 	pl_connect(p, &(pl_setup){.root = tb_string("R"), .table = table, .paths = *paths, .scheduler = *s});
 	kids = nd_make_entry(NULL, NULL);
 	pl_own(p, kids);
-	tb_add(table, tb_string("children"), tb_string("R"), kids);
+	pl_add(p, tb_string("children"), tb_string("R"), kids);
 	pl_watch_all(p, writer, ctx);
 	pl_watch_all(p, reader, NULL);
 	writes = told = 0;
@@ -108,7 +108,7 @@ int main(void) {
 	thing = nd_make_entry(one, NULL);
 	op_free(one);
 	pl_own(p, thing);
-	tb_add(table, tb_string("value"), tb_string("T"), thing);
+	pl_add(p, tb_string("value"), tb_string("T"), thing);
 	CHECK(writes == 2 && told == 2);
 	CHECK(number == 1);
 	teardown(s, paths);

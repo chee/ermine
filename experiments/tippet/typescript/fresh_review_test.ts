@@ -2,7 +2,7 @@
 import { assert, assertEquals } from "@std/assert"
 import { createScheduler } from "@ermine/reactivity"
 import { createPaths } from "@ermine/reactivity/paths"
-import { createTable, type Key } from "@ermine/graph/table"
+import { createTable } from "@ermine/graph/table"
 import { createPlaces } from "@ermine/places"
 import { children } from "@ermine/places/children"
 import type { Patch } from "@ermine/changeable/apply"
@@ -33,7 +33,7 @@ const put = (log: Log, value: unknown, node = "pig") =>
 
 async function receiver(store?: Store) {
 	const s = createScheduler()
-	const table = createTable((part, id) => places.onTableChange(part as Key, id))
+	const table = createTable()
 	const places = createPlaces({
 		root: "root",
 		table,

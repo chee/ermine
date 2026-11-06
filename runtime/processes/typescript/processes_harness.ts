@@ -27,7 +27,7 @@
 import createEntry from "@ermine/graph/entry"
 import { type Computer, createScheduler, type Scope } from "@ermine/reactivity"
 import { createPaths } from "@ermine/reactivity/paths"
-import { createTable, type Key } from "@ermine/graph/table"
+import { createTable } from "@ermine/graph/table"
 import { type Contributor, createPlaces, PlacesError } from "@ermine/places"
 import { children, place, rename } from "@ermine/places/children"
 import { get, gets, list, lookup, members } from "@ermine/places/lib"
@@ -39,7 +39,7 @@ import { createScopeNodes } from "./scopes.ts"
 type Json = unknown
 
 const s = createScheduler()
-const table = createTable((part, id) => places.onTableChange(part as Key, id))
+const table = createTable()
 const paths = createPaths<unknown>()
 const asked = { steps: 0, names: 0 }
 const rows = processes("R")
@@ -57,7 +57,7 @@ const places = createPlaces({
 })
 s.onTrackingEnd((key) => places.release(key))
 const host = s.createRootScope({ actor: "test" })
-const nodes = createScopeNodes({ scheduler: s, table })
+const nodes = createScopeNodes({ scheduler: s, table: { get: table.get, del: places.tables.del } })
 const hosted = <T>(f: () => T) => s.runWithScope(host, f)
 const header = () => createChangeHeader(s)
 
@@ -96,7 +96,7 @@ function answer(r: Request): Json {
 			scopes.set(r.name, s.createRootScope(r.info))
 			return {}
 		case "kids":
-			hosted(() => table.sub("children", r.id, createEntry(r.value, header())))
+			hosted(() => places.tables.sub("children", r.id, createEntry(r.value, header())))
 			return {}
 		case "place":
 			hosted(() => places.commit(place(kid(r.at), r.name, r.id, header())))
@@ -105,7 +105,11 @@ function answer(r: Request): Json {
 			hosted(() => places.commit(rename(kid(r.at), r.name, r.to, header())))
 			return {}
 		case "start":
-			hosted(() => places.commit(addProcess(table, "R", r.path, r.id, header())))
+			hosted(() =>
+				places.commit(
+					addProcess({ get: table.get, add: places.tables.add }, "R", r.path, r.id, header()),
+				)
+			)
 			return {}
 		case "stop":
 			hosted(() => places.commit(removeProcess(table, "R", r.path, header())))
@@ -160,7 +164,7 @@ function answer(r: Request): Json {
 		case "give":
 			return { id: nodes.give(named(r.scope), r.id) ?? undefined }
 		case "write":
-			hosted(() => table.sub(r.part, r.id, createEntry(r.value, header())))
+			hosted(() => places.tables.sub(r.part, r.id, createEntry(r.value, header())))
 			return {}
 		case "parts":
 			return { parts: [...table.get(r.id)].map(([part]) => part).sort() }

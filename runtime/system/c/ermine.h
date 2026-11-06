@@ -636,25 +636,9 @@ typedef struct {
 // --- features and their hooks (features.ts) ----------
 
 typedef enum {
-	ES_ON_TABLE, ES_ON_READ, ES_ON_WRITE, ES_ON_TEARDOWN, ES_ON_RECORD, ES_ON_STATUS,
+	ES_ON_READ, ES_ON_WRITE, ES_ON_TEARDOWN, ES_ON_RECORD, ES_ON_STATUS,
 	ES_ON_ID, ES_ON_SCHEDULE, ES_ON_CREATE_FUNCTION, ES_ON_ERROR, ES_HOOKS
 } es_hook;
-
-// A layer over the table places reads: the table it gives places, and where table events and
-// commits go. The raw table's events go to the first layer, and each layer's on to the next.
-typedef struct {
-	tb_table *front;
-	tb_event event;
-	void (*commit)(void *ctx, const pl_changed *changed);
-	void *ctx;
-} es_layer;
-// What onTable is given: the table under it, and where its own events and commits go on to.
-typedef struct {
-	tb_table *table;
-	tb_event ahead_event;
-	void (*ahead_commit)(void *ctx, const pl_changed *changed);
-	void *ahead_ctx;
-} es_under;
 
 typedef struct {
 	const es_node_data *node;
@@ -691,7 +675,6 @@ typedef struct es_pulse_ask es_pulse_ask;
 
 // the continuation of a hook: what is after it in its chain, the base last. not calling it: what the
 // hook guards does not happen. each is called with the hook's own arguments, as given or changed
-typedef struct es_table_next es_table_next;
 typedef struct es_read_next es_read_next;
 typedef struct es_write_next es_write_next;
 typedef struct es_teardown_next es_teardown_next;
@@ -701,7 +684,6 @@ typedef struct es_id_next es_id_next;
 typedef struct es_schedule_next es_schedule_next;
 typedef struct es_create_next es_create_next;
 typedef struct es_error_next es_error_next;
-int es_next_table(es_table_next *next, const es_under *under, es_layer *out);
 int es_next_read(es_read_next *next, const es_reading *x, const es_versions *items, es_versions *out);
 int es_next_write(es_write_next *next, es_context *o, const es_write *w);
 int es_next_teardown(es_teardown_next *next, sc_scope *scope, const char *why);
@@ -721,7 +703,6 @@ void es_run_pulse(es_pulse_ask *pulse);
 // naming the feature and hook, except ES_PENDING, ES_STOP, a FeatureError, and a code next gave,
 // which pass as they are. A Refusal gets its feature and hook named. ctx is the one given at
 // registration.
-typedef int (*es_on_table_fn)(void *ctx, const es_under *under, es_table_next *next, es_layer *out);
 typedef int (*es_on_read_fn)(void *ctx, const es_reading *x, const es_versions *items,
 	es_read_next *next, es_versions *out);
 typedef int (*es_on_write_fn)(void *ctx, es_context *o, const es_write *w, es_write_next *next);
@@ -745,10 +726,9 @@ typedef int (*es_on_error_fn)(void *ctx, int code, const char *fn, es_error_next
 // Scheduler listeners it adds are removed at close.
 typedef struct es_feature_api {
 	sc_scheduler *scheduler;
-	tb_table *table;
+	const tb_table *table;
 	void *private_;
 } es_feature_api;
-int es_on_table(es_feature_api *f, es_on_table_fn fn, void *ctx);
 int es_on_read(es_feature_api *f, es_on_read_fn fn, void *ctx);
 int es_on_write(es_feature_api *f, es_on_write_fn fn, void *ctx);
 int es_on_teardown(es_feature_api *f, es_on_teardown_fn fn, void *ctx);
@@ -827,7 +807,6 @@ struct es_ermine {
 	int closed;
 	sc_scheduler *scheduler;
 	tb_table *table;
-	tb_table *front;
 	pt_paths *paths;
 	pl *places;
 	sn *scopes;
@@ -1245,7 +1224,7 @@ const es_shown *es_features(es_ermine *e, size_t *n);
 
 // what the other four call. the hooks around: a write (land at the end), reads' items, a teardown (fn),
 // a status, a record (keep). each is the chain of that kind, the base's own last
-// the entries changed, said written: the layers' commits, innermost first, then places'
+// the entries changed, said written
 void es_commit_changed(es_ermine *e, const pl_changed *changed);
 int es_hook_write(es_ermine *e, es_context *o, const es_write *w,
 	int (*land)(void *ctx, const es_write *w), void *ctx);

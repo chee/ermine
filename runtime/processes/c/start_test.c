@@ -58,7 +58,7 @@ int main(void) {
 	places = pl_new();
 	s = sc_new((sc_options){0});
 	sc_on_tracking_end(s, pl_forget, places);
-	table = tb_make(pl_event, places);
+	table = tb_new();
 	pt_paths *paths = pt_new();
 	pr_processes rows;
 	pr_processes_init(&rows, tb_string("R"));
@@ -67,7 +67,7 @@ int main(void) {
 		.scheduler = s, .contributors = walk, .ncontributors = 2});
 	sc_pair info = {"actor", op_str("host")};
 	sc_scope *host = sc_create_root_scope(s, &info, 1);
-	scopes = sn_new(s, table);
+	scopes = sn_new(s, table, places);
 	sc_run_with_scope(host, run, NULL);
 	pr_halt(life);
 	sc_free(s);

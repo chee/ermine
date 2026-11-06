@@ -24,13 +24,6 @@ export function testFeature(
 		setup(f) {
 			if (spec.early) void f.places
 			if (spec.late) late.set(name, () => f.onWrite((o, wr, next) => next(o, wr)))
-			if (spec.onTable) {
-				f.onTable((t, next) => {
-					say("onTable")
-					if (spec.onTable === "throw") boom()
-					return next(t)
-				})
-			}
 			if (spec.onRead) {
 				f.onRead((x, items, next) => {
 					say("onRead", x.id)

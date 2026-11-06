@@ -140,7 +140,7 @@ static int add(pl *l, tb_table *table, const char *part, tb_key root, const char
 		op_free(trie);
 		pl_own(l, node);
 		if (made != NULL) *made = node;
-		tb_add(table, tb_string(part), root, node);
+		pl_add(l, tb_string(part), root, node);
 		return 0;
 	}
 	const op_value *v = there->value;

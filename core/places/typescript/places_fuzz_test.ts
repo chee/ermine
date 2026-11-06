@@ -45,7 +45,7 @@ function seeded(seed: number, reach: Reach) {
 	const s = createScheduler()
 	s.onRunStart(() => void reach.runs++)
 	s.onTrackingEnd((key) => l.release(key))
-	const table = createTable((part, id) => l.onTableChange(part as Key, id))
+	const table = createTable()
 	const paths = createPaths<unknown>()
 	const l = createPlaces({ root: "R", table, paths, scheduler: s })
 	const places = l
@@ -57,7 +57,7 @@ function seeded(seed: number, reach: Reach) {
 		if (there === undefined) {
 			const node = createEntry<unknown>(undefined, h())
 			update(node, patches, node.change)
-			table.add(part, id, node)
+			places.tables.add(part, id, node)
 		} else {
 			update(there, patches, h())
 			l.commit([there])
@@ -81,8 +81,8 @@ function seeded(seed: number, reach: Reach) {
 	}
 	s.runWithScope(host, () => {
 		for (const id of IDS) {
-			if (pick(5)) table.add("children", id, createEntry(kids(), h()))
-			if (pick(4)) table.add("value", id, createEntry<unknown>(value(), h()))
+			if (pick(5)) places.tables.add("children", id, createEntry(kids(), h()))
+			if (pick(4)) places.tables.add("value", id, createEntry<unknown>(value(), h()))
 		}
 	})
 
@@ -216,20 +216,20 @@ function seeded(seed: number, reach: Reach) {
 		}
 		reach.events++
 		if (k === 10) {
-			table.sub("children", id, createEntry(kids(), h()))
+			places.tables.sub("children", id, createEntry(kids(), h()))
 			return `sub children ${id}`
 		}
 		if (k === 11) {
-			table.sub("value", id, createEntry<unknown>(value(), h()))
+			places.tables.sub("value", id, createEntry<unknown>(value(), h()))
 			return `sub value ${id}`
 		}
 		if (k === 12) {
 			const part = pick(2) ? "children" : "value"
-			table.del(part, id)
+			places.tables.del(part, id)
 			return `del ${part} ${id}`
 		}
 		const from = one(IDS), shared = table.get("children", from)
-		if (shared) table.sub("children", id, shared)
+		if (shared) places.tables.sub("children", id, shared)
 		return `share children ${from} at ${id}`
 	}
 
