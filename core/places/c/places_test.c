@@ -18,6 +18,7 @@
 
 static pl *p;
 static tb_table *table;
+static const pl_contributor *const walk[] = {&pl_children};
 static nd_entry *kids, *thing;
 
 typedef struct {
@@ -71,7 +72,8 @@ static void setup(void *ctx, sc_scheduler **s, pt_paths **paths) {
 	sc_on_tracking_end(*s, pl_forget, p);
 	table = tb_new();
 	*paths = pt_new();
-	pl_connect(p, &(pl_setup){.root = tb_string("R"), .table = table, .paths = *paths, .scheduler = *s});
+	pl_connect(p, &(pl_setup){.root = tb_string("R"), .table = table, .paths = *paths, .scheduler = *s,
+		.contributors = walk, .ncontributors = 1});
 	kids = nd_make_entry(NULL, NULL);
 	pl_own(p, kids);
 	pl_add(p, tb_string("children"), tb_string("R"), kids);

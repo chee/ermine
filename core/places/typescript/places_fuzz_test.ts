@@ -7,7 +7,7 @@ import { createScheduler } from "@ermine/reactivity"
 import { createPaths } from "@ermine/reactivity/paths"
 import { createTable, type Id, type Key, TableError } from "@ermine/graph/table"
 import { at, createPlaces, type Path, PlacesError } from "./places.ts"
-import { move, place, rename, unplace } from "./children.ts"
+import { children, move, place, rename, unplace } from "./children.ts"
 import { get, list } from "./lib.ts"
 import { createChangeHeader } from "./header.ts"
 import { type Address, plan } from "./path.ts"
@@ -47,7 +47,7 @@ function seeded(seed: number, reach: Reach) {
 	s.onTrackingEnd((key) => l.release(key))
 	const table = createTable()
 	const paths = createPaths<unknown>()
-	const l = createPlaces({ root: "R", table, paths, scheduler: s })
+	const l = createPlaces({ root: "R", table, paths, scheduler: s, contributors: [children] })
 	const places = l
 	const o = s.createRootScope({ actor: "fuzz" })
 	const host = s.createRootScope({ actor: "fuzz" })

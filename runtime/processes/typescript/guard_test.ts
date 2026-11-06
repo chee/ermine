@@ -8,6 +8,7 @@ import { createPaths } from "@ermine/reactivity/paths"
 import { createTable, type Id, type Key } from "@ermine/graph/table"
 import { createGuard, Refusal, REFUSED, type Setup, slot, target, type Thing } from "./guard.ts"
 import { createPlaces } from "@ermine/places"
+import { children } from "@ermine/places/children"
 import { get, members } from "@ermine/places/lib"
 import { createChangeHeader } from "@ermine/places/header"
 
@@ -15,7 +16,13 @@ function world() {
 	const s = createScheduler()
 	s.onTrackingEnd((key) => l.release(key))
 	const table = createTable()
-	const l = createPlaces({ root: "R", table, paths: createPaths<unknown>(), scheduler: s })
+	const l = createPlaces({
+		root: "R",
+		table,
+		paths: createPaths<unknown>(),
+		scheduler: s,
+		contributors: [children],
+	})
 	const places = l
 	const host = s.createRootScope({ actor: "host" })
 	const hosted = <T>(f: () => T) => s.runWithScope(host, f)

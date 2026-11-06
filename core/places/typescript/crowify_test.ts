@@ -5,6 +5,7 @@ import { createScheduler } from "@ermine/reactivity"
 import { createPaths } from "@ermine/reactivity/paths"
 import { createCrow } from "@ermine/crow"
 import { at as read, createPlaces, type Places } from "./places.ts"
+import { children } from "./children.ts"
 import { createChangeHeader } from "./header.ts"
 import { crowify, crowifyTable, updateEntry } from "./crowify.ts"
 
@@ -97,6 +98,7 @@ Deno.test("crowify: crowify through places stops at what a run was handed; a run
 		table,
 		paths: createPaths(),
 		scheduler: s,
+		contributors: [children],
 	})
 	crowify(s, u, (key) => {
 		const where = places.describe(key)
@@ -144,6 +146,7 @@ Deno.test("crowify: through places, a reader's value never changes under it, and
 		table: crowifyTable(table, u),
 		paths: createPaths(),
 		scheduler: s,
+		contributors: [children],
 	})
 	const host = s.createRootScope({ actor: "host" })
 	const header = () => s.runWithScope(host, () => createChangeHeader(s))

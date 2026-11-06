@@ -13,7 +13,7 @@ import { type Told, trace } from "../../reactivity/typescript/scheduler_harness.
 import { createPaths } from "@ermine/reactivity/paths"
 import { createTable, type Id, type Key } from "@ermine/graph/table"
 import { at, createPlaces, sliceAt } from "./places.ts"
-import { move, place, rename, unplace } from "./children.ts"
+import { children, move, place, rename, unplace } from "./children.ts"
 import { createCrow } from "@ermine/crow"
 import { updateEntry } from "./crowify.ts"
 import { get, list, lookup, members } from "./lib.ts"
@@ -26,7 +26,7 @@ function world(options?: SchedulerOptions) {
 	trace(s, (m) => void moments.push(m))
 	const table = createTable()
 	const paths = createPaths<unknown>()
-	const l = createPlaces({ root: "R", table, paths, scheduler: s })
+	const l = createPlaces({ root: "R", table, paths, scheduler: s, contributors: [children] })
 	const places = l
 	const kid = (id: Id) => table.get("children", id)!
 	const host = s.createRootScope({ actor: "host" })

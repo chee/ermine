@@ -1,5 +1,6 @@
 import type { ChangeHeader } from "@ermine/graph/entry"
 import type { Id, Path, Places } from "@ermine/places"
+import type { Index } from "@ermine/places/children"
 import type { Runs } from "@ermine/processes/runs"
 import type { Computer, Frame, Scope } from "@ermine/reactivity"
 import type { Key } from "@ermine/graph/table"
@@ -18,6 +19,8 @@ export type Base = {
 	readonly runs: Runs
 	readonly calls: Calls
 	readonly made: Map<Id, Made>
+	// What names each node, by folder and name.
+	readonly names: Index
 	// Reads of nodes that are not there, per reader, shown in a computer's or a process's status.
 	readonly missing: Map<
 		Id,

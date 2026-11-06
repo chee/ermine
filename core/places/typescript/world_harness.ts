@@ -36,7 +36,7 @@ import { type Told, trace } from "../../reactivity/typescript/scheduler_harness.
 import { createPaths } from "@ermine/reactivity/paths"
 import { createTable, type Id, type Key } from "@ermine/graph/table"
 import { type Contributor, createPlaces, PlacesError, type Where } from "./places.ts"
-import { move, place, rename, unplace } from "./children.ts"
+import { children, createNames, move, place, rename, unplace } from "./children.ts"
 
 import type { Answer, Request } from "../../../meta/conformance/typescript/harness.ts"
 import { toJson } from "../../../meta/conformance/typescript/form.ts"
@@ -63,10 +63,18 @@ trace(s, (m) => {
 s.onTrackingEnd((key) => places.release(key))
 export const table = createTable()
 export const paths = createPaths<unknown>()
-export let places = createPlaces({ root: "R", table, paths, scheduler: s })
+export let places = createPlaces({
+	root: "R",
+	table,
+	paths,
+	scheduler: s,
+	contributors: [children],
+})
+let index = createNames(places)
 // From here on, places walks with these contributors (the same table, paths and scheduler).
 export function contribute(contributors: readonly Contributor[]) {
 	places = createPlaces({ root: "R", table, paths, scheduler: s, contributors })
+	index = createNames(places)
 }
 export const host = s.createRootScope({ actor: "test" })
 export const header = (extra?: Info) => createChangeHeader(s, { extra })
@@ -227,7 +235,7 @@ export function worldAnswer(r: Request): Json | undefined {
 			return n === undefined || n.value === undefined ? {} : { value: toJson(n.value) }
 		}
 		case "namesOf":
-			return { names: places.namesOf(r.id).map((n) => ({ folder: n.folder, name: n.name })) }
+			return { names: index.of(r.id).map((n) => ({ folder: n.folder, name: n.name })) }
 		case "held":
 			return paths.held()
 		case "watchAll": {

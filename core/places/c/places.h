@@ -4,7 +4,7 @@
 //   sc_scheduler *s = sc_new((sc_options){..});
 //   sc_on_tracking_end(s, pl_forget, p);
 //   pl_connect(p, &(pl_setup){tb_string("R"), table, paths, s});
-//   pl_commit(p, &changed);  // after a write from children.h
+//   pl_commit(p, &changed);  // after a change in place
 //
 // Returned values and names are borrowed from the table. Out of memory aborts.
 #ifndef PLACES_H
@@ -209,19 +209,10 @@ size_t pl_lookup(pl *p, const char *const *names, size_t nnames, const char *con
 	size_t nfrom, int all, size_t *depths);
 void pl_keys(pl *p, tb_key part, tb_key id, const op_key *path, size_t n, int ids, pl_namelist *out);
 
-// pl_members_at reads the whole children map. pl_list reads only which names there are (ids
+// pl_members_at reads every name and what is at it. pl_list reads only which names there are (ids
 // left empty). Both merge every contributor's names, each once.
 pl_members pl_members_at(pl *p, const char *const *path, size_t n);
 pl_members pl_list(pl *p, const char *const *path, size_t n);
-
-// Latest placed last. An entry already in the table when places was made is missing. Borrowed
-// until the next write or table event.
-typedef struct {
-	tb_key folder;
-	const char *name;
-} pl_slot;
-const pl_slot *pl_names_of(const pl *p, tb_key id, size_t *n);
-
 
 op_value *pl_change_base(pl *l, const sc_pair *extra, size_t n);
 

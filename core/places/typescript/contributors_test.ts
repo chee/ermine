@@ -16,7 +16,7 @@ const rows: Contributor = {
 	names: ({ path }, r) => path === undefined ? [] : r.keys("value", "rows", path, true),
 }
 
-function world(contributors?: Contributor[]) {
+function world(contributors: Contributor[]) {
 	const s = createScheduler()
 	const table = createTable()
 	const paths = createPaths<unknown>()
@@ -41,29 +41,6 @@ function world(contributors?: Contributor[]) {
 	}
 	return { s, places, paths, put, tracked }
 }
-
-Deno.test("contributors: children given alone answers and reads as places given none", () => {
-	const plain = world()
-	const given = world([children])
-	const reads = (w: ReturnType<typeof world>) => [
-		w.tracked(() => get(w.places, ["work", "clock", "on"])),
-		w.tracked(() => [...list(w.places, ["work"])]),
-		w.tracked(() => lookup(w.places, ["on"], ["work", "clock"])),
-	]
-	const r = reads(plain)
-	assertEquals(r.map((x) => (x as unknown[]).length), [3, 2, 3])
-	assertEquals(reads(given), r)
-	for (const p of [[], ["work"], ["work", "clock"], ["nope"]]) {
-		assertEquals(get(given.places, p), get(plain.places, p))
-		assertEquals([...list(given.places, p)], [...list(plain.places, p)])
-		assertEquals(
-			members(given.places, p).map(({ name, id }) => ({ name, id })),
-			members(plain.places, p),
-		)
-	}
-	assertEquals(gets(given.places, ["work", "clock"]), [{ id: "C0", from: "children" }])
-	assertEquals(gets(plain.places, ["work", "clock"]), [{ id: "C0", from: "children" }])
-})
 
 Deno.test("contributors: the first answer wins, entries has them all, names merge each once, in canonical CBOR's key order", () => {
 	const w = world([rows, children])

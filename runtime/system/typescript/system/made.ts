@@ -152,7 +152,7 @@ export function computerNode(
 
 function forget(m: Computed) {
 	const { inner, id } = m
-	const { base, places } = here(inner)
+	const { base } = here(inner)
 	base.made.delete(id)
 	const bin = bins.get(m.own)
 	if (bin !== undefined) {
@@ -162,7 +162,7 @@ function forget(m: Computed) {
 		if (there?.delete(m) && there.size === 0) bin.at.delete(at)
 	}
 	base.missing.delete(id)
-	for (const { folder, name } of [...places.namesOf(id)]) takeOut(inner, folder, name, id)
+	for (const { folder, name } of [...base.names.of(id)]) takeOut(inner, folder, name, id)
 	nodeGone(inner, id, { runs: true, held: true })
 }
 
@@ -186,7 +186,7 @@ export function unplaced(inner: Inner, folder: Id, name: string) {
 // finishes.
 export function stopMade(inner: Inner, below: readonly Id[], always?: Id) {
 	const { base, s, places, calls } = here(inner)
-	const ids = below.filter((i) => i === always || up(base, places, places.root, i) === undefined)
+	const ids = below.filter((i) => i === always || up(base, places.root, i) === undefined)
 	for (const id of ids) {
 		const m = base.made.get(id)
 		if (m !== undefined) {

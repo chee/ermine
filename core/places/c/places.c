@@ -81,8 +81,6 @@ typedef struct {
 	size_t refs;
 	pm made_by;
 	struct pl_made *mades;
-	tb_table *indexed, *folders, *named;
-	struct fold *folds;
 } shared;
 
 
@@ -100,11 +98,8 @@ struct pl {
 	tb_key root;
 	const pl_contributor *const *asked;
 	size_t nasked;
-	int given;
 	shared *s;
 };
-
-static const char *children_part = "children";
 
 static pt_key paths_key(tb_key k) { return (pt_key){.string = k.string, .symbol = k.symbol}; }
 
@@ -129,23 +124,9 @@ pl *pl_new(void) {
 	l->s->refs = 1;
 	l->s->pairs = tb_new();
 	l->s->kept = tb_new();
-	l->s->indexed = tb_new();
-	l->s->folders = tb_new();
-	l->s->named = tb_new();
 	l->s->crow = cr_new();
 	if (l->s->crow == NULL) abort();
 	return l;
-}
-
-static int plain_step(void *ctx, const pl_here *here, const char *name, pl *l, tb_key *out);
-static void plain_names(void *ctx, const pl_here *here, pl *l, pl_namelist *out);
-static const pl_contributor plain = {"children", plain_step, plain_names, NULL, NULL};
-static const pl_contributor *const alone[] = {&plain};
-
-static void ask(pl *l, const pl_contributor *const *contributors, size_t n) {
-	l->given = n > 0;
-	l->asked = l->given ? contributors : alone;
-	l->nasked = l->given ? n : 1;
 }
 
 void pl_connect(pl *l, const pl_setup *setup) {
@@ -156,7 +137,8 @@ void pl_connect(pl *l, const pl_setup *setup) {
 	l->s->loosening = setup->tracking;
 	l->s->now = setup->now;
 	l->s->now_ctx = setup->now_ctx;
-	ask(l, setup->contributors, setup->ncontributors);
+	l->asked = setup->contributors;
+	l->nasked = setup->ncontributors;
 }
 
 tb_key pl_root(const pl *l) { return l->root; }
@@ -164,8 +146,8 @@ tb_key pl_root(const pl *l) { return l->root; }
 cr_crow *pl_crow(pl *l) { return l->s->crow; }
 
 const pl_contributor *const *pl_contributors(const pl *l, size_t *n) {
-	*n = l->given ? l->nasked : 0;
-	return l->given ? l->asked : NULL;
+	*n = l->nasked;
+	return l->asked;
 }
 
 static void unhold(pl *l, hold *h) {
@@ -182,7 +164,6 @@ static void unhold(pl *l, hold *h) {
 }
 
 static void free_dead(pl *l);
-static void names_free(shared *s);
 
 void pl_free(pl *l) {
 	if (l == NULL) return;
@@ -206,7 +187,6 @@ void pl_free(pl *l) {
 	// blocks still held elsewhere outlive the places: they forget it
 	for (struct pl_made *m = s->mades; m != NULL; m = m->next) m->s = NULL;
 	pm_clear(&s->made_by);
-	names_free(s);
 	tb_free(s->kept);
 	pm_clear(&s->mine);
 	tb_free(s->pairs);
@@ -578,178 +558,6 @@ static int same_key(tb_key a, tb_key b) {
 	return a.string != NULL && b.string != NULL && strcmp(a.string, b.string) == 0;
 }
 
-static int child_of(const nd_entry *children, const char *name, tb_key *out);
-
-
-static tb_key key_own(tb_key k) { return k.symbol ? k : tb_string(xdup(k.string)); }
-static void key_disown(tb_key k) {
-	if (k.symbol == NULL) free((char *)k.string);
-}
-
-typedef struct rec rec;
-struct rec {
-	char *name, *id;
-	rec *prev, *next;
-};
-typedef struct fold fold;
-struct fold {
-	tb_key folder;
-	rec *recs;
-	fold *prev, *next;
-};
-typedef struct {
-	pl_slot *items;
-	size_t n, cap;
-} slots;
-
-static const char folding, naming;
-
-static void slot_free(pl_slot *slot) {
-	key_disown(slot->folder);
-	free((char *)slot->name);
-}
-
-static void name_out(pl *l, tb_key folder, const char *name) {
-	shared *s = l->s;
-	rec *r = tb_get(s->indexed, folder, tb_string(name));
-	if (r == NULL) return;
-	tb_del(s->indexed, folder, tb_string(name));
-	fold *f = tb_get(s->folders, tb_symbol(&folding), folder);
-	if (r->prev != NULL) r->prev->next = r->next;
-	else f->recs = r->next;
-	if (r->next != NULL) r->next->prev = r->prev;
-	if (f->recs == NULL) {
-		if (f->prev != NULL) f->prev->next = f->next;
-		else s->folds = f->next;
-		if (f->next != NULL) f->next->prev = f->prev;
-		tb_del(s->folders, tb_symbol(&folding), folder);
-		key_disown(f->folder);
-		free(f);
-	}
-	slots *list = tb_get(s->named, tb_symbol(&naming), tb_string(r->id));
-	size_t i = 0;
-	while (!(same_key(list->items[i].folder, folder) && strcmp(list->items[i].name, name) == 0)) i++;
-	slot_free(&list->items[i]);
-	memmove(&list->items[i], &list->items[i + 1], (list->n - i - 1) * sizeof *list->items);
-	if (--list->n == 0) {
-		tb_del(s->named, tb_symbol(&naming), tb_string(r->id));
-		free(list->items);
-		free(list);
-	}
-	free(r->name);
-	free(r->id);
-	free(r);
-}
-
-// Indexes a name as the entry has it now. A name put over counts as taken out and put in again,
-// so it becomes the latest placed.
-static void name_in(pl *l, tb_key folder, const char *name, const nd_entry *entry) {
-	shared *s = l->s;
-	tb_key now;
-	int has = child_of(entry, name, &now);
-	rec *r = tb_get(s->indexed, folder, tb_string(name));
-	if (r != NULL && has && strcmp(r->id, now.string) == 0) return;
-	name_out(l, folder, name);
-	if (!has) return;
-	fold *f = tb_get(s->folders, tb_symbol(&folding), folder);
-	if (f == NULL) {
-		f = xalloc(sizeof *f);
-		f->folder = key_own(folder);
-		f->next = s->folds;
-		if (f->next != NULL) f->next->prev = f;
-		s->folds = f;
-		tb_add(s->folders, tb_symbol(&folding), folder, f);
-	}
-	r = xalloc(sizeof *r);
-	r->name = xdup(name);
-	r->id = xdup(now.string);
-	r->next = f->recs;
-	if (r->next != NULL) r->next->prev = r;
-	f->recs = r;
-	tb_add(s->indexed, folder, tb_string(name), r);
-	slots *list = tb_get(s->named, tb_symbol(&naming), tb_string(r->id));
-	if (list == NULL) {
-		list = xalloc(sizeof *list);
-		tb_add(s->named, tb_symbol(&naming), tb_string(r->id), list);
-	}
-	if (list->n == list->cap) {
-		list->cap = list->cap ? list->cap * 2 : 2;
-		list->items = realloc(list->items, list->cap * sizeof *list->items);
-		if (list->items == NULL) abort();
-	}
-	list->items[list->n++] = (pl_slot){key_own(folder), xdup(name)};
-}
-
-static void names_again(pl *l, tb_key folder) {
-	const nd_entry *entry = tb_get(l->s->table, tb_string(children_part), folder);
-	fold *f = tb_get(l->s->folders, tb_symbol(&folding), folder);
-	size_t n = 0;
-	for (rec *r = f != NULL ? f->recs : NULL; r != NULL; r = r->next) n++;
-	// the list changes as names are indexed, so copy its names first
-	char **had = xalloc(n * sizeof *had);
-	size_t i = n;
-	for (rec *r = f != NULL ? f->recs : NULL; r != NULL; r = r->next) had[--i] = xdup(r->name);
-	for (i = 0; i < n; i++) {
-		name_in(l, folder, had[i], entry);
-		free(had[i]);
-	}
-	free(had);
-	const op_value *v = entry != NULL ? entry->value : NULL;
-	if (v == NULL || v->type != OP_MAP) return;
-	for (i = 0; i < v->count; i++) name_in(l, folder, v->keys[i], entry);
-}
-
-static void names_touched(pl *l, tb_key folder, const op_patch *patches, size_t n) {
-	for (size_t i = 0; i < n; i++) {
-		if (patches[i].place.length == 0 ||
-			(patches[i].has_move && patches[i].move.length == 0)) {
-			names_again(l, folder);
-			return;
-		}
-	}
-	const nd_entry *entry = tb_get(l->s->table, tb_string(children_part), folder);
-	for (size_t i = 0; i < n; i++) {
-		if (patches[i].place.path[0].type == OP_STR_KEY) {
-			name_in(l, folder, patches[i].place.path[0].s, entry);
-		}
-		if (patches[i].has_move && patches[i].move.path[0].type == OP_STR_KEY) {
-			name_in(l, folder, patches[i].move.path[0].s, entry);
-		}
-	}
-}
-
-const pl_slot *pl_names_of(const pl *l, tb_key id, size_t *n) {
-	const slots *list = tb_get(l->s->named, tb_symbol(&naming), id);
-	*n = list != NULL ? list->n : 0;
-	return list != NULL ? list->items : NULL;
-}
-
-static void names_free(shared *s) {
-	while (s->folds != NULL) {
-		fold *f = s->folds;
-		s->folds = f->next;
-		while (f->recs != NULL) {
-			rec *r = f->recs;
-			f->recs = r->next;
-			slots *list = tb_get(s->named, tb_symbol(&naming), tb_string(r->id));
-			if (list != NULL) {
-				for (size_t i = 0; i < list->n; i++) slot_free(&list->items[i]);
-				tb_del(s->named, tb_symbol(&naming), tb_string(r->id));
-				free(list->items);
-				free(list);
-			}
-			free(r->name);
-			free(r->id);
-			free(r);
-		}
-		key_disown(f->folder);
-		free(f);
-	}
-	tb_free(s->indexed);
-	tb_free(s->folders);
-	tb_free(s->named);
-}
-
 static void tell_alls(pl *l, const pl_fact *facts, size_t n);
 static void landed(pl *l, tb_key part, tb_key id);
 
@@ -773,34 +581,34 @@ int pl_del(pl *l, tb_key part, tb_key id) {
 }
 
 static void landed(pl *l, tb_key part, tb_key id) {
-	if (same_key(part, tb_string(children_part))) names_again(l, id);
 	size_t n;
 	pt_spot *const *spots = pt_event(l->s->paths, pair_key(l, part), paths_key(id), &n);
 	spots_vec out = {0};
 	add_spots(&out, spots, n);
 	say(l, &out);
 	free(out.v);
-	if (l->s->alls == NULL) return;
-	const nd_entry *entry = tb_get(l->s->table, part, id);
-	op_patch patch = {0};
-	if (entry != NULL && entry->value != NULL) {
-		patch.has_value = 1;
-		patch.value = op_ref(entry->value);
+	if (l->s->alls != NULL) {
+		const nd_entry *entry = tb_get(l->s->table, part, id);
+		op_patch patch = {0};
+		if (entry != NULL && entry->value != NULL) {
+			patch.has_value = 1;
+			patch.value = op_ref(entry->value);
+		}
+		// Take the value and change as they are now, since a function that writes the entry changes
+		// them. For a take-out, make a change from the open scope (if any) with the site here.
+		ch_header change = entry != NULL ? entry->change : (ch_header){0};
+		pl_made *made = NULL;
+		int changed = entry != NULL;
+		if (entry == NULL) {
+			char *error = pl_header(l, NULL, 0, CH_HERE, &change, &made);
+			if (error == NULL) changed = 1;
+			free(error);
+		}
+		pl_fact fact = {part, id, &patch, 1, changed ? &change : NULL, entry};
+		tell_alls(l, &fact, 1);
+		if (made != NULL) pl_made_free(made);
+		op_free((op_value *)patch.value);
 	}
-	// Take the value and change as they are now, since a function that writes the entry changes
-	// them. For a take-out, make a change from the open scope (if any) with the site here.
-	ch_header change = entry != NULL ? entry->change : (ch_header){0};
-	pl_made *made = NULL;
-	int changed = entry != NULL;
-	if (entry == NULL) {
-		char *error = pl_header(l, NULL, 0, CH_HERE, &change, &made);
-		if (error == NULL) changed = 1;
-		free(error);
-	}
-	pl_fact fact = {part, id, &patch, 1, changed ? &change : NULL, entry};
-	tell_alls(l, &fact, 1);
-	if (made != NULL) pl_made_free(made);
-	op_free((op_value *)patch.value);
 }
 
 typedef struct {
@@ -841,12 +649,6 @@ static pl_facts pl_each_entry_change(pl *l, const pl_changed *changed) {
 
 void pl_commit(pl *l, const pl_changed *changed) {
 	pl_facts facts = pl_each_entry_change(l, changed);
-	for (size_t i = 0; i < facts.n; i++) {
-		const pl_fact *f = &facts.items[i];
-		if (same_key(f->part, tb_string(children_part))) {
-			names_touched(l, f->id, f->patches, f->patches_length);
-		}
-	}
 	spots_vec out = {0};
 	for (size_t i = 0; i < facts.n; i++) {
 		size_t n;
@@ -922,21 +724,6 @@ void pl_stop(pl_watch *w) {
 
 static int is_map(const op_value *v) { return v != NULL && v->type == OP_MAP; }
 
-static int child_of(const nd_entry *children, const char *name, tb_key *out) {
-	const op_value *v = children != NULL ? children->value : NULL;
-	if (!is_map(v)) return 0;
-	const op_value *id = op_get(v, name);
-	if (id == NULL || id->type != OP_STR) return 0;
-	*out = tb_string(id->str);
-	return 1;
-}
-
-static int step(pl *l, tb_key id, const char *name, tb_key *out) {
-	op_key key = {.type = OP_STR_KEY, .s = name};
-	if (!l->s->peeping) tell(l, pt_spot_of(l->s->paths, pair_key(l, tb_string(children_part)), paths_key(id), &key, 1, 0));
-	return child_of(tb_get(l->s->table, tb_string(children_part), id), name, out);
-}
-
 static void pl_namelist_add(pl_namelist *list, const char *name) {
 	if (list->n == list->cap) {
 		list->cap = list->cap ? list->cap * 2 : 8;
@@ -960,22 +747,6 @@ void pl_keys(pl *l, tb_key part, tb_key id, const op_key *path, size_t n, int id
 	for (size_t i = 0; i < v->count; i++) {
 		if (!ids || v->items[i]->type == OP_STR) pl_namelist_add(out, v->keys[i]);
 	}
-}
-
-static int plain_step(void *ctx, const pl_here *here, const char *name, pl *l, tb_key *out) {
-	(void)ctx;
-	if (same_key(here->id, pl_level())) return 0;
-	op_key key = {.type = OP_STR_KEY, .s = name};
-	const op_value *v = pl_read(l, tb_string(children_part), here->id, &key, 1);
-	if (v == NULL || v->type != OP_STR) return 0;
-	*out = tb_string(v->str);
-	return 1;
-}
-
-static void plain_names(void *ctx, const pl_here *here, pl *l, pl_namelist *out) {
-	(void)ctx;
-	if (same_key(here->id, pl_level())) return;
-	pl_keys(l, tb_string(children_part), here->id, NULL, 0, 0, out);
 }
 
 static const char level_tag;
@@ -1016,17 +787,6 @@ static int go(pl *l, const pl_here *here, const char *name, tb_key *out, const c
 static size_t walk_from(pl *l, const pl_here *from, const char *const *path, size_t n,
 	pl_member *out, uint32_t *gones) {
 	size_t i = 0;
-	if (!l->given) {
-		tb_key at = from->id;
-		for (; i < n; i++) {
-			tb_key id;
-			if (!step(l, at, path[i], &id)) break;
-			out[i] = (pl_member){path[i], id, NULL};
-			if (gones != NULL) gones[i] = 0;
-			at = id;
-		}
-		return i;
-	}
 	pl_here here = *from;
 	const char **trail = NULL;
 	if (from->has_path) {
@@ -1061,13 +821,6 @@ size_t pl_walk(pl *l, tb_key from, const char *const *path, size_t n, pl_member 
 static int reach(pl *l, const char *const *path, size_t n, tb_key *out, uint32_t *gone) {
 	tb_key at = l->root;
 	*gone = 0;
-	if (!l->given) {
-		for (size_t i = 0; i < n; i++) {
-			if (!step(l, at, path[i], &at)) return 0;
-		}
-		*out = at;
-		return 1;
-	}
 	pl_member *steps = xalloc((n + 1) * sizeof *steps);
 	uint32_t *gones = xalloc((n + 1) * sizeof *gones);
 	pl_here root = {.id = l->root, .has_path = 1};
@@ -1225,61 +978,35 @@ void pl_members_free(pl_members *list) {
 	*list = (pl_members){0};
 }
 
-static pl_members members_of(const nd_entry *children) {
-	pl_members out = {0};
-	const op_value *v = children != NULL ? children->value : NULL;
-	if (!is_map(v)) return out;
-	out.items = xalloc(v->count * sizeof *out.items);
-	for (size_t i = 0; i < v->count; i++) {
-		if (v->items[i]->type == OP_STR) {
-			out.items[out.n++] = (pl_member){v->keys[i], tb_string(v->items[i]->str), NULL};
-		}
-	}
-	return out;
-}
-
 pl_members pl_members_at(pl *l, const char *const *path, size_t n) {
 	tb_key id;
 	uint32_t gone;
 	if (!reach(l, path, n, &id, &gone)) return (pl_members){0};
-	if (l->given) {
-		pl_here here = {.id = id, .has_path = 1, .path = path, .length = n, .gone = gone};
-		pl_nameds names = pl_names(l, &here);
-		here.gone = names.gone;
-		pl_members out = {0};
-		out.items = xalloc((names.n + 1) * sizeof *out.items);
-		for (size_t i = 0; i < names.n; i++) {
-			pl_member m;
-			if (pl_walk_at(l, &here, &names.items[i].name, 1, &m) == 1) out.items[out.n++] = m;
-		}
-		pl_nameds_free(&names);
-		return out;
+	pl_here here = {.id = id, .has_path = 1, .path = path, .length = n, .gone = gone};
+	pl_nameds names = pl_names(l, &here);
+	here.gone = names.gone;
+	pl_members out = {0};
+	out.items = xalloc((names.n + 1) * sizeof *out.items);
+	for (size_t i = 0; i < names.n; i++) {
+		pl_member m;
+		if (pl_walk_at(l, &here, &names.items[i].name, 1, &m) == 1) out.items[out.n++] = m;
 	}
-	if (!l->s->peeping) tell(l, pt_spot_of(l->s->paths, pair_key(l, tb_string(children_part)), paths_key(id), NULL, 0, 0));
-	return members_of(tb_get(l->s->table, tb_string(children_part), id));
+	pl_nameds_free(&names);
+	return out;
 }
 
 pl_members pl_list(pl *l, const char *const *path, size_t n) {
 	tb_key id;
 	uint32_t gone;
 	if (!reach(l, path, n, &id, &gone)) return (pl_members){0};
+	pl_here here = {.id = id, .has_path = 1, .path = path, .length = n, .gone = gone};
+	pl_nameds names = pl_names(l, &here);
 	pl_members out = {0};
-	if (l->given) {
-		pl_here here = {.id = id, .has_path = 1, .path = path, .length = n, .gone = gone};
-		pl_nameds names = pl_names(l, &here);
-		out.items = xalloc((names.n + 1) * sizeof *out.items);
-		for (size_t i = 0; i < names.n; i++) {
-			out.items[out.n++] = (pl_member){names.items[i].name, {0}, names.items[i].from};
-		}
-		pl_nameds_free(&names);
-		return out;
+	out.items = xalloc((names.n + 1) * sizeof *out.items);
+	for (size_t i = 0; i < names.n; i++) {
+		out.items[out.n++] = (pl_member){names.items[i].name, {0}, names.items[i].from};
 	}
-	if (!l->s->peeping) tell(l, pt_spot_of(l->s->paths, pair_key(l, tb_string(children_part)), paths_key(id), NULL, 0, 1));
-	const nd_entry *children = tb_get(l->s->table, tb_string(children_part), id);
-	const op_value *v = children != NULL ? children->value : NULL;
-	if (!is_map(v)) return out;
-	out.items = xalloc(v->count * sizeof *out.items);
-	for (size_t i = 0; i < v->count; i++) out.items[out.n++] = (pl_member){v->keys[i], {0}, NULL};
+	pl_nameds_free(&names);
 	return out;
 }
 

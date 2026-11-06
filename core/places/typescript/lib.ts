@@ -10,9 +10,7 @@ import {
 	type Places,
 } from "./places.ts"
 
-type Reads =
-	& Pick<Places, "root" | "walk" | "readKeys" | "readValue">
-	& Partial<Pick<Places, "contributors" | "names">>
+type Reads = Pick<Places, "root" | "walk" | "names">
 
 function reach(places: Pick<Places, "walk">, path: Path, from?: Here): Here | undefined {
 	const steps = places.walk(path, from)
@@ -59,24 +57,15 @@ export function lookup(
 	return all ? out : undefined
 }
 
-// One read of the whole children map, so any change to it reruns the reader.
+// One read of every name, so any change to one reruns the reader.
 export function members(places: Reads, path: Path): Member[] {
 	const here = reach(places, path)
 	if (here === undefined) return []
-	if (places.contributors !== undefined && places.names !== undefined) {
-		const named = places.names(here)
-		const under = named.gone === (here.gone ?? 0) ? here : { ...here, gone: named.gone }
-		const out: Member[] = []
-		for (const { name } of named) {
-			for (const m of places.walk([name], under)) out.push(m)
-		}
-		return out
-	}
-	const map = places.readValue("children", here.id)
-	if (map === null || typeof map !== "object" || Array.isArray(map)) return []
+	const named = places.names(here)
+	const under = named.gone === (here.gone ?? 0) ? here : { ...here, gone: named.gone }
 	const out: Member[] = []
-	for (const [name, to] of Object.entries(map)) {
-		if (typeof to === "string" || typeof to === "symbol") out.push({ name, id: to })
+	for (const { name } of named) {
+		for (const m of places.walk([name], under)) out.push(m)
 	}
 	return out
 }
@@ -86,9 +75,5 @@ export function members(places: Reads, path: Path): Member[] {
 export function* list(places: Reads, path: Path): Generator<string> {
 	const here = reach(places, path)
 	if (here === undefined) return
-	if (places.contributors !== undefined && places.names !== undefined) {
-		for (const n of places.names(here)) yield n.name
-		return
-	}
-	yield* places.readKeys("children", here.id)
+	for (const n of places.names(here)) yield n.name
 }

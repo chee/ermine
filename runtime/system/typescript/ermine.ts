@@ -19,7 +19,7 @@
 // // close() stops every process ermine started, newest first, then the host's scope.
 import type { ChangeHeader } from "@ermine/graph/entry"
 import { createPlaces, type Id, type Path, type Places } from "@ermine/places"
-import { children, crow } from "@ermine/places/children"
+import { children, createNames, crow } from "@ermine/places/children"
 import { crowify } from "@ermine/places/crowify"
 import { keepStackTraceLimit } from "@ermine/changeable/stacktrace"
 import { place } from "./system/names.ts"
@@ -287,6 +287,7 @@ export function createErmine(options: Options = {}): Ermine {
 	// it rather than changing it in place.
 	const offCrow = crowify(s, crow)
 	const p = places
+	const names = createNames(p)
 
 	const node = options.host?.node ?? newId()
 	const hostScope = s.createRootScope({ ...options.info, node: node })
@@ -556,6 +557,7 @@ export function createErmine(options: Options = {}): Ermine {
 		runs,
 		calls,
 		made: madeNodes,
+		names,
 		missing: new Map(),
 		setting: new Set(),
 		pulse: () => s.pulse(),

@@ -9,6 +9,7 @@ import createEntry from "@ermine/graph/entry"
 import update from "@ermine/changeable/update"
 import type { Patch } from "@ermine/changeable/apply"
 import { createPlaces } from "@ermine/places"
+import { children } from "@ermine/places/children"
 import { createGuard, Refusal } from "./guard.ts"
 import { createChangeHeader } from "@ermine/places/header"
 import { no, yes } from "@ermine/protect"
@@ -21,7 +22,13 @@ function world() {
 	const s = createScheduler()
 	s.onTrackingEnd((k) => places.release(k))
 	const table = createTable()
-	const places = createPlaces({ root: "R", table, paths: createPaths<unknown>(), scheduler: s })
+	const places = createPlaces({
+		root: "R",
+		table,
+		paths: createPaths<unknown>(),
+		scheduler: s,
+		contributors: [children],
+	})
 	const runs = createRuns({ places, table, scheduler: s })
 	const o = s.createRootScope({ actor: "host" })
 	const other = s.createRootScope({ actor: "other" })

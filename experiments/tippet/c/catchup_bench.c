@@ -8,8 +8,11 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "../../../core/places/c/children.h"
 #include "history.h"
 #include "tippet.h"
+
+static const pl_contributor *const walk[] = {&pl_children};
 
 #define CHARS 1000
 #define TURNS 1200
@@ -198,7 +201,8 @@ static void bench(tp_log *w, const messages *m, int file, int forgets) {
 	sc_on_tracking_end(s, pl_forget, places);
 	tb_table *table = tb_new();
 	pt_paths *paths = pt_new();
-	pl_connect(places, &(pl_setup){.root = tb_string("R"), .table = table, .paths = paths, .scheduler = s});
+	pl_connect(places, &(pl_setup){.root = tb_string("R"), .table = table, .paths = paths, .scheduler = s,
+		.contributors = walk, .ncontributors = 1});
 	sc_pair info = {"actor", op_str("cardputer")};
 	d.scope = sc_create_root_scope(s, &info, 1);
 	d.table = table, d.places = places;

@@ -1427,6 +1427,7 @@ static void release(es_ermine *e) {
 	if (h->owns && e->scheduler != NULL) sc_free(e->scheduler);
 	if (e->table != NULL) tb_free(e->table);
 	if (e->paths != NULL) pt_free(e->paths);
+	if (e->names != NULL) pl_index_free(e->names);
 	if (e->places != NULL) pl_free(e->places);
 	if (e->processes != NULL) pr_free(e->processes);
 	if (e->statuses != NULL) cst_free(e->statuses);
@@ -1434,6 +1435,7 @@ static void release(es_ermine *e) {
 	if (e->scopes != NULL) sn_free(e->scopes);
 	e->table = NULL;
 	e->paths = NULL;
+	e->names = NULL;
 	e->places = NULL;
 	e->processes = NULL;
 	e->statuses = NULL;
@@ -1620,6 +1622,7 @@ int es_create(const es_options *given, es_ermine **out) {
 	pl_connect(e->places, &(pl_setup){.root = tb_string(e->root), .table = e->table, .paths = e->paths,
 		.scheduler = e->scheduler, .contributors = h->contributors, .ncontributors = 2, .tracking = 1,
 		.now = o->now, .now_ctx = o->now_ctx});
+	e->names = pl_index_new(e->places);
 	h->tracking = sc_on_tracking_end(e->scheduler, pl_forget, e->places);
 	h->tracking_first = sc_on_tracking_start(e->scheduler, pl_tracking, e->places);
 	h->crow = pl_crowify(e->scheduler, pl_crow(e->places), NULL, NULL);

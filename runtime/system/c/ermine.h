@@ -38,6 +38,7 @@
 #include "../../../lib/changeable/c/value.h"
 #include "../../processes/c/guard.h"
 #include "../../../core/places/c/places.h"
+#include "../../../core/places/c/children.h"
 #include "../../processes/c/status.h"
 #include "../../../core/protect/c/protect.h"
 #include "../../../core/reactivity/c/paths.h"
@@ -809,6 +810,7 @@ struct es_ermine {
 	tb_table *table;
 	pt_paths *paths;
 	pl *places;
+	pl_index *names;
 	sn *scopes;
 	cst *statuses;
 	crn *runs;

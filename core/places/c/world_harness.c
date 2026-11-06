@@ -87,8 +87,10 @@ tb_table *world_table;
 pt_paths *world_paths;
 pl *world_places;
 sc_scope *world_host;
-static const pl_contributor *const *contributors;
-static size_t ncontributors;
+static const pl_contributor *const kids[] = {&pl_children};
+static const pl_contributor *const *contributors = kids;
+static size_t ncontributors = 1;
+static pl_index *world_index;
 
 // From here on, places walks with these contributors (the same table, paths and scheduler).
 void world_contribute(const pl_contributor *const *list, size_t n) {
@@ -830,7 +832,7 @@ static op_value *world_answer(const op_value *r) {
 	}
 	if (strcmp(op, "namesOf") == 0) {
 		size_t n;
-		const pl_slot *slots = pl_names_of(world_places, world_key(op_get(r, "id")), &n);
+		const pl_slot *slots = pl_index_of(world_index, world_key(op_get(r, "id")), &n);
 		op_value *names = op_list();
 		for (size_t i = 0; i < n; i++) {
 			op_value *slot = op_map();
@@ -953,6 +955,7 @@ static void world_start(void) {
 	pl_connect(world_places, &(pl_setup){.root = tb_string("R"), .table = world_table, .paths = world_paths,
 		.scheduler = world_scheduler, .contributors = contributors,
 		.ncontributors = ncontributors});
+	world_index = pl_index_new(world_places);
 	host_info = (sc_pair){"actor", op_str("test")};
 	world_host = sc_create_root_scope(world_scheduler, &host_info, 1);
 }
@@ -994,6 +997,7 @@ void world_finish(void) {
 	sc_free(world_scheduler);
 	tb_free(world_table);
 	pt_free(world_paths);
+	pl_index_free(world_index);
 	pl_free(world_places);
 	op_free((op_value *)host_info.value);
 	for (size_t i = 0; i < nmoments; i++) {

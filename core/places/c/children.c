@@ -49,6 +49,195 @@ static void names(void *ctx, const pl_here *here, pl *l, pl_namelist *out) {
 
 const pl_contributor pl_children = {"children", step, names, NULL, NULL};
 
+static tb_key key_own(tb_key k) { return k.symbol ? k : tb_string(xdup(k.string)); }
+static void key_disown(tb_key k) {
+	if (k.symbol == NULL) free((char *)k.string);
+}
+
+typedef struct rec rec;
+struct rec {
+	char *name, *id;
+	rec *prev, *next;
+};
+typedef struct fold fold;
+struct fold {
+	tb_key folder;
+	rec *recs;
+	fold *prev, *next;
+};
+typedef struct {
+	pl_slot *items;
+	size_t n, cap;
+} slots;
+
+static const char folding, naming;
+
+struct pl_index {
+	pl_watch *watch;
+	tb_table *indexed, *folders, *named;
+	fold *folds;
+};
+
+static void slot_free(pl_slot *slot) {
+	key_disown(slot->folder);
+	free((char *)slot->name);
+}
+
+static void name_out(pl_index *s, tb_key folder, const char *name) {
+	rec *r = tb_get(s->indexed, folder, tb_string(name));
+	if (r == NULL) return;
+	tb_del(s->indexed, folder, tb_string(name));
+	fold *f = tb_get(s->folders, tb_symbol(&folding), folder);
+	if (r->prev != NULL) r->prev->next = r->next;
+	else f->recs = r->next;
+	if (r->next != NULL) r->next->prev = r->prev;
+	if (f->recs == NULL) {
+		if (f->prev != NULL) f->prev->next = f->next;
+		else s->folds = f->next;
+		if (f->next != NULL) f->next->prev = f->prev;
+		tb_del(s->folders, tb_symbol(&folding), folder);
+		key_disown(f->folder);
+		free(f);
+	}
+	slots *list = tb_get(s->named, tb_symbol(&naming), tb_string(r->id));
+	size_t i = 0;
+	while (!(same_key(list->items[i].folder, folder) && strcmp(list->items[i].name, name) == 0)) i++;
+	slot_free(&list->items[i]);
+	memmove(&list->items[i], &list->items[i + 1], (list->n - i - 1) * sizeof *list->items);
+	if (--list->n == 0) {
+		tb_del(s->named, tb_symbol(&naming), tb_string(r->id));
+		free(list->items);
+		free(list);
+	}
+	free(r->name);
+	free(r->id);
+	free(r);
+}
+
+// Indexes a name as the entry has it now. A name put over counts as taken out and put in again,
+// so it becomes the latest placed.
+static void name_in(pl_index *s, tb_key folder, const char *name, const nd_entry *entry) {
+	tb_key now;
+	int has = child_of(entry, name, &now);
+	rec *r = tb_get(s->indexed, folder, tb_string(name));
+	if (r != NULL && has && strcmp(r->id, now.string) == 0) return;
+	name_out(s, folder, name);
+	if (!has) return;
+	fold *f = tb_get(s->folders, tb_symbol(&folding), folder);
+	if (f == NULL) {
+		f = xalloc(sizeof *f);
+		f->folder = key_own(folder);
+		f->next = s->folds;
+		if (f->next != NULL) f->next->prev = f;
+		s->folds = f;
+		tb_add(s->folders, tb_symbol(&folding), folder, f);
+	}
+	r = xalloc(sizeof *r);
+	r->name = xdup(name);
+	r->id = xdup(now.string);
+	r->next = f->recs;
+	if (r->next != NULL) r->next->prev = r;
+	f->recs = r;
+	tb_add(s->indexed, folder, tb_string(name), r);
+	slots *list = tb_get(s->named, tb_symbol(&naming), tb_string(r->id));
+	if (list == NULL) {
+		list = xalloc(sizeof *list);
+		tb_add(s->named, tb_symbol(&naming), tb_string(r->id), list);
+	}
+	if (list->n == list->cap) {
+		list->cap = list->cap ? list->cap * 2 : 2;
+		list->items = realloc(list->items, list->cap * sizeof *list->items);
+		if (list->items == NULL) abort();
+	}
+	list->items[list->n++] = (pl_slot){key_own(folder), xdup(name)};
+}
+
+static void names_again(pl_index *s, tb_key folder, const nd_entry *entry) {
+	fold *f = tb_get(s->folders, tb_symbol(&folding), folder);
+	size_t n = 0;
+	for (rec *r = f != NULL ? f->recs : NULL; r != NULL; r = r->next) n++;
+	// the list changes as names are indexed, so copy its names first
+	char **had = xalloc(n * sizeof *had);
+	size_t i = n;
+	for (rec *r = f != NULL ? f->recs : NULL; r != NULL; r = r->next) had[--i] = xdup(r->name);
+	for (i = 0; i < n; i++) {
+		name_in(s, folder, had[i], entry);
+		free(had[i]);
+	}
+	free(had);
+	const op_value *v = entry != NULL ? entry->value : NULL;
+	if (v == NULL || v->type != OP_MAP) return;
+	for (i = 0; i < v->count; i++) name_in(s, folder, v->keys[i], entry);
+}
+
+static void names_touched(pl_index *s, tb_key folder, const op_patch *patches, size_t n,
+	const nd_entry *entry) {
+	for (size_t i = 0; i < n; i++) {
+		if (patches[i].place.length == 0 ||
+			(patches[i].has_move && patches[i].move.length == 0)) {
+			names_again(s, folder, entry);
+			return;
+		}
+	}
+	for (size_t i = 0; i < n; i++) {
+		if (patches[i].place.path[0].type == OP_STR_KEY) {
+			name_in(s, folder, patches[i].place.path[0].s, entry);
+		}
+		if (patches[i].has_move && patches[i].move.path[0].type == OP_STR_KEY) {
+			name_in(s, folder, patches[i].move.path[0].s, entry);
+		}
+	}
+}
+
+static void told(const pl_fact *f, void *ctx) {
+	if (!same_key(f->part, tb_string("children"))) return;
+	names_touched(ctx, f->id, f->patches, f->patches_length, f->entry);
+}
+
+pl_index *pl_index_new(pl *l) {
+	pl_index *s = xalloc(sizeof *s);
+	s->indexed = tb_new();
+	s->folders = tb_new();
+	s->named = tb_new();
+	s->watch = pl_watch_all(l, told, s);
+	return s;
+}
+
+const pl_slot *pl_index_of(const pl_index *s, tb_key id, size_t *n) {
+	const slots *list = tb_get(s->named, tb_symbol(&naming), id);
+	*n = list != NULL ? list->n : 0;
+	return list != NULL ? list->items : NULL;
+}
+
+void pl_index_free(pl_index *s) {
+	if (s == NULL) return;
+	pl_stop(s->watch);
+	while (s->folds != NULL) {
+		fold *f = s->folds;
+		s->folds = f->next;
+		while (f->recs != NULL) {
+			rec *r = f->recs;
+			f->recs = r->next;
+			slots *list = tb_get(s->named, tb_symbol(&naming), tb_string(r->id));
+			if (list != NULL) {
+				for (size_t i = 0; i < list->n; i++) slot_free(&list->items[i]);
+				tb_del(s->named, tb_symbol(&naming), tb_string(r->id));
+				free(list->items);
+				free(list);
+			}
+			free(r->name);
+			free(r->id);
+			free(r);
+		}
+		key_disown(f->folder);
+		free(f);
+	}
+	tb_free(s->indexed);
+	tb_free(s->folders);
+	tb_free(s->named);
+	free(s);
+}
+
 static int taken(const nd_entry *children, const char *name) {
 	return is_map(children->value) && op_get(children->value, name) != NULL;
 }

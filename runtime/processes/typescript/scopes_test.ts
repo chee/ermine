@@ -3,6 +3,7 @@ import createEntry from "@ermine/graph/entry"
 import { createScheduler } from "@ermine/reactivity"
 import { createTable } from "@ermine/graph/table"
 import { createPlaces } from "@ermine/places"
+import { children } from "@ermine/places/children"
 import { createPaths } from "@ermine/reactivity/paths"
 import { createScopeNodes } from "./scopes.ts"
 
@@ -10,7 +11,13 @@ function world() {
 	const events: string[] = []
 	const s = createScheduler()
 	const table = createTable()
-	const places = createPlaces({ root: "R", table, paths: createPaths<unknown>(), scheduler: s })
+	const places = createPlaces({
+		root: "R",
+		table,
+		paths: createPaths<unknown>(),
+		scheduler: s,
+		contributors: [children],
+	})
 	places.watchAll((f) => void events.push(`${String(f.part)} ${String(f.id)}`))
 	const nodes = createScopeNodes({
 		scheduler: s,

@@ -13,10 +13,13 @@
 #include <unistd.h>
 
 #include "../../../lib/changeable/c/json.h"
+#include "../../../core/places/c/children.h"
 #include "history.h"
 #include "store.h"
 #include "tippet.h"
 #include "wire.h"
+
+static const pl_contributor *const walk[] = {&pl_children};
 
 // cap: when set, an allocation that would take the heap past it fails
 typedef struct {
@@ -786,7 +789,8 @@ static int dev_make(dev *d, tp_store *store, uint8_t s) {
 	sc_on_tracking_end(d->s, pl_forget, d->places);
 	d->table = tb_new();
 	d->paths = pt_new();
-	pl_connect(d->places, &(pl_setup){.root = tb_string("R"), .table = d->table, .paths = d->paths, .scheduler = d->s});
+	pl_connect(d->places, &(pl_setup){.root = tb_string("R"), .table = d->table, .paths = d->paths, .scheduler = d->s,
+		.contributors = walk, .ncontributors = 1});
 	d->info = (sc_pair){"actor", op_str("test")};
 	d->scope = sc_create_root_scope(d->s, &d->info, 1);
 	uint8_t seed[32];

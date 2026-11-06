@@ -1,6 +1,6 @@
 import type { ChangeHeader } from "@ermine/graph/entry"
 import { locationsOf, nearest } from "@ermine/places/header"
-import { type Id, type Path, type Places, PlacesError } from "@ermine/places"
+import { type Id, type Path, PlacesError } from "@ermine/places"
 import { get } from "@ermine/places/lib"
 import { slot as slotOf, target as targetOf, type Thing } from "@ermine/processes/guard"
 import type { Key } from "@ermine/graph/table"
@@ -27,14 +27,14 @@ export function viewOf(base: Base, h: ChangeHeader): ChangeView {
 }
 
 // The names from root down to id, going up id's names now. None if nothing reaches it.
-export function up(base: Base, places: Places, root: Id, id: Id): Path | undefined {
+export function up(base: Base, root: Id, id: Id): Path | undefined {
 	const visited = new Set<Id>()
 	const go = (at: Id): Path | undefined => {
 		if (at === root) return []
 		visited.add(at)
 		const running = base.processes.get(at)?.context.at
 		if (running !== undefined) return [...running]
-		const names = places.namesOf(at)
+		const names = base.names.of(at)
 		for (let i = names.length - 1; i >= 0; i--) {
 			if (visited.has(names[i].folder)) continue
 			const above = go(names[i].folder)
@@ -46,7 +46,7 @@ export function up(base: Base, places: Places, root: Id, id: Id): Path | undefin
 }
 
 export function seenIn(base: Base, reader: Inner, id: Id): Path | undefined {
-	const p = up(base, reader.places, reader.places.root, id)
+	const p = up(base, reader.places.root, id)
 	return p !== undefined && get(reader.places, p) === id ? p : undefined
 }
 

@@ -9,6 +9,7 @@ import { createTable } from "@ermine/graph/table"
 import { rand } from "../../../meta/conformance/typescript/rand.ts"
 import { isMap, made, patch, paths } from "../../../lib/crow/typescript/random_harness.ts"
 import { at as read, createPlaces, type Places } from "./places.ts"
+import { children } from "./children.ts"
 import { createChangeHeader } from "./header.ts"
 import { crowify, updateEntry } from "./crowify.ts"
 
@@ -39,6 +40,7 @@ Deno.test("crowify: through places and a scheduler with crowify, what a computat
 			table,
 			paths: createPaths(),
 			scheduler: s,
+			contributors: [children],
 		})
 		const host = s.createRootScope({ actor: "host" })
 		const header = () => s.runWithScope(host, () => createChangeHeader(s))

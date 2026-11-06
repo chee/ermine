@@ -3,13 +3,20 @@ import { createTable } from "@ermine/graph/table"
 import { createScheduler, PENDING as WAIT } from "@ermine/reactivity"
 import { createPaths } from "@ermine/reactivity/paths"
 import { createPlaces } from "@ermine/places"
+import { children } from "@ermine/places/children"
 import { createStatus, isPending, PENDING, status } from "./status.ts"
 
 function world() {
 	const s = createScheduler()
 	s.onTrackingEnd((k) => places.release(k))
 	const table = createTable()
-	const places = createPlaces({ root: "R", table, paths: createPaths<unknown>(), scheduler: s })
+	const places = createPlaces({
+		root: "R",
+		table,
+		paths: createPaths<unknown>(),
+		scheduler: s,
+		contributors: [children],
+	})
 	const statuses = createStatus({ places, table, scheduler: s })
 	const o = s.createRootScope({ actor: "host" })
 	return { s, table, places, statuses, o }

@@ -2,7 +2,7 @@
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/graph/entry"
 import { createTable, type Id, type Tables } from "@ermine/graph/table"
 import { createPlaces, type Path, type Places, PlacesError } from "@ermine/places"
-import { move, place, rename, unplace } from "@ermine/places/children"
+import { children as kids, move, place, rename, unplace } from "@ermine/places/children"
 import { createPaths, type Spot } from "@ermine/reactivity/paths"
 import type { Pick } from "../../../meta/conformance/typescript/gen.ts"
 
@@ -29,7 +29,7 @@ export function createWorld(
 		getRun: () => undefined,
 	} as unknown as Parameters<typeof createPlaces>[0]["scheduler"]
 	const table = createTable()
-	const p: Places = createPlaces({ root: "R", table, paths, scheduler })
+	const p: Places = createPlaces({ root: "R", table, paths, scheduler, contributors: [kids] })
 	const children = (id: Id) => table.get("children", id)
 	let time = 0
 	const header = (): ChangeHeader => ({

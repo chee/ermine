@@ -1,11 +1,12 @@
-// children: the children format, a contributor and the plain functions that edit a children entry.
+// children: the children format, a contributor, the plain functions that edit a children entry and
+// the index of what names each id.
 import type { ChangeHeader, Entry } from "@ermine/graph/entry"
 import { createCrow, type Crow } from "@ermine/crow"
 import type { Patch } from "@ermine/changeable/apply"
 import { isPojo } from "@ermine/changeable/kinds"
 import type { Id, Key } from "@ermine/graph/table"
 import { updateEntry } from "./crowify.ts"
-import { asId, type Contributor, level, PlacesError } from "./places.ts"
+import { asId, type Contributor, level, type Places, PlacesError } from "./places.ts"
 
 export const children: Contributor = {
 	from: "children",
@@ -106,4 +107,59 @@ export function move(
 	return moving([from, name], [into, to]).flatMap((m) =>
 		write(m.entry === "from" ? from : into, m.patches, header)
 	)
+}
+
+export type Slot = { readonly folder: Id; readonly name: string }
+
+export type Index = { readonly of: (id: Id) => readonly Slot[] }
+
+function touched(patches: readonly Patch[]): string[] | undefined {
+	const out: string[] = []
+	for (const p of patches) {
+		if (p.path.length === 0 || (p.move !== undefined && p.move.path.length === 0)) {
+			return undefined
+		}
+		if (typeof p.path[0] === "string") out.push(p.path[0])
+		if (typeof p.move?.path[0] === "string") out.push(p.move.path[0])
+	}
+	return out
+}
+
+// Every folder and name that names an id, latest placed last. It learns from what places tells,
+// so an entry already in the table when it is made is missing.
+export function createNames(places: Pick<Places, "watchAll">): Index {
+	const indexed = new Map<Id, Map<string, Id>>()
+	const named = new Map<Id, Slot[]>()
+	function unindex(folder: Id, name: string) {
+		const k = indexed.get(folder)
+		const id = k?.get(name)
+		if (id === undefined) return
+		k!.delete(name)
+		if (k!.size === 0) indexed.delete(folder)
+		const list = named.get(id)!
+		list.splice(list.findIndex((n) => n.folder === folder && n.name === name), 1)
+		if (list.length === 0) named.delete(id)
+	}
+	function index(folder: Id, name: string, entry: Entry<unknown> | undefined) {
+		const now = child(entry, name)
+		if (indexed.get(folder)?.get(name) === now) return
+		unindex(folder, name)
+		if (now === undefined) return
+		let k = indexed.get(folder)
+		if (k === undefined) indexed.set(folder, k = new Map())
+		k.set(name, now)
+		let list = named.get(now)
+		if (list === undefined) named.set(now, list = [])
+		list.push({ folder, name })
+	}
+	places.watchAll(({ part, id, patches, entry }) => {
+		if (part !== "children") return
+		let names: Iterable<string> | undefined = touched(patches)
+		if (names === undefined) {
+			const v = entry?.value
+			names = new Set([...indexed.get(id)?.keys() ?? [], ...isPojo(v) ? Object.keys(v) : []])
+		}
+		for (const name of names) index(id, name, entry)
+	})
+	return { of: (id) => named.get(id) ?? [] }
 }

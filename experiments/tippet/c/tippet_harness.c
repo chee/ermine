@@ -12,10 +12,13 @@
 #include "../../../meta/conformance/c/harness.h"
 #include "../../../meta/conformance/c/protocol_harness.h"
 #include "../../../core/encoding/c/cbor.h"
+#include "../../../core/places/c/children.h"
 #include "history.h"
 #include "store.h"
 #include "tippet.h"
 #include "wire.h"
+
+static const pl_contributor *const walk[] = {&pl_children};
 
 #define WHEN 1760000000
 #define MAX (64u << 20)
@@ -774,7 +777,8 @@ static device *made(const char *name, const uint8_t *seed, long rebase, int forg
 		d->table = tb_new();
 		d->paths = pt_new();
 		pl_connect(d->places, &(pl_setup){.root = tb_string("root"), .table = d->table,
-			.paths = d->paths, .scheduler = d->scheduler});
+			.paths = d->paths, .scheduler = d->scheduler, .contributors = walk,
+			.ncontributors = 1});
 		d->info = (sc_pair){"actor", op_str("harness")};
 		d->scope = sc_create_root_scope(d->scheduler, &d->info, 1);
 		tp_history_options ho = {w.mem, log, d->table, d->places, NULL, inside, d, forgets, rebase};

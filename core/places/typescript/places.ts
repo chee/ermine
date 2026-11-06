@@ -1,9 +1,9 @@
-// places: walks names from a root through the children table and ties reads to the scheduler.
+// places: walks names from a root through its contributors and ties reads to the scheduler.
 // A whole entry goes in with tables.add, tables.sub or tables.del, which write the table and tell. A change in place is a
 // plain function on the entry, announced with commit.
 //
-//   const places = createPlaces({ root, table, paths, scheduler, contributors: [other, children] })
-//   places.commit(place(table.get("children", id)!, name, entry, createChangeHeader(scheduler)))
+//   const places = createPlaces({ root, table, paths, scheduler, contributors: [one, other] })
+//   places.commit(changed)
 //
 // A name is any string except "", ".", ".." and "/".
 import type { ChangeHeader, Entry } from "@ermine/graph/entry"
@@ -29,7 +29,7 @@ export type Setup = {
 	scheduler:
 		& Pick<Scheduler, "track" | "mark" | "getRun">
 		& Partial<Pick<Scheduler, "getCurrentFrame">>
-	contributors?: readonly Contributor[]
+	contributors: readonly Contributor[]
 	now?: () => number
 }
 
@@ -56,8 +56,6 @@ export type Contributor = {
 	names(here: Here, reads: Reads): string[] | typeof none
 	level?(here: Here, name: string, reads: Reads): boolean
 }
-
-export type Slot = { readonly folder: Id; readonly name: string }
 
 export type Answer = { readonly id: Id; readonly from: string }
 
@@ -96,12 +94,6 @@ const isId = (v: unknown): v is Id => typeof v === "string" || typeof v === "sym
 
 export const asId = (v: unknown): Id | undefined => isId(v) ? v : undefined
 
-const plain: Contributor = {
-	from: "children",
-	step: ({ id }, name, r) => id === level ? undefined : asId(r.read("children", id, [name])),
-	names: ({ id }, r) => id === level ? [] : r.keys("children", id),
-}
-
 export function at(v: unknown, path: readonly Step[]): unknown {
 	for (const k of path) {
 		if (typeof k === "number") {
@@ -136,12 +128,6 @@ export function sliceAt(v: unknown, path: readonly Step[], range: Span): unknown
 	if (!Array.isArray(v) && !isTyped(v)) fail("wrong-kind")
 	if (b > (v as ArrayLike<unknown>).length) fail("range")
 	return (v as unknown[]).slice(a, b)
-}
-
-function child(children: Entry<unknown> | undefined, name: string): Id | undefined {
-	const v = children?.value
-	if (!isPojo(v) || !Object.hasOwn(v, name)) return undefined
-	return asId(v[name])
 }
 
 export function createPlaces(setup: Setup): Places {
@@ -223,56 +209,6 @@ export function createPlaces(setup: Setup): Places {
 		if (spots.length) scheduler.mark(spots, scheduler.getRun())
 	}
 
-	const indexed = new Map<Id, Map<string, Id>>()
-	const named = new Map<Id, Slot[]>()
-	function unindex(folder: Id, name: string) {
-		const k = indexed.get(folder)
-		const id = k?.get(name)
-		if (id === undefined) return
-		k!.delete(name)
-		if (k!.size === 0) indexed.delete(folder)
-		const list = named.get(id)!
-		list.splice(list.findIndex((n) => n.folder === folder && n.name === name), 1)
-		if (list.length === 0) named.delete(id)
-	}
-	function index(folder: Id, name: string, entry: Entry<unknown> | undefined) {
-		const now = child(entry, name)
-		if (indexed.get(folder)?.get(name) === now) return
-		unindex(folder, name)
-		if (now === undefined) return
-		let k = indexed.get(folder)
-		if (k === undefined) indexed.set(folder, k = new Map())
-		k.set(name, now)
-		let list = named.get(now)
-		if (list === undefined) named.set(now, list = [])
-		list.push({ folder, name })
-	}
-	function reindex(folder: Id, names?: Iterable<string>) {
-		const entry = table.get("children", folder) as Entry<unknown> | undefined
-		if (names !== undefined) {
-			for (const name of names) index(folder, name, entry)
-			return
-		}
-		const v = entry?.value
-		const all = new Set([
-			...indexed.get(folder)?.keys() ?? [],
-			...isPojo(v) ? Object.keys(v) : [],
-		])
-		for (const name of all) index(folder, name, entry)
-	}
-	function touched(patches: readonly Patch[]): string[] | undefined {
-		const out: string[] = []
-		for (const p of patches) {
-			if (p.path.length === 0 || (p.move !== undefined && p.move.path.length === 0)) {
-				return undefined
-			}
-			if (typeof p.path[0] === "string") out.push(p.path[0])
-			if (typeof p.move?.path[0] === "string") out.push(p.move.path[0])
-		}
-		return out
-	}
-	const namesOf = (id: Id): readonly Slot[] => named.get(id) ?? []
-
 	function add(part: Key, id: Id, entry: Entry<unknown>) {
 		if (table.get(part, id) === entry) return
 		table.add(part, id, entry)
@@ -291,16 +227,15 @@ export function createPlaces(setup: Setup): Places {
 	}
 
 	function landed(part: Key, id: Id) {
-		if (part === "children") reindex(id)
 		say(paths.event(first(part), id))
-		if (alls.length === 0) return
-		const entry = table.get(part, id)
-		const patch: Patch = entry?.value === undefined
-			? { path: [] }
-			: { path: [], value: entry.value }
-		const change = entry !== undefined ? entry.change : removal()
-		const facts = [{ part, id, patches: [patch], change, entry }]
-		tellAll(facts)
+		if (alls.length > 0) {
+			const entry = table.get(part, id)
+			const patch: Patch = entry?.value === undefined
+				? { path: [] }
+				: { path: [], value: entry.value }
+			const change = entry !== undefined ? entry.change : removal()
+			tellAll([{ part, id, patches: [patch], change, entry }])
+		}
 	}
 
 	// an entry taken out leaves no change, so make one now from the frame open
@@ -336,7 +271,6 @@ export function createPlaces(setup: Setup): Places {
 
 	function commit(changed: readonly Entry<unknown>[]) {
 		const facts = [...eachEntryChange(changed)]
-		for (const f of facts) if (f.part === "children") reindex(f.id, touched(f.patches))
 		const out: unknown[] = []
 		for (const f of facts) out.push(...paths.mark(first(f.part), f.id, f.patches))
 		say(out)
@@ -376,8 +310,7 @@ export function createPlaces(setup: Setup): Places {
 	}
 
 	const root = setup.root
-	const given = setup.contributors
-	const asked = given ?? [plain]
+	const asked = setup.contributors
 
 	let said = 0
 
@@ -407,18 +340,6 @@ export function createPlaces(setup: Setup): Places {
 	}
 
 	function* walk(path: Path, from: Id | Here = root): Generator<Member, Here | undefined> {
-		if (given === undefined) {
-			let at = typeof from === "object" ? from.id : from
-			for (const name of path) {
-				if (!peeping) tell(paths.spot(first("children"), at, [name]))
-				const id = child(table.get("children", at), name)
-				if (id === undefined) return undefined
-				yield { name, id }
-				at = id
-			}
-			const base = typeof from === "object" ? from.path : from === root ? [] : undefined
-			return { id: at, path: base && (path.length ? [...base, ...path] : base) }
-		}
 		let here: Here = typeof from === "object"
 			? from
 			: from === root
@@ -484,7 +405,7 @@ export function createPlaces(setup: Setup): Places {
 
 	return {
 		root,
-		contributors: given,
+		contributors: asked,
 		tables: { add, sub, del },
 		release,
 		describe,
@@ -494,7 +415,6 @@ export function createPlaces(setup: Setup): Places {
 		readValue,
 		readKeys,
 		readChange,
-		namesOf,
 		walk,
 		answers,
 		names,
@@ -519,12 +439,11 @@ export type Places = {
 	eachEntryChange: (changed: readonly Entry<unknown>[]) => Generator<Fact>
 	watchAll: (fn: (fact: Fact) => void) => () => void
 
-	readonly contributors: readonly Contributor[] | undefined
+	readonly contributors: readonly Contributor[]
 
 	readValue: (part: Key, id: Id, path?: readonly Step[], range?: Span) => unknown
 	readKeys: (part: Key, id: Id, path?: readonly Step[], ids?: boolean) => string[]
 	readChange: (part: Key, id: Id) => ChangeHeader | undefined
-	namesOf: (id: Id) => readonly Slot[]
 	walk: (path: Path, from?: Id | Here) => Generator<Member, Here | undefined>
 	answers: (here: Here, name: string) => Answers
 	names: (here: Here) => Names

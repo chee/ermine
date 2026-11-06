@@ -1,6 +1,7 @@
 // End to end, small: every live compute equals the graph read again, effects act at most once.
 import { assert, assertEquals } from "@std/assert"
 import { createPlaces, type Path, type Places, PlacesError } from "@ermine/places"
+import { children } from "@ermine/places/children"
 import { get, list, lookup, members } from "@ermine/places/lib"
 import { createPaths } from "@ermine/reactivity/paths"
 import { type Computer, createScheduler, type Scope } from "@ermine/reactivity"
@@ -36,6 +37,7 @@ function seeded(seed: number, reach: Reach) {
 		table: w.table,
 		paths: createPaths(),
 		scheduler: { track: () => {}, mark: () => 0, getRun: () => undefined },
+		contributors: [children],
 	})
 	const store = new Map<string, string>()
 	const made: Made[] = []

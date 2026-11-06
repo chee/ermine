@@ -430,7 +430,7 @@ int es_ask_slot(es_context *c, const char *parent, const char *const *path, size
 	return ask_slot(c, parent, path, npath);
 }
 
-static int up_go(es_ermine *e, const pl *places, const char *root, const char *at, es_map *visited,
+static int up_go(es_ermine *e, const char *root, const char *at, es_map *visited,
 	es_names *out);
 
 // ids and nodes ----------
@@ -889,19 +889,19 @@ void es_running_clear(es_ermine *e, const char *process) {
 // the names from root down to id, up id's names now (places' names, the latest placed first at each
 // step; a process's node is named by its row). 1 and *out; 0: nothing reaches it from root. Read
 // untracked
-static int up_go(es_ermine *e, const pl *places, const char *root, const char *at, es_map *visited,
+static int up_go(es_ermine *e, const char *root, const char *at, es_map *visited,
 	es_names *out) {
 	if (strcmp(at, root) == 0) return names_init(out), 1;
 	es_map_set(visited, at, NULL);
 	const running_rec *r = es_map_get(&state(e)->running, at);
 	if (r != NULL) return *out = names_of(CP(r->at.names), r->at.n), 1;
 	size_t n;
-	const pl_slot *slots = pl_names_of(places, tb_string(at), &n);
+	const pl_slot *slots = pl_index_of(e->names, tb_string(at), &n);
 	for (size_t i = n; i-- > 0;) {
 		const char *folder = slots[i].folder.string;
 		if (folder == NULL || es_map_has(visited, folder)) continue;
 		es_names above;
-		if (up_go(e, places, root, folder, visited, &above)) {
+		if (up_go(e, root, folder, visited, &above)) {
 			names_add(&above, slots[i].name);
 			return *out = above, 1;
 		}
@@ -912,7 +912,7 @@ static int up_go(es_ermine *e, const pl *places, const char *root, const char *a
 int es_seen_in(es_ermine *e, es_context *reader, const char *id, es_names *out) {
 	es_map visited = {0};
 	es_names p;
-	int found = up_go(e, reader->places, pl_root(reader->places).string, id, &visited, &p);
+	int found = up_go(e, pl_root(reader->places).string, id, &visited, &p);
 	es_map_free(&visited);
 	if (!found) return 0;
 	tb_key k;
@@ -1621,7 +1621,7 @@ static int not_shadowed(es_context *c, const es_names *path, const nd_entry *chi
 // removed folder no longer gives); returns the first error's text
 char *es_unplace_names(es_context *c, const char *id) {
 	size_t n;
-	const pl_slot *slots = pl_names_of(c->places, tb_string(id), &n);
+	const pl_slot *slots = pl_index_of(c->ermine->names, tb_string(id), &n);
 	char **folders = es_alloc((n + 1) * sizeof *folders), **names = es_alloc((n + 1) * sizeof *names);
 	size_t k = 0;
 	for (size_t i = 0; i < n; i++) {

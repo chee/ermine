@@ -6,6 +6,7 @@ import { createTable } from "@ermine/graph/table"
 import { createScheduler } from "@ermine/reactivity"
 import { createPaths } from "@ermine/reactivity/paths"
 import { createPlaces } from "@ermine/places"
+import { children } from "@ermine/places/children"
 import { createRuns } from "./runs.ts"
 import { createStatus } from "./status.ts"
 
@@ -15,7 +16,13 @@ function world(n: number, shape: Shape) {
 	const s = createScheduler()
 	s.onTrackingEnd((k) => places.release(k))
 	const table = createTable()
-	const places = createPlaces({ root: "R", table, paths: createPaths<unknown>(), scheduler: s })
+	const places = createPlaces({
+		root: "R",
+		table,
+		paths: createPaths<unknown>(),
+		scheduler: s,
+		contributors: [children],
+	})
 	const o = s.createRootScope({ actor: "bench" })
 	const h = (): ChangeHeader => ({
 		time: 0,
