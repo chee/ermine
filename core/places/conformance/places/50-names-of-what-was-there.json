@@ -1,0 +1,19 @@
+{
+	"title": "namesOf knows the names already in the table when it is made, walked from the root: a node named twice, both names; a folder nothing reaches, none",
+	"steps": [
+		{ "op": "kids", "id": "R", "value": { "a": "A", "b": "B" }, "expect": {} },
+		{ "op": "kids", "id": "A", "value": { "x": "X" }, "expect": {} },
+		{ "op": "kids", "id": "B", "value": { "copy": "X" }, "expect": {} },
+		{ "op": "kids", "id": "L", "value": { "y": "Y" }, "expect": {} },
+		{ "op": "rows", "expect": {} },
+		{ "op": "namesOf", "id": "A", "expect": { "names": [{ "folder": "R", "name": "a" }] } },
+		{ "op": "namesOf", "id": "Y", "expect": { "names": [] } },
+		{ "op": "place", "at": "R", "name": "c", "id": "X", "expect": {} },
+		{ "op": "unplace", "at": "A", "name": "x", "expect": {} },
+		{
+			"op": "namesOf",
+			"id": "X",
+			"expect": { "names": [{ "folder": "B", "name": "copy" }, { "folder": "R", "name": "c" }] }
+		}
+	]
+}

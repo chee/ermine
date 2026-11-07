@@ -8,8 +8,8 @@
 
 extern const pl_contributor pl_children;
 
-// Every folder and name that names an id, learned from what places tells: an entry already in the
-// table when it is made is missing. Free it before the places.
+// Every folder and name that names an id, learned from what places tells, after a walk from the
+// root through what the table already holds (a table handed in). Free it before the places.
 typedef struct pl_index pl_index;
 typedef struct {
 	tb_key folder;

@@ -22,13 +22,15 @@ static int same_key(tb_key a, tb_key b) {
 
 static int is_map(const op_value *v) { return v != NULL && v->type == OP_MAP; }
 
-static int child_of(const nd_entry *children, const char *name, tb_key *out) {
-	const op_value *v = children != NULL ? children->value : NULL;
+static int child_in(const op_value *v, const char *name, tb_key *out) {
 	if (!is_map(v)) return 0;
 	const op_value *id = op_get(v, name);
 	if (id == NULL || id->type != OP_STR) return 0;
 	*out = tb_string(id->str);
 	return 1;
+}
+static int child_of(const nd_entry *children, const char *name, tb_key *out) {
+	return child_in(children != NULL ? children->value : NULL, name, out);
 }
 
 static int step(void *ctx, const pl_here *here, const char *name, pl *l, tb_key *out) {
@@ -116,9 +118,9 @@ static void name_out(pl_index *s, tb_key folder, const char *name) {
 
 // Indexes a name as the entry has it now. A name put over counts as taken out and put in again,
 // so it becomes the latest placed.
-static void name_in(pl_index *s, tb_key folder, const char *name, const nd_entry *entry) {
+static void name_in(pl_index *s, tb_key folder, const char *name, const op_value *children) {
 	tb_key now;
-	int has = child_of(entry, name, &now);
+	int has = child_in(children, name, &now);
 	rec *r = tb_get(s->indexed, folder, tb_string(name));
 	if (r != NULL && has && strcmp(r->id, now.string) == 0) return;
 	name_out(s, folder, name);
@@ -161,13 +163,13 @@ static void names_again(pl_index *s, tb_key folder, const nd_entry *entry) {
 	size_t i = n;
 	for (rec *r = f != NULL ? f->recs : NULL; r != NULL; r = r->next) had[--i] = xdup(r->name);
 	for (i = 0; i < n; i++) {
-		name_in(s, folder, had[i], entry);
+		name_in(s, folder, had[i], entry != NULL ? entry->value : NULL);
 		free(had[i]);
 	}
 	free(had);
 	const op_value *v = entry != NULL ? entry->value : NULL;
 	if (v == NULL || v->type != OP_MAP) return;
-	for (i = 0; i < v->count; i++) name_in(s, folder, v->keys[i], entry);
+	for (i = 0; i < v->count; i++) name_in(s, folder, v->keys[i], v);
 }
 
 static void names_touched(pl_index *s, tb_key folder, const op_patch *patches, size_t n,
@@ -181,10 +183,10 @@ static void names_touched(pl_index *s, tb_key folder, const op_patch *patches, s
 	}
 	for (size_t i = 0; i < n; i++) {
 		if (patches[i].place.path[0].type == OP_STR_KEY) {
-			name_in(s, folder, patches[i].place.path[0].s, entry);
+			name_in(s, folder, patches[i].place.path[0].s, entry != NULL ? entry->value : NULL);
 		}
 		if (patches[i].has_move && patches[i].move.path[0].type == OP_STR_KEY) {
-			name_in(s, folder, patches[i].move.path[0].s, entry);
+			name_in(s, folder, patches[i].move.path[0].s, entry != NULL ? entry->value : NULL);
 		}
 	}
 }
@@ -194,12 +196,50 @@ static void told(const pl_fact *f, void *ctx) {
 	names_touched(ctx, f->id, f->patches, f->patches_length, f->entry);
 }
 
+typedef struct {
+	pl_index *s;
+	pl *l;
+} walking;
+
+static const char walked;
+
+// What the table already names, walked from the root, as TS. Nothing is written while it walks, so
+// the folders' keys stay where the children values have them.
+static void walk(void *data) {
+	walking *w = data;
+	tb_table *seen = tb_new();
+	size_t n = 0, cap = 1;
+	tb_key *folders = xalloc(cap * sizeof *folders);
+	folders[n++] = pl_root(w->l);
+	while (n > 0) {
+		tb_key folder = folders[--n];
+		if (tb_get(seen, tb_symbol(&walked), folder) != NULL) continue;
+		tb_add(seen, tb_symbol(&walked), folder, (void *)&walked);
+		const op_value *v = pl_read(w->l, tb_string("children"), folder, NULL, 0);
+		if (!is_map(v)) continue;
+		for (size_t i = 0; i < v->count; i++) {
+			name_in(w->s, folder, v->keys[i], v);
+			const op_value *id = v->items[i];
+			if (id == NULL || id->type != OP_STR) continue;
+			if (n == cap) {
+				cap *= 2;
+				folders = realloc(folders, cap * sizeof *folders);
+				if (folders == NULL) abort();
+			}
+			folders[n++] = tb_string(id->str);
+		}
+	}
+	free(folders);
+	tb_free(seen);
+}
+
 pl_index *pl_index_new(pl *l) {
 	pl_index *s = xalloc(sizeof *s);
 	s->indexed = tb_new();
 	s->folders = tb_new();
 	s->named = tb_new();
 	s->watch = pl_watch_all(l, told, s);
+	pl_peep(l, walk, &(walking){s, l});
 	return s;
 }
 

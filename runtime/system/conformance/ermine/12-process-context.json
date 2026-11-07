@@ -312,12 +312,6 @@
 					[
 						"w",
 						"onWrite",
-						"children",
-						"R"
-					],
-					[
-						"w",
-						"onWrite",
 						"attributes",
 						"n1"
 					],

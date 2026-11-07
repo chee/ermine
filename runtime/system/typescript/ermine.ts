@@ -28,12 +28,7 @@ import { enterScheduler, leaveScheduler, registerScheduler, registerScope } from
 import { isHandle, mint } from "./handles.ts"
 import { callFrame, createChangeHeader, locationsHere, outsideAt } from "@ermine/places/header"
 import type { Location } from "@ermine/changeable/stacktrace"
-import {
-	createStatus,
-	STATUS,
-	type StatusTables,
-	TABLE as STATUS_TABLE,
-} from "@ermine/processes/status"
+import { createStatus, STATUS, TABLE as STATUS_TABLE } from "@ermine/processes/status"
 import type { Policy } from "@ermine/protect"
 import { idAt, PROCESS, processes as rows } from "@ermine/processes"
 import { createRuns, type Run } from "@ermine/processes/runs"
@@ -49,7 +44,7 @@ import {
 import { createScheduler, type Info, PENDING, type Scheduler, type Scope } from "@ermine/reactivity"
 import { isPromise } from "@ermine/reactivity/helpers"
 import { createPaths } from "@ermine/reactivity/paths"
-import { createTable, type Key, type Table, type Tables } from "@ermine/graph/table"
+import { createTable, type Key, type Table } from "@ermine/graph/table"
 import { type Call, createCalls, type Wait } from "./calls.ts"
 import {
 	type Asked,
@@ -133,6 +128,8 @@ export type Options = {
 	features?: readonly Feature[]
 	scheduler?: Scheduler
 	may?: Policy
+	// A graph to start from, as storage hands it back: its root's id is root.
+	table?: Table
 	root?: Id
 	host?: {
 		// the host's own node id; give the same one each start for a saved graph, as root
@@ -251,7 +248,7 @@ function make(options: Options, undo: (() => void)[]): Ermine {
 		}
 		| undefined
 	let ids: (() => string) | undefined = undefined
-	const table: ErmineTable = createTable<Tables & StatusTables>()
+	const table = (options.table ?? createTable()) as ErmineTable
 	// A copy of the scheduler for features. Each on... function is wrapped so its off runs at close,
 	// because a scheduler passed in options outlives ermine.
 	const listening = new Set<() => void>()
@@ -529,7 +526,6 @@ function make(options: Options, undo: (() => void)[]): Ermine {
 		node,
 	})
 	hostInner.context.within(() => {
-		hostInner.put({ part: "children", id: root, patches: [{ path: [], value: {} }] })
 		const attrs: Record<string, unknown> = {
 			[ARGS]: options.host?.args ?? [],
 			[FEATURES]: features.shown,

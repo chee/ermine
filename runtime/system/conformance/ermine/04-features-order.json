@@ -151,24 +151,6 @@
 					[
 						"a",
 						"onWrite",
-						"children",
-						"R"
-					],
-					[
-						"b",
-						"onWrite",
-						"children",
-						"R"
-					],
-					[
-						"c",
-						"onWrite",
-						"children",
-						"R"
-					],
-					[
-						"a",
-						"onWrite",
 						"attributes",
 						"n1"
 					],
@@ -268,24 +250,6 @@
 			"name": "hooks",
 			"expect": {
 				"values": [
-					[
-						"a",
-						"onWrite",
-						"children",
-						"R"
-					],
-					[
-						"b",
-						"onWrite",
-						"children",
-						"R"
-					],
-					[
-						"c",
-						"onWrite",
-						"children",
-						"R"
-					],
 					[
 						"a",
 						"onWrite",

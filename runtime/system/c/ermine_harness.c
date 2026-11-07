@@ -112,6 +112,10 @@ typedef struct {
 	size_t nowned, capowned;
 	env_t **envs;
 	size_t nenvs, capenvs;
+	// what storage handed back (stored), and the entries made for it: the world's, not the ermine's
+	tb_table *stored;
+	nd_entry **entries;
+	size_t nentries, capentries;
 } world_t;
 static world_t *W;
 
@@ -2231,9 +2235,48 @@ static int feature_of(const op_value *f, const es_feature **out) {
 
 // --- a world made ----------
 
-// the ermine of a request (ermine's options), replacing the world
-static int make(const op_value *r) {
+// what storage would hand back: the value, attributes and children of everything the root reaches,
+// as TS. the values are shared, the entries new
+static void stored(world_t *w, const tb_table *from) {
+	static const char *const parts[] = {"value", "attributes", "children"};
+	w->stored = tb_new();
+	size_t n = 0, cap = 8;
+	char **ids = es_alloc(cap * sizeof *ids);
+	ids[n++] = es_dup("R");
+	while (n > 0) {
+		char *id = ids[--n];
+		if (tb_get(w->stored, tb_string("children"), tb_string(id)) != NULL ||
+			tb_get(w->stored, tb_string("value"), tb_string(id)) != NULL) {
+			free(id);
+			continue;
+		}
+		for (size_t p = 0; p < 3; p++) {
+			const nd_entry *was = tb_get(from, tb_string(parts[p]), tb_string(id));
+			if (was == NULL) continue;
+			nd_entry *entry = nd_make_entry(was->value, NULL);
+			ES_PUSH(w->entries, w->nentries, w->capentries, entry);
+			tb_add(w->stored, tb_string(parts[p]), tb_string(id), entry);
+		}
+		const nd_entry *kids = tb_get(from, tb_string("children"), tb_string(id));
+		const op_value *v = kids != NULL ? kids->value : NULL;
+		for (size_t i = 0; v != NULL && v->type == OP_MAP && i < v->count; i++) {
+			if (!is_str(v->items[i])) continue;
+			if (n == cap) ids = realloc(ids, (cap *= 2) * sizeof *ids);
+			ids[n++] = es_dup(v->items[i]->str);
+		}
+		free(id);
+	}
+	free(ids);
+}
+
+// the ermine of a request (ermine's options), replacing the world; stored: handed what storage would
+// give back from the world before
+static int make(const op_value *r, world_t *before) {
 	world_t *w = es_alloc(sizeof *w);
+	if (before != NULL) {
+		stored(w, before->e->table);
+		w->counter = before->counter;
+	}
 	W = w;
 	w->host = env_new(NULL);
 	w->actor = op_str("test");
@@ -2258,7 +2301,7 @@ static int make(const op_value *r) {
 		w->policy = pr_call(deny_run, NULL);
 	}
 	list[nfeatures] = &harness_feature;
-	es_options o = {.features = list, .nfeatures = nfeatures + 1, .may = w->policy, .root = "R",
+	es_options o = {.features = list, .nfeatures = nfeatures + 1, .may = w->policy, .table = w->stored, .root = "R",
 		.info = &w->info, .ninfo = 1, .calls_never = strcmp(str_or(r, "calls"), "never") == 0,
 		.user_activated = world_user_activated};
 	if (text(r, "at") != NULL) o.host.at = text(r, "at");
@@ -2286,6 +2329,9 @@ static void world_free(world_t *w) {
 	for (size_t i = 0; i < w->nspent; i++) es_promise_release(w->spent[i]);
 	free(w->spent);
 	if (w->e != NULL) es_free(w->e);
+	for (size_t i = 0; i < w->nentries; i++) nd_free_entry(w->entries[i]);
+	free(w->entries);
+	tb_free(w->stored);
 	for (size_t i = 0; i < w->nenvs; i++) {
 		env_t *e = w->envs[i];
 		for (size_t k = 0; k < e->vars.n; k++) op_free(e->vars.vals[k]);
@@ -2809,8 +2855,15 @@ static int answer(const op_value *r, op_value **res) {
 	if (op == NULL) return fail("no op undefined");
 	if (strcmp(op, "ermine") == 0) {
 		// the old world goes first: closing its ermine would wipe what a failed make threw
-		world_free(W);
-		TRY(make(r));
+		world_t *before = flag(r, "stored") && W != NULL && W->e != NULL ? W : NULL;
+		if (before == NULL) world_free(W);
+		int code = make(r, before);
+		if (before != NULL) {
+			world_t *now = W;
+			world_free(before);
+			W = now;
+		}
+		TRY(code);
 		*res = op_map();
 		return 0;
 	}
@@ -3021,7 +3074,7 @@ void hh_finish(void) {
 void hh_answer(const op_value *request, FILE *out) {
 	ES_PUSH(lines, nlines, caplines, hh_retain());
 	if (W == NULL && strcmp(str_or(request, "op"), "ermine") != 0) {
-		if (make(NULL) != 0) W->e = NULL;
+		if (make(NULL, NULL) != 0) W->e = NULL;
 	}
 	op_value *res = NULL;
 	es_clear_thrown();

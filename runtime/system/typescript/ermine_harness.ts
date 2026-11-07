@@ -75,7 +75,7 @@ import { Refusal } from "@ermine/processes/guard"
 import type { Process } from "@ermine/processes/start"
 import { no, pending, type Policy, yes } from "@ermine/protect"
 import { PENDING } from "@ermine/reactivity"
-import type { Id, Key } from "@ermine/graph/table"
+import { createTable, type Id, type Key, type Table } from "@ermine/graph/table"
 import { type Request, serve } from "../../../meta/conformance/typescript/harness.ts"
 import { fromJson, toJson } from "../../../meta/conformance/typescript/form.ts"
 import {
@@ -135,8 +135,30 @@ function log(name: string, v: unknown) {
 	logs.get(name)!.push(v === undefined ? null : v)
 }
 
+// What storage would hand back: the value, attributes and children of everything the root reaches.
+function stored(from: Ermine): Table {
+	const t = createTable()
+	const ids: Id[] = [from.places.root], seen = new Set<Id>()
+	for (let id; (id = ids.pop()) !== undefined;) {
+		if (seen.has(id)) continue
+		seen.add(id)
+		for (const part of ["value", "attributes", "children"]) {
+			const entry = from.table.get(part, id)
+			if (entry !== undefined) t.add(part, id, entry)
+		}
+		const kids = from.table.get("children", id)?.value
+		if (kids !== null && typeof kids === "object") {
+			for (const x of Object.values(kids)) if (typeof x === "string") ids.push(x)
+		}
+	}
+	return t
+}
+
+let n = 0
 function make(o: Request = {}): Made {
-	let n = 0
+	const table = o.stored ? stored(w!.ermine) : undefined
+	if (o.stored) w!.ermine.close()
+	else n = 0
 	const later: (() => void)[] = []
 	const slots: Made["slots"] = new Map()
 	const deny = (o.deny ?? []) as {
@@ -184,6 +206,7 @@ function make(o: Request = {}): Made {
 	}
 	w = made
 	made.ermine = createErmine({
+		...table !== undefined && { table },
 		root: "R",
 		info: { actor: "test" },
 		features: [...features, {

@@ -784,6 +784,9 @@ typedef struct {
 	int64_t (*now)(void *ctx);
 	void *now_ctx;
 	const pr_policy *may;
+	// a graph to start from, as storage hands it back, its root's id root (NULL: a new one). the
+	// caller's still: es_free leaves it
+	tb_table *table;
 	const char *root;
 	// the host's node: its id (NULL: a new one; give the same one each start for a saved graph, as
 	// root), where it is placed (NULL: nowhere), the host's args (NULL: none)

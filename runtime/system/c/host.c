@@ -140,7 +140,6 @@ static const char *const HOOK_NAMES[ES_HOOKS] = {
 };
 
 static const char PART_PROCESS[] = PR_PART;
-static const char PART_CHILDREN[] = "children";
 static const char PART_ATTRIBUTES[] = "attributes";
 static const char PART_VALUE[] = "value";
 
@@ -258,6 +257,7 @@ typedef struct proc_rec {
 
 struct es_hosting {
 	int owns;
+	int owns_table;
 	int adding, made, queued;
 	struct es_pulse_ask {
 		es_ermine *e;
@@ -1374,18 +1374,12 @@ typedef struct {
 static int init_nodes(void *data) {
 	init_args *a = data;
 	es_ermine *e = a->e;
-	op_value *kids = op_map();
-	op_patch whole = {.has_value = 1, .value = kids};
-	es_write w = {.part = PART_CHILDREN, .id = e->root, .patches = &whole, .npatches = 1};
-	int code = es_context_put(e->host_context, &w);
-	op_free(kids);
-	if (code != 0) return code;
 	op_value *attrs = op_map();
 	op_set(attrs, ES_ARGS, names_value(a->o->host.args, a->o->host.nargs));
 	op_set(attrs, ES_FEATURES_ATTRIBUTE, shown_value(e));
-	whole.value = attrs;
-	w = (es_write){.part = PART_ATTRIBUTES, .id = e->node, .patches = &whole, .npatches = 1};
-	code = es_context_put(e->host_context, &w);
+	op_patch whole = {.has_value = 1, .value = attrs};
+	es_write w = {.part = PART_ATTRIBUTES, .id = e->node, .patches = &whole, .npatches = 1};
+	int code = es_context_put(e->host_context, &w);
 	op_free(attrs);
 	return code;
 }
@@ -1425,7 +1419,7 @@ static void release(es_ermine *e) {
 	if (e->computers != NULL) es_computers_free(e->computers);
 	e->computers = NULL;
 	if (h->owns && e->scheduler != NULL) sc_free(e->scheduler);
-	if (e->table != NULL) tb_free(e->table);
+	if (e->table != NULL && h->owns_table) tb_free(e->table);
 	if (e->paths != NULL) pt_free(e->paths);
 	if (e->names != NULL) pl_index_free(e->names);
 	if (e->places != NULL) pl_free(e->places);
@@ -1609,7 +1603,8 @@ int es_create(const es_options *given, es_ermine **out) {
 	e->scheduler = o->scheduler != NULL ? o->scheduler : sc_new((sc_options){.drop = es_drop, .data = e});
 
 
-	e->table = tb_new();
+	h->owns_table = o->table == NULL;
+	e->table = o->table != NULL ? o->table : tb_new();
 	if ((code = install(e, o)) != 0) goto fail;
 	// hooks and slots are added in setup only, as TS: nothing after this adds
 	h->adding = 0;

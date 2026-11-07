@@ -126,8 +126,10 @@ function touched(patches: readonly Patch[]): string[] | undefined {
 }
 
 // Every folder and name that names an id, latest placed last. It learns from what places tells,
-// so an entry already in the table when it is made is missing.
-export function createNames(places: Pick<Places, "watchAll">): Index {
+// after a walk from the root through what the table already holds (a table handed in).
+export function createNames(
+	places: Pick<Places, "watchAll" | "root" | "peep" | "readValue">,
+): Index {
 	const indexed = new Map<Id, Map<string, Id>>()
 	const named = new Map<Id, Slot[]>()
 	function unindex(folder: Id, name: string) {
@@ -140,8 +142,7 @@ export function createNames(places: Pick<Places, "watchAll">): Index {
 		list.splice(list.findIndex((n) => n.folder === folder && n.name === name), 1)
 		if (list.length === 0) named.delete(id)
 	}
-	function index(folder: Id, name: string, entry: Entry<unknown> | undefined) {
-		const now = child(entry, name)
+	function index(folder: Id, name: string, now: Id | undefined) {
 		if (indexed.get(folder)?.get(name) === now) return
 		unindex(folder, name)
 		if (now === undefined) return
@@ -159,7 +160,19 @@ export function createNames(places: Pick<Places, "watchAll">): Index {
 			const v = entry?.value
 			names = new Set([...indexed.get(id)?.keys() ?? [], ...isPojo(v) ? Object.keys(v) : []])
 		}
-		for (const name of names) index(id, name, entry)
+		for (const name of names) index(id, name, child(entry, name))
 	})
+	const walked = new Set<Id>(), folders = [places.root]
+	for (let folder; (folder = folders.pop()) !== undefined;) {
+		if (walked.has(folder)) continue
+		walked.add(folder)
+		const v = places.peep(() => places.readValue("children", folder!))
+		if (!isPojo(v)) continue
+		for (const [name, x] of Object.entries(v)) {
+			const id = asId(x)
+			index(folder, name, id)
+			if (id !== undefined) folders.push(id)
+		}
+	}
 	return { of: (id) => named.get(id) ?? [] }
 }

@@ -1,0 +1,16 @@
+{
+	"title": "an ermine handed a graph from storage starts from it: what was there reads the same and takes writes; making it writes nothing over the root",
+	"steps": [
+		{ "op": "ermine", "expect": {} },
+		{ "op": "host", "call": ["ensureNode", "/k", 0] },
+		{ "op": "host", "call": ["ensureNode", "/d/x", 1] },
+		{ "op": "ermine", "stored": true, "expect": {} },
+		{ "op": "host", "call": ["read", "/k"], "expect": { "value": 0 } },
+		{ "op": "host", "call": ["read", "/d/x"], "expect": { "value": 1 } },
+		{ "op": "host", "call": ["list", "/"], "expect": { "value": ["d", "k"] } },
+		{ "op": "host", "call": ["patch", "/k", [{ "path": [], "value": 2 }]] },
+		{ "op": "host", "call": ["read", "/k"], "expect": { "value": 2 } },
+		{ "op": "host", "call": ["remove", "/d/x"] },
+		{ "op": "host", "call": ["hasNode", "/d/x"], "expect": { "value": false } }
+	]
+}

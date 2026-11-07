@@ -99,6 +99,9 @@ void world_contribute(const pl_contributor *const *list, size_t n) {
 	if (world_places == NULL) return;
 	pl_connect(world_places, &(pl_setup){.root = tb_string("R"), .table = world_table,
 		.paths = world_paths, .scheduler = world_scheduler, .contributors = list, .ncontributors = n});
+	// as TS, a new index over the same table
+	pl_index_free(world_index);
+	world_index = pl_index_new(world_places);
 }
 
 #define PUSH(v, n, cap, x) \
