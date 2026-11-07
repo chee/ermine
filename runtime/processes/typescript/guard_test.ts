@@ -143,7 +143,7 @@ Deno.test("guard: a refused member stays in a list, its id REFUSED, in its place
 	}
 	const e = assertThrows(() => w.hosted(() => w.read(g, refused)))
 	assertInstanceOf(e, Refusal)
-	assertEquals(e.answer.reason, "refused")
+	assertEquals(e.reason, "refused")
 })
 
 Deno.test("guard: pending throws PENDING: the rules not there, a run ends pending and runs once they are; a write throws, nothing made", () => {

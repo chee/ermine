@@ -2,17 +2,17 @@
 // has a name but no id: list and members read under it as under a folder, and get finds no id.
 import {
 	type Answer,
-	type Here,
 	type Id,
 	level,
 	type Member,
 	type Path,
+	type Place,
 	type Places,
 } from "./places.ts"
 
 type Reads = Pick<Places, "root" | "walk" | "names">
 
-function reach(places: Pick<Places, "walk">, path: Path, from?: Here): Here | undefined {
+function reach(places: Pick<Places, "walk">, path: Path, from?: Place): Place | undefined {
 	const steps = places.walk(path, from)
 	let r = steps.next()
 	while (!r.done) r = steps.next()
@@ -42,7 +42,7 @@ export function lookup(
 	all = false,
 ): string[] | undefined | string[][] {
 	const out: string[][] = []
-	const heres: Here[] = [{ id: places.root, path: [] }]
+	const heres: Place[] = [{ id: places.root, path: [] }]
 	for (const name of from) {
 		const next = reach(places, [name], heres[heres.length - 1])
 		if (next === undefined) break

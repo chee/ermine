@@ -39,7 +39,7 @@ export const level: Id = /* @__PURE__ */ Symbol("level")
 
 export const none: unique symbol = /* @__PURE__ */ Symbol("none")
 
-export type Here = { readonly id: Id; readonly path?: Path; readonly gone?: number }
+export type Place = { readonly id: Id; readonly path?: Path; readonly gone?: number }
 
 const bit = (i: number) => i < 32 ? 1 << i : 0
 
@@ -52,9 +52,9 @@ export type Reads = {
 
 export type Contributor = {
 	readonly from: string
-	step(here: Here, name: string, reads: Reads): Id | undefined | typeof none
-	names(here: Here, reads: Reads): string[] | typeof none
-	level?(here: Here, name: string, reads: Reads): boolean
+	step(here: Place, name: string, reads: Reads): Id | undefined | typeof none
+	names(here: Place, reads: Reads): string[] | typeof none
+	level?(here: Place, name: string, reads: Reads): boolean
 }
 
 export type Answer = { readonly id: Id; readonly from: string }
@@ -314,7 +314,7 @@ export function createPlaces(setup: Setup): Places {
 
 	let said = 0
 
-	function go(here: Here, name: string): Member | undefined {
+	function go(here: Place, name: string): Member | undefined {
 		const gone = here.gone ?? 0
 		let under = gone
 		for (let i = 0; i < asked.length; i++) {
@@ -339,8 +339,8 @@ export function createPlaces(setup: Setup): Places {
 		said = under
 	}
 
-	function* walk(path: Path, from: Id | Here = root): Generator<Member, Here | undefined> {
-		let here: Here = typeof from === "object"
+	function* walk(path: Path, from: Id | Place = root): Generator<Member, Place | undefined> {
+		let here: Place = typeof from === "object"
 			? from
 			: from === root
 			? { id: root, path: [] }
@@ -355,7 +355,7 @@ export function createPlaces(setup: Setup): Places {
 		return here
 	}
 
-	function answers(here: Here, name: string): Answers {
+	function answers(here: Place, name: string): Answers {
 		const gone = here.gone ?? 0
 		let out: Answer[] = [], under = gone
 		for (let i = 0; i < asked.length; i++) {
@@ -379,7 +379,7 @@ export function createPlaces(setup: Setup): Places {
 	}
 
 	// With several contributors, in canonical CBOR key order.
-	function names(here: Here): Names {
+	function names(here: Place): Names {
 		const gone = here.gone ?? 0
 		let under = gone
 		const out: Named[] = []
@@ -444,9 +444,9 @@ export type Places = {
 	readValue: (part: Key, id: Id, path?: readonly Step[], range?: Span) => unknown
 	readKeys: (part: Key, id: Id, path?: readonly Step[], ids?: boolean) => string[]
 	readChange: (part: Key, id: Id) => ChangeHeader | undefined
-	walk: (path: Path, from?: Id | Here) => Generator<Member, Here | undefined>
-	answers: (here: Here, name: string) => Answers
-	names: (here: Here) => Names
+	walk: (path: Path, from?: Id | Place) => Generator<Member, Place | undefined>
+	answers: (here: Place, name: string) => Answers
+	names: (here: Place) => Names
 
 	record: <T>(f: () => T, reads: Set<unknown>, fresh?: Set<unknown>) => T
 	peep: <T>(f: () => T) => T

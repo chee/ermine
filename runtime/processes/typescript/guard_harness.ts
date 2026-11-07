@@ -204,11 +204,12 @@ function answer(r: Request): Json | undefined {
 				return { value: r.scope === undefined ? run() : s.runWithScope(scope(r.scope), run) }
 			} catch (e) {
 				if (e instanceof Refusal) {
-					const { grant } = e.answer, { field } = e.ask.target
+					const why = c.g.why(e)!
+					const { grant } = why.answer, { field } = why.ask.target
 					return {
 						error: "refused",
-						reason: e.answer.reason,
-						op: e.ask.op,
+						reason: e.reason,
+						op: e.op,
 						...(r.detail === true && grant && { grant }),
 						...(r.detail === true && field && { field }),
 					}

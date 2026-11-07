@@ -18,12 +18,16 @@ import { at, type Id, type Member, type Path, type Places } from "@ermine/places
 
 export const REFUSED: unique symbol = /* @__PURE__ */ Symbol.for("ermine.refused")
 
+// What a program catches: the op and the reason, never what was asked about (its id). The guard
+// that refused keeps the ask and answer for the host: why(refusal).
 export class Refusal extends Error {
 	readonly code = "refused"
-	constructor(readonly answer: Extract<Answer, { answer: "no" }>, readonly ask: Ask) {
-		super(`${ask.op} refused: ${answer.reason}`)
+	constructor(readonly op: string, readonly reason: string) {
+		super(`${op} refused: ${reason}`)
 	}
 }
+
+export type Why = { readonly answer: Extract<Answer, { answer: "no" }>; readonly ask: Ask }
 
 export type Setup = {
 	places: Pick<Places, "readValue">
@@ -52,8 +56,15 @@ export function createGuard(setup: Setup): {
 	place: (slot: Target, node: Target, ops: readonly string[]) => void
 	members: (list: readonly Member[], at?: Path) => Member[]
 	move: (source: Path, to: Path) => void
+	why: (e: unknown) => Why | undefined
 } {
 	const { places, table, scheduler } = setup
+	const whys = new WeakMap<Refusal, Why>()
+	const refuse = (answer: Why["answer"], ask: Ask) => {
+		const e = new Refusal(ask.op, answer.reason)
+		whys.set(e, { answer, ask })
+		return e
+	}
 	const policy = setup.may ?? everything
 	const from = placeOf(setup.from)
 	const told = may(policy, (part, id, field) => places.readValue(part as Key, id, field))
@@ -90,7 +101,7 @@ export function createGuard(setup: Setup): {
 		let waiting = false
 		for (const t of targets) {
 			const [a, answer] = asked(ask, op, t)
-			if (answer.answer === "no") throw new Refusal(answer, a)
+			if (answer.answer === "no") throw refuse(answer, a)
 			if (answer.answer === "pending") waiting = true
 		}
 		if (waiting) throw PENDING
@@ -118,7 +129,7 @@ export function createGuard(setup: Setup): {
 			target: { path: [...source] },
 			from,
 		}
-		throw new Refusal(no("into-itself"), a)
+		throw refuse(no("into-itself"), a)
 	}
 
 	function place(slot: Target, node: Target, ops: readonly string[]) {
@@ -132,11 +143,11 @@ export function createGuard(setup: Setup): {
 		const [a, answer] = slot.id === REFUSED || node.id === REFUSED
 			? [placing, no("refused")]
 			: both(quiet, placing)
-		if (answer.answer === "no") throw new Refusal(answer, a)
+		if (answer.answer === "no") throw refuse(answer, a)
 		let waiting = answer.answer === "pending"
 		for (const op of ops) {
 			const [b, got] = asked(quiet, op, node)
-			if (got.answer === "no") throw new Refusal(got, b)
+			if (got.answer === "no") throw refuse(got, b)
 			if (got.answer === "pending") waiting = true
 		}
 		if (waiting) throw PENDING
@@ -148,5 +159,6 @@ export function createGuard(setup: Setup): {
 		place,
 		members,
 		move,
+		why: (e) => e instanceof Refusal ? whys.get(e) : undefined,
 	}
 }

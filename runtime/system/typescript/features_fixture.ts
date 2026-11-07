@@ -1,6 +1,5 @@
 // The ermine harness's test features.
 import { Refusal } from "@ermine/processes/guard"
-import { no } from "@ermine/protect"
 import { ErmineError, type Feature, type Hook, type ProcessContext } from "./ermine.ts"
 
 export function testFeature(
@@ -57,11 +56,7 @@ export function testFeature(
 					if (how === "drop") return
 					if (how === "copy") return next(o, { ...wr })
 					if (how === "refuse") {
-						throw new Refusal(no(`${name} refused`), {
-							who: undefined,
-							op: "edit",
-							target: { id: wr.id },
-						})
+						throw new Refusal("edit", `${name} refused`)
 					}
 					next(o, wr)
 				})
