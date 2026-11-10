@@ -542,3 +542,10 @@ Deno.test(`edit oracle: ${SEEDS} seeds, apply(edit) is the recipe on a clone`, (
 		assertEquals(apply(got, undo), was, `${at}: undo`)
 	}
 })
+
+Deno.test("edit given only a recipe gives a function of base that makes the same patches", () => {
+	const bump = edit((d: { n: number }) => void d.n++)
+	assertEquals(bump({ n: 1 }), [{ path: ["n"], value: 2 }])
+	assertEquals(bump({ n: 5 }), [{ path: ["n"], value: 6 }])
+	assertThrows(() => edit(((d: { n: number }) => d.n++) as never)({ n: 1 }), TypeError)
+})

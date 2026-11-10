@@ -5,11 +5,11 @@ import type { Inner, Patch, Target } from "../context.ts"
 import { go } from "../acting.ts"
 import { marked } from "../site.ts"
 import { aimed, attributesOf, idThrough, needId, nodeOf, thing } from "./addressing.ts"
-import { askPlacing } from "./asking.ts"
+import { askPlacing, mayRead } from "./asking.ts"
 import { unplaced } from "./made.ts"
 import { here } from "./setting.ts"
 import { childrenOf, placeUnder, runningAt } from "./tree.ts"
-import type { System } from "./shapes.ts"
+import type { Patches, System } from "./shapes.ts"
 
 export const patch: System["patch"] = /* @__PURE__ */ marked(function patch(x, patches) {
 	return go(patch, "patch", true, patchAs, x, patches)
@@ -25,14 +25,20 @@ export const patchChildren: System["patchChildren"] = /* @__PURE__ */ marked(
 	},
 )
 
-// Patches x's part. Writes are patches only, never a recipe, since the base has no proxies.
-export function patchAs(inner: Inner, x: Target, given: readonly Patch[]) {
-	const patches = patchesOnly(given)
-	const { inside, ask } = here(inner)
+// Patches x's part. A function is given the value untracked (reading it is asked too).
+export function patchAs(inner: Inner, x: Target, given: Patches) {
+	const early = typeof given === "function" ? undefined : patchesOnly(given)
+	const { inside, ask, places } = here(inner)
 	inside(() => {
 		const n = nodeOf(inner, x)
 		const id = needId(inner, n)
 		ask("edit", aimed(id, n.path, n.part))
+		let patches = early
+		if (patches === undefined) {
+			mayRead(inner, id, n.path, n.part)
+			const value = places.peep(() => places.readValue(n.part, id))
+			patches = patchesOnly((given as (value: unknown) => readonly Patch[])(value))
+		}
 		if (patches.length) {
 			inner.put({
 				part: n.part,
@@ -81,12 +87,15 @@ export function patchChildrenAs(inner: Inner, x: Target, given: readonly Patch[]
 	})
 }
 
-export const patchAttributesAs = (inner: Inner, x: Target, patches: readonly Patch[]) =>
+export const patchAttributesAs = (inner: Inner, x: Target, patches: Patches) =>
 	patchAs(inner, attributesOf(inner, x), patches)
 
 function patchesOnly(patches: unknown): readonly Patch[] {
 	if (!Array.isArray(patches)) {
-		throw new ErmineError("not-patches", "patch takes patches: [{ path, value }]")
+		throw new ErmineError(
+			"not-patches",
+			"patch takes patches, [{ path, value }], or a function of the value giving them",
+		)
 	}
 	return patches
 }

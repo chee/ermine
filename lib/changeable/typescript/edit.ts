@@ -492,15 +492,21 @@ function helpers(context: Context): Helpers {
 	return { splice: splice as Splice, nothing }
 }
 
-// Returns the patches the recipe made; a returned value becomes a put at [].
+export type Recipe<T> = (draft: T, helpers: Helpers) => T | void | typeof nothing
+
+// Returns the patches the recipe made; a returned value becomes a put at []. Given only a
+// recipe, gives a function of base that does the same.
+export default function edit<T>(recipe: Recipe<T>): (base: T) => Patch[]
+export default function edit<T>(base: T, recipe: Recipe<T>): Patch[]
 export default function edit<T>(
-	base: T,
-	recipe: (draft: T, helpers: Helpers) => T | void | typeof nothing,
-): Patch[] {
+	base: T | Recipe<T>,
+	recipe?: Recipe<T>,
+): Patch[] | ((base: T) => Patch[]) {
+	if (recipe === undefined) return (b: T) => edit(b, base as Recipe<T>)
 	const context: Context = { out: [], done: false }
 	if (typeof base === "string") context.top = base
 	try {
-		const d = kind(base) ? draft(base, context) : base
+		const d = kind(base) ? draft(base as T, context) : base as T
 		const r = recipe(d, helpers(context))
 		if (r === undefined || r === d || Object.is(r, base)) return context.out
 		if (context.out.length) throw new TypeError("a recipe changed the draft and returned a value")

@@ -23,6 +23,7 @@ import {
 	readAttributes,
 	readChildren,
 } from "@ermine/system"
+import edit from "@ermine/changeable/edit"
 import { countOf } from "./system_fixture.ts"
 import { manual } from "./manual_fixture.ts"
 
@@ -48,7 +49,7 @@ Deno.test("@ermine/system: getNode makes nothing, ensureNode makes once, hasNode
 	e.close()
 })
 
-Deno.test("@ermine/system: patch takes patches only; a node not there: nothing-there; attributes by their own pair", () => {
+Deno.test("@ermine/system: patch takes patches or a function giving them; a node not there: nothing-there; attributes by their own pair", () => {
 	const e = createErmine({ features: [manual] })
 	const errors: unknown[] = []
 	e.within(() =>
@@ -56,7 +57,7 @@ Deno.test("@ermine/system: patch takes patches only; a node not there: nothing-t
 			ensureNode("./x", { n: 0 })
 			patch("./x", [{ path: ["n"], value: 1 }])
 			try {
-				patch("./x", ((d: { n: number }) => void (d.n = 2)) as never)
+				patch("./x", (() => 5) as never)
 			} catch (x) {
 				errors.push((x as ErmineError).code)
 			}
@@ -74,6 +75,33 @@ Deno.test("@ermine/system: patch takes patches only; a node not there: nothing-t
 	let kind: unknown
 	e.getProcessContext()!.within(() => kind = readAttributes("/code/x", ["kind"]))
 	assertEquals(kind, "thing")
+	e.close()
+})
+
+Deno.test("@ermine/system: patch with a function is given the value now; edit curried makes the patches", () => {
+	const e = createErmine({ features: [manual] })
+	const seen: unknown[] = []
+	e.within(() =>
+		ensureNode("/code/p", () => {
+			ensureNode("./serial", { next: 0 })
+			ensureNode("./tags", { list: ["a"] })
+			for (let i = 0; i < 3; i++) {
+				patch("./serial", (v) => {
+					seen.push(v.next)
+					return [{ path: ["next"], value: v.next + 1 }]
+				})
+			}
+			patch("./tags", edit((d: { list: string[] }) => void d.list.push("b")))
+			patchAttributes("./tags", (v) => [{ path: [], value: { ...v, kind: "tags" } }])
+		})
+	)
+	e.start(programAt(e, "/code/p"), "/code/p")
+	assertEquals(seen, [0, 1, 2])
+	assertEquals(e.within(() => peep(() => read("/code/serial"))), { next: 3 })
+	assertEquals(e.within(() => peep(() => read("/code/tags"))), { list: ["a", "b"] })
+	let kind: unknown
+	e.getProcessContext()!.within(() => kind = readAttributes("/code/tags", ["kind"]))
+	assertEquals(kind, "tags")
 	e.close()
 })
 

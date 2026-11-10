@@ -7,6 +7,10 @@ import type { Call } from "../calls.ts"
 import type { Inner, Node, Patch, Step, Target, Version, Why } from "../context.ts"
 
 // The info key a write made through a writer has while the page is user-activated.
+// The patches, or a function given the part's value now that gives them.
+// deno-lint-ignore no-explicit-any
+export type Patches = readonly Patch[] | ((value: any) => readonly Patch[])
+
 export const USER_ACTIVATED = "userActivated"
 
 // The attribute holding the node key of the nearest enclosing scope that has one.
@@ -142,8 +146,8 @@ export type System = {
 	readAllChildren: (x: Target) => Version[]
 	readEntries: (x: Target) => Item[]
 	peep: <T>(f: () => T) => T
-	patch: (x: Target, patches: readonly Patch[]) => void
-	patchAttributes: (x: Target, patches: readonly Patch[]) => void
+	patch: (x: Target, patches: Patches) => void
+	patchAttributes: (x: Target, patches: Patches) => void
 	patchChildren: (x: Target, patches: readonly Patch[]) => void
 	explain: (x: Target | ChangeView, key?: readonly Step[]) => Explained | undefined
 	explainAttributes: (x: Target) => Explained | undefined
