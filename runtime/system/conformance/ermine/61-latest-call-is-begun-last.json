@@ -1,5 +1,5 @@
 {
-	"title": "a handler's latest call is the one begun last: an earlier call that settles after it (its promise) is told through onRecord, but the record held stays the later one's (a review found the one settling last held)",
+	"title": "a handler's latest call is the one begun last: an earlier call that settles after it (its promise) does not replace the record, which stays the later one's (a review found the one settling last held)",
 	"steps": [
 		{
 			"op": "ermine",

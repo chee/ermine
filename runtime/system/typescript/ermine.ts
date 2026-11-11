@@ -31,7 +31,7 @@ import type { Location } from "@ermine/changeable/stacktrace"
 import { createStatus, STATUS } from "@ermine/processes/status"
 import type { Policy } from "@ermine/protect"
 import { processes as rows } from "@ermine/processes"
-import { createRuns } from "@ermine/processes/runs"
+import { createRuns, type Run } from "@ermine/processes/runs"
 import { createScopeNodes } from "@ermine/processes/scopes"
 import {
 	createProcesses,
@@ -45,7 +45,7 @@ import { createScheduler, type Info, PENDING, type Scheduler, type Scope } from 
 import { isPromise } from "@ermine/reactivity/helpers"
 import { createPaths } from "@ermine/reactivity/paths"
 import { createTable, type Key, type Table } from "@ermine/graph/table"
-import { createCalls } from "./calls.ts"
+import { type Call, createCalls, type Wait } from "./calls.ts"
 import {
 	type Asked,
 	type Calling,
@@ -78,15 +78,7 @@ import { attach, innerOf } from "./system/setting.ts"
 import { type ChangeView, type Status, WAITING } from "./system/shapes.ts"
 
 export { ErmineError, FeatureError } from "./features.ts"
-export type {
-	Asked,
-	Calling,
-	Feature,
-	FeatureAPI,
-	Hook,
-	Hooks,
-	Reading,
-} from "./features.ts"
+export type { Asked, Calling, Feature, FeatureAPI, Hook, Hooks, Reading } from "./features.ts"
 export type {
 	At,
 	CreatedFunction,
@@ -159,6 +151,11 @@ export type Ermine = {
 	readonly table: Pick<ErmineTable, "get" | "who">
 	readonly places: Places
 	readonly id: Id
+	readonly records: {
+		run: (id: Id) => Run | undefined
+		call: (id: Id) => Call | undefined
+		waits: () => Wait[]
+	}
 }
 
 // A uuidv7 (rfc 9562): 48 bits of ms, then a 12-bit counter, then random. A clock going back
@@ -698,6 +695,13 @@ function make(options: Options, undo: (() => void)[]): Ermine {
 				alive()
 				const d = isHandle(x) ? base.handles.get(x) : undefined
 				return d === undefined ? undefined : { node: d.node }
+			},
+		},
+		records: {
+			value: {
+				run: (id: Id) => (alive(), runs.read(id)),
+				call: (id: Id) => (alive(), calls.latest(id)),
+				waits: () => (alive(), calls.waits()),
 			},
 		},
 	}) as unknown as Ermine

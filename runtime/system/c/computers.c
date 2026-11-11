@@ -556,7 +556,6 @@ static char *drop(made *m) {
 		free(parts);
 	}
 	if (e->runs != NULL) crn_drop(e->runs, tb_string(m->id));
-	es_held_drop(e, m->id);
 	return bad;
 }
 
@@ -855,7 +854,6 @@ static void free_waiting(es_waiting *w, size_t n) {
 
 void es_status_free(es_status *s) {
 	if (s == NULL) return;
-	free(s->held_feature);
 	free(s->error);
 	free_waiting(s->waiting, s->nwaiting);
 	op_free(s->more);
@@ -863,7 +861,6 @@ void es_status_free(es_status *s) {
 }
 
 static void release_unshared(es_status *st, const es_status *shown) {
-	if (st->held_feature != shown->held_feature) free(st->held_feature);
 	if (st->error != shown->error) free(st->error);
 	if (st->waiting != shown->waiting) free_waiting(st->waiting, st->nwaiting);
 	if (st->more != shown->more) op_free(st->more);
@@ -1116,12 +1113,6 @@ static int own_status(es_context *c, const es_node_data *n, const char *id, cons
 	if (code) return code;
 	const op_value *v = cst_status(c->places, tb_string(id));
 	if (pl_status(c->places) == SC_STOP) return ES_STOP;
-	es_held h;
-	if (es_held_status(e, id, &h) || es_held_row(e, id, &h)) {
-		st->has_held = 1;
-		st->held_feature = es_dup(h.feature);
-		st->held_write = h.write;
-	}
 	if (!es_is_computer(e, id)) return plain_status(c, id, v, st);
 	return computer_status(c, id, v, key, st);
 }

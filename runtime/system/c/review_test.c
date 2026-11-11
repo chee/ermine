@@ -1,5 +1,5 @@
-// Cases from a review that the harness cannot show (a scope torn down as a wait is made, a hook
-// calling next twice, a handler failing with no text); the memory ones run under AddressSanitizer.
+// Cases from a review that the harness cannot show (a scope torn down as a wait is made, a handler
+// failing with no text); the memory ones run under AddressSanitizer.
 // make test-review-system, test-check-review-system.
 #include "ermine.h"
 
@@ -45,25 +45,6 @@ static void wait_in_a_scope_going(void) {
 	es_free(e);
 }
 
-typedef struct {
-	// 0: the same record twice. 1: the record, then a changed one
-	int mode;
-	int told;
-} hook_t;
-static int calls_next_twice(void *ctx, const es_recorded *r, es_record_next *next) {
-	hook_t *h = ctx;
-	h->told++;
-	int code = es_next_record(next, r);
-	if (code || r->call == NULL) return code;
-	if (h->mode == 0) return es_next_record(next, r);
-	es_call changed = *r->call;
-	changed.end = "failed";
-	es_recorded again = *r;
-	again.call = &changed;
-	return es_next_record(next, &again);
-}
-static int hook_setup(void *ctx, es_feature_api *f) { return es_on_record(f, calls_next_twice, ctx); }
-
 static es_out answers(es_context *c, void *ctx, const op_value *const *args, size_t n) {
 	(void)c, (void)ctx, (void)args, (void)n;
 	return es_out_of(op_num(1));
@@ -80,35 +61,16 @@ static es_out makes_actions(es_context *c, void *ctx) {
 	CHECK(es_create_action(c, es_text("bad"), fails_with_no_text, NULL, &h) == 0);
 	return es_out_of(NULL);
 }
-static es_ermine *with_actions(hook_t *hook, es_started **started) {
-	es_feature f = {.name = "twice", .setup = hook_setup, .ctx = hook};
-	const es_feature *list[1] = {&f};
-	es_options o = {.features = list, .nfeatures = 1};
+static es_ermine *with_actions(es_started **started) {
 	es_ermine *e = NULL;
-	CHECK(es_create(&o, &e) == 0);
+	CHECK(es_create(&(es_options){0}, &e) == 0);
 	es_refused no = {0};
 	CHECK(es_start(e, makes_actions, NULL, es_text("/code/p"), NULL, started, &no) == 0);
 	return e;
 }
-static void next_called_twice(int mode) {
-	hook_t hook = {mode, 0};
-	es_started *started = NULL;
-	es_ermine *e = with_actions(&hook, &started);
-	for (int i = 0; i < 2; i++) {
-		op_value *out = NULL;
-		CHECK(es_execute_action(e->host_context, es_on_path(es_text("/code/p/ok")), NULL, 0, &out) == 0);
-		op_free(out);
-	}
-	CHECK(hook.told > 0);
-	es_stop(started, NULL);
-	es_started_free(started);
-	CHECK(es_close(e) == 0);
-	es_free(e);
-}
 static void failing_with_no_text(void) {
-	hook_t hook = {0, 0};
 	es_started *started = NULL;
-	es_ermine *e = with_actions(&hook, &started);
+	es_ermine *e = with_actions(&started);
 	op_value *out = NULL;
 	CHECK(es_execute_action(e->host_context, es_on_path(es_text("/code/p/bad")), NULL, 0, &out) != 0);
 	es_clear_thrown();
@@ -247,8 +209,6 @@ int main(int argc, char **argv) {
 #define RUN(name, call) \
 	if (only == NULL || strcmp(only, name) == 0) call
 	RUN("wait", wait_in_a_scope_going());
-	RUN("next", next_called_twice(0));
-	RUN("next-changed", next_called_twice(1));
 	RUN("no-text", failing_with_no_text());
 	RUN("stale-promise", stale_promise_settling());
 	RUN("foreign-seen", seen_by_a_foreign_context());

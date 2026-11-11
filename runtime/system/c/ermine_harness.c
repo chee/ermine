@@ -70,9 +70,6 @@ typedef struct {
 typedef struct {
 	char *name;
 	const op_value *spec;
-	es_feature_api *api;
-	es_slot *slot;
-	long matched;
 	op_value *held;
 } tf_t;
 
@@ -85,10 +82,8 @@ typedef struct {
 	es_ermine *e;
 	es_map running;
 	es_map logs;
-	es_map slots;
 	es_map programs;
 	es_map shared;
-	es_map late;
 	env_t *host;
 	queued_t *queue;
 	size_t nqueue, capqueue, head;
@@ -485,12 +480,6 @@ static op_value *path_value(int has_path, char *const *path, size_t n) {
 static op_value *status_value(const es_status *st) {
 	op_value *m = op_map();
 	op_set(m, "state", op_str(st->state));
-	if (st->has_held) {
-		op_value *h = op_map();
-		op_set(h, "feature", op_str(st->held_feature));
-		op_set(h, "write", op_str(st->held_write));
-		op_set(m, "held", h);
-	}
 	if (st->error != NULL) op_set(m, "error", op_str(st->error));
 	if (st->phase != NULL) op_set(m, "phase", op_str(st->phase));
 	if (st->nwaiting > 0) {
@@ -594,11 +583,6 @@ static op_value *explained_value(const es_explained *x) {
 		}
 	}
 	if (x->change != NULL && x->change->user_activated) op_set(m, "userActivated", op_bool(1));
-	if (x->has_held) {
-		op_value *h = op_map();
-		op_set(h, "feature", op_str(x->held_feature));
-		op_set(m, "held", h);
-	}
 	return m;
 }
 
@@ -1881,7 +1865,7 @@ static int expr(sys_t sys, env_t *env, const op_value *e, op_value **out) {
 // --- the world's pieces ----------
 
 // the harness's own feature: ids "n1", ..., or the name a start gave; pulses held to run after a
-// request; the functions made. It is not shown in features
+// request; the functions made
 #define HARNESS "harness"
 static int harness_id(void *ctx, const char *kind, es_id_next *next, char **out) {
 	(void)ctx;
@@ -2004,70 +1988,6 @@ static int tf_read(void *ctx, const es_reading *x, const es_versions *items, es_
 	}
 	return es_next_read(next, x, items, out);
 }
-static int in_list(const op_value *list, const char *s) {
-	for (size_t i = 0; i < list->count; i++) {
-		if (is_str(list->items[i]) && strcmp(list->items[i]->str, s) == 0) return 1;
-	}
-	return 0;
-}
-static int tf_write(void *ctx, es_context *o, const es_write *w, es_write_next *next) {
-	tf_t *t = ctx;
-	if (t->slot != NULL) {
-		long count = 0;
-		es_slot_get(t->slot, o, &count);
-		es_slot_set(t->slot, o, count + 1);
-	}
-	const char *how = text(t->spec, "onWrite");
-	if (how == NULL) return es_next_write(next, o, w);
-	// only: the host's context's writes; ids, parts: writes to those alone
-	if (is_how(t, "only", "host") && o->process != NULL) return es_next_write(next, o, w);
-	const op_value *ids = field(t->spec, "ids"), *parts = field(t->spec, "parts");
-	if (ids != NULL && ids->type == OP_LIST && !in_list(ids, w->id)) return es_next_write(next, o, w);
-	if (parts != NULL && parts->type == OP_LIST && !in_list(parts, w->part)) {
-		return es_next_write(next, o, w);
-	}
-	// takes: only writes taking something out (an entry gone, or every patch with no value or move)
-	int out = w->gone;
-	if (!out) {
-		out = 1;
-		for (size_t i = 0; i < w->npatches; i++) {
-			if (w->patches[i].has_value || w->patches[i].has_move) out = 0;
-		}
-	}
-	if (flag(t->spec, "takes") && !out) return es_next_write(next, o, w);
-	const op_value *times = field(t->spec, "times");
-	if (times != NULL && times->type == OP_NUM && t->matched++ >= (long)times->num) {
-		return es_next_write(next, o, w);
-	}
-	say(t, "onWrite", w->part, w->id, w->gone ? "gone" : NULL);
-	if (strcmp(how, "throw") == 0) return boom(t);
-	if (strcmp(how, "drop") == 0) return 0;
-	if (strcmp(how, "copy") == 0) {
-		es_write copy = *w;
-		return es_next_write(next, o, &copy);
-	}
-	if (strcmp(how, "refuse") == 0) {
-		char reason[256];
-		snprintf(reason, sizeof reason, "%s refused", t->name);
-		gd_refusal why = {.op = "edit", .reason = reason};
-		return es_fail_refusal(&why, NULL, NULL);
-	}
-	return es_next_write(next, o, w);
-}
-static int tf_teardown(void *ctx, sc_scope *scope, const char *why, es_teardown_next *next) {
-	tf_t *t = ctx;
-	say(t, "onTeardown", why, NULL, NULL);
-	if (is_how(t, "onTeardown", "throw")) return boom(t);
-	if (is_how(t, "onTeardown", "drop")) return 0;
-	if (is_how(t, "onTeardown", "why")) {
-		char *s = es_alloc(strlen(t->name) + strlen(why) + 2);
-		sprintf(s, "%s:%s", t->name, why);
-		int code = es_next_teardown(next, scope, s);
-		free(s);
-		return code;
-	}
-	return es_next_teardown(next, scope, why);
-}
 static int tf_status(void *ctx, const es_asked *x, const es_status *st, es_status_next *next,
 	es_status *out) {
 	tf_t *t = ctx;
@@ -2092,14 +2012,6 @@ static int tf_status(void *ctx, const es_asked *x, const es_status *st, es_statu
 		out->more = more;
 	}
 	return 0;
-}
-static int tf_record(void *ctx, const es_recorded *r, es_record_next *next) {
-	tf_t *t = ctx;
-	say(t, "onRecord", r->run != NULL ? "run" : "call", r->id,
-		r->run != NULL ? r->run->end : r->call->end);
-	if (is_how(t, "onRecord", "throw")) return boom(t);
-	if (is_how(t, "onRecord", "drop")) return 0;
-	return es_next_record(next, r);
 }
 static int tf_id(void *ctx, const char *kind, es_id_next *next, char **out) {
 	tf_t *t = ctx;
@@ -2154,50 +2066,20 @@ static int tf_error(void *ctx, int code, const char *fn, es_error_next *next, in
 	}
 	return es_next_error(next, code, fn, out);
 }
-static int tf_pass(void *ctx, es_context *o, const es_write *w, es_write_next *next) {
-	(void)ctx;
-	return es_next_write(next, o, w);
-}
-
 static int tf_setup(void *ctx, es_feature_api *f) {
 	tf_t *t = ctx;
-	t->api = f;
 	if (flag(t->spec, "early")) {
 		pl *places;
 		TRY(es_api_places(f, &places));
 	}
 	if (flag(t->spec, "onRead")) TRY(es_on_read(f, tf_read, t));
-	if (flag(t->spec, "slot")) {
-		TRY(es_reserve_slot(f, &t->slot));
-		es_map_set(&W->slots, t->name, t);
-	}
-	if (flag(t->spec, "onWrite") || t->slot != NULL) TRY(es_on_write(f, tf_write, t));
-	if (flag(t->spec, "onTeardown")) TRY(es_on_teardown(f, tf_teardown, t));
 	if (flag(t->spec, "onStatus")) TRY(es_on_status(f, tf_status, t));
-	if (flag(t->spec, "onRecord")) TRY(es_on_record(f, tf_record, t));
 	if (flag(t->spec, "onId")) TRY(es_on_id(f, tf_id, t));
 	if (flag(t->spec, "onSchedule")) TRY(es_on_schedule(f, tf_schedule, t));
 	if (flag(t->spec, "onCreateFunction")) TRY(es_on_create_function(f, tf_create_function, t));
 	if (flag(t->spec, "onError")) TRY(es_on_error(f, tf_error, t));
 	return 0;
 }
-
-static int inline_write(void *ctx, es_context *o, const es_write *w, es_write_next *next) {
-	(void)ctx;
-	op_value *row = op_list();
-	op_push(row, op_str("inline"));
-	op_push(row, op_str("onWrite"));
-	op_push(row, op_str(w->part));
-	op_push(row, op_str(w->id));
-	if (w->gone) op_push(row, op_str("gone"));
-	log_push("hooks", row);
-	return es_next_write(next, o, w);
-}
-static int inline_setup(void *ctx, es_feature_api *f) {
-	(void)ctx;
-	return es_on_write(f, inline_write, NULL);
-}
-static const es_feature inline_feature = {.name = "inline", .setup = inline_setup};
 
 static void tf_free(void *p) {
 	tf_t *t = p;
@@ -2208,10 +2090,6 @@ static void tf_free(void *p) {
 
 static int feature_of(const op_value *f, const es_feature **out) {
 	if (is_str(f)) {
-		if (strcmp(f->str, "inline") == 0) {
-			*out = &inline_feature;
-			return 0;
-		}
 		return fail("no feature %s", f->str);
 	}
 	es_feature *feature = owned_alloc(sizeof *feature);
@@ -2228,7 +2106,6 @@ static int feature_of(const op_value *f, const es_feature **out) {
 		feature->needs = names;
 		feature->nneeds = needs->count;
 	}
-	if (flag(f, "late")) es_map_set(&W->late, t->name, t);
 	*out = feature;
 	return 0;
 }
@@ -2302,7 +2179,7 @@ static int make(const op_value *r, world_t *before) {
 	}
 	list[nfeatures] = &harness_feature;
 	es_options o = {.features = list, .nfeatures = nfeatures + 1, .may = w->policy, .table = w->stored, .root = "R",
-		.info = &w->info, .ninfo = 1, .calls_never = strcmp(str_or(r, "calls"), "never") == 0,
+		.info = &w->info, .ninfo = 1,
 		.user_activated = world_user_activated};
 	if (text(r, "at") != NULL) o.host.at = text(r, "at");
 	const op_value *args = field(r, "args");
@@ -2354,10 +2231,8 @@ static void world_free(world_t *w) {
 	for (size_t i = 0; i < w->logs.n; i++) op_free(w->logs.vals[i]);
 	es_map_free(&w->logs);
 	es_map_free(&w->running);
-	es_map_free(&w->slots);
 	es_map_free(&w->programs);
 	es_map_free(&w->shared);
-	es_map_free(&w->late);
 	free(w->queue);
 	free(w->held);
 	free(w->next);
@@ -2508,7 +2383,7 @@ static op_value *call_shown(const es_call *c) {
 	}
 	return m;
 }
-static op_value *run_shown(const crn_run *r, const char *held) {
+static op_value *run_shown(const crn_run *r) {
 	op_value *m = op_map();
 	op_set(m, "n", op_int(r->n));
 	op_set(m, "frame", frame_shown(r->frame));
@@ -2519,12 +2394,6 @@ static op_value *run_shown(const crn_run *r, const char *held) {
 		op_push(writes, pair_value(r->writes->items[i].part, r->writes->items[i].id));
 	}
 	op_set(m, "writes", writes);
-	if (held != NULL) {
-		op_value *h = op_map();
-		op_set(h, "feature", op_str(held));
-		op_set(h, "write", op_str("status"));
-		op_set(m, "held", h);
-	}
 	return m;
 }
 
@@ -2686,12 +2555,6 @@ static int op_start(const op_value *r, op_value **res) {
 	if (code == ES_TAKEN) {
 		op_value *m = op_map();
 		op_set(m, "refused", op_str(refused.refused));
-		if (refused.has_held) {
-			op_value *h = op_map();
-			op_set(h, "process", op_str(refused.held_process));
-			op_set(h, "feature", op_str(refused.held_feature));
-			op_set(m, "held", h);
-		}
 		es_refused_free(&refused);
 		es_map_del(&W->running, name);
 		*res = m;
@@ -2732,43 +2595,6 @@ static int id_at(const op_value *path, const char **id) {
 	return 1;
 }
 
-// the features in the host's attributes, without the harness's
-static void hide_harness(op_value *attrs) {
-	if (attrs->type != OP_MAP) return;
-	for (size_t i = 0; i < attrs->count; i++) {
-		op_value *list = attrs->items[i];
-		if (strcmp(attrs->keys[i], ES_FEATURES_ATTRIBUTE) != 0 || list->type != OP_LIST) continue;
-		op_value *kept = op_list();
-		for (size_t k = 0; k < list->count; k++) {
-			const char *name = text(list->items[k], "name");
-			if (name == NULL || strcmp(name, HARNESS) != 0) op_push(kept, op_ref(list->items[k]));
-		}
-		op_set(attrs, ES_FEATURES_ATTRIBUTE, kept);
-		return;
-	}
-}
-
-static int op_features(op_value **res) {
-	TRY(es_alive(W->e));
-	size_t n;
-	const es_shown *shown = es_features(W->e, &n);
-	static const char *const hooks[] = {"onRead", "onWrite", "onTeardown", "onRecord", "onStatus",
-		"onId", "onSchedule", "onCreateFunction", "onError"};
-	op_value *list = op_list();
-	for (size_t i = 0; i < n; i++) {
-		if (strcmp(shown[i].name, HARNESS) == 0) continue;
-		op_value *m = op_map(), *hs = op_list();
-		op_set(m, "name", op_str(shown[i].name));
-		op_set(m, "needs", strs(shown[i].nneeds, (const char *const *)shown[i].needs));
-		for (size_t k = 0; k < shown[i].nhooks; k++) op_push(hs, op_str(hooks[shown[i].hooks[k]]));
-		op_set(m, "hooks", hs);
-		op_push(list, m);
-	}
-	*res = op_map();
-	op_set(*res, "features", list);
-	return 0;
-}
-
 static int op_record(const op_value *r, op_value **res) {
 	TRY(es_alive(W->e));
 	const char *id = text(r, "id");
@@ -2779,7 +2605,7 @@ static int op_record(const op_value *r, op_value **res) {
 		if (c != NULL) op_set(*res, "record", call_shown(c));
 	} else {
 		const crn_run *run = es_records_run(W->e, id);
-		if (run != NULL) op_set(*res, "record", run_shown(run, es_records_run_held(W->e, id)));
+		if (run != NULL) op_set(*res, "record", run_shown(run));
 	}
 	return 0;
 }
@@ -2869,14 +2695,6 @@ static int answer(const op_value *r, op_value **res) {
 	}
 	es_ermine *e = W->e;
 	if (e == NULL) return fail("no ermine");
-	if (strcmp(op, "features") == 0) return op_features(res);
-	if (strcmp(op, "late") == 0) {
-		tf_t *t = es_map_get(&W->late, str_or(r, "feature"));
-		if (t == NULL || t->api == NULL) return fail("no feature %s", str_or(r, "feature"));
-		TRY(es_on_write(t->api, tf_pass, NULL));
-		*res = op_map();
-		return 0;
-	}
 	if (strcmp(op, "uuid") == 0) {
 		TRY(es_alive(e));
 		const char *id = NULL;
@@ -2889,9 +2707,7 @@ static int answer(const op_value *r, op_value **res) {
 		const nd_entry *attrs = tb_get(e->table, tb_string("attributes"), tb_string(e->node));
 		*res = op_map();
 		op_set(*res, "id", op_str(e->node));
-		op_value *p = attrs != NULL ? plain(attrs->value) : NULL;
-		if (p != NULL) hide_harness(p);
-		if (p != NULL) op_set(*res, "attributes", p);
+		if (attrs != NULL) op_set(*res, "attributes", plain(attrs->value));
 		return 0;
 	}
 	if (strcmp(op, "context") == 0) {
@@ -2975,18 +2791,6 @@ static int answer(const op_value *r, op_value **res) {
 	}
 	if (strcmp(op, "record") == 0) return op_record(r, res);
 	if (strcmp(op, "waits") == 0) return op_waits(res);
-	if (strcmp(op, "slot") == 0) {
-		TRY(es_alive(e));
-		running_t *p = running_named(text(r, "process"));
-		es_context *c = p != NULL && p->id != NULL ? es_process_context_of(e, p->id) : NULL;
-		tf_t *t = es_map_get(&W->slots, str_or(r, "feature"));
-		long count;
-		*res = op_map();
-		if (c != NULL && t != NULL && t->slot != NULL && es_slot_get(t->slot, c, &count)) {
-			op_set(*res, "value", op_int(count));
-		}
-		return 0;
-	}
 	if (strcmp(op, "do") == 0) return op_do(r, res);
 	if (strcmp(op, "settle") == 0) {
 		settle_all();

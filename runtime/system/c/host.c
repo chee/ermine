@@ -1,4 +1,4 @@
-// The host: createErmine, features and hooks, slots, start, stop, close, process contexts, records
+// The host: createErmine, features and hooks, start, stop, close, process contexts, records
 // and the registry. ermine.h declares the functions.
 //
 // The chains hand hooks borrowed arguments for the call. An onRead hook's out is a fresh array, and
@@ -6,9 +6,6 @@
 // out is borrowed from the hook, good until its next call or es_close; the chain copies the last
 // one whole into the caller's. A closed ermine gives NULL or 0 with es_thrown() ES_CLOSED from
 // every function that returns a pointer or a 1/0.
-//
-// Scope nodes going is done by libraries with no write hook, so onWrite does not see them and
-// cannot hold them back.
 #include "../../../core/places/c/children.h"
 #include "ermine.h"
 
@@ -135,11 +132,9 @@ int es_fail_ermine(int code, const char *fmt, ...) {
 
 
 static const char *const HOOK_NAMES[ES_HOOKS] = {
-	"onRead", "onWrite", "onTeardown", "onRecord", "onStatus",
-	"onId", "onSchedule", "onCreateFunction", "onError",
+	"onRead", "onStatus", "onId", "onSchedule", "onCreateFunction", "onError",
 };
 
-static const char PART_PROCESS[] = PR_PART;
 static const char PART_ATTRIBUTES[] = "attributes";
 static const char PART_VALUE[] = "value";
 
@@ -196,9 +191,6 @@ typedef struct {
 	const char *feature;
 	union {
 		es_on_read_fn read;
-		es_on_write_fn write;
-		es_on_teardown_fn teardown;
-		es_on_record_fn record;
 		es_on_status_fn status;
 		es_on_id_fn id;
 		es_on_schedule_fn schedule;
@@ -216,24 +208,7 @@ typedef struct {
 	es_feature_api api;
 	es_ermine *e;
 	char *name;
-	es_hook *used;
-	size_t nused, cap;
 } fapi;
-
-typedef struct {
-	const char *feature;
-	int touches;
-} held_rec;
-typedef struct {
-	const char *feature;
-	char **at;
-	size_t nat;
-} row_rec;
-
-struct es_slot {
-	pm held;
-	struct es_slot *next;
-};
 
 typedef struct proc_rec {
 	es_started started;
@@ -272,17 +247,11 @@ struct es_hosting {
 	hook_list hooks[ES_HOOKS];
 	fapi **apis;
 	size_t napis, capapis;
-	es_shown *shown;
-	size_t nshown, capshown;
 	sc_listener *settle, *tracking, *tracking_first, *pulsed;
 	sc_listener **listened;
 	size_t nlistened, caplistened;
 	pl_crowified *crow;
 	int registered;
-	const char *deepest;
-	char heldkey;
-	es_map held, rows;
-	es_map run_held;
 	es_map contexts;
 	proc_rec **procs;
 	size_t nprocs, capprocs;
@@ -299,7 +268,6 @@ struct es_hosting {
 	size_t nblocks, capblocks;
 	pr_processes rows_walk;
 	const pl_contributor *contributors[2];
-	es_slot *slots;
 	es_ermine *next_closed;
 };
 typedef struct es_hosting hosting;
@@ -528,134 +496,6 @@ int es_pulse(es_context *c) {
 }
 
 
-static void mark_held(es_ermine *e) {
-	const void *keys[1] = {&host_of(e)->heldkey};
-	sc_mark(e->scheduler, keys, 1, NULL);
-}
-static void track_held(es_ermine *e) { (void)sc_track(e->scheduler, &host_of(e)->heldkey); }
-
-static held_rec *held_of(hosting *h, const char *part, const char *id) {
-	es_map *at = es_map_get(&h->held, id);
-	return at == NULL ? NULL : es_map_get(at, part);
-}
-
-static int unhold(hosting *h, const char *part, const char *id) {
-	es_map *at = es_map_get(&h->held, id);
-	if (at == NULL) return 0;
-	held_rec *r = es_map_get(at, part);
-	if (r == NULL) return 0;
-	es_map_del(at, part);
-	free(r);
-	if (at->n == 0) {
-		es_map_free(at);
-		free(at);
-		es_map_del(&h->held, id);
-	}
-	return 1;
-}
-
-static void hold(hosting *h, const char *part, const char *id, const char *feature, int touches) {
-	es_map *at = es_map_get(&h->held, id);
-	if (at == NULL) {
-		at = es_alloc(sizeof *at);
-		es_map_set(&h->held, id, at);
-	}
-	held_rec *r = es_map_get(at, part);
-	if (r == NULL) {
-		r = es_alloc(sizeof *r);
-		es_map_set(at, part, r);
-	}
-	r->feature = feature;
-	r->touches = touches;
-}
-
-static int touches_status(const es_write *w) {
-	if (w->gone) return 1;
-	for (size_t i = 0; i < w->npatches; i++) {
-		const op_patch *p = &w->patches[i];
-		if (p->place.length > 0) {
-			if (p->place.path[0].type == OP_STR_KEY && strcmp(p->place.path[0].s, CST_ATTRIBUTE) == 0) {
-				return 1;
-			}
-		} else if (p->has_value && p->value != NULL && p->value->type == OP_MAP &&
-			op_get(p->value, CST_ATTRIBUTE) != NULL) {
-			return 1;
-		}
-	}
-	return 0;
-}
-
-void es_held_drop(es_ermine *e, const char *id) {
-	hosting *h = host_of(e);
-	int told = 0;
-	for (;;) {
-		es_map *at = es_map_get(&h->held, id);
-		if (at == NULL) break;
-		const char *gone = NULL;
-		for (size_t i = 0; i < at->n; i++) {
-			if (tb_get(e->table, tb_string(at->keys[i]), tb_string(id)) == NULL) {
-				gone = at->keys[i];
-				break;
-			}
-		}
-		if (gone == NULL) break;
-		char *part = es_dup(gone);
-		told = unhold(h, part, id) || told;
-		free(part);
-	}
-	if (told) mark_held(e);
-}
-
-int es_held_at(es_ermine *e, const char *part, const char *id, es_held *out) {
-	track_held(e);
-	held_rec *r = held_of(host_of(e), part, id);
-	if (r == NULL) return 0;
-	*out = (es_held){r->feature, NULL};
-	return 1;
-}
-
-int es_held_status(es_ermine *e, const char *id, es_held *out) {
-	track_held(e);
-	held_rec *r = held_of(host_of(e), CST_TABLE, id);
-	if (r == NULL || !r->touches) return 0;
-	*out = (es_held){r->feature, "status"};
-	return 1;
-}
-
-static row_rec *row_held(es_ermine *e, const char *id);
-static const char *row_at(es_ermine *e, const char *root, char *const *at, size_t nat) {
-	nd_entry *entry = tb_get(e->table, tb_string(PART_PROCESS), tb_string(root));
-	const op_value *v = entry != NULL ? entry->value : NULL;
-	for (size_t i = 0; i < nat; i++) {
-		v = v != NULL && v->type == OP_MAP ? op_get(v, at[i]) : NULL;
-	}
-	if (v != NULL && v->type == OP_MAP) v = op_get(v, "");
-	return v != NULL && v->type == OP_STR ? v->str : NULL;
-}
-static void row_free(row_rec *r) {
-	pr_names_free(r->at, r->nat);
-	free(r);
-}
-static row_rec *row_held(es_ermine *e, const char *id) {
-	hosting *h = host_of(e);
-	row_rec *r = es_map_get(&h->rows, id);
-	if (r == NULL) return NULL;
-	const char *there = row_at(e, e->root, r->at, r->nat);
-	if (there != NULL && strcmp(there, id) == 0) return r;
-	es_map_del(&h->rows, id);
-	row_free(r);
-	return NULL;
-}
-
-int es_held_row(es_ermine *e, const char *id, es_held *out) {
-	track_held(e);
-	row_rec *r = row_held(e, id);
-	if (r == NULL) return 0;
-	*out = (es_held){r->feature, "row"};
-	return 1;
-}
-
-
 // what a hook's code is passed up as: PENDING, STOP, a FeatureError, and what its next gave pass as
 // they are; a Refusal as it is, its feature and hook named; else a FeatureError
 static int own(const char *feature, const char *hook, int code, int passed) {
@@ -676,83 +516,6 @@ static int own(const char *feature, const char *hook, int code, int passed) {
 
 void es_commit_changed(es_ermine *e, const pl_changed *changed) { pl_commit(e->places, changed); }
 static void commit_changed(void *ctx, const pl_changed *changed) { es_commit_changed(ctx, changed); }
-
-typedef struct {
-	es_ermine *e;
-	int (*land)(void *ctx, const es_write *w);
-	void *ctx;
-	int landed;
-} write_frame;
-
-struct es_write_next {
-	write_frame *f;
-	size_t i;
-	const es_write *given;
-	int passed;
-};
-
-static int write_land(write_frame *f, const es_write *x) {
-	es_ermine *e = f->e;
-	hosting *h = host_of(e);
-	f->landed = 1;
-	int told = unhold(h, x->part, x->id);
-	if (!told && strcmp(x->part, PART_PROCESS) == 0) {
-		if (h->rows.n > 0 && strcmp(x->id, e->root) == 0) told = 1;
-	}
-	if (told) mark_held(e);
-	return f->land(f->ctx, x);
-}
-
-static int write_at(write_frame *f, size_t i, es_context *o, const es_write *w) {
-	hosting *h = host_of(f->e);
-	hook_list *l = &h->hooks[ES_ON_WRITE];
-	if (i == l->n) return write_land(f, w);
-	hook_rec *r = &l->items[i];
-	es_write_next next = {f, i, w, 0};
-	h->deepest = r->feature;
-	int code = r->fn.write(r->ctx, o, w, &next);
-	return own(r->feature, "onWrite", code, next.passed);
-}
-
-int es_next_write(es_write_next *next, es_context *o, const es_write *w) {
-	hosting *h = host_of(next->f->e);
-	hook_rec *r = &h->hooks[ES_ON_WRITE].items[next->i];
-	es_write tagged;
-	const char **features = NULL;
-	const es_write *pass = w;
-	if (w != next->given) {
-		size_t n = next->given->nfeatures;
-		features = es_alloc((n + 1) * sizeof *features);
-		for (size_t k = 0; k < n; k++) features[k] = next->given->features[k];
-		features[n] = r->feature;
-		tagged = *w;
-		tagged.features = features;
-		tagged.nfeatures = n + 1;
-		pass = &tagged;
-	}
-	int code = write_at(next->f, next->i + 1, o, pass);
-	free(features);
-	next->passed = code;
-	return code;
-}
-
-int es_hook_write(es_ermine *e, es_context *o, const es_write *w,
-	int (*land)(void *ctx, const es_write *w), void *ctx) {
-	hosting *h = host_of(e);
-	const char *was = h->deepest;
-	h->deepest = NULL;
-	write_frame f = {e, land, ctx, 0};
-	int code = write_at(&f, 0, o, w);
-	const char *by = h->deepest;
-	h->deepest = was;
-	if (code != 0) return code;
-	if (!f.landed && by != NULL) {
-		hold(h, w->part, w->id, by, strcmp(w->part, CST_TABLE) == 0 && touches_status(w));
-		mark_held(e);
-	}
-	return 0;
-}
-
 
 struct es_read_next {
 	es_ermine *e;
@@ -838,78 +601,6 @@ int es_hook_read(es_ermine *e, const es_reading *x, const es_versions *items, es
 }
 
 
-typedef struct {
-	es_ermine *e;
-	void (*fn)(void *ctx, const char *why);
-	void *ctx;
-} teardown_frame;
-struct es_teardown_next {
-	teardown_frame *f;
-	size_t i;
-	int passed;
-};
-
-static int teardown_at(teardown_frame *f, size_t i, sc_scope *scope, const char *why) {
-	hook_list *l = &host_of(f->e)->hooks[ES_ON_TEARDOWN];
-	if (i == l->n) {
-		f->fn(f->ctx, why);
-		return 0;
-	}
-	hook_rec *r = &l->items[i];
-	es_teardown_next next = {f, i, 0};
-	int code = r->fn.teardown(r->ctx, scope, why, &next);
-	return own(r->feature, "onTeardown", code, next.passed);
-}
-
-int es_next_teardown(es_teardown_next *next, sc_scope *scope, const char *why) {
-	int code = teardown_at(next->f, next->i + 1, scope, why);
-	next->passed = code;
-	return code;
-}
-
-int es_hook_teardown(es_ermine *e, sc_scope *scope, const char *why,
-	void (*fn)(void *ctx, const char *why), void *ctx) {
-	teardown_frame f = {e, fn, ctx};
-	return teardown_at(&f, 0, scope, why);
-}
-
-
-typedef struct {
-	es_ermine *e;
-	void (*keep)(void *ctx, const es_recorded *r);
-	void *ctx;
-} record_frame;
-struct es_record_next {
-	record_frame *f;
-	size_t i;
-	int passed;
-};
-
-static int record_at(record_frame *f, size_t i, const es_recorded *x) {
-	hook_list *l = &host_of(f->e)->hooks[ES_ON_RECORD];
-	if (i == l->n) {
-		f->keep(f->ctx, x);
-		return 0;
-	}
-	hook_rec *r = &l->items[i];
-	es_record_next next = {f, i, 0};
-	int code = r->fn.record(r->ctx, x, &next);
-	return own(r->feature, "onRecord", code, next.passed);
-}
-
-int es_next_record(es_record_next *next, const es_recorded *r) {
-	int code = record_at(next->f, next->i + 1, r);
-	next->passed = code;
-	return code;
-}
-
-int es_hook_record(es_ermine *e, const es_recorded *r,
-	void (*keep)(void *ctx, const es_recorded *r), void *ctx) {
-	record_frame f = {e, keep, ctx};
-	return record_at(&f, 0, r);
-}
-
-
 struct es_status_next {
 	es_ermine *e;
 	size_t i;
@@ -937,7 +628,6 @@ int es_next_status(es_status_next *next, const es_asked *x, const es_status *st,
 
 static void status_copy(const es_status *s, es_status *out) {
 	*out = *s;
-	if (s->held_feature != NULL) out->held_feature = es_dup(s->held_feature);
 	if (s->error != NULL) out->error = es_dup(s->error);
 	out->waiting = NULL;
 	if (s->nwaiting > 0) {
@@ -1092,9 +782,6 @@ static int add_hook(es_feature_api *f, es_hook kind, hook_rec rec) {
 	rec.feature = a->name;
 	hook_list *l = &h->hooks[kind];
 	ES_PUSH(l->items, l->n, l->cap, rec);
-	int used = 0;
-	for (size_t i = 0; i < a->nused; i++) used = used || a->used[i] == kind;
-	if (!used) ES_PUSH(a->used, a->nused, a->cap, kind);
 	return 0;
 }
 
@@ -1102,21 +789,6 @@ int es_on_read(es_feature_api *f, es_on_read_fn fn, void *ctx) {
 	hook_rec r = {.ctx = ctx};
 	r.fn.read = fn;
 	return add_hook(f, ES_ON_READ, r);
-}
-int es_on_write(es_feature_api *f, es_on_write_fn fn, void *ctx) {
-	hook_rec r = {.ctx = ctx};
-	r.fn.write = fn;
-	return add_hook(f, ES_ON_WRITE, r);
-}
-int es_on_teardown(es_feature_api *f, es_on_teardown_fn fn, void *ctx) {
-	hook_rec r = {.ctx = ctx};
-	r.fn.teardown = fn;
-	return add_hook(f, ES_ON_TEARDOWN, r);
-}
-int es_on_record(es_feature_api *f, es_on_record_fn fn, void *ctx) {
-	hook_rec r = {.ctx = ctx};
-	r.fn.record = fn;
-	return add_hook(f, ES_ON_RECORD, r);
 }
 int es_on_status(es_feature_api *f, es_on_status_fn fn, void *ctx) {
 	hook_rec r = {.ctx = ctx};
@@ -1219,33 +891,6 @@ int es_api_seen(es_feature_api *f, const char *id, es_context *context, es_names
 	return es_fail(ES_NOTHING_THERE, "nothing-there");
 }
 
-int es_reserve_slot(es_feature_api *f, es_slot **out) {
-	fapi *a = f->private_;
-	hosting *h = host_of(a->e);
-	if (!h->adding) return es_fail_ermine(ES_SETUP_ONLY, "%s's reserveSlot", a->name);
-	es_slot *s = es_alloc(sizeof *s);
-	s->next = h->slots;
-	h->slots = s;
-	*out = s;
-	return 0;
-}
-
-int es_slot_get(const es_slot *s, es_context *c, long *out) {
-	long *v = pm_get(&s->held, c);
-	if (v == NULL) return 0;
-	*out = *v;
-	return 1;
-}
-
-void es_slot_set(es_slot *s, es_context *c, long value) {
-	long *v = pm_get(&s->held, c);
-	if (v == NULL) {
-		v = es_alloc(sizeof *v);
-		pm_set(&s->held, c, v);
-	}
-	*v = value;
-}
-
 typedef struct {
 	const es_feature *const *features;
 	size_t n;
@@ -1323,46 +968,10 @@ static int install(es_ermine *e, const es_options *options) {
 		a->api = (es_feature_api){e->scheduler, e->table, a};
 		if (f->setup != NULL) code = f->setup(f->ctx, &a->api);
 		if (code != 0) break;
-		es_shown s = {0};
-		s.name = es_dup(f->name);
-		s.needs = es_alloc((f->nneeds + 1) * sizeof *s.needs);
-		for (size_t k = 0; k < f->nneeds; k++) s.needs[k] = es_dup(f->needs[k]);
-		s.nneeds = f->nneeds;
-		s.hooks = es_alloc((a->nused + 1) * sizeof *s.hooks);
-		if (a->nused) memcpy(s.hooks, a->used, a->nused * sizeof *s.hooks);
-		s.nhooks = a->nused;
-		ES_PUSH(h->shown, h->nshown, h->capshown, s);
 	}
 	ordering_free(&o);
 	return code;
 }
-
-static op_value *shown_value(es_ermine *e) {
-	hosting *h = host_of(e);
-	op_value *list = op_list();
-	for (size_t i = 0; i < h->nshown; i++) {
-		const es_shown *s = &h->shown[i];
-		op_value *m = op_map();
-		op_set(m, "name", op_str(s->name));
-		op_set(m, "needs", names_value(CP(s->needs), s->nneeds));
-		op_value *hooks = op_list();
-		for (size_t k = 0; k < s->nhooks; k++) op_push(hooks, op_str(HOOK_NAMES[s->hooks[k]]));
-		op_set(m, "hooks", hooks);
-		op_push(list, m);
-	}
-	return list;
-}
-
-const es_shown *es_features(es_ermine *e, size_t *n) {
-	if (es_alive(e)) {
-		*n = 0;
-		return NULL;
-	}
-	es_clear_thrown();
-	*n = host_of(e)->nshown;
-	return host_of(e)->shown;
-}
-
 
 static void keep_value(hosting *h, op_value *v) { ES_PUSH(h->keep, h->nkeep, h->capkeep, v); }
 
@@ -1376,7 +985,6 @@ static int init_nodes(void *data) {
 	es_ermine *e = a->e;
 	op_value *attrs = op_map();
 	op_set(attrs, ES_ARGS, names_value(a->o->host.args, a->o->host.nargs));
-	op_set(attrs, ES_FEATURES_ATTRIBUTE, shown_value(e));
 	op_patch whole = {.has_value = 1, .value = attrs};
 	es_write w = {.part = PART_ATTRIBUTES, .id = e->node, .patches = &whole, .npatches = 1};
 	int code = es_context_put(e->host_context, &w);
@@ -1395,12 +1003,6 @@ static void forget_context(es_ermine *e, es_context *c) {
 		if (h->all[i] != c) continue;
 		h->all[i] = h->all[--h->nall];
 		break;
-	}
-	for (es_slot *sl = h->slots; sl != NULL; sl = sl->next) {
-		long *held = pm_get(&sl->held, c);
-		if (held == NULL) continue;
-		pm_delete(&sl->held, c);
-		free(held);
 	}
 	for (size_t i = 0; i < h->nprocs; i++)
 		if (h->procs[i]->context == c) h->procs[i]->context = NULL;
@@ -1442,22 +1044,6 @@ static void release(es_ermine *e) {
 	for (size_t i = 0; i < h->nblocks; i++) pl_made_free(h->blocks[i]);
 	h->nblocks = 0;
 	for (size_t k = 0; k < ES_HOOKS; k++) h->hooks[k].n = 0;
-	for (size_t i = 0; i < h->nshown; i++) {
-		free(h->shown[i].name);
-		pr_names_free(h->shown[i].needs, h->shown[i].nneeds);
-		free(h->shown[i].hooks);
-	}
-	h->nshown = 0;
-	for (size_t i = 0; i < h->rows.n; i++) row_free(h->rows.vals[i]);
-	es_map_free(&h->rows);
-	for (size_t i = 0; i < h->held.n; i++) {
-		es_map *at = h->held.vals[i];
-		for (size_t k = 0; k < at->n; k++) free(at->vals[k]);
-		es_map_free(at);
-		free(at);
-	}
-	es_map_free(&h->held);
-	es_map_free(&h->run_held);
 }
 
 static void unlisten(es_ermine *e) {
@@ -1504,23 +1090,12 @@ static void free_hosting(es_ermine *e) {
 		if (h->with.keys[i] != NULL && h->owns) op_free(h->with.vals[i]);
 	pm_clear(&h->with);
 	pm_clear(&h->children);
-	for (es_slot *sl = h->slots; sl != NULL;) {
-		es_slot *next = sl->next;
-		for (size_t i = 0; i < sl->held.cap; i++) {
-			if (sl->held.keys[i] != NULL) free(sl->held.vals[i]);
-		}
-		pm_clear(&sl->held);
-		free(sl);
-		sl = next;
-	}
 	for (size_t i = 0; i < h->napis; i++) {
 		free(h->apis[i]->name);
-		free(h->apis[i]->used);
 		free(h->apis[i]);
 	}
 	for (size_t k = 0; k < ES_HOOKS; k++) free(h->hooks[k].items);
 	free(h->apis);
-	free(h->shown);
 	free(h->listened);
 	free(h->all);
 	free(h->scopes);
@@ -1563,29 +1138,6 @@ static void status_write(void *ctx, const char *part, tb_key id, const op_patch 
 	es_context_writer(c != NULL ? c : e->host_context, part, id, patches, n, header);
 }
 
-// a run's record, told to onRecord (naming the feature that held its status write back) and held
-// when the hooks let it through; a hook's changed run is not held
-typedef struct {
-	es_ermine *e;
-	crn_take take;
-	void *taking;
-} run_holding;
-static void run_keep(void *ctx, const es_recorded *r) {
-	run_holding *k = ctx;
-	if (r->run == NULL) return;
-	es_map *m = &host_of(k->e)->run_held;
-	if (r->held != NULL) es_map_set(m, r->id, (void *)r->held);
-	else es_map_del(m, r->id);
-	k->take(k->taking);
-}
-static void run_hold(void *ctx, tb_key id, crn_run *run, crn_take take, void *taking) {
-	es_ermine *e = ctx;
-	held_rec *h = held_of(host_of(e), CST_TABLE, id.string);
-	es_recorded r = {.id = id.string, .run = run, .held = h != NULL && h->touches ? h->feature : NULL};
-	run_holding k = {e, take, taking};
-	es_hook_record(e, &r, run_keep, &k);
-}
-
 int es_create(const es_options *given, es_ermine **out) {
 	es_options none = {0};
 	const es_options *o = given != NULL ? given : &none;
@@ -1606,7 +1158,7 @@ int es_create(const es_options *given, es_ermine **out) {
 	h->owns_table = o->table == NULL;
 	e->table = o->table != NULL ? o->table : tb_new();
 	if ((code = install(e, o)) != 0) goto fail;
-	// hooks and slots are added in setup only, as TS: nothing after this adds
+	// hooks are added in setup only, as TS: nothing after this adds
 	h->adding = 0;
 
 	if (o->root != NULL) e->root = es_dup(o->root);
@@ -1665,9 +1217,8 @@ int es_create(const es_options *given, es_ermine **out) {
 			.owner = owner, .id = process_id, .id_ctx = e,
 			.write = host_write, .write_ctx = e, .statuses = e->statuses});
 	}
-	e->runs = crn_new(&(crn_setup){.places = e->places, .table = e->table, .scheduler = e->scheduler,
-		.hold = run_hold, .hold_ctx = e});
-	e->calls = es_calls_new(e, !o->calls_never);
+	e->runs = crn_new(&(crn_setup){.places = e->places, .table = e->table, .scheduler = e->scheduler});
+	e->calls = es_calls_new(e);
 
 	sched_add(e->scheduler);
 	h->registered = 1;
@@ -1952,33 +1503,6 @@ static int start_under(es_ermine *e, es_program fn, void *ctx, const char *const
 			refused->nat = no.nat;
 			refused->at = es_alloc((no.nat + 1) * sizeof *refused->at);
 			for (size_t i = 0; i < no.nat; i++) refused->at[i] = es_dup(no.at[i]);
-			// taken by a stopped process whose row a feature held: said, naming both (to the host's start
-			// only: a program is told where, never whose it is)
-			for (size_t k = 0; !child && k < h->rows.n;) {
-				size_t before = h->rows.n;
-				char *pid = es_dup(h->rows.keys[k]);
-				row_rec *r = row_held(e, pid);
-				if (h->rows.n != before) {
-					free(pid);
-					continue;
-				}
-				k++;
-				if (r == NULL) {
-					free(pid);
-					continue;
-				}
-				size_t common = r->nat < no.nat ? r->nat : no.nat;
-				size_t i = 0;
-				while (i < common && strcmp(r->at[i], no.at[i]) == 0) i++;
-				if (i != common) {
-					free(pid);
-					continue;
-				}
-				refused->has_held = 1;
-				refused->held_process = pid;
-				refused->held_feature = es_dup(r->feature);
-				break;
-			}
 		}
 		return es_fail_ermine(ES_TAKEN, "taken");
 	}
@@ -2073,8 +1597,6 @@ void es_child_free(es_child *k) {
 void es_refused_free(es_refused *r) {
 	if (r == NULL) return;
 	pr_names_free(r->at, r->nat);
-	free(r->held_process);
-	free(r->held_feature);
 	*r = (es_refused){0};
 }
 
@@ -2082,7 +1604,6 @@ void es_refused_free(es_refused *r) {
 // malloc'd for the caller (NULL: none)
 static char *stop_process(proc_rec *rec, const char *why) {
 	es_ermine *e = rec->e;
-	hosting *h = host_of(e);
 	sc_scope *hold = rec->child ? pr_scope(rec->started.process) : NULL;
 	if (hold != NULL) sc_retain(hold);
 	char *why_ = es_dup(why != NULL ? why : "ended");
@@ -2090,24 +1611,7 @@ static char *stop_process(proc_rec *rec, const char *why) {
 	char *bad = pr_stop(e->processes, rec->started.process);
 	es_map_del(&e->whys, rec->id);
 	free(why_);
-	es_held_drop(e, rec->id);
 	rec->running = 0;
-	held_rec *held = held_of(h, PART_PROCESS, e->root);
-	const char *at;
-	const char *const *names;
-	size_t n = pr_at(rec->started.process, &names);
-	at = row_at(e, e->root, (char *const *)names, n);
-	if (at != NULL && strcmp(at, rec->id) == 0 && held != NULL) {
-		row_rec *r = es_alloc(sizeof *r);
-		r->feature = held->feature;
-		r->nat = n;
-		r->at = es_alloc((n + 1) * sizeof *r->at);
-		for (size_t i = 0; i < n; i++) r->at[i] = es_dup(names[i]);
-		row_rec *was = es_map_get(&h->rows, rec->id);
-		if (was != NULL) row_free(was);
-		es_map_set(&h->rows, rec->id, r);
-		mark_held(e);
-	}
 	if (hold != NULL) sc_release(hold);
 	return bad;
 }
@@ -2318,12 +1822,6 @@ const crn_run *es_records_run(es_ermine *e, const char *id) {
 	const crn_run *run = NULL;
 	if (crn_read(e->runs, NULL, NULL, tb_string(id), CRN_ALL, &run, NULL, NULL) != 0) return NULL;
 	return run;
-}
-
-const char *es_records_run_held(es_ermine *e, const char *id) {
-	if (es_alive(e)) return NULL;
-	es_clear_thrown();
-	return es_map_get(&host_of(e)->run_held, id);
 }
 
 const es_call *es_records_call(es_ermine *e, const char *id) {

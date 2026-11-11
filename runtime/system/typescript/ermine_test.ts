@@ -45,25 +45,6 @@ Deno.test("every change takes its time from the clock createErmine is given", ()
 	e.close()
 })
 
-Deno.test("close() finishes when a feature holds every teardown back", () => {
-	const held: string[] = []
-	const hold: Feature = {
-		name: "hold",
-		setup: (f) => f.onTeardown((_scope, why) => void held.push(why)),
-	}
-	const told: string[] = []
-	const e = createErmine({ features: [hold, manual] })
-	e.within(() => ensureNode("/code/p", () => addTeardown((why) => told.push(why))))
-	const p = e.start(programAt(e, "/code/p"), "/code/p")
-	assert(!("refused" in p))
-	e.within(() => addTeardown((why) => told.push(why)))
-	e.close()
-	assertEquals(told, [])
-	assertEquals(held, ["ended", "ended"])
-	assertEquals(p.process.scope.state, "gone")
-	assertThrows(() => e.within(() => read("/")), ErmineError, "closed")
-})
-
 function counted() {
 	const s = createScheduler()
 	const on = new Map<unknown, number>()
@@ -306,7 +287,7 @@ Deno.test("a hook added while createErmine is making is refused setup-only, not 
 		name: "late",
 		setup: (f) =>
 			f.onId((kind, next) => {
-				f.onWrite((o, w, next) => next(o, w))
+				f.onStatus((x, st, next) => next(x, st))
 				return next(kind)
 			}),
 	}

@@ -1,5 +1,5 @@
 {
-	"title": "features: needs and their order. a need not given: missing-feature; a name twice: feature-twice; needs going round: needs-loop. chain order: the list, each one's needs first; the first outermost, so its hook is called first. ermine.features: each one's name, needs and hooks, in chain order, and the same on the host's node (ermine.features)",
+	"title": "features: needs and their order. a need not given: missing-feature; a name twice: feature-twice; needs going round: needs-loop. chain order: the list, each one's needs first; the first outermost, so its hook is called first",
 	"steps": [
 		{
 			"op": "ermine",
@@ -60,114 +60,18 @@
 					"needs": [
 						"a"
 					],
-					"onWrite": "log",
 					"onRead": "log"
 				},
 				{
 					"name": "a",
-					"onWrite": "log"
+					"onRead": "log"
 				},
 				{
 					"name": "c",
-					"onWrite": "log",
 					"onRead": "log"
 				}
 			],
 			"expect": {}
-		},
-		{
-			"op": "features",
-			"expect": {
-				"features": [
-					{
-						"name": "a",
-						"needs": [],
-						"hooks": [
-							"onWrite"
-						]
-					},
-					{
-						"name": "b",
-						"needs": [
-							"a"
-						],
-						"hooks": [
-							"onRead",
-							"onWrite"
-						]
-					},
-					{
-						"name": "c",
-						"needs": [],
-						"hooks": [
-							"onRead",
-							"onWrite"
-						]
-					}
-				]
-			}
-		},
-		{
-			"op": "node",
-			"expect": {
-				"id": "n1",
-				"attributes": {
-					"ermine.host.args": [],
-					"ermine.features": [
-						{
-							"name": "a",
-							"needs": [],
-							"hooks": [
-								"onWrite"
-							]
-						},
-						{
-							"name": "b",
-							"needs": [
-								"a"
-							],
-							"hooks": [
-								"onRead",
-								"onWrite"
-							]
-						},
-						{
-							"name": "c",
-							"needs": [],
-							"hooks": [
-								"onRead",
-								"onWrite"
-							]
-						}
-					]
-				}
-			}
-		},
-		{
-			"op": "log",
-			"name": "hooks",
-			"expect": {
-				"values": [
-					[
-						"a",
-						"onWrite",
-						"attributes",
-						"n1"
-					],
-					[
-						"b",
-						"onWrite",
-						"attributes",
-						"n1"
-					],
-					[
-						"c",
-						"onWrite",
-						"attributes",
-						"n1"
-					]
-				]
-			}
 		},
 		{
 			"op": "host",
@@ -201,18 +105,6 @@
 						[
 							"value"
 						]
-					],
-					[
-						"each",
-						[
-							"readAll",
-							"/x"
-						],
-						[
-							"from",
-							"change",
-							"actor"
-						]
 					]
 				]
 			],
@@ -220,28 +112,7 @@
 				"value": [
 					[
 						1
-					],
-					[
-						"test"
 					]
-				]
-			}
-		},
-		{
-			"op": "frame",
-			"part": "value",
-			"id": "n2",
-			"expect": {
-				"frame": [
-					{
-						"locations": [
-							"program"
-						]
-					},
-					{
-						"actor": "test",
-						"node": "n1"
-					}
 				]
 			}
 		},
@@ -252,65 +123,6 @@
 				"values": [
 					[
 						"a",
-						"onWrite",
-						"attributes",
-						"n1"
-					],
-					[
-						"b",
-						"onWrite",
-						"attributes",
-						"n1"
-					],
-					[
-						"c",
-						"onWrite",
-						"attributes",
-						"n1"
-					],
-					[
-						"a",
-						"onWrite",
-						"value",
-						"n2"
-					],
-					[
-						"b",
-						"onWrite",
-						"value",
-						"n2"
-					],
-					[
-						"c",
-						"onWrite",
-						"value",
-						"n2"
-					],
-					[
-						"a",
-						"onWrite",
-						"children",
-						"R"
-					],
-					[
-						"b",
-						"onWrite",
-						"children",
-						"R"
-					],
-					[
-						"c",
-						"onWrite",
-						"children",
-						"R"
-					],
-					[
-						"b",
-						"onRead",
-						"n2"
-					],
-					[
-						"c",
 						"onRead",
 						"n2"
 					],

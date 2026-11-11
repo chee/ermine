@@ -2,12 +2,10 @@
 // ermine per run: root "R", host scope { actor: "test" }, ids "n1", "n2", ..., process ids
 // "proc:<name>". After every request the asked-for pulses run until none is asked.
 // node: { path, part } | { id, part }
-// { op: "ermine", features?, deny?, uuid?, calls?, at?, args? } -> {}
-//     features: names ("inline" or another harness's own) or test features (below)
+// { op: "ermine", features?, deny?, uuid?, at?, args? } -> {}
+//     features: names (another harness's own) or test features (below)
 //     deny: [{ op, path?, id?, from?, pending? }] refuses (or marks pending) matching ops
-//     uuid: use uuidv7 ids; calls: "never" holds no call records; at, args: the host's node
-// { op: "features" } -> { features }
-// { op: "late", feature } -> {}              a test feature adds a hook now
+//     uuid: use uuidv7 ids; at, args: the host's node
 // { op: "uuid", path } -> { v7 }             whether the id there is a uuidv7
 // { op: "node" } -> { id, attributes }       the host's node
 // { op: "context", process? } -> { at, folder, args, process?, scope }   scope: "process" | "host"
@@ -17,14 +15,13 @@
 // { op: "host", call, as? } -> { value? }    a function of the ermine object, as the host
 // { op: "code", at, program, back?, throws?, promise? } -> {}   run program's steps as a setup;
 //     its value is back's expr, or it throws text, or (promise) a promise settled at "settle"
-// { op: "start", name, at, program?, args? } -> { id } | { refused, held? }
+// { op: "start", name, at, program?, args? } -> { id } | { refused }
 //     program: the node holding a code step's program (default at)
 // { op: "stop", name, why? } -> {}
 // { op: "status", name } -> { status }
 // { op: "close" } -> {}
 // { op: "record", kind: "run" | "call", id } -> { record? }
 // { op: "waits" } -> { waits }               [{ caller, path?, id? }]
-// { op: "slot", feature, process } -> { value? }
 // { op: "do", process, call, as? } -> { value }   call [fn, ...args] from outside
 // { op: "withWriter", process, name, steps?, back? } -> { value? }   call the process's writer
 // { op: "activation", active } -> {}         whether the page is user-activated
@@ -35,14 +32,11 @@
 //     { op: "callframe", id } -> { frame }   where the handler's latest call was made from
 // A call that gave a promise logs how it settled to "promised".
 //
-// A test feature: { name, needs?, onRead?, onWrite?, onTeardown?, onRecord?, onStatus?,
-// onId?, onSchedule?, onCreateFunction?, onError?, slot?, early?, late? }. Each hook logs [name, hook, ...] to "hooks", then does what its value says:
-// "log" calls next, "drop" does not, "throw" throws "<name> threw", onWrite "refuse" throws a
-// Refusal, onRead "add" adds an item, onWrite "copy" passes a copy, onTeardown "why" prefixes why
-// with "<name>:", onStatus "add" adds the field <name>. onId "wrap" prefixes the
+// A test feature: { name, needs?, onRead?, onStatus?,
+// onId?, onSchedule?, onCreateFunction?, onError?, early? }. Each hook logs [name, hook, ...] to "hooks", then does what its value says:
+// "log" calls next, "drop" does not, "throw" throws "<name> threw", onRead "add" adds an item, onStatus "add" adds the field <name>. onId "wrap" prefixes the
 // id with "<name>-", "throw-process" throws for a process's id only; onSchedule "later" runs the pulse itself after the request; onCreateFunction
-// "drop" does not pass it on; onError "replace" throws a "gone" error instead. Limits: only "host", ids, parts, takes,
-// times: n.
+// "drop" does not pass it on; onError "replace" throws a "gone" error instead..
 //
 // program: steps { do: [fn, ...args], as? }; "$x" in an arg is the name x. fn is a @ermine/system
 // function or one of:
@@ -85,7 +79,6 @@ import {
 	ErmineError,
 	type Feature,
 	FeatureError,
-	FEATURES,
 	type ProcessContext,
 	SendError,
 	type Started,
@@ -118,7 +111,6 @@ type Made = {
 	logs: Map<string, unknown[]>
 	later: (() => void)[]
 	held: (() => void)[]
-	slots: Map<string, (o: ProcessContext | undefined) => unknown>
 	programs: Map<string, () => unknown>
 	host: Env
 	shared: Map<string, () => unknown>
@@ -127,7 +119,6 @@ type Made = {
 }
 
 let w: Made | undefined
-const late = new Map<string, () => void>()
 
 function log(name: string, v: unknown) {
 	const logs = world().logs
@@ -160,7 +151,6 @@ function make(o: Request = {}): Made {
 	if (o.stored) w!.ermine.close()
 	else n = 0
 	const later: (() => void)[] = []
-	const slots: Made["slots"] = new Map()
 	const deny = (o.deny ?? []) as {
 		op: string
 		path?: string
@@ -186,19 +176,15 @@ function make(o: Request = {}): Made {
 			})()
 			: testFeature(f as Record<string, unknown>, {
 				log,
-				slots,
-				late,
 				later: (pulse) => void later.push(pulse),
 			})
 	)
-	if (o.calls === "never") features.push(noCalls)
 	const made: Made = {
 		ermine: undefined as never,
 		running: new Map(),
 		logs: new Map(),
 		later,
 		held: [],
-		slots,
 		programs: new Map(),
 		host: new Map(),
 		shared: new Map(),
@@ -257,15 +243,6 @@ export type Additions = {
 	ops?: Record<string, (r: Request, ermine: Ermine) => Record<string, unknown>>
 }
 let added: Additions = {}
-
-const inline: Feature = {
-	name: "inline",
-	setup: (f) =>
-		f.onWrite((o, wr, next) => {
-			log("hooks", ["inline", "onWrite", wr.part, wr.id, ...wr.gone ? ["gone"] : []])
-			next(o, wr)
-		}),
-}
 
 function arg(env: Env, a: unknown): unknown {
 	if (typeof a === "string" && a.startsWith("$")) return env.get(a.slice(1))
@@ -668,12 +645,10 @@ function status(st: Status | undefined) {
 }
 function explained(b: ReturnType<System["explain"]>) {
 	if (b === undefined) return undefined
-	const held = b.held === undefined ? {} : { held: b.held }
-	if (b.writer === undefined) return held
+	if (b.writer === undefined) return {}
 	return {
 		...shownWriter(b.writer),
 		...b.change?.userActivated && { userActivated: true },
-		...held,
 	}
 }
 function shownWriter(w: NonNullable<NonNullable<ReturnType<System["explain"]>>["writer"]>) {
@@ -715,9 +690,6 @@ const runShown = (r: Run) =>
 		end: r.end,
 		...r.error !== undefined && { error: message(r.error) },
 		writes: pairs(r.writes),
-		...(r as Run & { held?: unknown }).held !== undefined && {
-			held: (r as Run & { held?: unknown }).held,
-		},
 	})
 
 function drain() {
@@ -758,7 +730,7 @@ function start(r: Request): Record<string, unknown> {
 		})
 		if ("refused" in s) {
 			m.running.delete(r.name)
-			return { refused: s.refused, ...s.held && { held: s.held } }
+			return { refused: s.refused }
 		}
 		m.running.get(r.name)!.started = s
 		return { id: s.process.id }
@@ -775,11 +747,6 @@ async function answer(r: Request): Promise<Record<string, unknown>> {
 		case "ermine":
 			make(r)
 			return {}
-		case "features":
-			return { features: e.features.filter((f) => f.name !== HARNESS) }
-		case "late":
-			late.get(r.feature)!()
-			return {}
 		case "uuid": {
 			const id = get(e.places, r.path)
 			const v7 = typeof id === "string" &&
@@ -790,15 +757,7 @@ async function answer(r: Request): Promise<Record<string, unknown>> {
 			const attrs = e.table.get("attributes", e.id)?.value as
 				| Record<string, unknown>
 				| undefined
-			const shown = attrs?.[FEATURES] as { name: string }[] | undefined
-			return {
-				id: e.id,
-				attributes: plain(
-					shown === undefined
-						? attrs
-						: { ...attrs, [FEATURES]: shown.filter((f) => f.name !== HARNESS) },
-				),
-			}
+			return { id: e.id, attributes: plain(attrs) }
 		}
 		case "context": {
 			const p = r.process === undefined ? undefined : m.running.get(r.process)?.started.process
@@ -886,11 +845,6 @@ async function answer(r: Request): Promise<Record<string, unknown>> {
 					...x.id !== undefined && { id: x.id },
 				})),
 			}
-		case "slot": {
-			const p = m.running.get(r.process)?.started.process
-			const v = m.slots.get(r.feature)?.(e.getProcessContext(p))
-			return v === undefined ? {} : { value: v }
-		}
 		case "do": {
 			const p = m.running.get(r.process)
 			if (p?.api === undefined) throw new Error(`no process ${r.process}`)
@@ -956,13 +910,6 @@ async function answer(r: Request): Promise<Record<string, unknown>> {
 }
 
 const HARNESS = "harness"
-const noCalls: Feature = {
-	name: "no-calls",
-	setup: (f) => f.onRecord((r, next) => r.call === undefined && next(r)),
-}
-
-named.set("inline", inline)
-
 export const serveErmine = (additions: Additions = {}) => {
 	added = additions
 	for (const f of additions.features ?? []) named.set(f.name, f)

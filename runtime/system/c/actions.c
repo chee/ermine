@@ -666,7 +666,6 @@ void es_explained_free(es_explained *x) {
 	names_free_all(x->writer.path, x->writer.npath);
 	es_run_view_free(x->writer.run);
 	es_call_view_free(x->writer.call);
-	free(x->held_feature);
 	free(x);
 }
 
@@ -698,17 +697,8 @@ static int explain_node(es_context *c, const es_node_data *n, const op_key *key,
 	if (pl_status(c->places) != SC_OK) return ES_STOP;
 	op_value *change = change_at(e, n->part, id);
 	es_explained *x = es_alloc(sizeof *x);
-	es_held h;
-	if (es_held_at(e, n->part, id, &h)) {
-		x->has_held = 1;
-		x->held_feature = es_dup(h.feature);
-	}
 	if (change == NULL) {
-		if (!x->has_held) {
-			free(x);
-			return 0;
-		}
-		*out = x;
+		free(x);
 		return 0;
 	}
 	writer_of(c, change, x);
@@ -822,7 +812,6 @@ struct es_going {
 
 struct es_calls {
 	es_ermine *e;
-	int keep;
 	int closing;
 	unsigned n;
 	es_going **stack;
@@ -989,10 +978,9 @@ static void landed(const pl_fact *fact, void *ctx);
 static void run_ended(sc_computer *c, unsigned n, sc_ended ended, const void *const *reads,
 	size_t nreads, const sc_more *more, void *data);
 
-struct es_calls *es_calls_new(es_ermine *e, int keep) {
+struct es_calls *es_calls_new(es_ermine *e) {
 	struct es_calls *x = es_alloc(sizeof *x);
 	x->e = e;
-	x->keep = keep;
 	x->watch = pl_watch_all(e->places, landed, x);
 	x->ended = sc_on_run_end(e->scheduler, run_ended, x);
 	return x;
@@ -1153,33 +1141,19 @@ int es_calls_calling(es_ermine *e, ch_frame *frame, es_calling_view *out) {
 	return 0;
 }
 
-typedef struct {
-	struct es_calls *x;
-	es_call *owned;
-	int held;
-	int gone;
-} keeping;
-
-static void keep_record(void *ctx, const es_recorded *r) {
-	keeping *k = ctx;
-	struct es_calls *x = k->x;
-	if (!x->keep || k->gone || r->call == NULL) return;
-	held *h = es_map_get(&x->records, r->id);
-	// the latest is the call begun last: an earlier call settling later is told, not held
-	if (h != NULL && h->call != NULL && h->call->n > r->call->n) return;
-	// next called again with the record held: held already
-	if (h != NULL && h->call == r->call) return;
-	es_call *mine = r->call == k->owned ? k->owned : call_copy(r->call);
-	k->held = mine == k->owned;
+// the latest call is the one begun last: an earlier call settling later is let go
+static void keep_record(struct es_calls *x, es_call *call, const char *id) {
+	held *h = es_map_get(&x->records, id);
+	if (h != NULL && h->call != NULL && h->call->n > call->n) {
+		call_free(call);
+		return;
+	}
 	if (h == NULL) {
 		h = es_alloc(sizeof *h);
-		es_map_set(&x->records, r->id, h);
+		es_map_set(&x->records, id, h);
 	}
-	// the one held was the record's own, a changed record's next replacing it: let go of here
-	if (h->call != NULL && h->call == k->owned) k->owned = NULL, k->held = 0;
 	call_free(h->call);
-	h->call = mine;
-	k->held = mine == k->owned;
+	h->call = call;
 	const void *keys[1] = {h};
 	sc_mark(x->e->scheduler, keys, 1, sc_get_run(x->e->scheduler));
 }
@@ -1192,8 +1166,8 @@ typedef struct {
 	double ended;
 } more_of;
 
-// the call so far, ended as end says, told to onRecord and held as the handler's latest. the hook's code
-static int record(es_going *g, const char *end, const more_of *m) {
+// the call so far, ended as end says, and held as the handler's latest
+static void record(es_going *g, const char *end, const more_of *m) {
 	struct es_calls *x = g->x;
 	es_call c = {0};
 	c.n = g->n;
@@ -1217,11 +1191,9 @@ static int record(es_going *g, const char *end, const more_of *m) {
 	c.made = g->made;
 	c.nmade = g->nmade;
 	c.frame = g->frame;
-	keeping k = {x, call_copy(&c), 0, g->gone};
-	es_recorded r = {g->handler, NULL, k.owned, NULL};
-	int code = es_hook_record(x->e, &r, keep_record, &k);
-	if (!k.held) call_free(k.owned);
-	return code;
+	es_call *mine = call_copy(&c);
+	if (g->gone) call_free(mine);
+	else keep_record(x, mine, g->handler);
 }
 
 static void call_settled(void *ctx, int ok, const op_value *value, const char *error) {
@@ -1240,7 +1212,7 @@ static void call_settled(void *ctx, int ok, const op_value *value, const char *e
 	going_release(g);
 }
 
-static int end_call(es_ermine *e, es_going *g, const es_out *out) {
+static void end_call(es_ermine *e, es_going *g, const es_out *out) {
 	struct es_calls *x = e->calls;
 	for (size_t i = 0; i < x->nstack; i++) {
 		if (x->stack[i] != g) continue;
@@ -1251,22 +1223,26 @@ static int end_call(es_ermine *e, es_going *g, const es_out *out) {
 	more_of m = {0};
 	m.has_ended = 1;
 	m.ended = now();
-	if (out->kind == ES_OUT_PENDING) return record(g, "pending", &m);
+	if (out->kind == ES_OUT_PENDING) {
+		record(g, "pending", &m);
+		return;
+	}
 	if (out->kind == ES_OUT_FAILED) {
 		m.error = out->error;
-		return record(g, "failed", &m);
+		record(g, "failed", &m);
+		return;
 	}
 	es_promise *p = out->value == NULL ? NULL : es_promise_of(e, out->value);
 	if (p == NULL) {
 		m.has_returned = 1;
 		m.returned = out->value;
-		return record(g, "done", &m);
+		record(g, "done", &m);
+		return;
 	}
 	more_of unended = {0};
-	int code = record(g, "pending", &unended);
+	record(g, "pending", &unended);
 	g->refs++;
 	es_promise_then(p, call_settled, g);
-	return code;
 }
 
 void es_calls_end(es_ermine *e, es_going *g, const es_out *out) { end_call(e, g, out); }
@@ -1758,13 +1734,7 @@ static int call_action(es_context *c, const es_node_data *n, const char *id,
 		es_queue_pulse(e);
 		return ES_PENDING;
 	}
-	code = end_call(e, g, &r.out);
-	if (code) {
-		call_over(g);
-		es_queue_pulse(e);
-		op_free(r.out.value);
-		return code;
-	}
+	end_call(e, g, &r.out);
 	es_promise *promise = r.out.value == NULL ? NULL : es_promise_of(e, r.out.value);
 	if (promise != NULL) {
 		ending *done = es_alloc(sizeof *done);
@@ -1879,7 +1849,6 @@ void es_caller_free(es_caller *c) {
 
 typedef struct {
 	es_context *c;
-	sc_scope *own;
 	es_teardown fn;
 	void *ctx;
 } tearing;
@@ -1891,21 +1860,14 @@ static char *torn(void *data) {
 	es_ermine *e = t->c->ermine;
 	const char *why = es_why_of(e, t->c->node);
 	if (why == NULL) why = !sc_scope_alive(t->c->scope) ? "ended" : "replaced";
-	int code = es_hook_teardown(e, t->own, why, t->fn, t->ctx);
-	// the error as the scheduler carries it; what was thrown stays in es_thrown() for whoever tears down
-	char *err = NULL;
-	if (code) {
-		const es_error *thrown = es_thrown();
-		err = es_dup(thrown->message != NULL ? thrown->message : es_code_name(code));
-	}
+	t->fn(t->ctx, why);
 	free(t);
-	return err;
+	return NULL;
 }
 
 static int teardown_on(es_context *c, sc_scope *own, es_teardown fn, void *ctx) {
 	tearing *t = es_alloc(sizeof *t);
 	t->c = c;
-	t->own = own;
 	t->fn = fn;
 	t->ctx = ctx;
 	char *err = sc_register_teardown(c->ermine->scheduler, own, torn, t);

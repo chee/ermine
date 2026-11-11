@@ -1,14 +1,8 @@
 {
-	"title": "the process context, under the api: resolve as the api's paths (bare inside at, ./ from folder, / the root); within(f) f with its scope open; write one write at a node (its id, or its id and the path it was reached by), asked edit (by the path when given, so a policy by path decides), through onWrite, its change made from the open scope; none open: a process's throws nothing-open (feature code opens it: within), the host's falls back to its own scope; remove the entry at a node's part taken out, asked as write is; ask protect's; ermine.api(process context) an api from it",
+	"title": "the process context, under the api: resolve as the api's paths (bare inside at, ./ from folder, / the root); within(f) f with its scope open; write one write at a node (its id, or its id and the path it was reached by), asked edit (by the path when given, so a policy by path decides), its change made from the open scope; none open: a process's throws nothing-open (feature code opens it: within), the host's falls back to its own scope; remove the entry at a node's part taken out, asked as write is; ask protect's; ermine.api(process context) an api from it",
 	"steps": [
 		{
 			"op": "ermine",
-			"features": [
-				{
-					"name": "w",
-					"onWrite": "log"
-				}
-			],
 			"deny": [
 				{
 					"op": "edit",
@@ -301,111 +295,6 @@
 						"actor": "test",
 						"node": "n1"
 					}
-				]
-			}
-		},
-		{
-			"op": "log",
-			"name": "hooks",
-			"expect": {
-				"values": [
-					[
-						"w",
-						"onWrite",
-						"attributes",
-						"n1"
-					],
-					[
-						"w",
-						"onWrite",
-						"children",
-						"R"
-					],
-					[
-						"w",
-						"onWrite",
-						"value",
-						"n2"
-					],
-					[
-						"w",
-						"onWrite",
-						"children",
-						"n3"
-					],
-					[
-						"w",
-						"onWrite",
-						"process",
-						"R"
-					],
-					[
-						"w",
-						"onWrite",
-						"attributes",
-						"proc:p"
-					],
-					[
-						"w",
-						"onWrite",
-						"status",
-						"proc:p"
-					],
-					[
-						"w",
-						"onWrite",
-						"children",
-						"R"
-					],
-					[
-						"w",
-						"onWrite",
-						"value",
-						"n4"
-					],
-					[
-						"w",
-						"onWrite",
-						"children",
-						"n5"
-					],
-					[
-						"w",
-						"onWrite",
-						"value",
-						"n6"
-					],
-					[
-						"w",
-						"onWrite",
-						"children",
-						"n5"
-					],
-					[
-						"w",
-						"onWrite",
-						"status",
-						"proc:p"
-					],
-					[
-						"w",
-						"onWrite",
-						"value",
-						"n4"
-					],
-					[
-						"w",
-						"onWrite",
-						"value",
-						"n4"
-					],
-					[
-						"w",
-						"onWrite",
-						"value",
-						"n6",
-						"gone"
-					]
 				]
 			}
 		},

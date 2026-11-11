@@ -395,70 +395,6 @@ static void case_writer_hidden_in_records(void) {
 	finish();
 }
 
-// a program's start that is taken says where only: a stopped child's row that a feature held is
-// not the starter's business (the host's own start names it)
-static int hold_rows;
-static int row_holder_write(void *ctx, es_context *o, const es_write *w, es_write_next *next) {
-	(void)ctx;
-	int takes = w->gone;
-	if (!takes) {
-		takes = 1;
-		for (size_t i = 0; i < w->npatches; i++) {
-			if (w->patches[i].has_value || w->patches[i].has_move) takes = 0;
-		}
-	}
-	if (hold_rows && strcmp(w->part, "process") == 0 && takes) return 0;
-	return es_next_write(next, o, w);
-}
-static int row_holder_setup(void *ctx, es_feature_api *f) {
-	(void)ctx;
-	return es_on_write(f, row_holder_write, NULL);
-}
-static es_refused TAKEN_BY_PROGRAM;
-static es_out starts_stops_restarts(es_context *c, void *ctx) {
-	(void)ctx;
-	es_child k;
-	es_refused no = {0};
-	CHECK(es_start_in(c, plain_kid, NULL, es_text("/work/c"), NULL, &k, &no) == 0 && k.id != NULL);
-	hold_rows = 1;
-	CHECK(es_child_stop(c, k.id, NULL) == 0);
-	es_child_free(&k);
-	CHECK(es_start_in(c, plain_kid, NULL, es_text("/work/c"), NULL, &k, &TAKEN_BY_PROGRAM) == 0);
-	CHECK(k.id == NULL);
-	return es_out_of(NULL);
-}
-static void case_taken_names_no_holder_to_a_program(void) {
-	es_feature holder = {.name = "holder", .setup = row_holder_setup};
-	const es_feature *features[] = {&holder};
-	E = NULL;
-	free(KID);
-	KID = NULL;
-	hold_rows = 0;
-	TAKEN_BY_PROGRAM = (es_refused){0};
-	CHECK(es_create(&(es_options){.features = features, .nfeatures = 1}, &E) == 0);
-	es_refused no = {0};
-	CHECK(es_start(E, starts_stops_restarts, NULL, es_text("/code/p"), NULL, &STARTED, &no) == 0);
-	es_pulse(es_host_context(E));
-	CHECK(TAKEN_BY_PROGRAM.refused != NULL && strcmp(TAKEN_BY_PROGRAM.refused, "taken") == 0);
-	CHECK(TAKEN_BY_PROGRAM.nat == 2 && strcmp(TAKEN_BY_PROGRAM.at[0], "work") == 0);
-	CHECK(!TAKEN_BY_PROGRAM.has_held && TAKEN_BY_PROGRAM.held_process == NULL &&
-		TAKEN_BY_PROGRAM.held_feature == NULL);
-	es_refused_free(&TAKEN_BY_PROGRAM);
-	// the host's own start there names the stopped process and the feature
-	es_started *again;
-	es_refused host = {0};
-	CHECK(es_start(E, plain_kid, NULL, es_text("/work/c"), NULL, &again, &host) != 0);
-	es_clear_thrown();
-	CHECK(host.refused != NULL && host.has_held && host.held_process != NULL);
-	CHECK(host.held_feature != NULL && strcmp(host.held_feature, "holder") == 0);
-	es_refused_free(&host);
-	hold_rows = 0;
-	es_stop(STARTED, NULL);
-	es_pulse(es_host_context(E));
-	es_started_free(STARTED);
-	finish();
-}
-
 // a writer's own mark never carries userActivated: a writer made inside a writer run while the page
 // is user-activated does not run its changes as activated, unless it is when it is called
 static int event_now;
@@ -598,7 +534,6 @@ int main(void) {
 	case_cleanup_through_action();
 	case_teardown_not_in_an_action();
 	case_writer_hidden_in_records();
-	case_taken_names_no_holder_to_a_program();
 	case_writer_mark_has_no_user_activated();
 	case_child_stop_asks_as_starter();
 	puts(failed ? "FAILED" : "ok");

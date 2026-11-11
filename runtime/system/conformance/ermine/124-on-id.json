@@ -20,23 +20,7 @@
 			"expect": {
 				"id": "a-n1",
 				"attributes": {
-					"ermine.host.args": [],
-					"ermine.features": [
-						{
-							"name": "a",
-							"needs": [],
-							"hooks": [
-								"onId"
-							]
-						},
-						{
-							"name": "b",
-							"needs": [],
-							"hooks": [
-								"onId"
-							]
-						}
-					]
+					"ermine.host.args": []
 				}
 			}
 		},

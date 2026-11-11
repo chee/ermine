@@ -1,5 +1,5 @@
 {
-	"title": "onStatus(x, status, next), the sixth hook: middleware around status(x), as the others. each feature's hook is given the node read (x: its node and id) and the status so far, calls next, and gives back what status(x) shows, fields of its own added. chain order: the first outermost, so its hook is called first; the base's status is what the innermost next gives. not called for a node not there (status: undefined). a hook's throw names the feature and the hook, and ermine.features lists it. a hook not calling next: what it gives back is shown, the hooks after it not asked. a process's status (start's status()) goes through it too",
+	"title": "onStatus(x, status, next), the sixth hook: middleware around status(x), as the others. each feature's hook is given the node read (x: its node and id) and the status so far, calls next, and gives back what status(x) shows, fields of its own added. chain order: the first outermost, so its hook is called first; the base's status is what the innermost next gives. not called for a node not there (status: undefined). a hook's throw names the feature and the hook. a hook not calling next: what it gives back is shown, the hooks after it not asked. a process's status (start's status()) goes through it too",
 	"steps": [
 		{
 			"op": "ermine",
@@ -14,27 +14,6 @@
 				}
 			],
 			"expect": {}
-		},
-		{
-			"op": "features",
-			"expect": {
-				"features": [
-					{
-						"name": "a",
-						"needs": [],
-						"hooks": [
-							"onStatus"
-						]
-					},
-					{
-						"name": "b",
-						"needs": [],
-						"hooks": [
-							"onStatus"
-						]
-					}
-				]
-			}
 		},
 		{
 			"op": "host",

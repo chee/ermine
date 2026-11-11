@@ -618,33 +618,11 @@ static block *block_new(const op_patch *src, size_t n) {
 	return b;
 }
 
-typedef struct {
-	ch_frame *frame;
-	op_value *list;
-} featured;
-static void featured_free(void *p) {
-	featured *f = p;
-	ch_frame_free(f->frame);
-	op_free(f->list);
-	free(f);
-}
-
-// the change a write lands with: its writer's, or made now; for a write a hook changed, that one
-// with a frame more on top naming the hooks. *made: the block of a header made now; *fx: the frame
-static int header_of(es_ermine *e, const es_write *w, ch_header *h, pl_made **made,
-	featured **fx) {
+// the change a write lands with: its writer's, or made now. *made: the block of a header made now
+static int header_of(es_ermine *e, const es_write *w, ch_header *h, pl_made **made) {
 	*made = NULL;
-	*fx = NULL;
 	if (w->header != NULL) *h = *w->header;
 	else TRY(es_header(e, h, made));
-	if (w->nfeatures == 0) return 0;
-	featured *f = es_alloc(sizeof *f);
-	f->list = op_list();
-	for (size_t i = 0; i < w->nfeatures; i++) op_push(f->list, op_str(w->features[i]));
-	ch_pair info = {ES_FEATURES, f->list};
-	f->frame = ch_frame_make(&info, 1, h->frame);
-	h->frame = f->frame;
-	*fx = f;
 	return 0;
 }
 
@@ -678,8 +656,7 @@ static int land(void *ctx, const es_write *w) {
 	}
 	ch_header h;
 	pl_made *made;
-	featured *fx;
-	TRY(header_of(e, w, &h, &made, &fx));
+	TRY(header_of(e, w, &h, &made));
 	int first = 1;
 	if (entry == NULL) {
 		op_value *base = empty(w->part), *v;
@@ -688,12 +665,10 @@ static int land(void *ctx, const es_write *w) {
 		op_free(base);
 		if (bad != OP_OK) {
 			if (made != NULL) pl_made_free(made);
-			if (fx != NULL) featured_free(fx);
 			return apply_failed(bad, failed);
 		}
 		if (v == NULL) {
 			if (made != NULL) pl_made_free(made);
-			if (fx != NULL) featured_free(fx);
 			return 0;
 		}
 		nd_entry *fresh = nd_make_entry(v, &h);
@@ -703,7 +678,6 @@ static int land(void *ctx, const es_write *w) {
 		// pulse (pl_sweep)
 		pl_own_in(e->places, fresh, e->table);
 		hold(e, fresh, &first, made, pl_made_free);
-		hold(e, fresh, &first, fx, featured_free);
 		return 0;
 	}
 	block *b = block_new(w->patches, w->npatches);
@@ -714,7 +688,6 @@ static int land(void *ctx, const es_write *w) {
 	if (bad != OP_OK) {
 		block_free(b);
 		if (made != NULL) pl_made_free(made);
-		if (fx != NULL) featured_free(fx);
 		return apply_failed(bad, failed);
 	}
 	pl_changed changed = {1, {entry}};
@@ -722,7 +695,6 @@ static int land(void *ctx, const es_write *w) {
 	es_action_let_go(e, held, entry->value);
 	hold(e, entry, &first, made, pl_made_free);
 	hold(e, entry, &first, b, block_free);
-	hold(e, entry, &first, fx, featured_free);
 	return 0;
 }
 
@@ -736,7 +708,7 @@ static int put_land(void *ctx, const es_write *x) {
 }
 static int put_in(void *p) {
 	putting *s = p;
-	return es_hook_write(s->c->ermine, s->c, s->w, put_land, s->c->ermine);
+	return put_land(s->c->ermine, s->w);
 }
 int es_context_put(es_context *c, const es_write *w) {
 	putting s = {c, w};
@@ -1981,7 +1953,6 @@ static int remove_in(void *v) {
 	if (!code) {
 		crn_drop(e->runs, tb_string(id));
 		es_calls_drop(e, id);
-		es_held_drop(e, id);
 		// what was made at it and under it stops (the node itself always; what is under it, unless a name
 		// still reaches it)
 		stop_unreached(c, &below, id);

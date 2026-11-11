@@ -348,7 +348,7 @@ es_promise *es_promise_of(es_ermine *e, const op_value *v);
 
 // One table write: patches on (part, id), with the path it was reached by when known. header is
 // the change as its writer made it, or NULL to make it from the scope open. gone means the entry
-// was taken out. features lists the onWrite hooks that changed it, outermost first.
+// was taken out.
 typedef struct {
 	const char *part;
 	const char *id;
@@ -359,15 +359,11 @@ typedef struct {
 	size_t npatches;
 	const ch_header *header;
 	int gone;
-	const char *const *features;
-	size_t nfeatures;
 } es_write;
 
-#define ES_FEATURES "features"
 #define ES_SCOPE "ermine.computer.scope"
 #define ES_WAITING "ermine.process.waiting"
 #define ES_ARGS "ermine.host.args"
-#define ES_FEATURES_ATTRIBUTE "ermine.features"
 
 // A process context: where and as whom a thing is done. There is one per process and one for the
 // host (process 0). A process's is freed with its scope, the others at es_free. Made by
@@ -473,14 +469,10 @@ typedef struct {
 	double since;
 } es_waiting;
 
-// Status. state is done, pending, failed or looping. held: a feature held a write back
-// (held_write is "status" or "row"). phase ("run" or "act") goes with failed. n is a computer's
+// Status. state is done, pending, failed or looping. phase ("run" or "act") goes with failed. n is a computer's
 // latest run. more holds a feature's own fields.
 typedef struct {
 	const char *state;
-	int has_held;
-	char *held_feature;
-	const char *held_write;
 	char *error;
 	const char *phase;
 	es_waiting *waiting;
@@ -547,14 +539,11 @@ typedef struct {
 	// outside: where it began, the nearest locations up its frames (borrowed from the change view); NULL: none
 	const op_value *locations;
 } es_writer;
-// A change explained: the change and its writer. held: the latest write there a feature held
-// back.
+// A change explained: the change and its writer.
 typedef struct {
 	const es_change_view *change;
 	int has_writer;
 	es_writer writer;
-	int has_held;
-	char *held_feature;
 } es_explained;
 
 // Who called the running action: the actor its writes carry, and the caller's process node by
@@ -585,7 +574,7 @@ typedef struct {
 	op_value *change;
 } es_call_write;
 
-// A call's record, the latest per handler (older ones go to onRecord). caller is the sending
+// A call's record, the latest per handler (older ones are let go). caller is the sending
 // process's id (the host's node for the host). context is the caller's. handler_change is the
 // handler value's change as called. started and ended are ms since 1970.
 typedef struct {
@@ -637,7 +626,7 @@ typedef struct {
 // --- features and their hooks (features.ts) ----------
 
 typedef enum {
-	ES_ON_READ, ES_ON_WRITE, ES_ON_TEARDOWN, ES_ON_RECORD, ES_ON_STATUS,
+	ES_ON_READ, ES_ON_STATUS,
 	ES_ON_ID, ES_ON_SCHEDULE, ES_ON_CREATE_FUNCTION, ES_ON_ERROR, ES_HOOKS
 } es_hook;
 
@@ -653,12 +642,6 @@ typedef struct {
 	const es_node_data *node;
 	const char *id;
 } es_asked;
-typedef struct {
-	const char *id;
-	const crn_run *run;
-	const es_call *call;
-	const char *held;
-} es_recorded;
 
 // what onCreateFunction is told: kind ("memo", "effect", "action"), the computer (NULL for an action),
 // its node, and who made it (the process's id, or the host's node's)
@@ -677,18 +660,12 @@ typedef struct es_pulse_ask es_pulse_ask;
 // the continuation of a hook: what is after it in its chain, the base last. not calling it: what the
 // hook guards does not happen. each is called with the hook's own arguments, as given or changed
 typedef struct es_read_next es_read_next;
-typedef struct es_write_next es_write_next;
-typedef struct es_teardown_next es_teardown_next;
-typedef struct es_record_next es_record_next;
 typedef struct es_status_next es_status_next;
 typedef struct es_id_next es_id_next;
 typedef struct es_schedule_next es_schedule_next;
 typedef struct es_create_next es_create_next;
 typedef struct es_error_next es_error_next;
 int es_next_read(es_read_next *next, const es_reading *x, const es_versions *items, es_versions *out);
-int es_next_write(es_write_next *next, es_context *o, const es_write *w);
-int es_next_teardown(es_teardown_next *next, sc_scope *scope, const char *why);
-int es_next_record(es_record_next *next, const es_recorded *r);
 int es_next_status(es_status_next *next, const es_asked *x, const es_status *st, es_status *out);
 // *out: an id, new (the hook that does not pass next's on frees it)
 int es_next_id(es_id_next *next, const char *kind, char **out);
@@ -706,9 +683,6 @@ void es_run_pulse(es_pulse_ask *pulse);
 // registration.
 typedef int (*es_on_read_fn)(void *ctx, const es_reading *x, const es_versions *items,
 	es_read_next *next, es_versions *out);
-typedef int (*es_on_write_fn)(void *ctx, es_context *o, const es_write *w, es_write_next *next);
-typedef int (*es_on_teardown_fn)(void *ctx, sc_scope *scope, const char *why, es_teardown_next *next);
-typedef int (*es_on_record_fn)(void *ctx, const es_recorded *r, es_record_next *next);
 typedef int (*es_on_status_fn)(void *ctx, const es_asked *x, const es_status *st,
 	es_status_next *next, es_status *out);
 // kind: "node" or "process". *out: the id, new (malloc'd), next's or the hook's own
@@ -731,9 +705,6 @@ typedef struct es_feature_api {
 	void *private_;
 } es_feature_api;
 int es_on_read(es_feature_api *f, es_on_read_fn fn, void *ctx);
-int es_on_write(es_feature_api *f, es_on_write_fn fn, void *ctx);
-int es_on_teardown(es_feature_api *f, es_on_teardown_fn fn, void *ctx);
-int es_on_record(es_feature_api *f, es_on_record_fn fn, void *ctx);
 int es_on_status(es_feature_api *f, es_on_status_fn fn, void *ctx);
 int es_on_id(es_feature_api *f, es_on_id_fn fn, void *ctx);
 int es_on_schedule(es_feature_api *f, es_on_schedule_fn fn, void *ctx);
@@ -752,11 +723,6 @@ int es_api_new_id(es_feature_api *f, char **out);
 // a listener a feature added to the scheduler (sc_on_…), taken away at es_close as ermine's own are
 int es_listened(es_feature_api *f, sc_listener *l);
 
-typedef struct es_slot es_slot;
-int es_reserve_slot(es_feature_api *f, es_slot **out);
-int es_slot_get(const es_slot *s, es_context *c, long *out);
-void es_slot_set(es_slot *s, es_context *c, long value);
-
 // A feature: its name, the files it lists, the names it needs (set up first), and its setup.
 typedef struct {
 	const char *name;
@@ -767,14 +733,6 @@ typedef struct {
 	int (*setup)(void *ctx, es_feature_api *f);
 	void *ctx;
 } es_feature;
-typedef struct {
-	char *name;
-	char **needs;
-	size_t nneeds;
-	es_hook *hooks;
-	size_t nhooks;
-} es_shown;
-
 // --- the ermine ----------
 
 typedef struct {
@@ -798,7 +756,6 @@ typedef struct {
 	} host;
 	const sc_pair *info;
 	size_t ninfo;
-	int calls_never;
 	// whether a person just interacted with the page now (a writer asks as it runs: its changes
 	// say userActivated). NULL: never. the host says; the ermine does not look
 	int (*user_activated)(void *ctx);
@@ -845,20 +802,12 @@ typedef struct {
 	es_ermine *ermine;
 	pr_process *process;
 } es_started;
-// A refused start: "taken" or a name code, and the path. held: a stopped process's row that a
-// feature held back.
+// A refused start: "taken" or a name code, and the path.
 typedef struct {
 	const char *refused;
 	char **at;
 	size_t nat;
-	int has_held;
-	char *held_process, *held_feature;
 } es_refused;
-
-typedef struct {
-	const char *feature;
-	const char *write;
-} es_held;
 
 // --- A: nodes.c ----------
 
@@ -877,8 +826,7 @@ sc_scope *es_owner(es_context *c);
 // scope's own: the info a write carries is found from it
 ch_frame *es_open_frame(es_context *c);
 int es_ask_slot(es_context *c, const char *parent, const char *const *path, size_t npath);
-// one write at a node (its id, and the path it was reached by), asked "edit" on it, through onWrite,
-// committed, a pulse asked for. remove: the entry taken out, asked "edit" as write is
+// one write at a node (its id, and the path it was reached by), asked "edit" on it, committed, a pulse asked for. remove: the entry taken out, asked "edit" as write is
 int es_context_write_at(es_context *c, const char *part, const es_aim *at, const op_patch *patches,
 	size_t n, const ch_location *site);
 int es_context_remove_at(es_context *c, const char *part, const es_aim *at, const ch_location *site);
@@ -1066,7 +1014,7 @@ int es_get_caller(es_context *c, es_caller *out);
 // context). 1 with *from and *nfrom (*from NULL: the host), or 0 if no call is open.
 int es_caller_place(void *ctx, const char *const **from, size_t *nfrom);
 void es_caller_free(es_caller *c);
-// fn as the scope open goes (through onTeardown): why "replaced" (the owner ran again), "ended", or the
+// fn as the scope open goes: why "replaced" (the owner ran again), "ended", or the
 // reason a stop was given
 int es_add_teardown(es_context *c, es_teardown fn, void *ctx);
 // in an effect's act: fn(why) as the effect goes, and before its next act (the TypeScript's act returns
@@ -1114,9 +1062,8 @@ void es_promise_reject(es_promise *p, const char *message);
 void es_promise_then(es_promise *p,
 	void (*fn)(void *ctx, int ok, const op_value *value, const char *error), void *ctx);
 
-// the call records (calls.ts' Calls). the records are the latest per handler; history keeps older
-// ones through onRecord. keep 0: none held (options.calls_never; onRecord is still told)
-struct es_calls *es_calls_new(es_ermine *e, int keep);
+// the call records (calls.ts' Calls). the records are the latest per handler
+struct es_calls *es_calls_new(es_ermine *e);
 void es_calls_free(struct es_calls *x);
 unsigned es_calls_next(es_ermine *e);
 // call n begins in frame (made alone, its info { caller, handler, call: n }, borrowing the values of
@@ -1219,33 +1166,19 @@ es_context *es_process_context_of(es_ermine *e, const char *id);
 es_handle *es_handle_of(es_ermine *e, const es_node_data *node);
 int es_data_of(es_ermine *e, const void *x, es_node_data *node);
 const crn_run *es_records_run(es_ermine *e, const char *id);
-const char *es_records_run_held(es_ermine *e, const char *id);
 const es_call *es_records_call(es_ermine *e, const char *id);
 es_wait *es_records_waits(es_ermine *e, size_t *n);
 // the call being answered where the code runs now (the scope open, or one above it): its record so far
 // and the caller's context; for a service acting for its caller. 1, 0: none
 int es_calling(es_ermine *e, es_calling_view *out);
-const es_shown *es_features(es_ermine *e, size_t *n);
 
-// what the other four call. the hooks around: a write (land at the end), reads' items, a teardown (fn),
-// a status, a record (keep). each is the chain of that kind, the base's own last
+// what the other three call. the hooks around: reads' items, a status, a created function. each is the
+// chain of that kind, the base's own last
 // the entries changed, said written
 void es_commit_changed(es_ermine *e, const pl_changed *changed);
-int es_hook_write(es_ermine *e, es_context *o, const es_write *w,
-	int (*land)(void *ctx, const es_write *w), void *ctx);
 int es_hook_read(es_ermine *e, const es_reading *x, const es_versions *items, es_versions *out);
-int es_hook_teardown(es_ermine *e, sc_scope *scope, const char *why,
-	void (*fn)(void *ctx, const char *why), void *ctx);
 int es_hook_status(es_ermine *e, const es_asked *x, const es_status *st, es_status *out);
 int es_hook_create_function(es_ermine *e, const es_created *made);
-int es_hook_record(es_ermine *e, const es_recorded *r,
-	void (*keep)(void *ctx, const es_recorded *r), void *ctx);
-// writes held back by onWrite, tracked: at (part, id); a node's status write; a stopped process's row. 1
-// and *out, else 0. drop: a node gone, what was held at its parts holding nothing goes with it
-int es_held_at(es_ermine *e, const char *part, const char *id, es_held *out);
-int es_held_status(es_ermine *e, const char *id, es_held *out);
-int es_held_row(es_ermine *e, const char *id, es_held *out);
-void es_held_drop(es_ermine *e, const char *id);
 // a write's header now: the open scope's, its frame the one open; from outside the graph, the
 // call's location (es_enter) in a frame more on top. *made: its block, for pl_hold on the entry written
 int es_header(es_ermine *e, ch_header *out, pl_made **made);

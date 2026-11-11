@@ -1,17 +1,14 @@
 // The ermine harness's test features.
-import { Refusal } from "@ermine/processes/guard"
-import { ErmineError, type Feature, type Hook, type ProcessContext } from "./ermine.ts"
+import { ErmineError, type Feature, type Hook } from "./ermine.ts"
 
 export function testFeature(
 	spec: Record<string, unknown>,
 	o: {
 		log: (name: string, v: unknown) => void
-		slots: Map<string, (o: ProcessContext | undefined) => unknown>
-		late: Map<string, () => void>
 		later: (pulse: () => void) => void
 	},
 ): Feature {
-	const { log, slots, late, later } = o
+	const { log, later } = o
 	const name = spec.name as string
 	const say = (hook: Hook, ...more: unknown[]) => log("hooks", [name, hook, ...more])
 	const boom = () => {
@@ -22,7 +19,6 @@ export function testFeature(
 		...spec.needs !== undefined && { needs: spec.needs as string[] },
 		setup(f) {
 			if (spec.early) void f.places
-			if (spec.late) late.set(name, () => f.onWrite((o, wr, next) => next(o, wr)))
 			if (spec.onRead) {
 				f.onRead((x, items, next) => {
 					say("onRead", x.id)
@@ -33,42 +29,6 @@ export function testFeature(
 						return next(x, [...items, { value: name, from: { kind: "test" } }])
 					}
 					return next(x, items)
-				})
-			}
-			const slot = spec.slot ? f.reserveSlot<number>() : undefined
-			if (slot) slots.set(name, (o) => o === undefined ? undefined : slot.get(o))
-			let matched = 0
-			if (spec.onWrite || slot) {
-				f.onWrite((o, wr, next) => {
-					if (slot) slot.set(o, (slot.get(o) ?? 0) + 1)
-					const how = spec.onWrite
-					if (how === undefined) return next(o, wr)
-					if (spec.only === "host" && o.process !== undefined) return next(o, wr)
-					if (Array.isArray(spec.ids) && !spec.ids.includes(wr.id)) return next(o, wr)
-					if (Array.isArray(spec.parts) && !spec.parts.includes(wr.part)) return next(o, wr)
-					const out = wr.gone ||
-						wr.patches.every((p) => !("value" in p) && p.move === undefined)
-					if (spec.takes && !out) return next(o, wr)
-					if (typeof spec.times === "number" && matched++ >= spec.times) return next(o, wr)
-					if (wr.gone) say("onWrite", wr.part, wr.id, "gone")
-					else say("onWrite", wr.part, wr.id)
-					if (how === "throw") boom()
-					if (how === "drop") return
-					if (how === "copy") return next(o, { ...wr })
-					if (how === "refuse") {
-						throw new Refusal("edit", `${name} refused`)
-					}
-					next(o, wr)
-				})
-			}
-			if (spec.onTeardown) {
-				f.onTeardown((sc, why, next) => {
-					say("onTeardown", why)
-					const how = spec.onTeardown
-					if (how === "throw") boom()
-					if (how === "drop") return
-					if (how === "why") return next(sc, `${name}:${why}`)
-					next(sc, why)
 				})
 			}
 			if (spec.onStatus) {
@@ -114,15 +74,6 @@ export function testFeature(
 						return new ErmineError("gone", `${name} replaced it`)
 					}
 					return next(error, fn)
-				})
-			}
-			if (spec.onRecord) {
-				f.onRecord((r, next) => {
-					say("onRecord", r.run ? "run" : "call", r.id, (r.run ?? r.call)!.end)
-					const how = spec.onRecord
-					if (how === "throw") boom()
-					if (how === "drop") return
-					next(r)
 				})
 			}
 		},
