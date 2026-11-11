@@ -55,7 +55,7 @@
 				"n"
 			],
 			"expect": {
-				"id": "n4"
+				"id": "n3"
 			}
 		},
 		{
@@ -76,7 +76,7 @@
 		{
 			"op": "frame",
 			"part": "value",
-			"id": "n4",
+			"id": "n3",
 			"expect": {
 				"frame": [
 					{
@@ -94,7 +94,7 @@
 					},
 					{
 						"actor": "test",
-						"node": "n1"
+						"node": "R"
 					}
 				]
 			}
@@ -117,7 +117,7 @@
 		{
 			"op": "record",
 			"kind": "call",
-			"id": "n5",
+			"id": "n4",
 			"expect": {
 				"record": {
 					"n": 1,
@@ -127,11 +127,11 @@
 								"node": "proc:p",
 								"actor": "test"
 							},
-							"handler": "n5",
+							"handler": "n4",
 							"call": 1
 						},
 						{
-							"handler": "n5"
+							"handler": "n4"
 						},
 						{
 							"process": [
@@ -154,11 +154,11 @@
 						},
 						{
 							"actor": "test",
-							"node": "n1"
+							"node": "R"
 						}
 					],
 					"caller": "proc:p",
-					"handler": "n5",
+					"handler": "n4",
 					"args": [],
 					"end": "failed",
 					"error": "nothing-open: patch: nothing is open here (a module's top level, a timer, a listener, or after an await): call it from a setup, a memo, an effect or an action",
@@ -170,7 +170,7 @@
 		{
 			"op": "saved",
 			"part": "value",
-			"id": "n4",
+			"id": "n3",
 			"expect": {
 				"value": 1
 			}
@@ -178,7 +178,7 @@
 		{
 			"op": "frame",
 			"part": "value",
-			"id": "n4",
+			"id": "n3",
 			"expect": {
 				"frame": [
 					{
@@ -196,7 +196,7 @@
 					},
 					{
 						"actor": "test",
-						"node": "n1"
+						"node": "R"
 					}
 				]
 			}
@@ -234,7 +234,7 @@
 		{
 			"op": "frame",
 			"part": "value",
-			"id": "n4",
+			"id": "n3",
 			"expect": {
 				"frame": [
 					{
@@ -244,7 +244,7 @@
 					},
 					{
 						"actor": "test",
-						"node": "n1"
+						"node": "R"
 					}
 				]
 			}
@@ -254,7 +254,7 @@
 			"call": [
 				"write",
 				"value",
-				"n4",
+				"n3",
 				[
 					{
 						"path": [],
@@ -267,7 +267,7 @@
 		{
 			"op": "frame",
 			"part": "value",
-			"id": "n4",
+			"id": "n3",
 			"expect": {
 				"frame": [
 					{
@@ -277,7 +277,7 @@
 					},
 					{
 						"actor": "test",
-						"node": "n1"
+						"node": "R"
 					}
 				]
 			}
@@ -289,7 +289,7 @@
 				"write",
 				"value",
 				{
-					"id": "n4",
+					"id": "n3",
 					"path": [
 						"code",
 						"n"
@@ -309,7 +309,7 @@
 		{
 			"op": "frame",
 			"part": "value",
-			"id": "n4",
+			"id": "n3",
 			"expect": {
 				"frame": [
 					{
@@ -319,7 +319,7 @@
 					},
 					{
 						"actor": "test",
-						"node": "n1"
+						"node": "R"
 					}
 				]
 			}

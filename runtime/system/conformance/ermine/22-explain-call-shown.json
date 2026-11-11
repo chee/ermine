@@ -107,24 +107,24 @@
 		{
 			"op": "record",
 			"kind": "call",
-			"id": "n5",
+			"id": "n4",
 			"expect": {
 				"record": {
 					"n": 1,
 					"frame": [
 						{
 							"caller": {
-								"node": "n1",
+								"node": "R",
 								"actor": "test"
 							},
-							"handler": "n5",
+							"handler": "n4",
 							"call": 1,
 							"locations": [
 								"program"
 							]
 						},
 						{
-							"handler": "n5"
+							"handler": "n4"
 						},
 						{
 							"process": [
@@ -147,11 +147,11 @@
 						},
 						{
 							"actor": "test",
-							"node": "n1"
+							"node": "R"
 						}
 					],
-					"caller": "n1",
-					"handler": "n5",
+					"caller": "R",
+					"handler": "n4",
 					"args": [
 						1
 					],
@@ -161,7 +161,7 @@
 					"writes": [
 						[
 							"value",
-							"n4"
+							"n3"
 						]
 					]
 				}

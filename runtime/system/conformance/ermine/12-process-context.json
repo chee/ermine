@@ -6,7 +6,7 @@
 			"deny": [
 				{
 					"op": "edit",
-					"id": "n7"
+					"id": "n6"
 				}
 			],
 			"expect": {}
@@ -52,7 +52,7 @@
 				"a"
 			],
 			"expect": {
-				"id": "n4"
+				"id": "n3"
 			}
 		},
 		{
@@ -62,7 +62,7 @@
 				"b"
 			],
 			"expect": {
-				"id": "n6"
+				"id": "n5"
 			}
 		},
 		{
@@ -157,7 +157,7 @@
 			"call": [
 				"write",
 				"value",
-				"n4",
+				"n3",
 				[
 					{
 						"path": [
@@ -176,7 +176,7 @@
 			"call": [
 				"write",
 				"value",
-				"n4",
+				"n3",
 				[
 					{
 						"path": [
@@ -193,7 +193,7 @@
 		{
 			"op": "saved",
 			"part": "value",
-			"id": "n4",
+			"id": "n3",
 			"expect": {
 				"value": {
 					"n": 1
@@ -203,7 +203,7 @@
 		{
 			"op": "frame",
 			"part": "value",
-			"id": "n4",
+			"id": "n3",
 			"expect": {
 				"frame": [
 					{
@@ -221,7 +221,7 @@
 					},
 					{
 						"actor": "test",
-						"node": "n1"
+						"node": "R"
 					}
 				]
 			}
@@ -231,7 +231,7 @@
 			"call": [
 				"write",
 				"value",
-				"n4",
+				"n3",
 				[
 					{
 						"path": [
@@ -250,7 +250,7 @@
 			"call": [
 				"remove",
 				"value",
-				"n6"
+				"n5"
 			],
 			"process": "p",
 			"expect": {},
@@ -259,7 +259,7 @@
 		{
 			"op": "saved",
 			"part": "value",
-			"id": "n4",
+			"id": "n3",
 			"expect": {
 				"value": {
 					"n": 2
@@ -269,13 +269,13 @@
 		{
 			"op": "saved",
 			"part": "value",
-			"id": "n6",
+			"id": "n5",
 			"expect": {}
 		},
 		{
 			"op": "frame",
 			"part": "value",
-			"id": "n4",
+			"id": "n3",
 			"expect": {
 				"frame": [
 					{
@@ -293,7 +293,7 @@
 					},
 					{
 						"actor": "test",
-						"node": "n1"
+						"node": "R"
 					}
 				]
 			}
@@ -303,7 +303,7 @@
 			"call": [
 				"ask",
 				"edit",
-				"n4",
+				"n3",
 				"value"
 			],
 			"process": "p",
@@ -323,7 +323,7 @@
 				"no"
 			],
 			"expect": {
-				"id": "n7"
+				"id": "n6"
 			}
 		},
 		{
@@ -331,7 +331,7 @@
 			"call": [
 				"write",
 				"value",
-				"n7",
+				"n6",
 				[
 					{
 						"path": [],
@@ -347,7 +347,7 @@
 		{
 			"op": "saved",
 			"part": "value",
-			"id": "n7",
+			"id": "n6",
 			"expect": {
 				"value": 1
 			}
@@ -426,7 +426,7 @@
 				"no"
 			],
 			"expect": {
-				"id": "n2"
+				"id": "n1"
 			}
 		},
 		{
@@ -435,7 +435,7 @@
 				"write",
 				"value",
 				{
-					"id": "n2",
+					"id": "n1",
 					"path": [
 						"no"
 					]
@@ -458,7 +458,7 @@
 				"remove",
 				"value",
 				{
-					"id": "n2",
+					"id": "n1",
 					"path": [
 						"no"
 					]
@@ -472,7 +472,7 @@
 		{
 			"op": "saved",
 			"part": "value",
-			"id": "n2",
+			"id": "n1",
 			"expect": {
 				"value": 1
 			}

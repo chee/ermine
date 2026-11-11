@@ -1,5 +1,5 @@
 {
-	"title": "getCaller(), in an action: who called it [chee 10-25: \"oh well, it should\"]: the actor its writes carry, and its process's node by its path from the root (the host, as caller, none placed); outside an action: undefined",
+	"title": "getCaller(), in an action: who called it [chee 10-25: \"oh well, it should\"]: the actor its writes carry, and its process's node by its path from the root (code outside any process: the root, []); outside an action: undefined",
 	"steps": [
 		{
 			"op": "ermine",
@@ -69,7 +69,8 @@
 			],
 			"expect": {
 				"value": {
-					"actor": "test"
+					"actor": "test",
+					"process": []
 				}
 			}
 		},

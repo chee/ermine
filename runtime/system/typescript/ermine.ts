@@ -1,17 +1,16 @@
-// // ermine: what a host makes, once. The host is process 0: its code runs in its own scope, where
+// // ermine, made once. Code outside any process runs as the root, in the root's scope, where
 // // the functions of @ermine/system act as it.
 // //
 // //   import { createErmine } from "@ermine/system"
 // //
-// //   const ermine = createErmine({ host: { at: "/host", args, setup } })
-// //   ermine.within(() => ensureNode("/work/n", 1))          // host code, as the host
+// //   const ermine = createErmine()
+// //   ermine.within(() => ensureNode("/work/n", 1))          // as the root
 // //   const running = ermine.start(clock, "/work/clock")    // { process, stop(), status() }
 // //   running.status()                                       // a setup that threw shows here
-// //   ermine.close()                                         // every process, then the host's
+// //   ermine.close()                                         // every process, then the root's scope
 // //
 // // Options all have defaults: features (none), scheduler (a new one), may (the policy every read
-// // and write is asked of; none allows all), root (a new id), host (where its node is placed, its
-// // args, and a setup run once untracked as createErmine ends), info (the host scope's info).
+// // and write is asked of; none allows all), root (a new id), info (the root scope's info).
 // //
 // // start(fn, at, { args }) runs fn as the setup of a process at `at`, given nothing. What setup
 // // returns is the process's value, and a throw shows in status(). Throwing PENDING leaves the
@@ -22,7 +21,6 @@ import { createPlaces, type Id, type Path, type Places } from "@ermine/places"
 import { children, createNames, crow } from "@ermine/places/children"
 import { crowify } from "@ermine/places/crowify"
 import { keepStackTraceLimit } from "@ermine/changeable/stacktrace"
-import { place } from "./system/names.ts"
 import { getStatus } from "./system/status.ts"
 import { enterScheduler, leaveScheduler, registerScheduler, registerScope } from "./registry.ts"
 import { isHandle, mint } from "./handles.ts"
@@ -107,7 +105,6 @@ export type {
 } from "./system/shapes.ts"
 export type { Call, Wait } from "./calls.ts"
 
-export const ARGS = "ermine.host.args"
 export type Options = {
 	features?: readonly Feature[]
 	scheduler?: Scheduler
@@ -115,13 +112,6 @@ export type Options = {
 	// A graph to start from, as storage hands it back: its root's id is root.
 	table?: Table
 	root?: Id
-	host?: {
-		// the host's own node id; give the same one each start for a saved graph, as root
-		node?: Id
-		at?: string | Path
-		args?: readonly string[]
-		setup?: () => unknown
-	}
 	info?: Info
 	// The clock every change's time is taken from, ms since 1970. Defaults to Date.now.
 	now?: () => number
@@ -293,8 +283,7 @@ function make(options: Options, undo: (() => void)[]): Ermine {
 	const p = places
 	const names = createNames(p)
 
-	const node = options.host?.node ?? newId()
-	const hostScope = s.createRootScope({ ...options.info, node: node })
+	const hostScope = s.createRootScope({ ...options.info, node: root })
 	undo.push(() => {
 		enterScheduler(s)
 		try {
@@ -337,7 +326,7 @@ function make(options: Options, undo: (() => void)[]): Ermine {
 		const o = callAbove(s.getCurrentFrame())
 		if (o === undefined) return undefined
 		const by = (o.info.caller as { node?: Id } | undefined)?.node
-		if (by === undefined || by === node) return {}
+		if (by === undefined || by === root) return {}
 		const ctx = contexts.get(by) ?? computerAt(madeNodes, by)?.inner
 		if (ctx?.context.process === undefined) return {}
 		return { from: ctx.context.at }
@@ -386,14 +375,8 @@ function make(options: Options, undo: (() => void)[]): Ermine {
 		places: p,
 		folder: [],
 		at: [],
-		args: options.host?.args ?? [],
-		node,
-	})
-	hostInner.context.within(() => {
-		const attrs: Record<string, unknown> = {
-			[ARGS]: options.host?.args ?? [],
-		}
-		hostInner.put({ part: "attributes", id: node, patches: [{ path: [], value: attrs }] })
+		args: [],
+		node: root,
 	})
 
 	const madeNodes: Base["made"] = new Map()
@@ -474,11 +457,6 @@ function make(options: Options, undo: (() => void)[]): Ermine {
 	// undone last: the teardown before it finds its context through the registration
 	undo.unshift(unregister)
 	registerScope(hostScope, hostInner)
-
-	if (options.host?.at !== undefined) {
-		const at = options.host.at
-		hostInner.context.within(() => place(at, mint(base.handles, { id: node, part: "value" })))
-	}
 
 	const started: Process[] = []
 
@@ -683,7 +661,7 @@ function make(options: Options, undo: (() => void)[]): Ermine {
 		scheduler: { get: part(s) },
 		table: { get: part({ get: table.get, who: table.who }) },
 		places: { get: part(p) },
-		id: { get: part(node) },
+		id: { get: part(root) },
 		handleOf: {
 			value: (node: NodeData): Node => {
 				alive()
@@ -719,16 +697,6 @@ function make(options: Options, undo: (() => void)[]): Ermine {
 		},
 		// pipe-extension: core gap
 		viewOf: (change) => (alive(), viewOf(base, change)),
-	}
-	// A throw in the host's setup closes ermine and is thrown from here.
-	const setup = options.host?.setup
-	if (setup !== undefined) {
-		try {
-			hostInner.context.within(setup)
-		} catch (e) {
-			close()
-			throw e
-		}
 	}
 	return ermine
 }

@@ -182,12 +182,6 @@ Deno.test("close() runs every step when one throws, throws the first error at th
 	e.close()
 })
 
-Deno.test("createErmine throwing after it registered its scheduler undoes the registration", () => {
-	const scheduler = createScheduler()
-	assertThrows(() => createErmine({ features: [manual], scheduler, host: { at: "" } }))
-	assertEquals(registrations(scheduler), 0)
-})
-
 // A scheduler that counts what is listening on it. The first off of a listener on throwing (an on…
 // name) throws after it took its listener out.
 function counting(throwing?: string) {
@@ -217,11 +211,6 @@ function counting(throwing?: string) {
 }
 
 Deno.test("createErmine throwing leaves nothing listening on a scheduler it was given", () => {
-	const placing = counting()
-	assertThrows(() => createErmine({ features: [manual], scheduler: placing, host: { at: "" } }))
-	assertEquals(placing.live, 0)
-	assertEquals(registrations(placing), 0)
-
 	const setting = counting()
 	const late: Feature = {
 		name: "late",
@@ -234,36 +223,12 @@ Deno.test("createErmine throwing leaves nothing listening on a scheduler it was 
 	assertThrows(() => createErmine({ features: [early, late, manual], scheduler: setting }), Error)
 	assertEquals(setting.live, 0)
 
-	// only features listen after a pulse, so the off that throws is a feature's
-	const throwing = counting("onAfterPulse")
-	const one: Feature = { name: "one", setup: (f) => void f.scheduler.onAfterPulse(() => {}) }
-	const two: Feature = { name: "two", setup: (f) => void f.scheduler.onAfterPulse(() => {}) }
-	assertThrows(
-		() => createErmine({ features: [one, two, manual], scheduler: throwing, host: { at: "" } }),
-		Error,
-	)
-	assertEquals(throwing.live, 0)
-
-	const set = counting()
-	const host = {
-		setup: () => {
-			throw new Error("host")
-		},
-	}
-	assertThrows(
-		() => createErmine({ features: [early, manual], scheduler: set, host }),
-		Error,
-		"host",
-	)
-	assertEquals(set.live, 0)
-	assertEquals(registrations(set), 0)
-
 	const closing = counting()
 	createErmine({ features: [early, manual], scheduler: closing }).close()
 	assertEquals(closing.live, 0)
 })
 
-Deno.test("the host gives the root and its own node; a feature makes ids through onId", () => {
+Deno.test("code outside any process acts as the root; a feature makes ids through onId", () => {
 	let api: FeatureAPI | undefined
 	let n = 0
 	const ids: Feature = {
@@ -274,8 +239,8 @@ Deno.test("the host gives the root and its own node; a feature makes ids through
 			api = f
 		},
 	}
-	const e = createErmine({ root: "R", host: { node: "H" }, features: [ids] })
-	assertEquals([e.places.root, e.id], ["R", "H"])
+	const e = createErmine({ root: "R", features: [ids] })
+	assertEquals([e.places.root, e.id], ["R", "R"])
 	const made = api!.newId()
 	assert(made.startsWith("n"), made)
 	e.close()

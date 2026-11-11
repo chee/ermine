@@ -40,7 +40,7 @@
 				"x"
 			],
 			"expect": {
-				"id": "n2"
+				"id": "n1"
 			}
 		},
 		{
@@ -50,7 +50,7 @@
 				"put"
 			],
 			"expect": {
-				"id": "n3"
+				"id": "n2"
 			}
 		},
 		{
@@ -64,26 +64,53 @@
 		{
 			"op": "frame",
 			"part": "value",
-			"id": "n2",
+			"id": "n1",
 			"expect": {
 				"frame": [
 					{
 						"caller": {
-							"node": "n1",
+							"node": "R",
 							"actor": "test"
 						},
-						"handler": "n3",
+						"handler": "n2",
 						"call": 1,
 						"locations": [
 							"program"
 						]
 					},
 					{
-						"handler": "n3"
+						"handler": "n2"
 					},
 					{
 						"actor": "test",
-						"node": "n1"
+						"node": "R"
+					}
+				]
+			}
+		},
+		{
+			"op": "frame",
+			"part": "value",
+			"id": "n1",
+			"expect": {
+				"frame": [
+					{
+						"caller": {
+							"node": "R",
+							"actor": "test"
+						},
+						"handler": "n2",
+						"call": 1,
+						"locations": [
+							"program"
+						]
+					},
+					{
+						"handler": "n2"
+					},
+					{
+						"actor": "test",
+						"node": "R"
 					}
 				]
 			}
@@ -92,33 +119,6 @@
 			"op": "frame",
 			"part": "value",
 			"id": "n2",
-			"expect": {
-				"frame": [
-					{
-						"caller": {
-							"node": "n1",
-							"actor": "test"
-						},
-						"handler": "n3",
-						"call": 1,
-						"locations": [
-							"program"
-						]
-					},
-					{
-						"handler": "n3"
-					},
-					{
-						"actor": "test",
-						"node": "n1"
-					}
-				]
-			}
-		},
-		{
-			"op": "frame",
-			"part": "value",
-			"id": "n3",
 			"expect": {
 				"frame": [
 					{
@@ -128,33 +128,33 @@
 					},
 					{
 						"actor": "test",
-						"node": "n1"
+						"node": "R"
 					}
 				]
 			}
 		},
 		{
 			"op": "callframe",
-			"id": "n3",
+			"id": "n2",
 			"expect": {
 				"frame": [
 					{
 						"caller": {
-							"node": "n1",
+							"node": "R",
 							"actor": "test"
 						},
-						"handler": "n3",
+						"handler": "n2",
 						"call": 1,
 						"locations": [
 							"program"
 						]
 					},
 					{
-						"handler": "n3"
+						"handler": "n2"
 					},
 					{
 						"actor": "test",
-						"node": "n1"
+						"node": "R"
 					}
 				]
 			}
@@ -201,7 +201,7 @@
 		{
 			"op": "frame",
 			"part": "value",
-			"id": "n2",
+			"id": "n1",
 			"expect": {
 				"frame": [
 					{
@@ -214,15 +214,15 @@
 							"node": "proc:p",
 							"actor": "test"
 						},
-						"handler": "n3",
+						"handler": "n2",
 						"call": 2
 					},
 					{
-						"handler": "n3"
+						"handler": "n2"
 					},
 					{
 						"actor": "test",
-						"node": "n1"
+						"node": "R"
 					}
 				]
 			}
@@ -230,7 +230,7 @@
 		{
 			"op": "frame",
 			"part": "value",
-			"id": "n3",
+			"id": "n2",
 			"expect": {
 				"frame": [
 					{
@@ -240,14 +240,14 @@
 					},
 					{
 						"actor": "test",
-						"node": "n1"
+						"node": "R"
 					}
 				]
 			}
 		},
 		{
 			"op": "callframe",
-			"id": "n3",
+			"id": "n2",
 			"expect": {
 				"frame": [
 					{
@@ -255,15 +255,15 @@
 							"node": "proc:p",
 							"actor": "test"
 						},
-						"handler": "n3",
+						"handler": "n2",
 						"call": 2
 					},
 					{
-						"handler": "n3"
+						"handler": "n2"
 					},
 					{
 						"actor": "test",
-						"node": "n1"
+						"node": "R"
 					}
 				]
 			}

@@ -1,4 +1,4 @@
-import { assert, assertEquals, assertNotStrictEquals, assertStrictEquals } from "@std/assert"
+import { assert, assertEquals } from "@std/assert"
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/graph/entry"
 import { createTable } from "@ermine/graph/table"
 import { createScheduler } from "@ermine/reactivity"
@@ -7,7 +7,7 @@ import { createCrow } from "@ermine/crow"
 import { at as read, createPlaces, type Places } from "./places.ts"
 import { children } from "./children.ts"
 import { createChangeHeader } from "./header.ts"
-import { crowify, crowifyTable, updateEntry } from "./crowify.ts"
+import { crowify, updateEntry } from "./crowify.ts"
 
 const h = (): ChangeHeader => ({ time: 1, actor: "test", frame: { info: {}, parent: undefined } })
 type Doc = Record<string, unknown>
@@ -45,29 +45,6 @@ Deno.test("crowify: what a run read before an await is let go of as it waits: a 
 	assertEquals(e.value!.list, { a: 1, b: 2, c: 3 })
 	go()
 	await waited
-})
-
-Deno.test("crowify: through reading, a get is a read; a get of ids is not", () => {
-	const u = createCrow()
-	const table = createTable()
-	const t = crowifyTable(table, u)
-	const e = createEntry<unknown>({ a: 1 }, h())
-	table.add("value", "N", e as never)
-	// owned: the next write changes the root in place; read: the next write copies it
-	updateEntry(u, e, [{ path: ["a"], value: 2 }], h())
-	const owned = e.value
-	t.get("value", e as never)
-	updateEntry(u, e, [{ path: ["a"], value: 3 }], h())
-	assertStrictEquals(e.value, owned)
-	t.get("value", "N")
-	const held = e.value
-	updateEntry(u, e, [{ path: ["a"], value: 4 }], h())
-	assertNotStrictEquals(e.value, held)
-	const again = e.value
-	t.get("N")
-	updateEntry(u, e, [{ path: ["a"], value: 5 }], h())
-	assertNotStrictEquals(e.value, again)
-	assertEquals(e.value, { a: 5 })
 })
 
 Deno.test("crowify: crowify: what a computation keeps past its run is held; what it read and dropped is not", () => {
@@ -139,11 +116,12 @@ Deno.test("crowify: crowify through places stops at what a run was handed; a run
 Deno.test("crowify: through places, a reader's value never changes under it, and it is told", () => {
 	const u = createCrow()
 	const s = createScheduler()
+	crowify(s, u)
 	s.onTrackingEnd((key) => places.release(key))
 	const table = createTable()
 	const places: Places = createPlaces({
 		root: "R",
-		table: crowifyTable(table, u),
+		table,
 		paths: createPaths(),
 		scheduler: s,
 		contributors: [children],

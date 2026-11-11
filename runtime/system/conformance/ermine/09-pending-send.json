@@ -41,7 +41,7 @@
 				"asks"
 			],
 			"expect": {
-				"id": "n4"
+				"id": "n3"
 			}
 		},
 		{
@@ -72,7 +72,7 @@
 			"expect": {
 				"waits": [
 					{
-						"caller": "n4",
+						"caller": "n3",
 						"path": [
 							"svc",
 							"on",
@@ -100,7 +100,7 @@
 			"expect": {
 				"waits": [
 					{
-						"caller": "n4",
+						"caller": "n3",
 						"path": [
 							"svc",
 							"on",

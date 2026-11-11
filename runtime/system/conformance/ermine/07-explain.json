@@ -134,7 +134,7 @@
 				"w"
 			],
 			"expect": {
-				"id": "n8"
+				"id": "n7"
 			}
 		},
 		{
@@ -236,7 +236,7 @@
 		{
 			"op": "frame",
 			"part": "value",
-			"id": "n4",
+			"id": "n3",
 			"expect": {
 				"frame": [
 					{
@@ -244,11 +244,11 @@
 							"node": "proc:p",
 							"actor": "test"
 						},
-						"handler": "n9",
+						"handler": "n8",
 						"call": 1
 					},
 					{
-						"handler": "n9"
+						"handler": "n8"
 					},
 					{
 						"process": [
@@ -271,7 +271,7 @@
 					},
 					{
 						"actor": "test",
-						"node": "n1"
+						"node": "R"
 					}
 				]
 			}

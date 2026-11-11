@@ -6,12 +6,12 @@
 			"deny": [
 				{
 					"op": "read",
-					"id": "n2",
+					"id": "n1",
 					"from": "code/spy"
 				},
 				{
 					"op": "read",
-					"id": "n3",
+					"id": "n2",
 					"from": "code/spy"
 				}
 			],
@@ -53,7 +53,7 @@
 				"secret"
 			],
 			"expect": {
-				"id": "n2"
+				"id": "n1"
 			}
 		},
 		{
@@ -62,7 +62,7 @@
 				"other"
 			],
 			"expect": {
-				"id": "n3"
+				"id": "n2"
 			}
 		},
 		{
@@ -71,7 +71,7 @@
 				"open"
 			],
 			"expect": {
-				"id": "n4"
+				"id": "n3"
 			}
 		},
 		{
@@ -94,7 +94,7 @@
 			"call": [
 				"read",
 				{
-					"id": "n2",
+					"id": "n1",
 					"part": "value"
 				}
 			],
@@ -108,7 +108,7 @@
 			"call": [
 				"readEntries",
 				{
-					"id": "n2",
+					"id": "n1",
 					"part": "value"
 				}
 			],
@@ -138,7 +138,7 @@
 			"call": [
 				"readEntries",
 				{
-					"id": "n4",
+					"id": "n3",
 					"part": "value"
 				}
 			],

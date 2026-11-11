@@ -120,17 +120,17 @@
 					"frame": [
 						{
 							"caller": {
-								"node": "n1",
+								"node": "R",
 								"actor": "test"
 							},
-							"handler": "n7",
+							"handler": "n6",
 							"call": 1,
 							"locations": [
 								"program"
 							]
 						},
 						{
-							"handler": "n7"
+							"handler": "n6"
 						},
 						{
 							"process": [
@@ -153,11 +153,11 @@
 						},
 						{
 							"actor": "test",
-							"node": "n1"
+							"node": "R"
 						}
 					],
-					"caller": "n1",
-					"handler": "n7",
+					"caller": "R",
+					"handler": "n6",
 					"args": [],
 					"end": "done",
 					"reads": [],
@@ -187,17 +187,17 @@
 					"frame": [
 						{
 							"caller": {
-								"node": "n1",
+								"node": "R",
 								"actor": "test"
 							},
-							"handler": "n9",
+							"handler": "n8",
 							"call": 2,
 							"locations": [
 								"program"
 							]
 						},
 						{
-							"handler": "n9"
+							"handler": "n8"
 						},
 						{
 							"process": [
@@ -220,21 +220,21 @@
 						},
 						{
 							"actor": "test",
-							"node": "n1"
+							"node": "R"
 						}
 					],
-					"caller": "n1",
-					"handler": "n9",
+					"caller": "R",
+					"handler": "n8",
 					"args": [],
 					"end": "done",
 					"reads": [
 						[
 							"value",
-							"n2"
+							"n1"
 						],
 						[
 							"children",
-							"n3"
+							"n2"
 						]
 					],
 					"writes": []

@@ -87,13 +87,13 @@
 				"c-out"
 			],
 			"expect": {
-				"id": "n5"
+				"id": "n4"
 			}
 		},
 		{
 			"op": "frame",
 			"part": "value",
-			"id": "n5",
+			"id": "n4",
 			"expect": {
 				"frame": [
 					{
@@ -130,7 +130,7 @@
 					},
 					{
 						"actor": "test",
-						"node": "n1"
+						"node": "R"
 					}
 				]
 			}

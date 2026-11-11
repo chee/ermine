@@ -130,7 +130,7 @@
 				"n"
 			],
 			"expect": {
-				"id": "n5"
+				"id": "n4"
 			}
 		},
 		{
@@ -142,7 +142,7 @@
 				"echo"
 			],
 			"expect": {
-				"id": "n6"
+				"id": "n5"
 			}
 		},
 		{
@@ -175,11 +175,11 @@
 								"node": "proc:q",
 								"actor": "test"
 							},
-							"handler": "n6",
+							"handler": "n5",
 							"call": 1
 						},
 						{
-							"handler": "n6"
+							"handler": "n5"
 						},
 						{
 							"process": [
@@ -202,11 +202,11 @@
 						},
 						{
 							"actor": "test",
-							"node": "n1"
+							"node": "R"
 						}
 					],
 					"caller": "proc:q",
-					"handler": "n6",
+					"handler": "n5",
 					"args": [
 						"hi"
 					],
@@ -215,7 +215,7 @@
 					"reads": [
 						[
 							"value",
-							"n5"
+							"n4"
 						]
 					],
 					"writes": []
@@ -252,11 +252,11 @@
 								"node": "proc:q",
 								"actor": "test"
 							},
-							"handler": "n6",
+							"handler": "n5",
 							"call": 2
 						},
 						{
-							"handler": "n6"
+							"handler": "n5"
 						},
 						{
 							"process": [
@@ -279,11 +279,11 @@
 						},
 						{
 							"actor": "test",
-							"node": "n1"
+							"node": "R"
 						}
 					],
 					"caller": "proc:q",
-					"handler": "n6",
+					"handler": "n5",
 					"args": [
 						"yo"
 					],
@@ -292,7 +292,7 @@
 					"reads": [
 						[
 							"value",
-							"n5"
+							"n4"
 						]
 					],
 					"writes": []
@@ -329,11 +329,11 @@
 								"node": "proc:q",
 								"actor": "test"
 							},
-							"handler": "n8",
+							"handler": "n7",
 							"call": 3
 						},
 						{
-							"handler": "n8"
+							"handler": "n7"
 						},
 						{
 							"process": [
@@ -356,11 +356,11 @@
 						},
 						{
 							"actor": "test",
-							"node": "n1"
+							"node": "R"
 						}
 					],
 					"caller": "proc:q",
-					"handler": "n8",
+					"handler": "n7",
 					"args": [
 						7
 					],
@@ -370,7 +370,7 @@
 					"writes": [
 						[
 							"value",
-							"n5"
+							"n4"
 						]
 					]
 				}
@@ -406,11 +406,11 @@
 								"node": "proc:q",
 								"actor": "test"
 							},
-							"handler": "n9",
+							"handler": "n8",
 							"call": 4
 						},
 						{
-							"handler": "n9"
+							"handler": "n8"
 						},
 						{
 							"process": [
@@ -433,11 +433,11 @@
 						},
 						{
 							"actor": "test",
-							"node": "n1"
+							"node": "R"
 						}
 					],
 					"caller": "proc:q",
-					"handler": "n9",
+					"handler": "n8",
 					"args": [],
 					"end": "failed",
 					"error": "nope",
@@ -476,11 +476,11 @@
 								"node": "proc:q",
 								"actor": "test"
 							},
-							"handler": "n10",
+							"handler": "n9",
 							"call": 5
 						},
 						{
-							"handler": "n10"
+							"handler": "n9"
 						},
 						{
 							"process": [
@@ -503,11 +503,11 @@
 						},
 						{
 							"actor": "test",
-							"node": "n1"
+							"node": "R"
 						}
 					],
 					"caller": "proc:q",
-					"handler": "n10",
+					"handler": "n9",
 					"args": [
 						3
 					],
@@ -539,11 +539,11 @@
 								"node": "proc:q",
 								"actor": "test"
 							},
-							"handler": "n10",
+							"handler": "n9",
 							"call": 5
 						},
 						{
-							"handler": "n10"
+							"handler": "n9"
 						},
 						{
 							"process": [
@@ -566,11 +566,11 @@
 						},
 						{
 							"actor": "test",
-							"node": "n1"
+							"node": "R"
 						}
 					],
 					"caller": "proc:q",
-					"handler": "n10",
+					"handler": "n9",
 					"args": [
 						3
 					],
@@ -608,11 +608,11 @@
 								"node": "proc:q",
 								"actor": "test"
 							},
-							"handler": "n11",
+							"handler": "n10",
 							"call": 6
 						},
 						{
-							"handler": "n11"
+							"handler": "n10"
 						},
 						{
 							"process": [
@@ -635,17 +635,17 @@
 						},
 						{
 							"actor": "test",
-							"node": "n1"
+							"node": "R"
 						}
 					],
 					"caller": "proc:q",
-					"handler": "n11",
+					"handler": "n10",
 					"args": [],
 					"end": "done",
 					"reads": [
 						[
 							"value",
-							"n12"
+							"n11"
 						]
 					],
 					"writes": [
@@ -655,13 +655,13 @@
 						],
 						[
 							"attributes",
-							"n12"
+							"n11"
 						]
 					],
 					"made": [
 						[
 							"memo",
-							"n12"
+							"n11"
 						]
 					]
 				}
@@ -675,7 +675,7 @@
 				"inner"
 			],
 			"expect": {
-				"id": "n12"
+				"id": "n11"
 			}
 		},
 		{
@@ -704,17 +704,17 @@
 					"frame": [
 						{
 							"caller": {
-								"node": "n1",
+								"node": "R",
 								"actor": "test"
 							},
-							"handler": "n6",
+							"handler": "n5",
 							"call": 7,
 							"locations": [
 								"program"
 							]
 						},
 						{
-							"handler": "n6"
+							"handler": "n5"
 						},
 						{
 							"process": [
@@ -737,11 +737,11 @@
 						},
 						{
 							"actor": "test",
-							"node": "n1"
+							"node": "R"
 						}
 					],
-					"caller": "n1",
-					"handler": "n6",
+					"caller": "R",
+					"handler": "n5",
 					"args": [
 						"host"
 					],
@@ -750,7 +750,7 @@
 					"reads": [
 						[
 							"value",
-							"n5"
+							"n4"
 						]
 					],
 					"writes": []

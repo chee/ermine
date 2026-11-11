@@ -122,7 +122,7 @@
 				"a"
 			],
 			"expect": {
-				"id": "n4"
+				"id": "n3"
 			}
 		},
 		{
@@ -132,7 +132,7 @@
 				"b"
 			],
 			"expect": {
-				"id": "n5"
+				"id": "n4"
 			}
 		},
 		{
@@ -143,12 +143,44 @@
 				"m"
 			],
 			"expect": {
-				"id": "n6"
+				"id": "n5"
 			}
 		},
 		{
 			"op": "pulse",
 			"expect": {}
+		},
+		{
+			"op": "frame",
+			"part": "value",
+			"id": "n3",
+			"expect": {
+				"frame": [
+					{
+						"process": [
+							"code",
+							"p"
+						]
+					},
+					{
+						"process": [
+							"code",
+							"p"
+						],
+						"node": "proc:p",
+						"locations": [
+							"program"
+						]
+					},
+					{
+						"processes": "start"
+					},
+					{
+						"actor": "test",
+						"node": "R"
+					}
+				]
+			}
 		},
 		{
 			"op": "frame",
@@ -177,7 +209,7 @@
 					},
 					{
 						"actor": "test",
-						"node": "n1"
+						"node": "R"
 					}
 				]
 			}
@@ -189,43 +221,11 @@
 			"expect": {
 				"frame": [
 					{
-						"process": [
-							"code",
-							"p"
-						]
-					},
-					{
-						"process": [
-							"code",
-							"p"
-						],
-						"node": "proc:p",
-						"locations": [
-							"program"
-						]
-					},
-					{
-						"processes": "start"
-					},
-					{
-						"actor": "test",
-						"node": "n1"
-					}
-				]
-			}
-		},
-		{
-			"op": "frame",
-			"part": "value",
-			"id": "n6",
-			"expect": {
-				"frame": [
-					{
 						"run": 1,
 						"mark": 5
 					},
 					{
-						"node": "n6",
+						"node": "n5",
 						"mark": 5
 					},
 					{
@@ -249,7 +249,7 @@
 					},
 					{
 						"actor": "test",
-						"node": "n1"
+						"node": "R"
 					}
 				]
 			}
@@ -267,7 +267,7 @@
 		{
 			"op": "frame",
 			"part": "value",
-			"id": "n5",
+			"id": "n4",
 			"expect": {
 				"frame": [
 					{
@@ -275,11 +275,11 @@
 							"node": "proc:p",
 							"actor": "test"
 						},
-						"handler": "n7",
+						"handler": "n6",
 						"call": 1
 					},
 					{
-						"handler": "n7"
+						"handler": "n6"
 					},
 					{
 						"process": [
@@ -302,7 +302,7 @@
 					},
 					{
 						"actor": "test",
-						"node": "n1"
+						"node": "R"
 					}
 				]
 			}
@@ -327,7 +327,7 @@
 				"c"
 			],
 			"expect": {
-				"id": "n10"
+				"id": "n9"
 			}
 		},
 		{
@@ -338,7 +338,50 @@
 				"later"
 			],
 			"expect": {
-				"id": "n11"
+				"id": "n10"
+			}
+		},
+		{
+			"op": "frame",
+			"part": "value",
+			"id": "n9",
+			"expect": {
+				"frame": [
+					{
+						"caller": {
+							"node": "proc:p",
+							"actor": "test"
+						},
+						"handler": "n8",
+						"call": 2
+					},
+					{
+						"handler": "n8"
+					},
+					{
+						"process": [
+							"code",
+							"p"
+						]
+					},
+					{
+						"process": [
+							"code",
+							"p"
+						],
+						"node": "proc:p",
+						"locations": [
+							"program"
+						]
+					},
+					{
+						"processes": "start"
+					},
+					{
+						"actor": "test",
+						"node": "R"
+					}
+				]
 			}
 		},
 		{
@@ -348,54 +391,11 @@
 			"expect": {
 				"frame": [
 					{
-						"caller": {
-							"node": "proc:p",
-							"actor": "test"
-						},
-						"handler": "n9",
-						"call": 2
-					},
-					{
-						"handler": "n9"
-					},
-					{
-						"process": [
-							"code",
-							"p"
-						]
-					},
-					{
-						"process": [
-							"code",
-							"p"
-						],
-						"node": "proc:p",
-						"locations": [
-							"program"
-						]
-					},
-					{
-						"processes": "start"
-					},
-					{
-						"actor": "test",
-						"node": "n1"
-					}
-				]
-			}
-		},
-		{
-			"op": "frame",
-			"part": "value",
-			"id": "n11",
-			"expect": {
-				"frame": [
-					{
 						"run": 1,
 						"mark": 10
 					},
 					{
-						"node": "n11",
+						"node": "n10",
 						"mark": 10
 					},
 					{
@@ -419,7 +419,7 @@
 					},
 					{
 						"actor": "test",
-						"node": "n1"
+						"node": "R"
 					}
 				]
 			}
@@ -443,7 +443,7 @@
 		{
 			"op": "frame",
 			"part": "value",
-			"id": "n4",
+			"id": "n3",
 			"expect": {
 				"frame": [
 					{
@@ -453,7 +453,7 @@
 					},
 					{
 						"actor": "test",
-						"node": "n1"
+						"node": "R"
 					}
 				]
 			}

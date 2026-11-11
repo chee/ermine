@@ -94,13 +94,13 @@
 				"k"
 			],
 			"expect": {
-				"id": "n4"
+				"id": "n3"
 			}
 		},
 		{
 			"op": "frame",
 			"part": "value",
-			"id": "n4",
+			"id": "n3",
 			"expect": {
 				"frame": [
 					{},
@@ -125,7 +125,7 @@
 					},
 					{
 						"actor": "test",
-						"node": "n1"
+						"node": "R"
 					}
 				]
 			}

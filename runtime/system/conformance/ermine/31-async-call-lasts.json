@@ -55,7 +55,7 @@
 				"slow"
 			],
 			"expect": {
-				"id": "n4"
+				"id": "n3"
 			}
 		},
 		{
@@ -69,24 +69,24 @@
 		{
 			"op": "record",
 			"kind": "call",
-			"id": "n4",
+			"id": "n3",
 			"expect": {
 				"record": {
 					"n": 1,
 					"frame": [
 						{
 							"caller": {
-								"node": "n1",
+								"node": "R",
 								"actor": "test"
 							},
-							"handler": "n4",
+							"handler": "n3",
 							"call": 1,
 							"locations": [
 								"program"
 							]
 						},
 						{
-							"handler": "n4"
+							"handler": "n3"
 						},
 						{
 							"process": [
@@ -109,11 +109,11 @@
 						},
 						{
 							"actor": "test",
-							"node": "n1"
+							"node": "R"
 						}
 					],
-					"caller": "n1",
-					"handler": "n4",
+					"caller": "R",
+					"handler": "n3",
 					"args": [
 						1
 					],
@@ -126,13 +126,13 @@
 						],
 						[
 							"attributes",
-							"n7"
+							"n6"
 						]
 					],
 					"made": [
 						[
 							"memo",
-							"n7"
+							"n6"
 						]
 					]
 				}
@@ -155,24 +155,24 @@
 		{
 			"op": "record",
 			"kind": "call",
-			"id": "n4",
+			"id": "n3",
 			"expect": {
 				"record": {
 					"n": 1,
 					"frame": [
 						{
 							"caller": {
-								"node": "n1",
+								"node": "R",
 								"actor": "test"
 							},
-							"handler": "n4",
+							"handler": "n3",
 							"call": 1,
 							"locations": [
 								"program"
 							]
 						},
 						{
-							"handler": "n4"
+							"handler": "n3"
 						},
 						{
 							"process": [
@@ -195,11 +195,11 @@
 						},
 						{
 							"actor": "test",
-							"node": "n1"
+							"node": "R"
 						}
 					],
-					"caller": "n1",
-					"handler": "n4",
+					"caller": "R",
+					"handler": "n3",
 					"args": [
 						1
 					],
@@ -213,13 +213,13 @@
 						],
 						[
 							"attributes",
-							"n7"
+							"n6"
 						]
 					],
 					"made": [
 						[
 							"memo",
-							"n7"
+							"n6"
 						]
 					]
 				}

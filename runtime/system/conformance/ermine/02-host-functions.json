@@ -1,13 +1,8 @@
 {
-	"title": "the host's functions, on ermine, from the host's process context: at and folder the root (bare names and ./ alike in the root), args the host's; each write as the host (its scope's actor and node in its frames), from outside the graph, so with locations; a send's caller the host's node, its record's frame the call's; teardown(fn) at close, told ended; closed, the functions and parts throw closed",
+	"title": "the host's functions, on ermine, from the host's process context: at and folder the root (bare names and ./ alike in the root), no args; each write as the host (its scope's actor and node in its frames), from outside the graph, so with locations; a send's caller the root, its record's frame the call's; teardown(fn) at close, told ended; closed, the functions and parts throw closed",
 	"steps": [
 		{
 			"op": "ermine",
-			"at": "/host",
-			"args": [
-				"a",
-				"b"
-			],
 			"expect": {}
 		},
 		{
@@ -15,10 +10,7 @@
 			"expect": {
 				"at": [],
 				"folder": [],
-				"args": [
-					"a",
-					"b"
-				],
+				"args": [],
 				"scope": "host"
 			}
 		},
@@ -61,7 +53,7 @@
 				"notes"
 			],
 			"expect": {
-				"id": "n2"
+				"id": "n1"
 			}
 		},
 		{
@@ -96,7 +88,7 @@
 		{
 			"op": "frame",
 			"part": "value",
-			"id": "n2",
+			"id": "n1",
 			"expect": {
 				"frame": [
 					{
@@ -106,7 +98,7 @@
 					},
 					{
 						"actor": "test",
-						"node": "n1"
+						"node": "R"
 					}
 				]
 			}
@@ -114,7 +106,7 @@
 		{
 			"op": "frame",
 			"part": "value",
-			"id": "n2",
+			"id": "n1",
 			"expect": {
 				"frame": [
 					{
@@ -124,7 +116,7 @@
 					},
 					{
 						"actor": "test",
-						"node": "n1"
+						"node": "R"
 					}
 				]
 			}
@@ -173,25 +165,25 @@
 					"frame": [
 						{
 							"caller": {
-								"node": "n1",
+								"node": "R",
 								"actor": "test"
 							},
-							"handler": "n3",
+							"handler": "n2",
 							"call": 1,
 							"locations": [
 								"program"
 							]
 						},
 						{
-							"handler": "n3"
+							"handler": "n2"
 						},
 						{
 							"actor": "test",
-							"node": "n1"
+							"node": "R"
 						}
 					],
-					"caller": "n1",
-					"handler": "n3",
+					"caller": "R",
+					"handler": "n2",
 					"args": [
 						"hey"
 					],

@@ -2,10 +2,10 @@
 // ermine per run: root "R", host scope { actor: "test" }, ids "n1", "n2", ..., process ids
 // "proc:<name>". After every request the asked-for pulses run until none is asked.
 // node: { path, part } | { id, part }
-// { op: "ermine", features?, deny?, uuid?, at?, args? } -> {}
+// { op: "ermine", features?, deny?, uuid? } -> {}
 //     features: names (another harness's own) or test features (below)
 //     deny: [{ op, path?, id?, from?, pending? }] refuses (or marks pending) matching ops
-//     uuid: use uuidv7 ids; at, args: the host's node
+//     uuid: use uuidv7 ids
 // { op: "uuid", path } -> { v7 }             whether the id there is a uuidv7
 // { op: "node" } -> { id, attributes }       the host's node
 // { op: "context", process? } -> { at, folder, args, process?, scope }   scope: "process" | "host"
@@ -210,10 +210,6 @@ function make(o: Request = {}): Made {
 			},
 		}],
 		may,
-		host: {
-			...o.at !== undefined && { at: o.at },
-			...o.args !== undefined && { args: o.args },
-		},
 	})
 	made.hostSys = hostSystem(made.ermine)
 	return made

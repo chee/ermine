@@ -112,13 +112,13 @@
 				"k"
 			],
 			"expect": {
-				"id": "n5"
+				"id": "n4"
 			}
 		},
 		{
 			"op": "frame",
 			"part": "value",
-			"id": "n5",
+			"id": "n4",
 			"expect": {
 				"frame": [
 					{
@@ -126,7 +126,7 @@
 							"node": "proc:q",
 							"actor": "test"
 						},
-						"handler": "n6",
+						"handler": "n5",
 						"call": 1
 					},
 					{},
@@ -151,7 +151,7 @@
 					},
 					{
 						"actor": "test",
-						"node": "n1"
+						"node": "R"
 					}
 				]
 			}

@@ -18,10 +18,7 @@
 		{
 			"op": "node",
 			"expect": {
-				"id": "a-n1",
-				"attributes": {
-					"ermine.host.args": []
-				}
+				"id": "R"
 			}
 		},
 		{
@@ -43,16 +40,6 @@
 			"name": "hooks",
 			"expect": {
 				"values": [
-					[
-						"a",
-						"onId",
-						"node"
-					],
-					[
-						"b",
-						"onId",
-						"node"
-					],
 					[
 						"a",
 						"onId",

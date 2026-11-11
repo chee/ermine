@@ -49,7 +49,7 @@
 				"take"
 			],
 			"expect": {
-				"id": "n4"
+				"id": "n3"
 			}
 		},
 		{
@@ -61,7 +61,7 @@
 				"wait"
 			],
 			"expect": {
-				"id": "n7"
+				"id": "n6"
 			}
 		},
 		{
@@ -97,17 +97,17 @@
 					"frame": [
 						{
 							"caller": {
-								"node": "n1",
+								"node": "R",
 								"actor": "test"
 							},
-							"handler": "n4",
+							"handler": "n3",
 							"call": 1,
 							"locations": [
 								"program"
 							]
 						},
 						{
-							"handler": "n4"
+							"handler": "n3"
 						},
 						{
 							"process": [
@@ -130,11 +130,11 @@
 						},
 						{
 							"actor": "test",
-							"node": "n1"
+							"node": "R"
 						}
 					],
-					"caller": "n1",
-					"handler": "n4",
+					"caller": "R",
+					"handler": "n3",
 					"args": [
 						"big"
 					],
@@ -160,17 +160,17 @@
 					"frame": [
 						{
 							"caller": {
-								"node": "n1",
+								"node": "R",
 								"actor": "test"
 							},
-							"handler": "n7",
+							"handler": "n6",
 							"call": 2,
 							"locations": [
 								"program"
 							]
 						},
 						{
-							"handler": "n7"
+							"handler": "n6"
 						},
 						{
 							"process": [
@@ -193,11 +193,11 @@
 						},
 						{
 							"actor": "test",
-							"node": "n1"
+							"node": "R"
 						}
 					],
-					"caller": "n1",
-					"handler": "n7",
+					"caller": "R",
+					"handler": "n6",
 					"args": [],
 					"end": "pending",
 					"reads": [],
@@ -213,13 +213,13 @@
 		{
 			"op": "record",
 			"kind": "call",
-			"id": "n4",
+			"id": "n3",
 			"expect": {}
 		},
 		{
 			"op": "record",
 			"kind": "call",
-			"id": "n7",
+			"id": "n6",
 			"expect": {}
 		},
 		{
@@ -229,7 +229,7 @@
 		{
 			"op": "record",
 			"kind": "call",
-			"id": "n7",
+			"id": "n6",
 			"expect": {}
 		}
 	]

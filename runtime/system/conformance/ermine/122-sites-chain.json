@@ -55,7 +55,7 @@
 				"x"
 			],
 			"expect": {
-				"id": "n5"
+				"id": "n4"
 			}
 		},
 		{
@@ -65,7 +65,39 @@
 				"y"
 			],
 			"expect": {
-				"id": "n6"
+				"id": "n5"
+			}
+		},
+		{
+			"op": "frame",
+			"part": "value",
+			"id": "n4",
+			"expect": {
+				"frame": [
+					{
+						"process": [
+							"code",
+							"p"
+						]
+					},
+					{
+						"process": [
+							"code",
+							"p"
+						],
+						"node": "proc:p",
+						"locations": [
+							"program"
+						]
+					},
+					{
+						"processes": "start"
+					},
+					{
+						"actor": "test",
+						"node": "R"
+					}
+				]
 			}
 		},
 		{
@@ -77,6 +109,19 @@
 					{
 						"process": [
 							"code",
+							"q"
+						]
+					},
+					{
+						"process": [
+							"code",
+							"q"
+						],
+						"node": "proc:q"
+					},
+					{
+						"process": [
+							"code",
 							"p"
 						]
 					},
@@ -95,7 +140,7 @@
 					},
 					{
 						"actor": "test",
-						"node": "n1"
+						"node": "R"
 					}
 				]
 			}
@@ -103,7 +148,7 @@
 		{
 			"op": "frame",
 			"part": "value",
-			"id": "n6",
+			"id": "n5",
 			"expect": {
 				"frame": [
 					{
@@ -140,52 +185,7 @@
 					},
 					{
 						"actor": "test",
-						"node": "n1"
-					}
-				]
-			}
-		},
-		{
-			"op": "frame",
-			"part": "value",
-			"id": "n6",
-			"expect": {
-				"frame": [
-					{
-						"process": [
-							"code",
-							"q"
-						]
-					},
-					{
-						"process": [
-							"code",
-							"q"
-						],
-						"node": "proc:q"
-					},
-					{
-						"process": [
-							"code",
-							"p"
-						]
-					},
-					{
-						"process": [
-							"code",
-							"p"
-						],
-						"node": "proc:p",
-						"locations": [
-							"program"
-						]
-					},
-					{
-						"processes": "start"
-					},
-					{
-						"actor": "test",
-						"node": "n1"
+						"node": "R"
 					}
 				]
 			}
@@ -204,13 +204,13 @@
 				"h"
 			],
 			"expect": {
-				"id": "n7"
+				"id": "n6"
 			}
 		},
 		{
 			"op": "frame",
 			"part": "value",
-			"id": "n7",
+			"id": "n6",
 			"expect": {
 				"frame": [
 					{
@@ -220,7 +220,7 @@
 					},
 					{
 						"actor": "test",
-						"node": "n1"
+						"node": "R"
 					}
 				]
 			}

@@ -69,7 +69,7 @@
 				"data"
 			],
 			"expect": {
-				"id": "n2"
+				"id": "n1"
 			}
 		},
 		{
@@ -79,7 +79,7 @@
 				"bump"
 			],
 			"expect": {
-				"id": "n5"
+				"id": "n4"
 			}
 		},
 		{
@@ -116,13 +116,13 @@
 				"m"
 			],
 			"expect": {
-				"id": "n8"
+				"id": "n7"
 			}
 		},
 		{
 			"op": "record",
 			"kind": "call",
-			"id": "n5",
+			"id": "n4",
 			"expect": {
 				"record": {
 					"n": 1,
@@ -132,11 +132,11 @@
 								"node": "proc:cl",
 								"actor": "test"
 							},
-							"handler": "n5",
+							"handler": "n4",
 							"call": 1
 						},
 						{
-							"handler": "n5"
+							"handler": "n4"
 						},
 						{
 							"process": [
@@ -159,24 +159,24 @@
 						},
 						{
 							"actor": "test",
-							"node": "n1"
+							"node": "R"
 						}
 					],
 					"caller": "proc:cl",
-					"handler": "n5",
+					"handler": "n4",
 					"args": [],
 					"end": "done",
 					"returned": 0,
 					"reads": [
 						[
 							"value",
-							"n2"
+							"n1"
 						]
 					],
 					"writes": [
 						[
 							"value",
-							"n2"
+							"n1"
 						]
 					]
 				}
@@ -252,7 +252,7 @@
 		{
 			"op": "record",
 			"kind": "call",
-			"id": "n5",
+			"id": "n4",
 			"expect": {
 				"record": {
 					"n": 2,
@@ -262,11 +262,11 @@
 								"node": "proc:ef",
 								"actor": "test"
 							},
-							"handler": "n5",
+							"handler": "n4",
 							"call": 2
 						},
 						{
-							"handler": "n5"
+							"handler": "n4"
 						},
 						{
 							"process": [
@@ -289,24 +289,24 @@
 						},
 						{
 							"actor": "test",
-							"node": "n1"
+							"node": "R"
 						}
 					],
 					"caller": "proc:ef",
-					"handler": "n5",
+					"handler": "n4",
 					"args": [],
 					"end": "done",
 					"returned": 5,
 					"reads": [
 						[
 							"value",
-							"n2"
+							"n1"
 						]
 					],
 					"writes": [
 						[
 							"value",
-							"n2"
+							"n1"
 						]
 					]
 				}

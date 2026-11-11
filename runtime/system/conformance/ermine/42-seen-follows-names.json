@@ -32,7 +32,7 @@
 				"note"
 			],
 			"expect": {
-				"id": "n2"
+				"id": "n1"
 			}
 		},
 		{
@@ -116,7 +116,7 @@
 				"executeAction",
 				"/system/s/on/log",
 				{
-					"id": "n2",
+					"id": "n1",
 					"part": "value"
 				}
 			],

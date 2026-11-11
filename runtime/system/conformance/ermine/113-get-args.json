@@ -1,12 +1,8 @@
 {
-	"title": "getArgs gives the arguments the host or the process was started with, as a list of text: the host's from the ermine's options, a process's from its start; none: empty",
+	"title": "getArgs gives the arguments a process was started with, as a list of text; none, or outside any process: empty",
 	"steps": [
 		{
 			"op": "ermine",
-			"args": [
-				"h1",
-				"h2"
-			],
 			"expect": {}
 		},
 		{
@@ -15,10 +11,7 @@
 				"getArgs"
 			],
 			"expect": {
-				"value": [
-					"h1",
-					"h2"
-				]
+				"value": []
 			}
 		},
 		{

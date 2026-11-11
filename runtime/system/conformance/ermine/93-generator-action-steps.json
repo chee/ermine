@@ -155,11 +155,11 @@
 								"node": "proc:q",
 								"actor": "test"
 							},
-							"handler": "n7",
+							"handler": "n6",
 							"call": 1
 						},
 						{
-							"handler": "n7"
+							"handler": "n6"
 						},
 						{
 							"process": [
@@ -182,11 +182,11 @@
 						},
 						{
 							"actor": "test",
-							"node": "n1"
+							"node": "R"
 						}
 					],
 					"caller": "proc:q",
-					"handler": "n7",
+					"handler": "n6",
 					"args": [
 						10
 					],
@@ -195,7 +195,7 @@
 					"writes": [
 						[
 							"value",
-							"n2"
+							"n1"
 						]
 					]
 				}
@@ -239,7 +239,7 @@
 		{
 			"op": "frame",
 			"part": "value",
-			"id": "n3",
+			"id": "n2",
 			"expect": {
 				"frame": [
 					{
@@ -247,11 +247,11 @@
 							"node": "proc:q",
 							"actor": "test"
 						},
-						"handler": "n7",
+						"handler": "n6",
 						"call": 1
 					},
 					{
-						"handler": "n7"
+						"handler": "n6"
 					},
 					{
 						"process": [
@@ -274,7 +274,7 @@
 					},
 					{
 						"actor": "test",
-						"node": "n1"
+						"node": "R"
 					}
 				]
 			}

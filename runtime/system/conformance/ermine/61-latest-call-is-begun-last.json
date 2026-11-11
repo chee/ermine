@@ -49,7 +49,7 @@
 				"go"
 			],
 			"expect": {
-				"id": "n4"
+				"id": "n3"
 			}
 		},
 		{
@@ -78,24 +78,24 @@
 		{
 			"op": "record",
 			"kind": "call",
-			"id": "n4",
+			"id": "n3",
 			"expect": {
 				"record": {
 					"n": 2,
 					"frame": [
 						{
 							"caller": {
-								"node": "n1",
+								"node": "R",
 								"actor": "test"
 							},
-							"handler": "n4",
+							"handler": "n3",
 							"call": 2,
 							"locations": [
 								"program"
 							]
 						},
 						{
-							"handler": "n4"
+							"handler": "n3"
 						},
 						{
 							"process": [
@@ -118,11 +118,11 @@
 						},
 						{
 							"actor": "test",
-							"node": "n1"
+							"node": "R"
 						}
 					],
-					"caller": "n1",
-					"handler": "n4",
+					"caller": "R",
+					"handler": "n3",
 					"args": [
 						2
 					],

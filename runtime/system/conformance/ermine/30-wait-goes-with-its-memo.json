@@ -68,7 +68,7 @@
 				"inner"
 			],
 			"expect": {
-				"id": "n6"
+				"id": "n5"
 			}
 		},
 		{
@@ -76,7 +76,7 @@
 			"expect": {
 				"waits": [
 					{
-						"caller": "n6",
+						"caller": "n5",
 						"path": [
 							"nobody"
 						]

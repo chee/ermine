@@ -133,13 +133,13 @@
 				"n"
 			],
 			"expect": {
-				"id": "n5"
+				"id": "n4"
 			}
 		},
 		{
 			"op": "frame",
 			"part": "value",
-			"id": "n5",
+			"id": "n4",
 			"expect": {
 				"frame": [
 					{
@@ -147,11 +147,11 @@
 							"node": "proc:q",
 							"actor": "test"
 						},
-						"handler": "n6",
+						"handler": "n5",
 						"call": 1
 					},
 					{
-						"handler": "n6"
+						"handler": "n5"
 					},
 					{
 						"process": [
@@ -174,7 +174,7 @@
 					},
 					{
 						"actor": "test",
-						"node": "n1"
+						"node": "R"
 					}
 				]
 			}
@@ -197,11 +197,11 @@
 								"node": "proc:q",
 								"actor": "test"
 							},
-							"handler": "n6",
+							"handler": "n5",
 							"call": 1
 						},
 						{
-							"handler": "n6"
+							"handler": "n5"
 						},
 						{
 							"process": [
@@ -224,11 +224,11 @@
 						},
 						{
 							"actor": "test",
-							"node": "n1"
+							"node": "R"
 						}
 					],
 					"caller": "proc:q",
-					"handler": "n6",
+					"handler": "n5",
 					"args": [
 						5
 					],
@@ -248,17 +248,17 @@
 						],
 						[
 							"attributes",
-							"n9"
+							"n8"
 						],
 						[
 							"value",
-							"n5"
+							"n4"
 						]
 					],
 					"made": [
 						[
 							"memo",
-							"n9"
+							"n8"
 						]
 					]
 				}
