@@ -45,10 +45,10 @@ import { createPaths } from "@ermine/reactivity/paths"
 import { createTable, type Key, type Table } from "@ermine/graph/table"
 import { type Call, createCalls, type Wait } from "./calls.ts"
 import {
-	type Asked,
 	type Calling,
 	chain,
 	ErmineError,
+	type Errored,
 	type Feature,
 	type IdKind,
 	install,
@@ -76,7 +76,7 @@ import { attach, innerOf } from "./system/setting.ts"
 import { type ChangeView, type Status, WAITING } from "./system/shapes.ts"
 
 export { ErmineError, FeatureError } from "./features.ts"
-export type { Asked, Calling, Feature, FeatureAPI, Hook, Hooks, Reading } from "./features.ts"
+export type { Calling, Feature, FeatureAPI, Hook, Hooks, Reading } from "./features.ts"
 export type {
 	At,
 	CreatedFunction,
@@ -117,6 +117,9 @@ export type Options = {
 	// microtask after writes. This could take a function given the pulse, to say when it runs, if a
 	// use for that ever comes up.
 	autopulse?: false
+	// Given each error ermine throws, and the name of the function that threw it; what it gives back
+	// is what is thrown (hints, for one, adds advice to the message).
+	errorFormatter?: (error: unknown, fn: string | undefined) => unknown
 	// The clock every change's time is taken from, ms since 1970. Defaults to Date.now.
 	now?: () => number
 }
@@ -267,7 +270,8 @@ function make(options: Options, undo: (() => void)[]): Ermine {
 	)
 	const newId = () => idFor("node")
 	ids = newId
-	const errored = chain<[unknown, string | undefined], unknown>(hooks.onError, "onError", (e) => e)
+	const format = options.errorFormatter
+	const errored: Errored = format === undefined ? (e) => e : (e, fn) => format(e, fn)
 
 	const root = options.root ?? newId()
 	places = createPlaces({
@@ -367,11 +371,6 @@ function make(options: Options, undo: (() => void)[]): Ermine {
 		) => [x2 as never, fresh(feature, items, items2 as Version[])],
 		(feature, [, items], inner, out) => fresh(feature, inner ?? items, out),
 	)
-	const statused = chain<[Asked, Status], Status>(
-		hooks.onStatus,
-		"onStatus",
-		(_x, st) => st,
-	)
 
 	const hostInner = createProcessContext(parts, {
 		scope: hostScope,
@@ -452,11 +451,10 @@ function make(options: Options, undo: (() => void)[]): Ermine {
 		changes: new WeakMap(),
 		enter,
 		shown,
-		statused,
 	}
 
 	attach(base, hostInner)
-	const unregister = registerScheduler(s, hooks.onError.length ? errored : undefined)
+	const unregister = registerScheduler(s, format === undefined ? undefined : errored)
 	// undone last: the teardown before it finds its context through the registration
 	undo.unshift(unregister)
 	registerScope(hostScope, hostInner)

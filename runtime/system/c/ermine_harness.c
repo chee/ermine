@@ -58,11 +58,6 @@ typedef struct {
 } held_t;
 
 typedef struct {
-	void (*f)(void *data);
-	void *data;
-} queued_t;
-
-typedef struct {
 	char *op, *path, *id, *from;
 	int pending;
 } deny_t;
@@ -85,8 +80,6 @@ typedef struct {
 	es_map programs;
 	es_map shared;
 	env_t *host;
-	queued_t *queue;
-	size_t nqueue, capqueue, head;
 	held_t *held;
 	size_t nheld, capheld;
 	// settled at once by a generator: the maker's hold lasts until the world goes
@@ -1862,7 +1855,7 @@ static int expr(sys_t sys, env_t *env, const op_value *e, op_value **out) {
 
 // --- the world's pieces ----------
 
-// the harness's own feature: ids "n1", ..., or the name a start gave; pulses held to run after a
+// the harness's own feature: ids "n1", ..., or the name a start gave; one pulse run after a
 // request; the functions made
 #define HARNESS "harness"
 static int harness_id(void *ctx, const char *kind, es_id_next *next, char **out) {
@@ -1883,23 +1876,9 @@ static int world_user_activated(void *ctx) {
 	(void)ctx;
 	return W->event;
 }
-static void run_ask(void *data) { es_run_pulse(data); }
-static void hold_pulse(es_pulse_ask *pulse) {
-	queued_t q = {run_ask, pulse};
-	ES_PUSH(W->queue, W->nqueue, W->capqueue, q);
-}
-static int harness_schedule(void *ctx, es_pulse_ask *pulse, es_schedule_next *next) {
-	(void)ctx;
-	(void)next;
-	hold_pulse(pulse);
-	return 0;
-}
 static void drain(void) {
-	while (W->head < W->nqueue) {
-		queued_t q = W->queue[W->head++];
-		q.f(q.data);
-	}
-	W->head = W->nqueue = 0;
+	sc_pulse(W->e->scheduler);
+	free(sc_escaped(W->e->scheduler));
 }
 static int harness_created(void *ctx, const es_created *made, es_create_next *next) {
 	(void)ctx;
@@ -1913,7 +1892,6 @@ static int harness_created(void *ctx, const es_created *made, es_create_next *ne
 }
 static int harness_setup(void *ctx, es_feature_api *f) {
 	(void)ctx;
-	TRY(es_on_schedule(f, harness_schedule, NULL));
 	TRY(es_on_create_function(f, harness_created, NULL));
 	if (!W->uuid) TRY(es_on_id(f, harness_id, NULL));
 	return 0;
@@ -1986,31 +1964,6 @@ static int tf_read(void *ctx, const es_reading *x, const es_versions *items, es_
 	}
 	return es_next_read(next, x, items, out);
 }
-static int tf_status(void *ctx, const es_asked *x, const es_status *st, es_status_next *next,
-	es_status *out) {
-	tf_t *t = ctx;
-	say(t, "onStatus", x->id, NULL, NULL);
-	if (is_how(t, "onStatus", "throw")) return boom(t);
-	if (is_how(t, "onStatus", "drop")) {
-		*out = *st;
-		return 0;
-	}
-	TRY(es_next_status(next, x, st, out));
-	if (is_how(t, "onStatus", "add")) {
-		// a status beside the one next gave: its fields and this feature's, good till the next call
-		op_value *more = op_map();
-		if (out->more != NULL && out->more->type == OP_MAP) {
-			for (size_t i = 0; i < out->more->count; i++) {
-				op_set(more, out->more->keys[i], op_ref(out->more->items[i]));
-			}
-		}
-		op_set(more, t->name, op_bool(1));
-		op_free(t->held);
-		t->held = more;
-		out->more = more;
-	}
-	return 0;
-}
 static int tf_id(void *ctx, const char *kind, es_id_next *next, char **out) {
 	tf_t *t = ctx;
 	say(t, "onId", kind, NULL, NULL);
@@ -2025,16 +1978,6 @@ static int tf_id(void *ctx, const char *kind, es_id_next *next, char **out) {
 	}
 	return 0;
 }
-static int tf_schedule(void *ctx, es_pulse_ask *pulse, es_schedule_next *next) {
-	tf_t *t = ctx;
-	say(t, "onSchedule", NULL, NULL, NULL);
-	if (is_how(t, "onSchedule", "throw")) return boom(t);
-	if (is_how(t, "onSchedule", "later")) {
-		hold_pulse(pulse);
-		return 0;
-	}
-	return es_next_schedule(next, pulse);
-}
 static int tf_create_function(void *ctx, const es_created *made, es_create_next *next) {
 	tf_t *t = ctx;
 	say(t, "onCreateFunction", strcmp(made->kind, "action") == 0 ? "method" : made->kind, made->id, NULL);
@@ -2042,7 +1985,7 @@ static int tf_create_function(void *ctx, const es_created *made, es_create_next 
 	if (is_how(t, "onCreateFunction", "drop")) return 0;
 	return es_next_create_function(next, made);
 }
-// the code an onError hook is told, as the TypeScript fixture logs error.code: a failure carrying an
+// the code the error formatter is told, as the TypeScript fixture logs error.code: a failure carrying an
 // apply code (its message's first word) logs that code, as an ApplyError's code is
 static const char *error_code(int code) {
 	const char *m = es_thrown()->message;
@@ -2054,15 +1997,14 @@ static const char *error_code(int code) {
 	}
 	return es_code_name(code);
 }
-static int tf_error(void *ctx, int code, const char *fn, es_error_next *next, int *out) {
-	tf_t *t = ctx;
-	say(t, "onError", fn, error_code(code), NULL);
-	if (is_how(t, "onError", "throw")) return boom(t);
-	if (is_how(t, "onError", "replace")) {
-		*out = es_fail_ermine(ES_GONE, "%s replaced it", t->name);
-		return 0;
-	}
-	return es_next_error(next, code, fn, out);
+static int format_error(void *ctx, int code, const char *fn) {
+	const char *how = ctx;
+	op_value *row = op_list();
+	op_push(row, fn != NULL ? op_str(fn) : op_null());
+	op_push(row, op_str(error_code(code)));
+	log_push("formatted", row);
+	if (strcmp(how, "replace") == 0) return es_fail_ermine(ES_GONE, "replaced");
+	return code;
 }
 static int tf_setup(void *ctx, es_feature_api *f) {
 	tf_t *t = ctx;
@@ -2071,11 +2013,8 @@ static int tf_setup(void *ctx, es_feature_api *f) {
 		TRY(es_api_places(f, &places));
 	}
 	if (flag(t->spec, "onRead")) TRY(es_on_read(f, tf_read, t));
-	if (flag(t->spec, "onStatus")) TRY(es_on_status(f, tf_status, t));
 	if (flag(t->spec, "onId")) TRY(es_on_id(f, tf_id, t));
-	if (flag(t->spec, "onSchedule")) TRY(es_on_schedule(f, tf_schedule, t));
 	if (flag(t->spec, "onCreateFunction")) TRY(es_on_create_function(f, tf_create_function, t));
-	if (flag(t->spec, "onError")) TRY(es_on_error(f, tf_error, t));
 	return 0;
 }
 
@@ -2178,7 +2117,12 @@ static int make(const op_value *r, world_t *before) {
 	list[nfeatures] = &harness_feature;
 	es_options o = {.features = list, .nfeatures = nfeatures + 1, .may = w->policy, .table = w->stored, .root = "R",
 		.info = &w->info, .ninfo = 1,
-		.user_activated = world_user_activated};
+		.user_activated = world_user_activated, .no_autopulse = 1};
+	const char *how = text(r, "errorFormatter");
+	if (how != NULL) {
+		o.error_formatter = format_error;
+		o.error_formatter_ctx = strcmp(how, "replace") == 0 ? "replace" : "log";
+	}
 	return es_create(&o, &w->e);
 }
 
@@ -2222,7 +2166,6 @@ static void world_free(world_t *w) {
 	es_map_free(&w->running);
 	es_map_free(&w->programs);
 	es_map_free(&w->shared);
-	free(w->queue);
 	free(w->held);
 	free(w->next);
 	op_free(w->actor);
@@ -2336,7 +2279,7 @@ static void settle_all(void) {
 			es_promise_release(batch[i].promise);
 		}
 		free(batch);
-		drain();
+		if (W->e != NULL && !W->e->closed) drain();
 	}
 }
 

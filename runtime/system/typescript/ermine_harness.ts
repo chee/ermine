@@ -2,8 +2,10 @@
 // ermine per run: root "R", host scope { actor: "test" }, ids "n1", "n2", ..., process ids
 // "proc:<name>". After every request the asked-for pulses run until none is asked.
 // node: { path, part } | { id, part }
-// { op: "ermine", features?, deny?, uuid? } -> {}
+// { op: "ermine", features?, deny?, uuid?, errorFormatter? } -> {}
 //     features: names (another harness's own) or test features (below)
+//     errorFormatter: "log" logs [fn, code] to "formatted" and gives the error back; "replace"
+//     logs the same and gives a "gone" error in its place
 //     deny: [{ op, path?, id?, from?, pending? }] refuses (or marks pending) matching ops
 //     uuid: use uuidv7 ids
 // { op: "uuid", path } -> { v7 }             whether the id there is a uuidv7
@@ -32,11 +34,11 @@
 //     { op: "callframe", id } -> { frame }   where the handler's latest call was made from
 // A call that gave a promise logs how it settled to "promised".
 //
-// A test feature: { name, needs?, onRead?, onStatus?,
-// onId?, onSchedule?, onCreateFunction?, onError?, early? }. Each hook logs [name, hook, ...] to "hooks", then does what its value says:
-// "log" calls next, "drop" does not, "throw" throws "<name> threw", onRead "add" adds an item, onStatus "add" adds the field <name>. onId "wrap" prefixes the
-// id with "<name>-", "throw-process" throws for a process's id only; onCreateFunction
-// "drop" does not pass it on; onError "replace" throws a "gone" error instead..
+// A test feature: { name, needs?, onRead?, onId?, onCreateFunction?, early? }. Each hook logs
+// [name, hook, ...] to "hooks", then does what its value says: "log" calls next, "drop" does not,
+// "throw" throws "<name> threw", onRead "add" adds an item. onId "wrap" prefixes the id with
+// "<name>-", "throw-process" throws for a process's id only; onCreateFunction "drop" does not
+// pass it on.
 //
 // program: steps { do: [fn, ...args], as? }; "$x" in an arg is the name x. fn is a @ermine/system
 // function or one of:
@@ -192,6 +194,12 @@ function make(o: Request = {}): Made {
 		...table !== undefined && { table },
 		root: "R",
 		info: { actor: "test" },
+		...o.errorFormatter !== undefined && {
+			errorFormatter: (e: unknown, fn: string | undefined) => {
+				log("formatted", [fn, (e as { code?: string }).code ?? "error"])
+				return o.errorFormatter === "replace" ? new ErmineError("gone", "replaced") : e
+			},
+		},
 		features: [...features, {
 			name: HARNESS,
 			setup: (f) => {

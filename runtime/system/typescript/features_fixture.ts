@@ -1,5 +1,5 @@
 // The ermine harness's test features.
-import { ErmineError, type Feature, type Hook } from "./ermine.ts"
+import type { Feature, Hook } from "./ermine.ts"
 
 export function testFeature(
 	spec: Record<string, unknown>,
@@ -30,16 +30,6 @@ export function testFeature(
 					return next(x, items)
 				})
 			}
-			if (spec.onStatus) {
-				f.onStatus((x, st, next) => {
-					say("onStatus", x.id)
-					const how = spec.onStatus
-					if (how === "throw") boom()
-					if (how === "drop") return st
-					const out = next(x, st)
-					return how === "add" && out !== undefined ? { ...out, [name]: true } : out
-				})
-			}
 			if (spec.onId) {
 				f.onId((kind, next) => {
 					say("onId", kind)
@@ -55,16 +45,6 @@ export function testFeature(
 					if (spec.onCreateFunction === "throw") boom()
 					if (spec.onCreateFunction === "drop") return
 					next(made)
-				})
-			}
-			if (spec.onError) {
-				f.onError((error, fn, next) => {
-					say("onError", fn, (error as { code?: string }).code ?? "error")
-					if (spec.onError === "throw") boom()
-					if (spec.onError === "replace") {
-						return new ErmineError("gone", `${name} replaced it`)
-					}
-					return next(error, fn)
 				})
 			}
 		},

@@ -254,7 +254,7 @@ Deno.test("a hook added while createErmine is making is refused setup-only, not 
 		name: "late",
 		setup: (f) =>
 			f.onId((kind, next) => {
-				f.onStatus((x, st, next) => next(x, st))
+				f.onRead((x, items, next) => next(x, items))
 				return next(kind)
 			}),
 	}

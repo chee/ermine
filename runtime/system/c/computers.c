@@ -860,12 +860,6 @@ void es_status_free(es_status *s) {
 	*s = (es_status){0};
 }
 
-static void release_unshared(es_status *st, const es_status *shown) {
-	if (st->error != shown->error) free(st->error);
-	if (st->waiting != shown->waiting) free_waiting(st->waiting, st->nwaiting);
-	if (st->more != shown->more) op_free(st->more);
-}
-
 static int ask_status(es_context *t, const char *id, const es_node_data *n) {
 	if (!t->guarded) return 0;
 	op_value *field = op_list();
@@ -1133,13 +1127,7 @@ static int get_status_of(es_context *c, es_target x, const char *key, es_status 
 	es_status st = {0};
 	code = own_status(c, &n, id, key, &st);
 	if (code == 0) {
-		es_asked asked = {&n, id};
-		es_status shown = {0};
-		code = es_hook_status(c->ermine, &asked, &st, &shown);
-		if (code == 0) {
-			release_unshared(&st, &shown);
-			*out = shown;
-		} else es_status_free(&st);
+		*out = st;
 	} else es_status_free(&st);
 	free(id);
 	es_node_data_free(&n);

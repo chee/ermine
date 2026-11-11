@@ -1,0 +1,97 @@
+{
+	"title": "errorFormatter covers every function ermine gives, reads, patches, names and nodes too: each failing call is formatted once, named, and what it gives is what is thrown",
+	"steps": [
+		{
+			"op": "ermine",
+			"errorFormatter": "log",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/x",
+				1
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/x",
+				{
+					"path": [],
+					"range": [
+						0,
+						1
+					]
+				}
+			],
+			"expect": {
+				"error": "Error: wrong-kind"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"patch",
+				"/x",
+				[
+					{
+						"path": [
+							"y"
+						],
+						"value": 1
+					}
+				]
+			],
+			"expect": {
+				"error": "Error: wrong-kind (patch 0)"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"unplace",
+				"/nowhere"
+			],
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"remove",
+				"/nowhere"
+			],
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "log",
+			"name": "formatted",
+			"expect": {
+				"values": [
+					[
+						"read",
+						"wrong-kind"
+					],
+					[
+						"patch",
+						"wrong-kind"
+					],
+					[
+						"unplace",
+						"nothing-there"
+					],
+					[
+						"remove",
+						"nothing-there"
+					]
+				]
+			}
+		}
+	]
+}

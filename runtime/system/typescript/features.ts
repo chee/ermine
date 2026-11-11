@@ -7,18 +7,16 @@
 //     name: "log",
 //     needs: [],
 //     setup(feature) {
-//       feature.onError((error, fn, next) => {
-//         console.log(fn, error)
-//         return next(error, fn)
+//       feature.onCreateFunction((made, next) => {
+//         console.log(made.kind, made.id)
+//         next(made)
 //       })
 //     },
 //   }
 //
 //   onRead(x, items, next)         adds items to what reads show
-//   onStatus(x, status, next)      what status(x) shows; not called for a node that is not there
 //   onId(kind, next)               each new id, kind "node" or "process"
 //   onCreateFunction(made, next)   each memo, effect and action made
-//   onError(error, fn, next)       each error ermine throws
 //
 // A hook that throws is rethrown as a FeatureError naming the feature and hook. PENDING and
 // whatever next threw pass through, and a Refusal passes with its feature and hook named.
@@ -38,7 +36,7 @@ import type {
 	ProcessContext,
 	Version,
 } from "./context.ts"
-import type { ChangeView, Status } from "./system/shapes.ts"
+import type { ChangeView } from "./system/shapes.ts"
 
 export type Code =
 	| "missing-feature"
@@ -88,22 +86,14 @@ export type Reading = {
 	readonly context: ProcessContext
 }
 
-export type Asked = {
-	readonly node: NodeData
-	readonly id: Id
-	readonly computer: boolean
-}
-
 export type Hooks = {
 	onRead: (
 		x: Reading,
 		items: readonly Version[],
 		next: (x: Reading, items: readonly Version[]) => readonly Version[],
 	) => readonly Version[]
-	onStatus: (x: Asked, status: Status, next: (x: Asked, status: Status) => Status) => Status
 	onId: (kind: IdKind, next: (kind: IdKind) => string) => string
 	onCreateFunction: (made: CreatedFunction, next: (made: CreatedFunction) => void) => void
-	onError: (error: unknown, fn: string | undefined, next: Errored) => unknown
 }
 export type Errored = (error: unknown, fn: string | undefined) => unknown
 export type IdKind = "node" | "process"
@@ -111,10 +101,8 @@ export type Hook = keyof Hooks
 // Every hook is listed once, so a hook added to Hooks and missed here is a type error.
 const HOOK_KEYS: Record<Hook, true> = {
 	onRead: true,
-	onStatus: true,
 	onId: true,
 	onCreateFunction: true,
-	onError: true,
 }
 export const HOOKS = Object.keys(HOOK_KEYS) as readonly Hook[]
 
@@ -124,10 +112,8 @@ export type FeatureAPI = {
 	readonly places: Places
 	readonly processes: Processes
 	onRead: (hook: Hooks["onRead"]) => void
-	onStatus: (hook: Hooks["onStatus"]) => void
 	onId: (hook: Hooks["onId"]) => void
 	onCreateFunction: (hook: Hooks["onCreateFunction"]) => void
-	onError: (hook: Hooks["onError"]) => void
 	// The host's process context, or a running process's. To act as one, wrap code in
 	// context.within(() => ...). Not available before setup finishes.
 	getProcessContext: {

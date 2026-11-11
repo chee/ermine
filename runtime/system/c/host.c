@@ -2,9 +2,7 @@
 // and the registry. ermine.h declares the functions.
 //
 // The chains hand hooks borrowed arguments for the call. An onRead hook's out is a fresh array, and
-// what next gives into the out a hook passed is that hook's to free or hand up. An onStatus hook's
-// out is borrowed from the hook, good until its next call or es_close; the chain copies the last
-// one whole into the caller's. A closed ermine gives NULL or 0 with es_thrown() ES_CLOSED from
+// what next gives into the out a hook passed is that hook's to free or hand up. A closed ermine gives NULL or 0 with es_thrown() ES_CLOSED from
 // every function that returns a pointer or a 1/0.
 #include "../../../core/places/c/children.h"
 #include "ermine.h"
@@ -132,7 +130,7 @@ int es_fail_ermine(int code, const char *fmt, ...) {
 
 
 static const char *const HOOK_NAMES[ES_HOOKS] = {
-	"onRead", "onStatus", "onId", "onSchedule", "onCreateFunction", "onError",
+	"onRead", "onId", "onCreateFunction",
 };
 
 static const char PART_VALUE[] = "value";
@@ -190,11 +188,8 @@ typedef struct {
 	const char *feature;
 	union {
 		es_on_read_fn read;
-		es_on_status_fn status;
 		es_on_id_fn id;
-		es_on_schedule_fn schedule;
 		es_on_create_function_fn create_function;
-		es_on_error_fn error;
 	} fn;
 	void *ctx;
 } hook_rec;
@@ -233,14 +228,12 @@ struct es_hosting {
 	int owns;
 	int owns_table;
 	int adding, made, queued;
-	struct es_pulse_ask {
-		es_ermine *e;
-	} pulse;
+	int no_autopulse;
 	// the process ids when no hook gives one
 	unsigned char boot[8];
 	unsigned long processes_made;
-	// onError hooks running: errors inside them go to no hook
-	int erroring;
+	int (*format)(void *ctx, int code, const char *fn);
+	void *format_ctx;
 	// the next process's id, made by the hooks before pr_start asks for it
 	char *pid;
 	hook_list hooks[ES_HOOKS];
@@ -456,22 +449,15 @@ static void run_pulse(void *data) {
 	free(sc_escaped(e->scheduler));
 }
 
-void es_run_pulse(es_pulse_ask *pulse) { run_pulse(pulse->e); }
-
-static int schedule_at(es_ermine *e, size_t i);
-
 int es_queue_pulse(es_ermine *e) {
 	hosting *h = host_of(e);
-	if (h->queued || e->closed) return 0;
+	if (h->queued || e->closed || h->no_autopulse) return 0;
 	h->queued = 1;
-	h->pulse.e = e;
-	int code = schedule_at(e, 0);
-	// a hook that failed ran nothing: ask again at the next write
-	if (code != 0) h->queued = 0;
-	return code;
+	run_pulse(e);
+	return 0;
 }
 
-// a listener has no code to give: a hook's failure stays in es_thrown()
+// a listener has no code to give
 static void settled(void *data) { (void)es_queue_pulse(data); }
 static void pulse_ended(void *data) {
 	es_ermine *e = data;
@@ -600,58 +586,6 @@ int es_hook_read(es_ermine *e, const es_reading *x, const es_versions *items, es
 }
 
 
-struct es_status_next {
-	es_ermine *e;
-	size_t i;
-	int passed;
-};
-
-static int status_at(es_ermine *e, size_t i, const es_asked *x, const es_status *st, es_status *out) {
-	hook_list *l = &host_of(e)->hooks[ES_ON_STATUS];
-	if (i == l->n) {
-		*out = *st;
-		return 0;
-	}
-	hook_rec *r = &l->items[i];
-	es_status_next next = {e, i, 0};
-	*out = *st;
-	int code = r->fn.status(r->ctx, x, st, &next, out);
-	return own(r->feature, "onStatus", code, next.passed);
-}
-
-int es_next_status(es_status_next *next, const es_asked *x, const es_status *st, es_status *out) {
-	int code = status_at(next->e, next->i + 1, x, st, out);
-	next->passed = code;
-	return code;
-}
-
-static void status_copy(const es_status *s, es_status *out) {
-	*out = *s;
-	if (s->error != NULL) out->error = es_dup(s->error);
-	out->waiting = NULL;
-	if (s->nwaiting > 0) {
-		out->waiting = es_alloc(s->nwaiting * sizeof *out->waiting);
-		for (size_t i = 0; i < s->nwaiting; i++) {
-			out->waiting[i] = s->waiting[i];
-			if (s->waiting[i].has_path) {
-				out->waiting[i].path = es_alloc((s->waiting[i].npath + 1) * sizeof(char *));
-				for (size_t k = 0; k < s->waiting[i].npath; k++) {
-					out->waiting[i].path[k] = es_dup(s->waiting[i].path[k]);
-				}
-			}
-		}
-	}
-	out->more = op_ref(s->more);
-}
-
-int es_hook_status(es_ermine *e, const es_asked *x, const es_status *st, es_status *out) {
-	es_status last;
-	TRY(status_at(e, 0, x, st, &last));
-	status_copy(&last, out);
-	return 0;
-}
-
-
 struct es_id_next {
 	es_ermine *e;
 	size_t i;
@@ -681,31 +615,6 @@ int es_next_id(es_id_next *next, const char *kind, char **out) {
 int es_make_id(es_ermine *e, const char *kind, char **out) { return id_at(e, 0, kind, out); }
 
 
-struct es_schedule_next {
-	es_ermine *e;
-	size_t i;
-	int passed;
-};
-
-static int schedule_at(es_ermine *e, size_t i) {
-	hosting *h = host_of(e);
-	hook_list *l = &h->hooks[ES_ON_SCHEDULE];
-	if (i == l->n) {
-		run_pulse(e);
-		return 0;
-	}
-	hook_rec *r = &l->items[i];
-	es_schedule_next next = {e, i, 0};
-	return own(r->feature, "onSchedule", r->fn.schedule(r->ctx, &h->pulse, &next), next.passed);
-}
-
-int es_next_schedule(es_schedule_next *next, es_pulse_ask *pulse) {
-	(void)pulse;
-	int code = schedule_at(next->e, next->i + 1);
-	next->passed = code;
-	return code;
-}
-
 struct es_create_next {
 	es_ermine *e;
 	size_t i;
@@ -728,38 +637,12 @@ int es_next_create_function(es_create_next *next, const es_created *made) {
 
 int es_hook_create_function(es_ermine *e, const es_created *made) { return create_at(e, 0, made); }
 
-struct es_error_next {
-	es_ermine *e;
-	size_t i;
-	int passed;
-};
-
-static int error_at(es_ermine *e, size_t i, int code, const char *fn, int *out) {
-	hook_list *l = &host_of(e)->hooks[ES_ON_ERROR];
-	*out = code;
-	if (i == l->n) return 0;
-	hook_rec *r = &l->items[i];
-	es_error_next next = {e, i, 0};
-	return own(r->feature, "onError", r->fn.error(r->ctx, code, fn, &next, out), next.passed);
-}
-
-int es_next_error(es_error_next *next, int code, const char *fn, int *out) {
-	int c = error_at(next->e, next->i + 1, code, fn, out);
-	next->passed = c;
-	return c;
-}
-
 int es_errored(es_ermine *e, int code, const char *fn) {
 	hosting *h = host_of(e);
-	if (h->hooks[ES_ON_ERROR].n == 0 || h->erroring || code == 0 || code == ES_PENDING ||
-		code == ES_STOP || code == ES_TAKEN) {
+	if (h->format == NULL || code == 0 || code == ES_PENDING || code == ES_STOP || code == ES_TAKEN) {
 		return code;
 	}
-	int out;
-	h->erroring++;
-	int failed = error_at(e, 0, code, fn, &out);
-	h->erroring--;
-	return failed != 0 ? failed : out;
+	return h->format(h->format_ctx, code, fn);
 }
 
 
@@ -789,33 +672,16 @@ int es_on_read(es_feature_api *f, es_on_read_fn fn, void *ctx) {
 	r.fn.read = fn;
 	return add_hook(f, ES_ON_READ, r);
 }
-int es_on_status(es_feature_api *f, es_on_status_fn fn, void *ctx) {
-	hook_rec r = {.ctx = ctx};
-	r.fn.status = fn;
-	return add_hook(f, ES_ON_STATUS, r);
-}
-
 int es_on_id(es_feature_api *f, es_on_id_fn fn, void *ctx) {
 	hook_rec r = {.ctx = ctx};
 	r.fn.id = fn;
 	return add_hook(f, ES_ON_ID, r);
-}
-int es_on_schedule(es_feature_api *f, es_on_schedule_fn fn, void *ctx) {
-	hook_rec r = {.ctx = ctx};
-	r.fn.schedule = fn;
-	return add_hook(f, ES_ON_SCHEDULE, r);
 }
 int es_on_create_function(es_feature_api *f, es_on_create_function_fn fn, void *ctx) {
 	hook_rec r = {.ctx = ctx};
 	r.fn.create_function = fn;
 	return add_hook(f, ES_ON_CREATE_FUNCTION, r);
 }
-int es_on_error(es_feature_api *f, es_on_error_fn fn, void *ctx) {
-	hook_rec r = {.ctx = ctx};
-	r.fn.error = fn;
-	return add_hook(f, ES_ON_ERROR, r);
-}
-
 int es_listened(es_feature_api *f, sc_listener *l) {
 	fapi *a = f->private_;
 	hosting *h = host_of(a->e);
@@ -1129,6 +995,9 @@ int es_create(const es_options *given, es_ermine **out) {
 	e->user_activated = o->user_activated;
 	e->user_activated_ctx = o->user_activated_ctx;
 	h->adding = 1;
+	h->no_autopulse = o->no_autopulse;
+	h->format = o->error_formatter;
+	h->format_ctx = o->error_formatter_ctx;
 	PF_RANDOM(h->boot, sizeof h->boot);
 	int code = 0;
 

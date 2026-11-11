@@ -1,18 +1,9 @@
 {
-	"title": "onError(error, fn, next): middleware around each error ermine throws through its own functions, given the function's name; what next gives is what is thrown. a logs and passes on, b throws another (gone) in its place, and that is what the program catches",
+	"title": "errorFormatter(error, fn): given each error ermine throws through its own functions, and the function's name; what it gives back is what is thrown, and what the program catches",
 	"steps": [
 		{
 			"op": "ermine",
-			"features": [
-				{
-					"name": "a",
-					"onError": "log"
-				},
-				{
-					"name": "b",
-					"onError": "replace"
-				}
-			],
+			"errorFormatter": "replace",
 			"expect": {}
 		},
 		{
@@ -56,18 +47,10 @@
 		},
 		{
 			"op": "log",
-			"name": "hooks",
+			"name": "formatted",
 			"expect": {
 				"values": [
 					[
-						"a",
-						"onError",
-						"createMemo",
-						"already-there"
-					],
-					[
-						"b",
-						"onError",
 						"createMemo",
 						"already-there"
 					]

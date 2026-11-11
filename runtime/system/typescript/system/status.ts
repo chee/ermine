@@ -20,19 +20,15 @@ export const getStatus = /* @__PURE__ */ marked(function getStatus(x: Target, ke
 	return go(getStatus, "getStatus", false, getStatusAs, x, key)
 }) as System["getStatus"]
 
-// The base's status, then what features show (onStatus). With `key`, only that field is read, so
+// The base's status. With `key`, only that field is read, so
 // a reader of state does not rerun each time n moves.
 export function getStatusAs(inner: Inner, x: Target): Status | undefined
 export function getStatusAs(inner: Inner, x: Target, key: string | undefined): unknown
 export function getStatusAs(inner: Inner, x: Target, key?: string): unknown {
-	const { base } = here(inner)
 	const n = nodeOf(inner, x)
 	const id = idOf(inner, n)
 	if (id === undefined) return undefined
-	const status = base.statused(
-		{ node: n, id, computer: computerAt(base.made, id) !== undefined },
-		ownStatus(inner, n, id, key),
-	)
+	const status = ownStatus(inner, n, id, key)
 	return key === undefined ? status : status?.[key]
 }
 

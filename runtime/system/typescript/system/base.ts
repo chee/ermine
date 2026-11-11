@@ -5,11 +5,11 @@ import type { Runs } from "@ermine/processes/runs"
 import type { Computer, Frame, Scope } from "@ermine/reactivity"
 import type { Location } from "@ermine/changeable/stacktrace"
 import type { Calls } from "../calls.ts"
-import type { Asked, Errored, Reading } from "../features.ts"
+import type { Errored, Reading } from "../features.ts"
 import type { Handles } from "../handles.ts"
 import type { Inner, Parts, Version, Why } from "../context.ts"
 import type { Made } from "./made.ts"
-import type { ChangeView, Status, WriterAs } from "./shapes.ts"
+import type { ChangeView, WriterAs } from "./shapes.ts"
 
 export type Base = {
 	readonly parts: Parts
@@ -50,5 +50,4 @@ export type Base = {
 	readonly pulse: () => void
 	readonly enter: Parts["enter"]
 	readonly shown: (x: Reading, items: readonly Version[]) => readonly Version[]
-	readonly statused: (x: Asked, status: Status) => Status
 }
