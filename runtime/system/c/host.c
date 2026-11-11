@@ -135,7 +135,6 @@ static const char *const HOOK_NAMES[ES_HOOKS] = {
 	"onRead", "onStatus", "onId", "onSchedule", "onCreateFunction", "onError",
 };
 
-static const char PART_ATTRIBUTES[] = "attributes";
 static const char PART_VALUE[] = "value";
 
 char **es_parse_steps(const char *text, size_t *n) {
@@ -975,23 +974,6 @@ static int install(es_ermine *e, const es_options *options) {
 
 static void keep_value(hosting *h, op_value *v) { ES_PUSH(h->keep, h->nkeep, h->capkeep, v); }
 
-typedef struct {
-	es_ermine *e;
-	const es_options *o;
-} init_args;
-
-static int init_nodes(void *data) {
-	init_args *a = data;
-	es_ermine *e = a->e;
-	op_value *attrs = op_map();
-	op_set(attrs, ES_ARGS, names_value(a->o->host.args, a->o->host.nargs));
-	op_patch whole = {.has_value = 1, .value = attrs};
-	es_write w = {.part = PART_ATTRIBUTES, .id = e->node, .patches = &whole, .npatches = 1};
-	int code = es_context_put(e->host_context, &w);
-	op_free(attrs);
-	return code;
-}
-
 static void remember_context(es_ermine *e, es_context *c) {
 	hosting *h = host_of(e);
 	ES_PUSH(h->all, h->nall, h->capall, c);
@@ -1104,7 +1086,6 @@ static void free_hosting(es_ermine *e) {
 	es_map_free(&h->contexts);
 	es_map_free(&e->whys);
 	free(e->root);
-	free(e->node);
 	free(h);
 	free(e);
 }
@@ -1176,12 +1157,10 @@ int es_create(const es_options *given, es_ermine **out) {
 	h->tracking_first = sc_on_tracking_start(e->scheduler, pl_tracking, e->places);
 	h->crow = pl_crowify(e->scheduler, pl_crow(e->places), NULL, NULL);
 
-	if (o->host.node != NULL) e->node = es_dup(o->host.node);
-	else if ((code = es_make_id(e, "node", &e->node)) != 0) goto fail;
 	{
 		sc_pair *info = es_alloc((o->ninfo + 1) * sizeof *info);
 		for (size_t i = 0; i < o->ninfo; i++) info[i] = o->info[i];
-		op_value *node = op_str(e->node);
+		op_value *node = op_str(e->root);
 		keep_value(h, node);
 		info[o->ninfo] = (sc_pair){CH_NODE, node};
 		e->host_scope = sc_create_root_scope(e->scheduler, info, o->ninfo + 1);
@@ -1194,14 +1173,9 @@ int es_create(const es_options *given, es_ermine **out) {
 	e->computers = es_computers_new(e);
 	e->actions = es_actions_new(e);
 	{
-		es_context_options co = {.scope = e->host_scope, .places = e->places, .args = o->host.args,
-			.nargs = o->host.nargs, .node = e->node};
+		es_context_options co = {.scope = e->host_scope, .places = e->places, .node = e->root};
 		e->host_context = es_context_new(e, &co);
 		remember_context(e, e->host_context);
-	}
-	{
-		init_args args = {e, o};
-		if ((code = es_within(e->host_context, init_nodes, &args)) != 0) goto fail;
 	}
 
 	e->scopes = sn_new(e->scheduler, e->table, e->places);
@@ -1224,11 +1198,6 @@ int es_create(const es_options *given, es_ermine **out) {
 	h->registered = 1;
 	es_register_scope(e->host_scope, e->host_context);
 
-	if (o->host.at != NULL) {
-		es_node_data node = {.id = e->node, .part = (char *)PART_VALUE};
-		es_handle *handle = es_mint(e, &node);
-		if ((code = es_place(e->host_context, es_text(o->host.at), es_on_node(handle))) != 0) goto fail;
-	}
 	h->made = 1;
 	*out = e;
 	return 0;

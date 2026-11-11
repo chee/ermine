@@ -363,7 +363,6 @@ typedef struct {
 
 #define ES_SCOPE "ermine.computer.scope"
 #define ES_WAITING "ermine.process.waiting"
-#define ES_ARGS "ermine.host.args"
 
 // A process context: where and as whom a thing is done. There is one per process and one for the
 // host (process 0). A process's is freed with its scope, the others at es_free. Made by
@@ -575,7 +574,7 @@ typedef struct {
 } es_call_write;
 
 // A call's record, the latest per handler (older ones are let go). caller is the sending
-// process's id (the host's node for the host). context is the caller's. handler_change is the
+// process's id (the root for the host). context is the caller's. handler_change is the
 // handler value's change as called. started and ended are ms since 1970.
 typedef struct {
 	unsigned n;
@@ -644,7 +643,7 @@ typedef struct {
 } es_asked;
 
 // what onCreateFunction is told: kind ("memo", "effect", "action"), the computer (NULL for an action),
-// its node, and who made it (the process's id, or the host's node's)
+// its node, and who made it (the process's id, or the root)
 typedef struct {
 	const char *kind;
 	sc_computer *computer;
@@ -746,14 +745,6 @@ typedef struct {
 	// caller's still: es_free leaves it
 	tb_table *table;
 	const char *root;
-	// the host's node: its id (NULL: a new one; give the same one each start for a saved graph, as
-	// root), where it is placed (NULL: nowhere), the host's args (NULL: none)
-	struct {
-		const char *node;
-		const char *at;
-		const char *const *args;
-		size_t nargs;
-	} host;
 	const sc_pair *info;
 	size_t ninfo;
 	// whether a person just interacted with the page now (a writer asks as it runs: its changes
@@ -777,7 +768,6 @@ struct es_ermine {
 	pr *processes;
 	const pr_policy *may;
 	char *root;
-	char *node;
 	sc_scope *host_scope;
 	es_context *host_context;
 	int (*user_activated)(void *ctx);

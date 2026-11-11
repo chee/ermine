@@ -1,5 +1,5 @@
 // The clock es_create is given: every change's time is read from it, for a host write, a patch, a
-// process started and the nodes it makes. And the ids it is given: the root, the host's node, and a
+// process started and the nodes it makes. And the ids it is given: the root and a
 // feature's ids made through onId. make test-clock-system, test-check-clock-system.
 #include "ermine.h"
 
@@ -104,11 +104,10 @@ static void the_host_gives_its_ids(void) {
 	es_ermine *e = NULL;
 	es_feature ids = {.name = "ids", .setup = api_setup, .ctx = &a};
 	const es_feature *list[] = {&ids};
-	es_options o = {.features = list, .nfeatures = 1, .root = "R", .host = {.node = "H"}};
+	es_options o = {.features = list, .nfeatures = 1, .root = "R"};
 	CHECK(es_create(&o, &e) == 0);
 	CHECK(a.early == ES_NOT_YET);
 	CHECK(strcmp(e->root, "R") == 0);
-	CHECK(strcmp(e->node, "H") == 0);
 	char *id = NULL;
 	CHECK(es_api_new_id(a.api, &id) == 0);
 	CHECK(id != NULL && id[0] == 'n');

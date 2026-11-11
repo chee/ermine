@@ -169,7 +169,7 @@ static void seen_by_a_foreign_context(void) {
 	CHECK(es_create(&o, &e) == 0);
 	CHECK(es_create(&(es_options){0}, &other) == 0);
 	es_names seen = {0};
-	CHECK(es_api_seen(kept_api, e->node, other->host_context, &seen) == ES_NOTHING_THERE);
+	CHECK(es_api_seen(kept_api, e->root, other->host_context, &seen) == ES_NOTHING_THERE);
 	es_clear_thrown();
 	CHECK(es_close(other) == 0);
 	es_free(other);

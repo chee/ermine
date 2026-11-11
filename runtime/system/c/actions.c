@@ -1829,7 +1829,7 @@ int es_caller_place(void *ctx, const char *const **from, size_t *nfrom) {
 		const op_value *node = caller == NULL ? NULL : op_get(caller, "node");
 		*from = NULL;
 		*nfrom = 0;
-		if (node == NULL || node->type != OP_STR || strcmp(node->str, e->node) == 0) return 1;
+		if (node == NULL || node->type != OP_STR || strcmp(node->str, e->root) == 0) return 1;
 		es_context *by = es_process_context_of(e, node->str);
 		if (by != NULL && by->process != NULL) {
 			*from = (const char *const *)by->at, *nfrom = by->nat;

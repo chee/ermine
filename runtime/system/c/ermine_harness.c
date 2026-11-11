@@ -100,8 +100,6 @@ typedef struct {
 	pr_policy *policy;
 	op_value *actor;
 	sc_pair info;
-	char **args;
-	size_t nargs;
 	int event;
 	owned_t *owned;
 	size_t nowned, capowned;
@@ -2181,15 +2179,6 @@ static int make(const op_value *r, world_t *before) {
 	es_options o = {.features = list, .nfeatures = nfeatures + 1, .may = w->policy, .table = w->stored, .root = "R",
 		.info = &w->info, .ninfo = 1,
 		.user_activated = world_user_activated};
-	if (text(r, "at") != NULL) o.host.at = text(r, "at");
-	const op_value *args = field(r, "args");
-	if (args != NULL && args->type == OP_LIST) {
-		w->args = owned_alloc((args->count + 1) * sizeof *w->args);
-		for (size_t i = 0; i < args->count; i++) w->args[i] = (char *)(is_str(args->items[i]) ? args->items[i]->str : "");
-		w->nargs = args->count;
-		o.host.args = (const char *const *)w->args;
-		o.host.nargs = w->nargs;
-	}
 	return es_create(&o, &w->e);
 }
 
@@ -2704,9 +2693,9 @@ static int answer(const op_value *r, op_value **res) {
 	}
 	if (strcmp(op, "node") == 0) {
 		TRY(es_alive(e));
-		const nd_entry *attrs = tb_get(e->table, tb_string("attributes"), tb_string(e->node));
+		const nd_entry *attrs = tb_get(e->table, tb_string("attributes"), tb_string(e->root));
 		*res = op_map();
-		op_set(*res, "id", op_str(e->node));
+		op_set(*res, "id", op_str(e->root));
 		if (attrs != NULL) op_set(*res, "attributes", plain(attrs->value));
 		return 0;
 	}
