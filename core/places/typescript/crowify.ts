@@ -4,7 +4,6 @@ import type { ChangeHeader, Entry } from "@ermine/graph/entry"
 import type { Patch } from "@ermine/changeable/apply"
 import type { Crow } from "@ermine/crow"
 import type { Scheduler } from "@ermine/reactivity"
-import type { Id, Table } from "@ermine/graph/table"
 
 export function crowify(
 	scheduler: Pick<Scheduler, "onRunStart" | "onTrack" | "onRunReturn" | "onRunEnd">,
@@ -44,23 +43,4 @@ export function updateEntry<V>(
 	if (value === undefined) delete entry.value
 	else entry.value = value as V
 	entry.change = { ...header, op: { patches: ps, undo } }
-}
-
-export function crowifyTable<T extends Pick<Table, "get" | "who">>(
-	table: T,
-	crow: Pick<Crow, "letGo">,
-): T {
-	function get(a: unknown, b?: unknown): unknown {
-		if (arguments.length === 1) {
-			const all = (table.get as (id: Id) => [string, Entry<unknown>][])(a as Id)
-			for (const [, e] of all) crow.letGo(e)
-			return all
-		}
-		const got = (table.get as (a: unknown, b: unknown) => unknown)(a, b)
-		if (typeof b === "string" || typeof b === "symbol") {
-			if (got !== undefined) crow.letGo(got as Entry<unknown>)
-		}
-		return got
-	}
-	return { ...table, get: get as Table["get"] }
 }

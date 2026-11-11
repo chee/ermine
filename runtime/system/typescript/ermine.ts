@@ -31,7 +31,7 @@ import type { Location } from "@ermine/changeable/stacktrace"
 import { createStatus, STATUS } from "@ermine/processes/status"
 import type { Policy } from "@ermine/protect"
 import { processes as rows } from "@ermine/processes"
-import { createRuns, type Run } from "@ermine/processes/runs"
+import { createRuns } from "@ermine/processes/runs"
 import { createScopeNodes } from "@ermine/processes/scopes"
 import {
 	createProcesses,
@@ -45,7 +45,7 @@ import { createScheduler, type Info, PENDING, type Scheduler, type Scope } from 
 import { isPromise } from "@ermine/reactivity/helpers"
 import { createPaths } from "@ermine/reactivity/paths"
 import { createTable, type Key, type Table } from "@ermine/graph/table"
-import { type Call, createCalls, type Wait } from "./calls.ts"
+import { createCalls } from "./calls.ts"
 import {
 	type Asked,
 	type Calling,
@@ -55,7 +55,6 @@ import {
 	type IdKind,
 	install,
 	type Reading,
-	type Shown,
 } from "./features.ts"
 import {
 	type CreatedFunction,
@@ -117,8 +116,6 @@ export type {
 export type { Call, Wait } from "./calls.ts"
 
 export const ARGS = "ermine.host.args"
-export const FEATURES = "ermine.features"
-
 export type Options = {
 	features?: readonly Feature[]
 	scheduler?: Scheduler
@@ -161,13 +158,7 @@ export type Ermine = {
 	readonly scheduler: Scheduler
 	readonly table: Pick<ErmineTable, "get" | "who">
 	readonly places: Places
-	readonly features: readonly Shown[]
 	readonly id: Id
-	readonly records: {
-		run: (id: Id) => Run | undefined
-		call: (id: Id) => Call | undefined
-		waits: () => Wait[]
-	}
 }
 
 // A uuidv7 (rfc 9562): 48 bits of ms, then a 12-bit counter, then random. A clock going back
@@ -404,7 +395,6 @@ function make(options: Options, undo: (() => void)[]): Ermine {
 	hostInner.context.within(() => {
 		const attrs: Record<string, unknown> = {
 			[ARGS]: options.host?.args ?? [],
-			[FEATURES]: features.shown,
 		}
 		hostInner.put({ part: "attributes", id: node, patches: [{ path: [], value: attrs }] })
 	})
@@ -696,7 +686,6 @@ function make(options: Options, undo: (() => void)[]): Ermine {
 		scheduler: { get: part(s) },
 		table: { get: part({ get: table.get, who: table.who }) },
 		places: { get: part(p) },
-		features: { get: part(features.shown) },
 		id: { get: part(node) },
 		handleOf: {
 			value: (node: NodeData): Node => {
@@ -709,13 +698,6 @@ function make(options: Options, undo: (() => void)[]): Ermine {
 				alive()
 				const d = isHandle(x) ? base.handles.get(x) : undefined
 				return d === undefined ? undefined : { node: d.node }
-			},
-		},
-		records: {
-			value: {
-				run: (id: Id) => (alive(), runs.read(id)),
-				call: (id: Id) => (alive(), calls.latest(id)),
-				waits: () => (alive(), calls.waits()),
 			},
 		},
 	}) as unknown as Ermine

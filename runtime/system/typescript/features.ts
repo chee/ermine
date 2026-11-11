@@ -159,12 +159,6 @@ export type Feature = {
 	setup: (feature: FeatureAPI) => void
 }
 
-export type Shown = {
-	readonly name: string
-	readonly needs: readonly string[]
-	readonly hooks: readonly Hook[]
-}
-
 export function order(features: readonly Feature[]): Feature[] {
 	const named = new Map<string, Feature>()
 	for (const f of features) {
@@ -194,7 +188,6 @@ export type Hooked<H extends Hook> = { readonly feature: string; readonly fn: Ho
 
 export type Installed = {
 	readonly hooks: { readonly [H in Hook]: readonly Hooked<H>[] }
-	readonly shown: readonly Shown[]
 	done: () => void
 }
 
@@ -219,10 +212,8 @@ export function install(
 	const hooks = Object.fromEntries(HOOKS.map((h) => [h, []])) as unknown as {
 		[H in Hook]: Hooked<H>[]
 	}
-	const shown: Shown[] = []
 	let open = true
 	for (const f of order(features)) {
-		const used: Hook[] = []
 		const adder = <H extends Hook>(h: H) => {
 			const add = (fn: Hooks[H]) => {
 				if (!open) {
@@ -232,7 +223,6 @@ export function install(
 					)
 				}
 				;(hooks[h] as Hooked<H>[]).push({ feature: f.name, fn })
-				if (!used.includes(h)) used.push(h)
 			}
 			return add
 		}
@@ -266,9 +256,8 @@ export function install(
 			newId: () => got("newId", parts.newId)(),
 		}
 		f.setup(api)
-		shown.push({ name: f.name, needs: [...(f.needs ?? [])], hooks: used })
 	}
-	return { hooks, shown, done: () => void (open = false) }
+	return { hooks, done: () => void (open = false) }
 }
 
 type Mark<A extends unknown[]> = (feature: string, given: A, passed: A) => A

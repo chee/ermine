@@ -10,7 +10,7 @@ import { fastest, inPlace, only, row } from "../../../lib/crow/typescript/bench_
 import { createPlaces, type Places } from "./places.ts"
 import { children } from "./children.ts"
 import { createChangeHeader } from "./header.ts"
-import { crowify, crowifyTable, updateEntry } from "./crowify.ts"
+import { crowify, updateEntry } from "./crowify.ts"
 
 const folder = (n: number) => () => ({
 	...Object.fromEntries(Array.from({ length: n }, (_, i) => [`name${i}`, `id${i}`])),
@@ -24,7 +24,7 @@ function world(way: "copy" | "in place" | "crow") {
 	const table = createTable()
 	const places: Places = createPlaces({
 		root: "R",
-		table: way === "crow" ? crowifyTable(table, u) : table,
+		table,
 		paths: createPaths(),
 		scheduler: s,
 		contributors: [children],
