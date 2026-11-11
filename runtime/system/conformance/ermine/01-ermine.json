@@ -1,5 +1,5 @@
 {
-	"title": "createErmine and its options: the root at the root's id; code outside any process acts as the root; id: the ids every new node gets (uuid: uuidv7s); onCreateFunction told of each memo, effect and method made, with who made it; may: what the host's functions are asked of too",
+	"title": "createErmine and its options: the root at the root's id; code outside any process acts as the root; createId: the ids every new node gets (uuid: uuidv7s); may: what the host's functions are asked of too",
 	"steps": [
 		{
 			"op": "ermine",
@@ -95,24 +95,6 @@
 					],
 					"part": "value"
 				}
-			}
-		},
-		{
-			"op": "log",
-			"name": "onCreateFunction",
-			"expect": {
-				"values": [
-					[
-						"memo",
-						"n2",
-						"R"
-					],
-					[
-						"method",
-						"n3",
-						"R"
-					]
-				]
 			}
 		},
 		{

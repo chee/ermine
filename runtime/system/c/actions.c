@@ -1590,10 +1590,7 @@ static int create_action(es_context *c, es_at p, es_action fn, void *ctx, es_han
 		free(sc_register_teardown(e->scheduler, own, placed_gone, k));
 	}
 	es_node_data n = {1, path.names, path.n, NULL, (char *)"value"};
-	es_created made = {"action", NULL, &n, m.id, c->node};
-	code = es_hook_create_function(e, &made);
-	int pulse = es_queue_pulse(e);
-	if (code == 0) code = pulse;
+	code = es_queue_pulse(e);
 	if (out != NULL) *out = es_handle_make(c, &n);
 	free(m.id);
 	es_names_free(&path);

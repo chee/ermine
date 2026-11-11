@@ -1855,9 +1855,7 @@ static int expr(sys_t sys, env_t *env, const op_value *e, op_value **out) {
 
 // --- the world's pieces ----------
 
-// the harness's ids: nodes "n1", ..., a process the name its start gave; its own feature: the
-// functions made
-#define HARNESS "harness"
+// the harness's ids: nodes "n1", ..., a process the name its start gave
 static int harness_process_id(void *ctx, char **out) {
 	(void)ctx;
 	if (W->process_id_throws) return es_fail_text("createProcessId threw");
@@ -1886,22 +1884,6 @@ static void drain(void) {
 	sc_pulse(W->e->scheduler);
 	free(sc_escaped(W->e->scheduler));
 }
-static int harness_created(void *ctx, const es_created *made, es_create_next *next) {
-	(void)ctx;
-	(void)next;
-	op_value *row = op_list();
-	op_push(row, op_str(strcmp(made->kind, "action") == 0 ? "method" : made->kind));
-	op_push(row, op_str(made->id));
-	op_push(row, op_str(made->process));
-	log_push("onCreateFunction", row);
-	return 0;
-}
-static int harness_setup(void *ctx, es_feature_api *f) {
-	(void)ctx;
-	TRY(es_on_create_function(f, harness_created, NULL));
-	return 0;
-}
-static const es_feature harness_feature = {.name = HARNESS, .setup = harness_setup};
 
 static char *joined(const char *const *path, size_t n) {
 	size_t size = 1;
@@ -1969,13 +1951,6 @@ static int tf_read(void *ctx, const es_reading *x, const es_versions *items, es_
 	}
 	return es_next_read(next, x, items, out);
 }
-static int tf_create_function(void *ctx, const es_created *made, es_create_next *next) {
-	tf_t *t = ctx;
-	say(t, "onCreateFunction", strcmp(made->kind, "action") == 0 ? "method" : made->kind, made->id, NULL);
-	if (is_how(t, "onCreateFunction", "throw")) return boom(t);
-	if (is_how(t, "onCreateFunction", "drop")) return 0;
-	return es_next_create_function(next, made);
-}
 // the code the error formatter is told, as the TypeScript fixture logs error.code: a failure carrying an
 // apply code (its message's first word) logs that code, as an ApplyError's code is
 static const char *error_code(int code) {
@@ -2004,7 +1979,6 @@ static int tf_setup(void *ctx, es_feature_api *f) {
 		TRY(es_api_places(f, &places));
 	}
 	if (flag(t->spec, "onRead")) TRY(es_on_read(f, tf_read, t));
-	if (flag(t->spec, "onCreateFunction")) TRY(es_on_create_function(f, tf_create_function, t));
 	return 0;
 }
 
@@ -2087,7 +2061,7 @@ static int make(const op_value *r, world_t *before) {
 	w->info = (sc_pair){"actor", w->actor};
 	const op_value *features = field(r, "features"), *deny = field(r, "deny");
 	size_t nfeatures = features != NULL && features->type == OP_LIST ? features->count : 0;
-	const es_feature **list = owned_alloc((nfeatures + 2) * sizeof *list);
+	const es_feature **list = owned_alloc((nfeatures + 1) * sizeof *list);
 	w->uuid = flag(r, "uuid");
 	w->process_id_throws = text(r, "createProcessId") != NULL && strcmp(text(r, "createProcessId"), "throw") == 0;
 	for (size_t i = 0; i < nfeatures; i++) TRY(feature_of(features->items[i], &list[i]));
@@ -2105,8 +2079,7 @@ static int make(const op_value *r, world_t *before) {
 		}
 		w->policy = pr_call(deny_run, NULL);
 	}
-	list[nfeatures] = &harness_feature;
-	es_options o = {.features = list, .nfeatures = nfeatures + 1, .may = w->policy, .table = w->stored, .root = "R",
+	es_options o = {.features = list, .nfeatures = nfeatures, .may = w->policy, .table = w->stored, .root = "R",
 		.info = &w->info, .ninfo = 1,
 		.user_activated = world_user_activated, .no_autopulse = 1};
 	if (!w->uuid || w->process_id_throws) o.create_process_id = harness_process_id;

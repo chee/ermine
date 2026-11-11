@@ -130,7 +130,7 @@ int es_fail_ermine(int code, const char *fmt, ...) {
 
 
 static const char *const HOOK_NAMES[ES_HOOKS] = {
-	"onRead", "onCreateFunction",
+	"onRead",
 };
 
 static const char PART_VALUE[] = "value";
@@ -188,7 +188,6 @@ typedef struct {
 	const char *feature;
 	union {
 		es_on_read_fn read;
-		es_on_create_function_fn create_function;
 	} fn;
 	void *ctx;
 } hook_rec;
@@ -611,28 +610,6 @@ int es_make_process_id(es_ermine *e, char **out) {
 }
 
 
-struct es_create_next {
-	es_ermine *e;
-	size_t i;
-	int passed;
-};
-
-static int create_at(es_ermine *e, size_t i, const es_created *made) {
-	hook_list *l = &host_of(e)->hooks[ES_ON_CREATE_FUNCTION];
-	if (i == l->n) return 0;
-	hook_rec *r = &l->items[i];
-	es_create_next next = {e, i, 0};
-	return own(r->feature, "onCreateFunction", r->fn.create_function(r->ctx, made, &next), next.passed);
-}
-
-int es_next_create_function(es_create_next *next, const es_created *made) {
-	int code = create_at(next->e, next->i + 1, made);
-	next->passed = code;
-	return code;
-}
-
-int es_hook_create_function(es_ermine *e, const es_created *made) { return create_at(e, 0, made); }
-
 int es_errored(es_ermine *e, int code, const char *fn) {
 	hosting *h = host_of(e);
 	if (h->format == NULL || code == 0 || code == ES_PENDING || code == ES_STOP || code == ES_TAKEN) {
@@ -667,11 +644,6 @@ int es_on_read(es_feature_api *f, es_on_read_fn fn, void *ctx) {
 	hook_rec r = {.ctx = ctx};
 	r.fn.read = fn;
 	return add_hook(f, ES_ON_READ, r);
-}
-int es_on_create_function(es_feature_api *f, es_on_create_function_fn fn, void *ctx) {
-	hook_rec r = {.ctx = ctx};
-	r.fn.create_function = fn;
-	return add_hook(f, ES_ON_CREATE_FUNCTION, r);
 }
 int es_listened(es_feature_api *f, sc_listener *l) {
 	fapi *a = f->private_;

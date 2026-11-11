@@ -34,10 +34,9 @@
 //     { op: "callframe", id } -> { frame }   where the handler's latest call was made from
 // A call that gave a promise logs how it settled to "promised".
 //
-// A test feature: { name, needs?, onRead?, onCreateFunction?, early? }. Each hook logs
-// [name, hook, ...] to "hooks", then does what its value says: "log" calls next, "drop" does not,
-// "throw" throws "<name> threw", onRead "add" adds an item; onCreateFunction "drop" does not
-// pass it on. The ermine's ids: nodes n1, n2, ..., a process proc:<its start's name>
+// A test feature: { name, needs?, onRead?, early? }. Its hook logs [name, hook, ...] to "hooks",
+// then does what its value says: "log" calls next, "drop" does not, "throw" throws "<name> threw",
+// "add" adds an item. The ermine's ids: nodes n1, n2, ..., a process proc:<its start's name>
 // (createProcessId "throw": it throws "createProcessId threw").
 //
 // program: steps { do: [fn, ...args], as? }; "$x" in an arg is the name x. fn is a @ermine/system
@@ -209,11 +208,7 @@ function make(o: Request = {}): Made {
 				return next ?? `n${++n}`
 			},
 		},
-		features: [...features, {
-			name: HARNESS,
-			setup: (f) =>
-				f.onCreateFunction((n) => log("onCreateFunction", [n.kind, n.id, n.process])),
-		}],
+		features,
 		may,
 	})
 	made.hostSys = hostSystem(made.ermine)
@@ -912,7 +907,6 @@ async function answer(r: Request): Promise<Record<string, unknown>> {
 	}
 }
 
-const HARNESS = "harness"
 export const serveErmine = (additions: Additions = {}) => {
 	added = additions
 	for (const f of additions.features ?? []) named.set(f.name, f)

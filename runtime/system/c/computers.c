@@ -779,11 +779,7 @@ static int create(es_context *c, int memo, es_names *path, char **key, es_comput
 	}
 	cst_give(e->statuses, m->c, tb_string(id));
 	if (e->runs != NULL) crn_give(e->runs, m->c, tb_string(id));
-	es_created made = {.kind = memo ? "memo" : "effect", .computer = m->c, .node = nd, .id = id,
-		.process = c->node};
-	code = es_hook_create_function(e, &made);
-	int pulse = es_queue_pulse(e);
-	if (code == 0) code = pulse;
+	code = es_queue_pulse(e);
 	if (out != NULL) *out = es_handle_make(c, nd);
 	release(m);
 	return code;

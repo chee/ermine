@@ -625,8 +625,7 @@ typedef struct {
 // --- features and their hooks (features.ts) ----------
 
 typedef enum {
-	ES_ON_READ,
-	ES_ON_CREATE_FUNCTION, ES_HOOKS
+	ES_ON_READ, ES_HOOKS
 } es_hook;
 
 typedef struct {
@@ -638,22 +637,10 @@ typedef struct {
 	es_context *context;
 } es_reading;
 
-// what onCreateFunction is told: kind ("memo", "effect", "action"), the computer (NULL for an action),
-// its node, and who made it (the process's id, or the root)
-typedef struct {
-	const char *kind;
-	sc_computer *computer;
-	const es_node_data *node;
-	const char *id;
-	const char *process;
-} es_created;
-
 // the continuation of a hook: what is after it in its chain, the base last. not calling it: what the
 // hook guards does not happen. each is called with the hook's own arguments, as given or changed
 typedef struct es_read_next es_read_next;
-typedef struct es_create_next es_create_next;
 int es_next_read(es_read_next *next, const es_reading *x, const es_versions *items, es_versions *out);
-int es_next_create_function(es_create_next *next, const es_created *made);
 
 // Hooks are middleware. Each returns 0 or a code (it threw). A code is rethrown as a FeatureError
 // naming the feature and hook, except ES_PENDING, ES_STOP, a FeatureError, and a code next gave,
@@ -661,7 +648,6 @@ int es_next_create_function(es_create_next *next, const es_created *made);
 // registration.
 typedef int (*es_on_read_fn)(void *ctx, const es_reading *x, const es_versions *items,
 	es_read_next *next, es_versions *out);
-typedef int (*es_on_create_function_fn)(void *ctx, const es_created *made, es_create_next *next);
 // What a feature acts with, in its setup and its hooks. Hooks can only be added in setup
 // (ES_SETUP_ONLY). Places, processes, contexts and handles exist after setup (ES_NOT_YET before).
 // Scheduler listeners it adds are removed at close.
@@ -671,7 +657,6 @@ typedef struct es_feature_api {
 	void *private_;
 } es_feature_api;
 int es_on_read(es_feature_api *f, es_on_read_fn fn, void *ctx);
-int es_on_create_function(es_feature_api *f, es_on_create_function_fn fn, void *ctx);
 int es_api_places(es_feature_api *f, pl **out);
 int es_api_processes(es_feature_api *f, pr **out);
 int es_api_get_process_context(es_feature_api *f, pr_process *process, es_context **out);
@@ -1140,12 +1125,10 @@ es_wait *es_records_waits(es_ermine *e, size_t *n);
 // and the caller's context; for a service acting for its caller. 1, 0: none
 int es_calling(es_ermine *e, es_calling_view *out);
 
-// what the other three call. the hooks around: reads' items, a status, a created function. each is the
-// chain of that kind, the base's own last
+// what the other three call. the hook around reads' items: its chain, the base's own last
 // the entries changed, said written
 void es_commit_changed(es_ermine *e, const pl_changed *changed);
 int es_hook_read(es_ermine *e, const es_reading *x, const es_versions *items, es_versions *out);
-int es_hook_create_function(es_ermine *e, const es_created *made);
 // a write's header now: the open scope's, its frame the one open; from outside the graph, the
 // call's location (es_enter) in a frame more on top. *made: its block, for pl_hold on the entry written
 int es_header(es_ermine *e, ch_header *out, pl_made **made);

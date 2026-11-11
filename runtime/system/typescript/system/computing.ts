@@ -71,7 +71,7 @@ function makeComputer<T>(
 	act: Act<T> | undefined,
 	options: { equal?: Equal<T> },
 ): Node {
-	const { base, parts, runs, s, table, resolve } = here(inner)
+	const { base, runs, s, table, resolve } = here(inner)
 	const own = owner(inner)
 	notInAct(own, act === undefined ? "createMemo" : "createEffect")
 	const path = resolve(name)
@@ -149,13 +149,6 @@ function makeComputer<T>(
 	m.c = c
 	base.statuses.give(c, id)
 	runs.give(c, id)
-	parts.onCreateFunction?.({
-		kind: act === undefined ? "memo" : "effect",
-		computer: c,
-		node: n,
-		id,
-		process: inner.node,
-	})
 	return handle(inner, n)
 }
 

@@ -16,7 +16,7 @@ import { createGuard, target as targetOf } from "@ermine/processes/guard"
 import type { Policy, Target as Asked } from "@ermine/protect"
 import { type At, PROCESS, type ProcessContext } from "@ermine/processes"
 import { inside as stepsInside, type Process } from "@ermine/processes/start"
-import type { Computer, Scheduler, Scope } from "@ermine/reactivity"
+import type { Scheduler, Scope } from "@ermine/reactivity"
 import { ErmineError } from "./features.ts"
 import { enterScheduler, leaveScheduler } from "./registry.ts"
 import type { Handle } from "./handles.ts"
@@ -60,14 +60,6 @@ export type From = {
 	readonly [more: string]: unknown
 }
 
-export type CreatedFunction = {
-	readonly kind: "memo" | "effect" | "method"
-	readonly computer?: Computer
-	readonly node: NodeData
-	readonly id: Id
-	readonly process: Id
-}
-
 export type { At, ProcessContext }
 
 export type Parts = {
@@ -78,7 +70,6 @@ export type Parts = {
 	readonly header: () => ChangeHeader
 	readonly enter: <T>(cut: unknown, build: Location | undefined, f: () => T) => T
 	readonly queuePulse: () => void
-	readonly onCreateFunction?: (made: CreatedFunction) => void
 	readonly alive: () => void
 	// In an action's call, the caller's place; asks are made as both.
 	readonly caller?: () => { from?: Path } | undefined

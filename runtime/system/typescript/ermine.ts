@@ -53,7 +53,6 @@ import {
 	type Reading,
 } from "./features.ts"
 import {
-	type CreatedFunction,
 	createProcessContext,
 	type ErmineTable,
 	type Inner,
@@ -77,7 +76,6 @@ export { ErmineError, FeatureError } from "./features.ts"
 export type { Calling, Feature, FeatureAPI, Hook, Hooks, Reading } from "./features.ts"
 export type {
 	At,
-	CreatedFunction,
 	From,
 	Node,
 	NodeData,
@@ -343,11 +341,6 @@ function make(options: Options, undo: (() => void)[]): Ermine {
 		header,
 		enter,
 		queuePulse,
-		onCreateFunction: chain<[CreatedFunction], void>(
-			hooks.onCreateFunction,
-			"onCreateFunction",
-			() => {},
-		),
 		alive,
 	}
 	const tag = (feature: string, item: Version): Version =>

@@ -30,14 +30,6 @@ export function testFeature(
 					return next(x, items)
 				})
 			}
-			if (spec.onCreateFunction) {
-				f.onCreateFunction((made, next) => {
-					say("onCreateFunction", made.kind, made.id)
-					if (spec.onCreateFunction === "throw") boom()
-					if (spec.onCreateFunction === "drop") return
-					next(made)
-				})
-			}
 		},
 	}
 }

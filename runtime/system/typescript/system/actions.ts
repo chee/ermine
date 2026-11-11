@@ -59,7 +59,6 @@ export function createActionAs(
 	})
 	keepAction(inner, own, made)
 	const n: NodeData = { path, part: "value" }
-	parts.onCreateFunction?.({ kind: "method", node: n, id: made, process: inner.node })
 	return handle(inner, n)
 }
 

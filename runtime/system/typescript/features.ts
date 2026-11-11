@@ -7,15 +7,14 @@
 //     name: "log",
 //     needs: [],
 //     setup(feature) {
-//       feature.onCreateFunction((made, next) => {
-//         console.log(made.kind, made.id)
-//         next(made)
+//       feature.onRead((x, items, next) => {
+//         console.log(x.id)
+//         return next(x, items)
 //       })
 //     },
 //   }
 //
 //   onRead(x, items, next)         adds items to what reads show
-//   onCreateFunction(made, next)   each memo, effect and action made
 //
 // A hook that throws is rethrown as a FeatureError naming the feature and hook. PENDING and
 // whatever next threw pass through, and a Refusal passes with its feature and hook named.
@@ -27,14 +26,7 @@ import type { Call } from "./calls.ts"
 import { PENDING, type Scheduler } from "@ermine/reactivity"
 import type { Key } from "@ermine/graph/table"
 import { Refusal } from "@ermine/processes/guard"
-import type {
-	CreatedFunction,
-	ErmineTable,
-	Node,
-	NodeData,
-	ProcessContext,
-	Version,
-} from "./context.ts"
+import type { ErmineTable, Node, NodeData, ProcessContext, Version } from "./context.ts"
 import type { ChangeView } from "./system/shapes.ts"
 
 export type Code =
@@ -91,14 +83,12 @@ export type Hooks = {
 		items: readonly Version[],
 		next: (x: Reading, items: readonly Version[]) => readonly Version[],
 	) => readonly Version[]
-	onCreateFunction: (made: CreatedFunction, next: (made: CreatedFunction) => void) => void
 }
 export type Errored = (error: unknown, fn: string | undefined) => unknown
 export type Hook = keyof Hooks
 // Every hook is listed once, so a hook added to Hooks and missed here is a type error.
 const HOOK_KEYS: Record<Hook, true> = {
 	onRead: true,
-	onCreateFunction: true,
 }
 export const HOOKS = Object.keys(HOOK_KEYS) as readonly Hook[]
 
@@ -108,7 +98,6 @@ export type FeatureAPI = {
 	readonly places: Places
 	readonly processes: Processes
 	onRead: (hook: Hooks["onRead"]) => void
-	onCreateFunction: (hook: Hooks["onCreateFunction"]) => void
 	// The host's process context, or a running process's. To act as one, wrap code in
 	// context.within(() => ...). Not available before setup finishes.
 	getProcessContext: {
