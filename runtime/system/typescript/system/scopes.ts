@@ -73,7 +73,7 @@ export function teardown(inner: Inner, own: Scope, fn: (why: Why) => unknown) {
 	const { base, s, scope } = here(inner)
 	s.registerTeardown(own, () => {
 		const why = base.whys.get(inner.node) ?? (scope.state !== "alive" ? "ended" : "replaced")
-		base.torn(own, why, fn)
+		fn(why)
 	})
 }
 

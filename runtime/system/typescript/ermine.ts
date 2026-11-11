@@ -28,9 +28,9 @@ import { enterScheduler, leaveScheduler, registerScheduler, registerScope } from
 import { isHandle, mint } from "./handles.ts"
 import { callFrame, createChangeHeader, locationsHere, outsideAt } from "@ermine/places/header"
 import type { Location } from "@ermine/changeable/stacktrace"
-import { createStatus, STATUS, TABLE as STATUS_TABLE } from "@ermine/processes/status"
+import { createStatus, STATUS } from "@ermine/processes/status"
 import type { Policy } from "@ermine/protect"
-import { idAt, PROCESS, processes as rows } from "@ermine/processes"
+import { processes as rows } from "@ermine/processes"
 import { createRuns, type Run } from "@ermine/processes/runs"
 import { createScopeNodes } from "@ermine/processes/scopes"
 import {
@@ -55,7 +55,6 @@ import {
 	type IdKind,
 	install,
 	type Reading,
-	type Recorded,
 	type Shown,
 } from "./features.ts"
 import {
@@ -70,7 +69,6 @@ import {
 	type Version,
 	whole,
 	type Why,
-	type Write,
 } from "./context.ts"
 import { seenIn, viewOf } from "./system/addressing.ts"
 import type { Base } from "./system/base.ts"
@@ -89,8 +87,6 @@ export type {
 	Hook,
 	Hooks,
 	Reading,
-	Recorded,
-	Slot,
 } from "./features.ts"
 export type {
 	At,
@@ -391,29 +387,10 @@ function make(options: Options, undo: (() => void)[]): Ermine {
 		) => [x2 as never, fresh(feature, items, items2 as Version[])],
 		(feature, [, items], inner, out) => fresh(feature, inner ?? items, out),
 	)
-	const torn = chain<[Scope, Why, (why: Why) => unknown], void>(
-		hooks.onTeardown.map((h) => ({
-			feature: h.feature,
-			fn: (sc: Scope, why: Why, _fn: unknown, next: (sc: Scope, why: Why) => void) =>
-				h.fn(sc, why, next),
-		})),
-		"onTeardown",
-		(_sc, why, fn) => void fn(why),
-		(_f, [, , fn], [sc, why]) => [sc as Scope, why as Why, fn],
-	)
 	const statused = chain<[Asked, Status], Status>(
 		hooks.onStatus,
 		"onStatus",
 		(_x, st) => st,
-	)
-	const recorded = chain<[Recorded, (r: Recorded) => void], void>(
-		hooks.onRecord.map((h) => ({
-			feature: h.feature,
-			fn: (r: Recorded, _keep: unknown, next: (r: Recorded) => void) => h.fn(r, next),
-		})),
-		"onRecord",
-		(r, keep) => keep(r),
-		(_f, [, keep], [r]) => [r as Recorded, keep],
 	)
 
 	const hostInner = createProcessContext(parts, {
@@ -465,19 +442,13 @@ function make(options: Options, undo: (() => void)[]): Ermine {
 		places: { describe: p.describe, watchAll: p.watchAll },
 		table,
 		scheduler: s,
-		hold: (id, run, keep) =>
-			recorded({ id, run }, (r) => {
-				if (r.run !== undefined) keep(r.run)
-			}),
+		hold: (_id, run, keep) => keep(run),
 	})
 	const calls = createCalls({
 		scheduler: s,
 		places: p,
 		table,
-		hold: (id, call, keep) =>
-			recorded({ id, call }, (r) => {
-				if (r.call !== undefined) keep(r.call)
-			}),
+		hold: (_id, call, keep) => keep(call),
 	})
 	undo.push(() => statuses.stop(), () => runs.stop(), () => calls.stop())
 	const contexts = new Map<Id, Inner>()
@@ -508,7 +479,6 @@ function make(options: Options, undo: (() => void)[]): Ermine {
 		changes: new WeakMap(),
 		enter,
 		shown,
-		torn,
 		statused,
 	}
 

@@ -7,22 +7,19 @@
 //     name: "log",
 //     needs: [],
 //     setup(feature) {
-//       feature.onRecord((record, next) => {
-//         console.log(record.id)
-//         next(record)
+//       feature.onError((error, fn, next) => {
+//         console.log(fn, error)
+//         return next(error, fn)
 //       })
 //     },
 //   }
 //
 //   onRead(x, items, next)         adds items to what reads show
-//   onTeardown(scope, why, next)   each teardown as its scope goes
-//   onRecord(record, next)         each run's and send's record
 //   onStatus(x, status, next)      what status(x) shows; not called for a node that is not there
 //   onId(kind, next)               each new id, kind "node" or "process"
 //   onSchedule(pulse, next)        each ask for a pulse; not calling next means the hook runs it
 //   onCreateFunction(made, next)   each memo, effect and action made
 //   onError(error, fn, next)       each error ermine throws
-//   reserveSlot()                  per-process state only this feature reaches
 //
 // A hook that throws is rethrown as a FeatureError naming the feature and hook. PENDING and
 // whatever next threw pass through, and a Refusal passes with its feature and hook named.
@@ -31,8 +28,7 @@ import type { Key as Step } from "@ermine/changeable/apply"
 import type { Id, Path, Places } from "@ermine/places"
 import type { Process, Processes } from "@ermine/processes/start"
 import type { Call } from "./calls.ts"
-import type { Run } from "@ermine/processes/runs"
-import { PENDING, type Scheduler, type Scope } from "@ermine/reactivity"
+import { PENDING, type Scheduler } from "@ermine/reactivity"
 import type { Key } from "@ermine/graph/table"
 import { Refusal } from "@ermine/processes/guard"
 import type {
@@ -42,7 +38,6 @@ import type {
 	NodeData,
 	ProcessContext,
 	Version,
-	Why,
 } from "./context.ts"
 import type { ChangeView, Status } from "./system/shapes.ts"
 
@@ -100,18 +95,12 @@ export type Asked = {
 	readonly computer: boolean
 }
 
-export type Recorded =
-	| { readonly id: Id; readonly run: Run; readonly call?: undefined }
-	| { readonly id: Id; readonly call: Call; readonly run?: undefined }
-
 export type Hooks = {
 	onRead: (
 		x: Reading,
 		items: readonly Version[],
 		next: (x: Reading, items: readonly Version[]) => readonly Version[],
 	) => readonly Version[]
-	onTeardown: (scope: Scope, why: Why, next: (scope: Scope, why: Why) => void) => void
-	onRecord: (record: Recorded, next: (record: Recorded) => void) => void
 	onStatus: (x: Asked, status: Status, next: (x: Asked, status: Status) => Status) => Status
 	onId: (kind: IdKind, next: (kind: IdKind) => string) => string
 	onSchedule: (pulse: () => void, next: (pulse: () => void) => void) => void
@@ -124,8 +113,6 @@ export type Hook = keyof Hooks
 // Every hook is listed once, so a hook added to Hooks and missed here is a type error.
 const HOOK_KEYS: Record<Hook, true> = {
 	onRead: true,
-	onTeardown: true,
-	onRecord: true,
 	onStatus: true,
 	onId: true,
 	onSchedule: true,
@@ -134,25 +121,17 @@ const HOOK_KEYS: Record<Hook, true> = {
 }
 export const HOOKS = Object.keys(HOOK_KEYS) as readonly Hook[]
 
-export type Slot<T> = {
-	get: (context: ProcessContext) => T | undefined
-	set: (context: ProcessContext, value: T) => void
-}
-
 export type FeatureAPI = {
 	readonly scheduler: Scheduler
 	readonly table: Pick<ErmineTable, "get" | "who">
 	readonly places: Places
 	readonly processes: Processes
 	onRead: (hook: Hooks["onRead"]) => void
-	onTeardown: (hook: Hooks["onTeardown"]) => void
-	onRecord: (hook: Hooks["onRecord"]) => void
 	onStatus: (hook: Hooks["onStatus"]) => void
 	onId: (hook: Hooks["onId"]) => void
 	onSchedule: (hook: Hooks["onSchedule"]) => void
 	onCreateFunction: (hook: Hooks["onCreateFunction"]) => void
 	onError: (hook: Hooks["onError"]) => void
-	reserveSlot: <T>() => Slot<T>
 	// The host's process context, or a running process's. To act as one, wrap code in
 	// context.within(() => ...). Not available before setup finishes.
 	getProcessContext: {
@@ -285,11 +264,6 @@ export function install(
 			calling: () => got("calling", parts.calling)(),
 			viewOf: (change) => got("viewOf", parts.viewOf)(change),
 			newId: () => got("newId", parts.newId)(),
-			reserveSlot: <T>(): Slot<T> => {
-				if (!open) throw new ErmineError("setup-only", `${f.name}'s reserveSlot`)
-				const held = new WeakMap<ProcessContext, T>()
-				return { get: (o) => held.get(o), set: (o, v) => void held.set(o, v) }
-			},
 		}
 		f.setup(api)
 		shown.push({ name: f.name, needs: [...(f.needs ?? [])], hooks: used })

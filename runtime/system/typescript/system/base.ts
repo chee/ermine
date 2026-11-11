@@ -3,7 +3,6 @@ import type { Id, Path, Places } from "@ermine/places"
 import type { Index } from "@ermine/places/children"
 import type { Runs } from "@ermine/processes/runs"
 import type { Computer, Frame, Scope } from "@ermine/reactivity"
-import type { Key } from "@ermine/graph/table"
 import type { Location } from "@ermine/changeable/stacktrace"
 import type { Calls } from "../calls.ts"
 import type { Asked, Errored, Reading } from "../features.ts"
@@ -51,6 +50,5 @@ export type Base = {
 	readonly pulse: () => void
 	readonly enter: Parts["enter"]
 	readonly shown: (x: Reading, items: readonly Version[]) => readonly Version[]
-	readonly torn: (scope: Scope, why: Why, fn: (why: Why) => unknown) => void
 	readonly statused: (x: Asked, status: Status) => Status
 }
