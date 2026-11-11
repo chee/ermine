@@ -130,7 +130,7 @@ int es_fail_ermine(int code, const char *fmt, ...) {
 
 
 static const char *const HOOK_NAMES[ES_HOOKS] = {
-	"onRead", "onId", "onCreateFunction",
+	"onRead", "onCreateFunction",
 };
 
 static const char PART_VALUE[] = "value";
@@ -188,7 +188,6 @@ typedef struct {
 	const char *feature;
 	union {
 		es_on_read_fn read;
-		es_on_id_fn id;
 		es_on_create_function_fn create_function;
 	} fn;
 	void *ctx;
@@ -229,12 +228,16 @@ struct es_hosting {
 	int owns_table;
 	int adding, made, queued;
 	int no_autopulse;
-	// the process ids when no hook gives one
+	int (*create_id)(void *ctx, char **out);
+	void *create_id_ctx;
+	int (*create_process_id)(void *ctx, char **out);
+	void *create_process_id_ctx;
+	// the process ids when no create_process_id is given
 	unsigned char boot[8];
 	unsigned long processes_made;
 	int (*format)(void *ctx, int code, const char *fn);
 	void *format_ctx;
-	// the next process's id, made by the hooks before pr_start asks for it
+	// the next process's id, made before pr_start asks for it
 	char *pid;
 	hook_list hooks[ES_HOOKS];
 	fapi **apis;
@@ -383,9 +386,7 @@ char *es_uuidv7(void) {
 	return s;
 }
 
-static char *base_id(es_ermine *e, const char *kind) {
-	if (strcmp(kind, "process") != 0) return es_uuidv7();
-	hosting *h = host_of(e);
+static char *base_process_id(hosting *h) {
 	size_t size = sizeof "proc:" + 16 + 1 + 20;
 	char *id = es_alloc(size);
 	int at = snprintf(id, size, "proc:");
@@ -586,33 +587,28 @@ int es_hook_read(es_ermine *e, const es_reading *x, const es_versions *items, es
 }
 
 
-struct es_id_next {
-	es_ermine *e;
-	size_t i;
-	int passed;
-};
-
-static int id_at(es_ermine *e, size_t i, const char *kind, char **out) {
-	hook_list *l = &host_of(e)->hooks[ES_ON_ID];
+static int given_id(int (*fn)(void *ctx, char **out), void *ctx, const char *name, char **out) {
 	*out = NULL;
-	if (i == l->n) {
-		*out = base_id(e, kind);
-		return 0;
+	int code = fn(ctx, out);
+	if (code == 0 && *out == NULL) return es_fail(ES_FAILED, "%s gave no id", name);
+	if (code != 0) {
+		free(*out);
+		*out = NULL;
 	}
-	hook_rec *r = &l->items[i];
-	es_id_next next = {e, i, 0};
-	int code = own(r->feature, "onId", r->fn.id(r->ctx, kind, &next, out), next.passed);
-	if (code == 0 && *out == NULL) code = es_fail_feature(r->feature, "onId", "gave no id");
 	return code;
 }
 
-int es_next_id(es_id_next *next, const char *kind, char **out) {
-	int code = id_at(next->e, next->i + 1, kind, out);
-	next->passed = code;
-	return code;
+int es_make_id(es_ermine *e, char **out) {
+	hosting *h = host_of(e);
+	if (h->create_id == NULL) return *out = es_uuidv7(), 0;
+	return given_id(h->create_id, h->create_id_ctx, "create_id", out);
 }
 
-int es_make_id(es_ermine *e, const char *kind, char **out) { return id_at(e, 0, kind, out); }
+int es_make_process_id(es_ermine *e, char **out) {
+	hosting *h = host_of(e);
+	if (h->create_process_id == NULL) return *out = base_process_id(h), 0;
+	return given_id(h->create_process_id, h->create_process_id_ctx, "create_process_id", out);
+}
 
 
 struct es_create_next {
@@ -672,11 +668,6 @@ int es_on_read(es_feature_api *f, es_on_read_fn fn, void *ctx) {
 	r.fn.read = fn;
 	return add_hook(f, ES_ON_READ, r);
 }
-int es_on_id(es_feature_api *f, es_on_id_fn fn, void *ctx) {
-	hook_rec r = {.ctx = ctx};
-	r.fn.id = fn;
-	return add_hook(f, ES_ON_ID, r);
-}
 int es_on_create_function(es_feature_api *f, es_on_create_function_fn fn, void *ctx) {
 	hook_rec r = {.ctx = ctx};
 	r.fn.create_function = fn;
@@ -705,7 +696,7 @@ int es_api_new_id(es_feature_api *f, char **out) {
 	fapi *a = f->private_;
 	*out = NULL;
 	TRY(after_setup("newId", a->e->places != NULL));
-	return es_make_id(a->e, "node", out);
+	return es_make_id(a->e, out);
 }
 
 int es_api_processes(es_feature_api *f, pr **out) {
@@ -998,6 +989,10 @@ int es_create(const es_options *given, es_ermine **out) {
 	h->no_autopulse = o->no_autopulse;
 	h->format = o->error_formatter;
 	h->format_ctx = o->error_formatter_ctx;
+	h->create_id = o->create_id;
+	h->create_id_ctx = o->create_id_ctx;
+	h->create_process_id = o->create_process_id;
+	h->create_process_id_ctx = o->create_process_id_ctx;
 	PF_RANDOM(h->boot, sizeof h->boot);
 	int code = 0;
 
@@ -1012,7 +1007,7 @@ int es_create(const es_options *given, es_ermine **out) {
 	h->adding = 0;
 
 	if (o->root != NULL) e->root = es_dup(o->root);
-	else if ((code = es_make_id(e, "node", &e->root)) != 0) goto fail;
+	else if ((code = es_make_id(e, &e->root)) != 0) goto fail;
 	e->places = pl_new();
 	e->paths = pt_new();
 	pr_processes_init(&h->rows_walk, tb_string(e->root));
@@ -1310,7 +1305,7 @@ static int start_under(es_ermine *e, es_program fn, void *ctx, const char *const
 	es_started **out, es_refused *refused, const ch_location *site) {
 	int child = starter != NULL;
 	hosting *h = host_of(e);
-	int failed = es_make_id(e, "process", &h->pid);
+	int failed = es_make_process_id(e, &h->pid);
 	if (failed) return failed;
 	proc_rec *rec = es_alloc(sizeof *rec);
 	rec->e = e;

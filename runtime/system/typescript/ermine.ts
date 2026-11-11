@@ -36,7 +36,6 @@ import {
 	pathsOf,
 	type Process,
 	type Processes,
-	processIds,
 	type Refused,
 } from "@ermine/processes/start"
 import { createScheduler, type Info, PENDING, type Scheduler, type Scope } from "@ermine/reactivity"
@@ -50,7 +49,6 @@ import {
 	ErmineError,
 	type Errored,
 	type Feature,
-	type IdKind,
 	install,
 	type Reading,
 } from "./features.ts"
@@ -122,6 +120,10 @@ export type Options = {
 	errorFormatter?: (error: unknown, fn: string | undefined) => unknown
 	// The clock every change's time is taken from, ms since 1970. Defaults to Date.now.
 	now?: () => number
+	// Each new node's id, and each new process's. What throws fails what wanted the id. Defaults:
+	// uuidv7, and proc:<boot>-<n>.
+	createId?: () => string
+	createProcessId?: () => string
 }
 
 export type StartOptions = {
@@ -262,13 +264,7 @@ function make(options: Options, undo: (() => void)[]): Ermine {
 	// Hooks and slots are added in setup only: every chain below is built from them as they are now.
 	features.done()
 	const { hooks } = features
-	const processId = processIds()
-	const idFor = chain<[IdKind], string>(
-		hooks.onId,
-		"onId",
-		(kind) => kind === "process" ? processId() : uuidv7(),
-	)
-	const newId = () => idFor("node")
+	const newId = options.createId ?? uuidv7
 	ids = newId
 	const format = options.errorFormatter
 	const errored: Errored = format === undefined ? (e) => e : (e, fn) => format(e, fn)
@@ -407,7 +403,7 @@ function make(options: Options, undo: (() => void)[]): Ermine {
 		owner,
 		write: hostInner.writer,
 		statuses,
-		id: () => idFor("process"),
+		id: options.createProcessId,
 		now: options.now,
 	})
 	const runs = createRuns({

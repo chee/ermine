@@ -1,6 +1,6 @@
 // The clock es_create is given: every change's time is read from it, for a host write, a patch, a
-// process started and the nodes it makes. And the ids it is given: the root and a
-// feature's ids made through onId. make test-clock-system, test-check-clock-system.
+// process started and the nodes it makes. And the ids it is given: the root and the
+// ids made through create_id and create_process_id. make test-clock-system, test-check-clock-system.
 #include "ermine.h"
 
 #include <stdio.h>
@@ -28,15 +28,12 @@ typedef struct {
 	char ids[64][16];
 	int n;
 } ids_t;
-static int next_id(void *ctx, const char *kind, es_id_next *next, char **out) {
+static int next_id(void *ctx, char **out) {
 	ids_t *t = ctx;
-	(void)kind;
-	(void)next;
 	snprintf(t->ids[t->n], sizeof t->ids[0], "n%d", t->n);
 	*out = es_dup(t->ids[t->n++]);
 	return 0;
 }
-static int ids_setup(void *ctx, es_feature_api *f) { return es_on_id(f, next_id, ctx); }
 
 static es_out setup(es_context *c, void *ctx) {
 	(void)ctx;
@@ -64,9 +61,8 @@ static int times_are_the_clock(es_ermine *e, ids_t *t) {
 static void every_change_takes_the_clock(void) {
 	ids_t t = {0};
 	es_ermine *e = NULL;
-	es_feature ids = {.name = "ids", .setup = ids_setup, .ctx = &t};
-	const es_feature *list[] = {&ids};
-	CHECK(es_create(&(es_options){.features = list, .nfeatures = 1, .now = fixed}, &e) == 0);
+	CHECK(es_create(&(es_options){.now = fixed, .create_id = next_id, .create_id_ctx = &t,
+		.create_process_id = next_id, .create_process_id_ctx = &t}, &e) == 0);
 	es_context *host = es_host_context(e);
 	op_value *zero = op_num(0);
 	es_handle *h;
@@ -96,7 +92,7 @@ static int api_setup(void *ctx, es_feature_api *f) {
 	char *id = NULL;
 	a->early = es_api_new_id(f, &id);
 	a->api = f;
-	return es_on_id(f, next_id, &a->t);
+	return 0;
 }
 
 static void the_host_gives_its_ids(void) {
@@ -104,7 +100,7 @@ static void the_host_gives_its_ids(void) {
 	es_ermine *e = NULL;
 	es_feature ids = {.name = "ids", .setup = api_setup, .ctx = &a};
 	const es_feature *list[] = {&ids};
-	es_options o = {.features = list, .nfeatures = 1, .root = "R"};
+	es_options o = {.features = list, .nfeatures = 1, .root = "R", .create_id = next_id, .create_id_ctx = &a.t};
 	CHECK(es_create(&o, &e) == 0);
 	CHECK(a.early == ES_NOT_YET);
 	CHECK(strcmp(e->root, "R") == 0);

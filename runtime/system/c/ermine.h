@@ -626,7 +626,7 @@ typedef struct {
 
 typedef enum {
 	ES_ON_READ,
-	ES_ON_ID, ES_ON_CREATE_FUNCTION, ES_HOOKS
+	ES_ON_CREATE_FUNCTION, ES_HOOKS
 } es_hook;
 
 typedef struct {
@@ -651,11 +651,8 @@ typedef struct {
 // the continuation of a hook: what is after it in its chain, the base last. not calling it: what the
 // hook guards does not happen. each is called with the hook's own arguments, as given or changed
 typedef struct es_read_next es_read_next;
-typedef struct es_id_next es_id_next;
 typedef struct es_create_next es_create_next;
 int es_next_read(es_read_next *next, const es_reading *x, const es_versions *items, es_versions *out);
-// *out: an id, new (the hook that does not pass next's on frees it)
-int es_next_id(es_id_next *next, const char *kind, char **out);
 int es_next_create_function(es_create_next *next, const es_created *made);
 
 // Hooks are middleware. Each returns 0 or a code (it threw). A code is rethrown as a FeatureError
@@ -664,8 +661,6 @@ int es_next_create_function(es_create_next *next, const es_created *made);
 // registration.
 typedef int (*es_on_read_fn)(void *ctx, const es_reading *x, const es_versions *items,
 	es_read_next *next, es_versions *out);
-// kind: "node" or "process". *out: the id, new (malloc'd), next's or the hook's own
-typedef int (*es_on_id_fn)(void *ctx, const char *kind, es_id_next *next, char **out);
 typedef int (*es_on_create_function_fn)(void *ctx, const es_created *made, es_create_next *next);
 // What a feature acts with, in its setup and its hooks. Hooks can only be added in setup
 // (ES_SETUP_ONLY). Places, processes, contexts and handles exist after setup (ES_NOT_YET before).
@@ -676,7 +671,6 @@ typedef struct es_feature_api {
 	void *private_;
 } es_feature_api;
 int es_on_read(es_feature_api *f, es_on_read_fn fn, void *ctx);
-int es_on_id(es_feature_api *f, es_on_id_fn fn, void *ctx);
 int es_on_create_function(es_feature_api *f, es_on_create_function_fn fn, void *ctx);
 int es_api_places(es_feature_api *f, pl **out);
 int es_api_processes(es_feature_api *f, pr **out);
@@ -684,7 +678,7 @@ int es_api_get_process_context(es_feature_api *f, pr_process *process, es_contex
 int es_api_handle_of(es_feature_api *f, const es_node_data *node, es_handle **out);
 int es_api_data_of(es_feature_api *f, const void *x, es_node_data *node);
 int es_api_seen(es_feature_api *f, const char *id, es_context *context, es_names *out);
-// a node id made as the ermine makes them, through onId; free it. ES_NOT_YET during setup
+// a node id made as the ermine makes them (create_id); free it. ES_NOT_YET during setup
 int es_api_new_id(es_feature_api *f, char **out);
 // 0 and *out when the node is reached from the root; ES_NOTHING_THERE (out empty) when nothing is
 // (the root is a path of no names: tell them apart by the code)
@@ -729,6 +723,12 @@ typedef struct {
 	// es_fail_text does. NULL: errors pass as they are
 	int (*error_formatter)(void *ctx, int code, const char *fn);
 	void *error_formatter_ctx;
+	// each new node's id, and each new process's: *out new (malloc'd). A code fails what wanted the
+	// id. NULL: uuidv7 for nodes, proc:<boot>-<n> for processes
+	int (*create_id)(void *ctx, char **out);
+	void *create_id_ctx;
+	int (*create_process_id)(void *ctx, char **out);
+	void *create_process_id_ctx;
 } es_options;
 
 // The base: what one ermine's contexts share. Made by es_create. The other files keep their state
@@ -1157,8 +1157,9 @@ int es_outside(es_ermine *e, op_value **locations);
 int es_alive(es_ermine *e);
 // asks for a pulse: it runs at once (C has no microtask); with no_autopulse, nothing happens
 int es_queue_pulse(es_ermine *e);
-// a new id of kind "node" or "process", through the onId hooks
-int es_make_id(es_ermine *e, const char *kind, char **out);
+// a new node's id and a new process's, from create_id and create_process_id
+int es_make_id(es_ermine *e, char **out);
+int es_make_process_id(es_ermine *e, char **out);
 // runs the error formatter over a code a public function is about to give (0, pending, stop and
 // taken pass as they are). The code to give. ES_GO wraps a function's work: a call inside a program
 // is its own, as a go() is in TypeScript

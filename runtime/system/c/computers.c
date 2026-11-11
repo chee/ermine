@@ -735,7 +735,7 @@ static int create(es_context *c, int memo, es_names *path, char **key, es_comput
 	sc_scope *own = es_owner(c);
 	(void)site;
 	char *id;
-	int failed = es_make_id(e, "node", &id);
+	int failed = es_make_id(e, &id);
 	if (failed) return failed;
 	placing p = {c, path->names, path->n, id, node_above(sc_scope_frame(own))};
 	int code = es_inside(c, place_node, &p);

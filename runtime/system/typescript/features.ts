@@ -15,7 +15,6 @@
 //   }
 //
 //   onRead(x, items, next)         adds items to what reads show
-//   onId(kind, next)               each new id, kind "node" or "process"
 //   onCreateFunction(made, next)   each memo, effect and action made
 //
 // A hook that throws is rethrown as a FeatureError naming the feature and hook. PENDING and
@@ -92,16 +91,13 @@ export type Hooks = {
 		items: readonly Version[],
 		next: (x: Reading, items: readonly Version[]) => readonly Version[],
 	) => readonly Version[]
-	onId: (kind: IdKind, next: (kind: IdKind) => string) => string
 	onCreateFunction: (made: CreatedFunction, next: (made: CreatedFunction) => void) => void
 }
 export type Errored = (error: unknown, fn: string | undefined) => unknown
-export type IdKind = "node" | "process"
 export type Hook = keyof Hooks
 // Every hook is listed once, so a hook added to Hooks and missed here is a type error.
 const HOOK_KEYS: Record<Hook, true> = {
 	onRead: true,
-	onId: true,
 	onCreateFunction: true,
 }
 export const HOOKS = Object.keys(HOOK_KEYS) as readonly Hook[]
@@ -112,7 +108,6 @@ export type FeatureAPI = {
 	readonly places: Places
 	readonly processes: Processes
 	onRead: (hook: Hooks["onRead"]) => void
-	onId: (hook: Hooks["onId"]) => void
 	onCreateFunction: (hook: Hooks["onCreateFunction"]) => void
 	// The host's process context, or a running process's. To act as one, wrap code in
 	// context.within(() => ...). Not available before setup finishes.
@@ -129,7 +124,7 @@ export type FeatureAPI = {
 	calling: () => Calling | undefined
 	// pipe-extension: core gap. A change as a process is shown it, so explain can take it back.
 	viewOf: (change: ChangeHeader) => ChangeView
-	// A node id made as the ermine makes them, through onId. Not available before setup finishes.
+	// A node id made as the ermine makes them (createId). Not available before setup finishes.
 	newId: () => string
 }
 

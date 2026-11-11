@@ -1,0 +1,22 @@
+{
+	"title": "a createProcessId that throws: the start fails with what it threw, and nothing is made with another id instead",
+	"steps": [
+		{
+			"op": "ermine",
+			"createProcessId": "throw",
+			"expect": {}
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": { "error": "Error: createProcessId threw" }
+		}
+	]
+}

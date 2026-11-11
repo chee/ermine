@@ -781,7 +781,7 @@ int es_build(es_context *c, const char *const *path, size_t npath, const op_valu
 	*out = NULL;
 	if (npath == 0) return places_fail(ES_ALREADY_THERE, "/");
 	char *id = NULL;
-	int code = given != NULL ? (id = es_dup(given), 0) : es_make_id(e, "node", &id);
+	int code = given != NULL ? (id = es_dup(given), 0) : es_make_id(e, &id);
 	if (code) return code;
 	char *parent = es_dup(pl_root(c->places).string);
 	for (size_t i = 0; i + 1 < npath && !code; i++) {
@@ -794,7 +794,7 @@ int es_build(es_context *c, const char *const *path, size_t npath, const op_valu
 			continue;
 		}
 		char *folder;
-		code = es_make_id(e, "node", &folder);
+		code = es_make_id(e, &folder);
 		if (code) break;
 		code = es_place_under(c, parent, path[i], folder, path, i + 1);
 		free(parent);
@@ -980,12 +980,12 @@ static int create_node_at_body(es_context *c, es_at folder, const op_value *valu
 	es_ermine *e = c->ermine;
 	if (out != NULL) *out = NULL;
 	char *id, *name;
-	int code = es_make_id(e, "node", &id);
+	int code = es_make_id(e, &id);
 	if (code) return code;
 	creating s = {.c = c, .value = value, .id = id};
 	code = es_resolve(c, folder, &s.path);
 	if (code) return free(id), code;
-	code = es_make_id(e, "node", &name);
+	code = es_make_id(e, &name);
 	if (code) return free(id), es_names_free(&s.path), code;
 	names_add(&s.path, name);
 	free(name);

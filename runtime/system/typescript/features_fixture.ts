@@ -30,15 +30,6 @@ export function testFeature(
 					return next(x, items)
 				})
 			}
-			if (spec.onId) {
-				f.onId((kind, next) => {
-					say("onId", kind)
-					if (spec.onId === "throw") boom()
-					if (spec.onId === "throw-process" && kind === "process") boom()
-					const id = next(kind)
-					return spec.onId === "wrap" ? `${name}-${id}` : id
-				})
-			}
 			if (spec.onCreateFunction) {
 				f.onCreateFunction((made, next) => {
 					say("onCreateFunction", made.kind, made.id)

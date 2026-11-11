@@ -87,7 +87,7 @@ typedef struct {
 	size_t nspent, capspent;
 	char *next, *pending;
 	long counter;
-	int uuid;
+	int uuid, process_id_throws;
 	deny_t *deny;
 	size_t ndeny;
 	pr_policy *policy;
@@ -1855,18 +1855,24 @@ static int expr(sys_t sys, env_t *env, const op_value *e, op_value **out) {
 
 // --- the world's pieces ----------
 
-// the harness's own feature: ids "n1", ..., or the name a start gave; one pulse run after a
-// request; the functions made
+// the harness's ids: nodes "n1", ..., a process the name its start gave; its own feature: the
+// functions made
 #define HARNESS "harness"
-static int harness_id(void *ctx, const char *kind, es_id_next *next, char **out) {
+static int harness_process_id(void *ctx, char **out) {
 	(void)ctx;
-	(void)kind;
-	(void)next;
+	if (W->process_id_throws) return es_fail_text("createProcessId threw");
 	if (W->next != NULL) {
 		*out = W->next;
 		W->next = NULL;
 		return 0;
 	}
+	char id[32];
+	snprintf(id, sizeof id, "n%ld", ++W->counter);
+	*out = es_dup(id);
+	return 0;
+}
+static int harness_id(void *ctx, char **out) {
+	(void)ctx;
 	char id[32];
 	snprintf(id, sizeof id, "n%ld", ++W->counter);
 	*out = es_dup(id);
@@ -1893,7 +1899,6 @@ static int harness_created(void *ctx, const es_created *made, es_create_next *ne
 static int harness_setup(void *ctx, es_feature_api *f) {
 	(void)ctx;
 	TRY(es_on_create_function(f, harness_created, NULL));
-	if (!W->uuid) TRY(es_on_id(f, harness_id, NULL));
 	return 0;
 }
 static const es_feature harness_feature = {.name = HARNESS, .setup = harness_setup};
@@ -1964,20 +1969,6 @@ static int tf_read(void *ctx, const es_reading *x, const es_versions *items, es_
 	}
 	return es_next_read(next, x, items, out);
 }
-static int tf_id(void *ctx, const char *kind, es_id_next *next, char **out) {
-	tf_t *t = ctx;
-	say(t, "onId", kind, NULL, NULL);
-	if (is_how(t, "onId", "throw")) return boom(t);
-	if (is_how(t, "onId", "throw-process") && strcmp(kind, "process") == 0) return boom(t);
-	TRY(es_next_id(next, kind, out));
-	if (is_how(t, "onId", "wrap")) {
-		char *s = es_alloc(strlen(t->name) + strlen(*out) + 2);
-		sprintf(s, "%s-%s", t->name, *out);
-		free(*out);
-		*out = s;
-	}
-	return 0;
-}
 static int tf_create_function(void *ctx, const es_created *made, es_create_next *next) {
 	tf_t *t = ctx;
 	say(t, "onCreateFunction", strcmp(made->kind, "action") == 0 ? "method" : made->kind, made->id, NULL);
@@ -2013,7 +2004,6 @@ static int tf_setup(void *ctx, es_feature_api *f) {
 		TRY(es_api_places(f, &places));
 	}
 	if (flag(t->spec, "onRead")) TRY(es_on_read(f, tf_read, t));
-	if (flag(t->spec, "onId")) TRY(es_on_id(f, tf_id, t));
 	if (flag(t->spec, "onCreateFunction")) TRY(es_on_create_function(f, tf_create_function, t));
 	return 0;
 }
@@ -2099,6 +2089,7 @@ static int make(const op_value *r, world_t *before) {
 	size_t nfeatures = features != NULL && features->type == OP_LIST ? features->count : 0;
 	const es_feature **list = owned_alloc((nfeatures + 2) * sizeof *list);
 	w->uuid = flag(r, "uuid");
+	w->process_id_throws = text(r, "createProcessId") != NULL && strcmp(text(r, "createProcessId"), "throw") == 0;
 	for (size_t i = 0; i < nfeatures; i++) TRY(feature_of(features->items[i], &list[i]));
 	if (deny != NULL && deny->type == OP_LIST) {
 		w->deny = owned_alloc((deny->count + 1) * sizeof *w->deny);
@@ -2118,6 +2109,8 @@ static int make(const op_value *r, world_t *before) {
 	es_options o = {.features = list, .nfeatures = nfeatures + 1, .may = w->policy, .table = w->stored, .root = "R",
 		.info = &w->info, .ninfo = 1,
 		.user_activated = world_user_activated, .no_autopulse = 1};
+	if (!w->uuid || w->process_id_throws) o.create_process_id = harness_process_id;
+	if (!w->uuid) o.create_id = harness_id;
 	const char *how = text(r, "errorFormatter");
 	if (how != NULL) {
 		o.error_formatter = format_error;

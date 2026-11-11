@@ -34,11 +34,11 @@
 //     { op: "callframe", id } -> { frame }   where the handler's latest call was made from
 // A call that gave a promise logs how it settled to "promised".
 //
-// A test feature: { name, needs?, onRead?, onId?, onCreateFunction?, early? }. Each hook logs
+// A test feature: { name, needs?, onRead?, onCreateFunction?, early? }. Each hook logs
 // [name, hook, ...] to "hooks", then does what its value says: "log" calls next, "drop" does not,
-// "throw" throws "<name> threw", onRead "add" adds an item. onId "wrap" prefixes the id with
-// "<name>-", "throw-process" throws for a process's id only; onCreateFunction "drop" does not
-// pass it on.
+// "throw" throws "<name> threw", onRead "add" adds an item; onCreateFunction "drop" does not
+// pass it on. The ermine's ids: nodes n1, n2, ..., a process proc:<its start's name>
+// (createProcessId "throw": it throws "createProcessId threw").
 //
 // program: steps { do: [fn, ...args], as? }; "$x" in an arg is the name x. fn is a @ermine/system
 // function or one of:
@@ -200,18 +200,19 @@ function make(o: Request = {}): Made {
 				return o.errorFormatter === "replace" ? new ErmineError("gone", "replaced") : e
 			},
 		},
+		...!o.uuid && { createId: () => `n${++n}` },
+		...(!o.uuid || o.createProcessId === "throw") && {
+			createProcessId: () => {
+				if (o.createProcessId === "throw") throw new Error("createProcessId threw")
+				const next = made.next
+				made.next = undefined
+				return next ?? `n${++n}`
+			},
+		},
 		features: [...features, {
 			name: HARNESS,
-			setup: (f) => {
-				f.onCreateFunction((n) => log("onCreateFunction", [n.kind, n.id, n.process]))
-				if (!o.uuid) {
-					f.onId(() => {
-						const next = made.next
-						made.next = undefined
-						return next ?? `n${++n}`
-					})
-				}
-			},
+			setup: (f) =>
+				f.onCreateFunction((n) => log("onCreateFunction", [n.kind, n.id, n.process])),
 		}],
 		may,
 	})

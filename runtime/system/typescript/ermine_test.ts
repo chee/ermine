@@ -230,18 +230,17 @@ Deno.test("createErmine throwing leaves nothing listening on a scheduler it was 
 	assertEquals(closing.live, 0)
 })
 
-Deno.test("code outside any process acts as the root; a feature makes ids through onId", () => {
+Deno.test("code outside any process acts as the root; a feature's newId is createId's", () => {
 	let api: FeatureAPI | undefined
 	let n = 0
 	const ids: Feature = {
 		name: "ids",
 		setup: (f) => {
 			assertThrows(() => f.newId(), ErmineError, "newId")
-			f.onId((kind, next) => kind === "node" ? `n${n++}` : next(kind))
 			api = f
 		},
 	}
-	const e = createErmine({ root: "R", features: [ids] })
+	const e = createErmine({ root: "R", features: [ids], createId: () => `n${n++}` })
 	assertEquals([e.places.root, e.id], ["R", "R"])
 	const made = api!.newId()
 	assert(made.startsWith("n"), made)
@@ -250,16 +249,14 @@ Deno.test("code outside any process acts as the root; a feature makes ids throug
 
 Deno.test("a hook added while createErmine is making is refused setup-only, not kept by some chains", () => {
 	const scheduler = counting()
-	const late: Feature = {
-		name: "late",
-		setup: (f) =>
-			f.onId((kind, next) => {
-				f.onRead((x, items, next) => next(x, items))
-				return next(kind)
-			}),
+	let api: FeatureAPI | undefined
+	const late: Feature = { name: "late", setup: (f) => void (api = f) }
+	const createId = () => {
+		api!.onRead((x, items, next) => next(x, items))
+		return "x"
 	}
 	assertThrows(
-		() => createErmine({ autopulse: false, features: [late], scheduler }),
+		() => createErmine({ autopulse: false, features: [late], scheduler, createId }),
 		Error,
 		"setup-only",
 	)
