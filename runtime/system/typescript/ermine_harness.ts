@@ -35,7 +35,7 @@
 // A test feature: { name, needs?, onRead?, onStatus?,
 // onId?, onSchedule?, onCreateFunction?, onError?, early? }. Each hook logs [name, hook, ...] to "hooks", then does what its value says:
 // "log" calls next, "drop" does not, "throw" throws "<name> threw", onRead "add" adds an item, onStatus "add" adds the field <name>. onId "wrap" prefixes the
-// id with "<name>-", "throw-process" throws for a process's id only; onSchedule "later" runs the pulse itself after the request; onCreateFunction
+// id with "<name>-", "throw-process" throws for a process's id only; onCreateFunction
 // "drop" does not pass it on; onError "replace" throws a "gone" error instead..
 //
 // program: steps { do: [fn, ...args], as? }; "$x" in an arg is the name x. fn is a @ermine/system
@@ -79,7 +79,6 @@ import {
 	ErmineError,
 	type Feature,
 	FeatureError,
-	type ProcessContext,
 	SendError,
 	type Started,
 } from "./ermine.ts"
@@ -109,7 +108,7 @@ type Made = {
 	running: Map<string, { started: Started; env: Env; api?: Sys }>
 	hostSys: Sys
 	logs: Map<string, unknown[]>
-	later: (() => void)[]
+	closed?: true
 	held: (() => void)[]
 	programs: Map<string, () => unknown>
 	host: Env
@@ -150,7 +149,6 @@ function make(o: Request = {}): Made {
 	const table = o.stored ? stored(w!.ermine) : undefined
 	if (o.stored) w!.ermine.close()
 	else n = 0
-	const later: (() => void)[] = []
 	const deny = (o.deny ?? []) as {
 		op: string
 		path?: string
@@ -176,14 +174,12 @@ function make(o: Request = {}): Made {
 			})()
 			: testFeature(f as Record<string, unknown>, {
 				log,
-				later: (pulse) => void later.push(pulse),
 			})
 	)
 	const made: Made = {
 		ermine: undefined as never,
 		running: new Map(),
 		logs: new Map(),
-		later,
 		held: [],
 		programs: new Map(),
 		host: new Map(),
@@ -192,13 +188,13 @@ function make(o: Request = {}): Made {
 	}
 	w = made
 	made.ermine = createErmine({
+		autopulse: false,
 		...table !== undefined && { table },
 		root: "R",
 		info: { actor: "test" },
 		features: [...features, {
 			name: HARNESS,
 			setup: (f) => {
-				f.onSchedule((pulse) => void later.push(pulse))
 				f.onCreateFunction((n) => log("onCreateFunction", [n.kind, n.id, n.process]))
 				if (!o.uuid) {
 					f.onId(() => {
@@ -688,9 +684,10 @@ const runShown = (r: Run) =>
 		writes: pairs(r.writes),
 	})
 
+// autopulse is off: the harness pulses after each request, as a microtask would.
 function drain() {
-	const later = world().later
-	while (later.length) later.shift()!()
+	const m = world()
+	if (!m.closed && m.ermine !== undefined) m.ermine.scheduler.pulse()
 }
 
 function code(r: Request) {
@@ -822,6 +819,7 @@ async function answer(r: Request): Promise<Record<string, unknown>> {
 			return { status: status(p.started.status()) }
 		}
 		case "close":
+			m.closed = true
 			e.close()
 			return {}
 		case "record": {

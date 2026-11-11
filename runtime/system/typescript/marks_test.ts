@@ -17,14 +17,13 @@ import {
 	read,
 	start,
 } from "@ermine/system"
-import { createErmine, ErmineError } from "./ermine.ts"
-import { manual } from "./manual_fixture.ts"
+import { createErmine, ErmineError, type Feature } from "./ermine.ts"
 
 const programAt = (e: { within: <T>(f: () => T) => T }, at: string) =>
 	e.within(() => read(at)) as () => unknown
 
-function started(f: () => unknown, features = [manual], may?: Policy) {
-	const e = createErmine({ features, ...may && { may } })
+function started(f: () => unknown, features: readonly Feature[] = [], may?: Policy) {
+	const e = createErmine({ autopulse: false, features, ...may && { may } })
 	e.within(() => ensureNode("/code/p", f))
 	const s = e.start(programAt(e, "/code/p"), "/code/p")
 	assert(!("refused" in s))
@@ -59,7 +58,7 @@ Deno.test("marks: a writer called after the ermine closed: closed", () => {
 
 Deno.test("marks: createWriter in an action, the writer's changes carry the call's mark: explain says the action, getCaller who called", () => {
 	let withWriter: ReturnType<typeof createWriter> | undefined
-	const e = createErmine({ features: [manual] })
+	const e = createErmine({ autopulse: false })
 	e.within(() =>
 		ensureNode("/code/p", () => {
 			ensureNode("/k", 0)
@@ -95,7 +94,7 @@ Deno.test("marks: each write through a writer has the writer's frames [chee 10-2
 })
 
 Deno.test("marks: a writer the host made: its writes, in a timer too, come from the line they were made at", async () => {
-	const e = createErmine({ features: [manual] })
+	const e = createErmine({ autopulse: false })
 	let line = 0
 	const withWriter = e.within(() => {
 		ensureNode("/t", 0)
@@ -116,7 +115,7 @@ Deno.test("marks: a writer the host made: its writes, in a timer too, come from 
 })
 
 Deno.test("marks: an action called from an act makes things for its own parent; the act itself makes nothing", () => {
-	const e = createErmine({ features: [manual] })
+	const e = createErmine({ autopulse: false })
 	e.within(() =>
 		ensureNode("/code/p", () => {
 			ensureNode("/k", 0)
@@ -174,7 +173,7 @@ Deno.test("marks: start asks as the starter for the stop() too: whoever calls it
 		return blocked ? no("denied") : yes
 	}
 	let stopIt: (() => void) | undefined
-	const e = createErmine({ features: [manual], may })
+	const e = createErmine({ autopulse: false, may })
 	e.within(() => ensureNode("/code/child", () => {}))
 	e.within(() => ensureNode("/work", 0))
 	e.within(() =>
@@ -218,7 +217,7 @@ Deno.test("marks: a writer made inside a writer while user-activated does not ke
 })
 
 Deno.test("marks: a writer an action returned is hidden in the call record: explain shows a marker, never the function", () => {
-	const e = createErmine({ features: [manual] })
+	const e = createErmine({ autopulse: false })
 	e.within(() => {
 		ensureNode("/shared", 0)
 		ensureNode("/code/p", () =>
@@ -239,7 +238,7 @@ Deno.test("marks: a writer an action returned is hidden in the call record: expl
 })
 
 Deno.test("marks: a generator action's record stays open to its end: a write after a yield explains as the call, in its writes", async () => {
-	const e = createErmine({ features: [manual] })
+	const e = createErmine({ autopulse: false })
 	e.within(() => {
 		ensureNode("/a", 0)
 		ensureNode("/b", 0)
@@ -262,7 +261,7 @@ Deno.test("marks: a generator action's record stays open to its end: a write aft
 
 Deno.test("marks: a write through a writer made in an action explains as the call, though the closed record does not list it", () => {
 	let withWriter: ReturnType<typeof createWriter> | undefined
-	const e = createErmine({ features: [manual] })
+	const e = createErmine({ autopulse: false })
 	e.within(() => {
 		ensureNode("/k", 0)
 		ensureNode("/code/p", () => createAction("on/go", () => void (withWriter = createWriter())))
@@ -280,7 +279,7 @@ Deno.test("marks: a generator action whose process stops mid-yield is returned (
 	const log: string[] = []
 	let open!: () => void
 	const gate = new Promise<void>((r) => (open = r))
-	const e = createErmine({ features: [manual] })
+	const e = createErmine({ autopulse: false })
 	e.within(() => {
 		ensureNode("/k", 0)
 		ensureNode("/code/p", () =>
@@ -313,7 +312,7 @@ Deno.test("marks: a generator action whose process stops mid-yield is returned (
 
 Deno.test("marks: start taken gives a program only where (refused, at), never whose it is", () => {
 	let out: unknown
-	const e = createErmine({ features: [manual] })
+	const e = createErmine({ autopulse: false })
 	e.within(() => ensureNode("/code/child", () => {}))
 	e.within(() =>
 		ensureNode("/code/p", () => {
@@ -328,7 +327,7 @@ Deno.test("marks: start taken gives a program only where (refused, at), never wh
 
 Deno.test("marks: a program started by a program stops when the ermine closes", () => {
 	const told: string[] = []
-	const e = createErmine({ features: [manual] })
+	const e = createErmine({ autopulse: false })
 	e.within(() => ensureNode("/code/child", () => addTeardown((why) => told.push(why))))
 	e.within(() => ensureNode("/code/p", () => void start(programAt(e, "/code/child"), "/work/c")))
 	e.start(programAt(e, "/code/p"), "/code/p")
@@ -337,7 +336,7 @@ Deno.test("marks: a program started by a program stops when the ermine closes", 
 })
 
 Deno.test("marks: createAction given an async function* throws not-a-function, saying to use a function*", () => {
-	const e = createErmine({ features: [manual] })
+	const e = createErmine({ autopulse: false })
 	assertThrows(
 		() => e.within(() => createAction("/a", async function* () {})),
 		ErmineError,

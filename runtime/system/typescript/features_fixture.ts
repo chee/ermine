@@ -5,10 +5,9 @@ export function testFeature(
 	spec: Record<string, unknown>,
 	o: {
 		log: (name: string, v: unknown) => void
-		later: (pulse: () => void) => void
 	},
 ): Feature {
-	const { log, later } = o
+	const { log } = o
 	const name = spec.name as string
 	const say = (hook: Hook, ...more: unknown[]) => log("hooks", [name, hook, ...more])
 	const boom = () => {
@@ -48,14 +47,6 @@ export function testFeature(
 					if (spec.onId === "throw-process" && kind === "process") boom()
 					const id = next(kind)
 					return spec.onId === "wrap" ? `${name}-${id}` : id
-				})
-			}
-			if (spec.onSchedule) {
-				f.onSchedule((pulse, next) => {
-					say("onSchedule")
-					if (spec.onSchedule === "throw") boom()
-					if (spec.onSchedule === "later") return later(pulse)
-					next(pulse)
 				})
 			}
 			if (spec.onCreateFunction) {

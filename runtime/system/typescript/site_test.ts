@@ -18,7 +18,6 @@ import { locationsOf } from "@ermine/places/header"
 import { frames } from "@ermine/changeable/stacktrace"
 import { get } from "@ermine/places/lib"
 import type { ChangeHeader } from "@ermine/graph/entry"
-import { manual } from "./manual_fixture.ts"
 
 type E = ReturnType<typeof createErmine>
 const changeAt = (e: E, name: string): ChangeHeader => {
@@ -29,7 +28,7 @@ const here = new URL(import.meta.url).href
 const lineOf = (c: ChangeHeader) => locationsOf(c.frame)?.find((l) => l.file === here)?.line
 
 Deno.test("site: a call from outside given a build location keeps it alone, nothing captured; a call in its arguments has the stack", () => {
-	const e = createErmine({ features: [manual] })
+	const e = createErmine({ autopulse: false })
 	const S = site("file:///program.ts", 12, 3)
 	e.within(() => {
 		at(S, ensureNode)("/x", (ensureNode("/y", 1), 1))
@@ -44,7 +43,7 @@ Deno.test("site: a call from outside given a build location keeps it alone, noth
 })
 
 Deno.test("site: a token not minted, or a function not @ermine/system's, gives nothing: the stack, as any call", () => {
-	const e = createErmine({ features: [manual] })
+	const e = createErmine({ autopulse: false })
 	const mine = () => 1
 	assert(at(site("file:///a.ts", 1, 1), mine) === mine)
 	assert(at({} as never, patch) === patch)
@@ -54,7 +53,7 @@ Deno.test("site: a token not minted, or a function not @ermine/system's, gives n
 })
 
 Deno.test("site: what the function runs never gets it (taken as it starts)", () => {
-	const e = createErmine({ features: [manual] })
+	const e = createErmine({ autopulse: false })
 	const S = site("file:///program.ts", 3, 1)
 	e.within(() => at(S, peep)(() => ensureNode("/z", 1)))
 	assertEquals(
@@ -66,7 +65,7 @@ Deno.test("site: what the function runs never gets it (taken as it starts)", () 
 })
 
 Deno.test("site: a computer made from outside through a call given a build location has it in its info; its run's writes too", () => {
-	const e = createErmine({ features: [manual] })
+	const e = createErmine({ autopulse: false })
 	const S = site("file:///program.ts", 8, 2)
 	e.within(() => {
 		ensureNode("/n", 1)
@@ -89,7 +88,7 @@ Deno.test("site: a computer made from outside through a call given a build locat
 const nextLine = () => frames(new Error().stack!)[1].line + 1
 
 Deno.test("site: a write or make in a setup has the process's frame: where it was started, from outside, whichever line wrote it", () => {
-	const e = createErmine({ features: [manual] })
+	const e = createErmine({ autopulse: false })
 	let started = 0
 	started = nextLine()
 	e.start(() => {
@@ -125,7 +124,7 @@ function captures(n: number): number {
 		},
 	})
 	try {
-		const e = createErmine({ features: [manual] })
+		const e = createErmine({ autopulse: false })
 		e.start(() => {
 			for (let i = 0; i < n; i++) ensureNode(`/n${i}`, i)
 			for (let i = 0; i < n; i++) patch(`/n${i}`, [{ path: [], value: -i }])
@@ -147,7 +146,7 @@ Deno.test("site: a process's setup captures nothing, however many writes and mak
 })
 
 Deno.test("site: two processes have a frame each; the host keeps each call's; an action's call, from outside its own, in a setup its starter's [chee 10-29: frames in the graph]", () => {
-	const e = createErmine({ features: [manual] })
+	const e = createErmine({ autopulse: false })
 	e.start(() => void ensureNode("/a", 0), "/p")
 	e.start(() => {
 		ensureNode("/b", 0)
@@ -181,7 +180,7 @@ Deno.test("site: two processes have a frame each; the host keeps each call's; an
 })
 
 Deno.test("site: a write inside a run is the run's frame, shared with the header, never copied", () => {
-	const e = createErmine({ features: [manual] })
+	const e = createErmine({ autopulse: false })
 	e.start(() => {
 		ensureNode("/n", 1)
 		ensureNode("/m", 0)

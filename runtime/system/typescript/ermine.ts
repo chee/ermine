@@ -113,6 +113,10 @@ export type Options = {
 	table?: Table
 	root?: Id
 	info?: Info
+	// false: no pulse runs by itself; the caller runs one with pulse(). Default: one is queued as a
+	// microtask after writes. This could take a function given the pulse, to say when it runs, if a
+	// use for that ever comes up.
+	autopulse?: false
 	// The clock every change's time is taken from, ms since 1970. Defaults to Date.now.
 	now?: () => number
 }
@@ -294,11 +298,10 @@ function make(options: Options, undo: (() => void)[]): Ermine {
 	})
 
 	let queued = false
-	const schedule = chain<[() => void], void>(hooks.onSchedule, "onSchedule", queueMicrotask)
 	function queuePulse() {
-		if (queued || closed) return
+		if (queued || closed || options.autopulse === false) return
 		queued = true
-		schedule(() => {
+		queueMicrotask(() => {
 			queued = false
 			if (closed) return
 			enterScheduler(s)

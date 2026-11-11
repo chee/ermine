@@ -1,7 +1,6 @@
 // What the conformance suite cannot say on the line protocol: the base's own files, a made-up
-// context, close() with every teardown held, and the host's ids.
+// context, and the ids.
 import {
-	addTeardown,
 	createAction,
 	ensureNode,
 	executeAction,
@@ -21,7 +20,6 @@ import {
 	type FeatureAPI,
 	type ProcessContext,
 } from "./ermine.ts"
-import { manual } from "./manual_fixture.ts"
 
 const programAt = (e: { within: <T>(f: () => T) => T }, at: string) =>
 	e.within(() => read(at)) as () => unknown
@@ -57,7 +55,7 @@ function counted() {
 
 Deno.test("a caller's waits made and answered again and again register one teardown", () => {
 	const { scheduler, on } = counted()
-	const e = createErmine({ features: [manual], scheduler })
+	const e = createErmine({ autopulse: false, scheduler })
 	const host = e.getProcessContext()!.scope
 	const before = on.get(host) ?? 0
 	for (let i = 0; i < 20; i++) {
@@ -74,7 +72,7 @@ Deno.test("a caller's waits made and answered again and again register one teard
 
 Deno.test("one method placed again and again registers one teardown", () => {
 	const { scheduler, on } = counted()
-	const e = createErmine({ features: [manual], scheduler })
+	const e = createErmine({ autopulse: false, scheduler })
 	const host = e.getProcessContext()!.scope
 	const before = on.get(host) ?? 0
 	for (let i = 0; i < 20; i++) e.within(() => createAction("/svc", () => i))
@@ -90,7 +88,7 @@ Deno.test("close() takes out what features listen to on the scheduler", () => {
 		name: "listening",
 		setup: (f) => void f.scheduler.onAfterPulse(() => void told++),
 	}
-	const e = createErmine({ scheduler: s, features: [listening, manual] })
+	const e = createErmine({ scheduler: s, autopulse: false, features: [listening] })
 	s.pulse()
 	assertEquals(told, 1)
 	e.close()
@@ -110,14 +108,15 @@ Deno.test("a feature's scheduler works in every member, the on… ones and the r
 			assertEquals(Object.keys(f.scheduler).sort(), Object.keys(s).sort())
 		},
 	}
-	createErmine({ scheduler: s, features: [using, manual] }).close()
+	createErmine({ scheduler: s, autopulse: false, features: [using] }).close()
 	assert(inside !== undefined)
 })
 
 Deno.test("closed, records, a feature's calling and id throw closed as the other parts do", () => {
 	let api: FeatureAPI | undefined
 	const e = createErmine({
-		features: [{ name: "keep", setup: (f) => void (api = f) }, manual],
+		autopulse: false,
+		features: [{ name: "keep", setup: (f) => void (api = f) }],
 	})
 	e.close()
 	assertThrows(() => e.records.call("x"), ErmineError, "closed")
@@ -130,7 +129,7 @@ Deno.test("closed, records, a feature's calling and id throw closed as the other
 Deno.test("a feature's context(process) is undefined once the process stopped, and typed so", () => {
 	let api: FeatureAPI | undefined
 	const keep: Feature = { name: "keep", setup: (f) => void (api = f) }
-	const e = createErmine({ features: [keep, manual] })
+	const e = createErmine({ autopulse: false, features: [keep] })
 	e.within(() => ensureNode("/code/p", () => 1))
 	const p = e.start(programAt(e, "/code/p"), "/code/p")
 	assert(!("refused" in p))
@@ -145,7 +144,7 @@ Deno.test("a feature's context(process) is undefined once the process stopped, a
 })
 
 Deno.test("a read of a node not there, outside a setup or a run, keeps nothing: reads don't slow as they pile up", () => {
-	const e = createErmine({ features: [manual] })
+	const e = createErmine({ autopulse: false })
 	e.start(() => void createAction("on/look", (p: string) => read(p)), "/code/p")
 	const missing = (from: string, n: number) => {
 		const t = performance.now()
@@ -173,7 +172,7 @@ Deno.test("close() runs every step when one throws, throws the first error at th
 			return real.teardown(scope)
 		},
 	}
-	const e = createErmine({ features: [manual], scheduler })
+	const e = createErmine({ autopulse: false, scheduler })
 	assertEquals(registrations(scheduler), 1)
 	boom = true
 	assertThrows(() => e.close(), Error, "boom")
@@ -220,11 +219,14 @@ Deno.test("createErmine throwing leaves nothing listening on a scheduler it was 
 		},
 	}
 	const early: Feature = { name: "early", setup: (f) => void f.scheduler.onSettle(() => {}) }
-	assertThrows(() => createErmine({ features: [early, late, manual], scheduler: setting }), Error)
+	assertThrows(
+		() => createErmine({ autopulse: false, features: [early, late], scheduler: setting }),
+		Error,
+	)
 	assertEquals(setting.live, 0)
 
 	const closing = counting()
-	createErmine({ features: [early, manual], scheduler: closing }).close()
+	createErmine({ autopulse: false, features: [early], scheduler: closing }).close()
 	assertEquals(closing.live, 0)
 })
 
@@ -256,6 +258,10 @@ Deno.test("a hook added while createErmine is making is refused setup-only, not 
 				return next(kind)
 			}),
 	}
-	assertThrows(() => createErmine({ features: [late, manual], scheduler }), Error, "setup-only")
+	assertThrows(
+		() => createErmine({ autopulse: false, features: [late], scheduler }),
+		Error,
+		"setup-only",
+	)
 	assertEquals(scheduler.live, 0)
 })

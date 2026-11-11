@@ -7,7 +7,6 @@ import { join } from "node:path"
 import { fileURLToPath as fromFileUrl, pathToFileURL } from "node:url"
 import { createErmine, type Feature, read } from "@ermine/system"
 import ermine, { type Options } from "./unplugin.ts"
-import { manual } from "../../../runtime/system/typescript/manual_fixture.ts"
 import { NAMES } from "../../../runtime/system/typescript/system/index.ts"
 
 const toFileUrl = (p: string) => pathToFileURL(p)
@@ -56,7 +55,7 @@ const changeAt = (e: E, name: string): ChangeHeader => {
 
 async function run(out: string, features: Feature[] = []) {
 	const program = (await import(toFileUrl(out).href)).default as () => unknown
-	const e = createErmine({ features: [manual, ...features] })
+	const e = createErmine({ autopulse: false, features: [...features] })
 	e.within(program)
 	return e
 }

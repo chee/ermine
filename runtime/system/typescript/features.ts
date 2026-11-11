@@ -17,7 +17,6 @@
 //   onRead(x, items, next)         adds items to what reads show
 //   onStatus(x, status, next)      what status(x) shows; not called for a node that is not there
 //   onId(kind, next)               each new id, kind "node" or "process"
-//   onSchedule(pulse, next)        each ask for a pulse; not calling next means the hook runs it
 //   onCreateFunction(made, next)   each memo, effect and action made
 //   onError(error, fn, next)       each error ermine throws
 //
@@ -103,7 +102,6 @@ export type Hooks = {
 	) => readonly Version[]
 	onStatus: (x: Asked, status: Status, next: (x: Asked, status: Status) => Status) => Status
 	onId: (kind: IdKind, next: (kind: IdKind) => string) => string
-	onSchedule: (pulse: () => void, next: (pulse: () => void) => void) => void
 	onCreateFunction: (made: CreatedFunction, next: (made: CreatedFunction) => void) => void
 	onError: (error: unknown, fn: string | undefined, next: Errored) => unknown
 }
@@ -115,7 +113,6 @@ const HOOK_KEYS: Record<Hook, true> = {
 	onRead: true,
 	onStatus: true,
 	onId: true,
-	onSchedule: true,
 	onCreateFunction: true,
 	onError: true,
 }
@@ -129,7 +126,6 @@ export type FeatureAPI = {
 	onRead: (hook: Hooks["onRead"]) => void
 	onStatus: (hook: Hooks["onStatus"]) => void
 	onId: (hook: Hooks["onId"]) => void
-	onSchedule: (hook: Hooks["onSchedule"]) => void
 	onCreateFunction: (hook: Hooks["onCreateFunction"]) => void
 	onError: (hook: Hooks["onError"]) => void
 	// The host's process context, or a running process's. To act as one, wrap code in

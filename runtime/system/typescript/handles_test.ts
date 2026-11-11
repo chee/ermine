@@ -2,10 +2,9 @@ import { assertEquals, assertThrows } from "@std/assert"
 import { createErmine, ErmineError } from "./ermine.ts"
 import { ensureNode, patch, read, readEntries } from "@ermine/system"
 import { no, type Policy, yes } from "@ermine/protect"
-import { manual } from "./manual_fixture.ts"
 
 Deno.test("a handle is not data: JSON, a string, a template throw; inspected it says [node]", () => {
-	const e = createErmine({ features: [manual] })
+	const e = createErmine({ autopulse: false })
 	const h = e.within(() => ensureNode("/a", 1))
 	assertThrows(() => JSON.stringify({ h }), ErmineError, "not-a-value")
 	assertThrows(() => `${h}`, ErmineError, "not-a-value")
@@ -15,8 +14,8 @@ Deno.test("a handle is not data: JSON, a string, a template throw; inspected it 
 })
 
 Deno.test("an object shaped like a node is no handle; nor is another ermine's", () => {
-	const one = createErmine({ features: [manual] })
-	const two = createErmine({ features: [manual] })
+	const one = createErmine({ autopulse: false })
+	const two = createErmine({ autopulse: false })
 	const h = one.within(() => ensureNode("/a", 1))
 	assertThrows(
 		() => one.within(() => read({ path: ["a"], part: "value" } as never)),
@@ -35,7 +34,7 @@ Deno.test("an object shaped like a node is no handle; nor is another ermine's", 
 })
 
 Deno.test("the host mints a handle from an id; dataOf says what one reaches (a place from the root, no maker)", () => {
-	const e = createErmine({ features: [manual] })
+	const e = createErmine({ autopulse: false })
 	const h = e.within(() => ensureNode("/a", 1))
 	const d = e.dataOf(h)!
 	assertEquals(d.node, { path: ["a"], part: "value" })
@@ -47,7 +46,7 @@ Deno.test("the host mints a handle from an id; dataOf says what one reaches (a p
 
 Deno.test("a refusal a program catches says the op and the reason, never the id it was about", () => {
 	const may: Policy = (ask) => ask.op === "edit" ? no("denied") : yes
-	const e = createErmine({ features: [manual], may })
+	const e = createErmine({ autopulse: false, may })
 	e.within(() => ensureNode("/a", 1))
 	const id = e.dataOf(e.within(() => readEntries("/a"))[0].node)!.node.id!
 	let caught = ""
