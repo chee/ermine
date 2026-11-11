@@ -78,7 +78,7 @@ import { computerAt } from "./system/made.ts"
 import { putStatus, setKey } from "./system/status.ts"
 import { callAbove } from "./system/scopes.ts"
 import { attach, innerOf } from "./system/setting.ts"
-import { type ChangeView, type Held, type Status, WAITING } from "./system/shapes.ts"
+import { type ChangeView, type Status, WAITING } from "./system/shapes.ts"
 
 export { ErmineError, FeatureError } from "./features.ts"
 export type {
@@ -110,7 +110,6 @@ export type {
 	CallView,
 	ChangeView,
 	Explained,
-	Held,
 	Item,
 	RunView,
 	Status,
@@ -156,12 +155,8 @@ export type Started = {
 export type Ermine = {
 	// Runs f in the host's scope.
 	within: <T>(f: () => T) => T
-	// A start is refused as taken, and `held` is set when a stopped process's row removal was held back by a feature.
-	start: (
-		fn: () => unknown,
-		at: string | Path,
-		options?: StartOptions,
-	) => Started | (Refused & { held?: { process: Id; feature: string } })
+	// A start is refused as taken.
+	start: (fn: () => unknown, at: string | Path, options?: StartOptions) => Started | Refused
 	close: () => void
 	getProcessContext: (process?: Process) => ProcessContext | undefined
 	// Handles for the host: one minted for a node, and what a handle reaches (undefined if not ours).
@@ -353,79 +348,6 @@ function make(options: Options, undo: (() => void)[]): Ermine {
 		return locations === undefined ? f() : s.runWith(scope!, callFrame(s, locations), f)
 	}
 
-	// Writes held back by a hook (one that did not call next) are remembered per (part, id) until a
-	// write there lands or the node goes.
-	let deepest: string | undefined
-	const heldWrites = new Map<Id, Map<Key, { feature: string; write: Write }>>()
-	const heldKey = {}
-	const heldOf = (part: Key, id: Id) => heldWrites.get(id)?.get(part)
-	const unhold = (part: Key, id: Id) => {
-		const at = heldWrites.get(id)
-		if (at === undefined || !at.delete(part)) return false
-		if (at.size === 0) heldWrites.delete(id)
-		return true
-	}
-	// When a node goes, the writes held at its parts go too, unless a part is still there.
-	const dropHeld = (id: Id) => {
-		const at = heldWrites.get(id)
-		if (at === undefined) return
-		let told = false
-		for (const part of [...at.keys()]) {
-			if (table.get(part, id) === undefined) told = unhold(part, id) || told
-		}
-		if (told) s.mark([heldKey])
-	}
-	const heldAt = (part: Key, id: Id) => {
-		s.track(heldKey)
-		const h = heldOf(part, id)
-		return h === undefined ? undefined : { feature: h.feature }
-	}
-	const statusHeld = (id: Id): Held | undefined => {
-		const h = heldOf(STATUS_TABLE, id)
-		if (h === undefined) return undefined
-		const touches = h.write.gone || h.write.patches.some((p) =>
-			p.path[0] === STATUS ||
-			(p.path.length === 0 && typeof p.value === "object" && p.value !== null &&
-				STATUS in p.value)
-		)
-		return touches ? { feature: h.feature, write: "status" } : undefined
-	}
-	// Stopped processes whose row removal a feature held back, by the process's node.
-	const heldRows = new Map<Id, { feature: string; at: Path }>()
-	const rowAt = (at: Path): Id | undefined => idAt(table.get(PROCESS, root)?.value, at)
-	// A held row that a later write already took out is dropped silently.
-	const rowHeld = (id: Id) => {
-		const r = heldRows.get(id)
-		if (r === undefined) return undefined
-		if (rowAt(r.at) === id) return r
-		heldRows.delete(id)
-		return undefined
-	}
-	const written = chain<[ProcessContext, Write, (w: Write) => void], void>(
-		hooks.onWrite.map((h) => ({
-			feature: h.feature,
-			fn: (
-				o: ProcessContext,
-				w: Write,
-				_land: unknown,
-				next: (o: ProcessContext, w: Write) => void,
-			) => {
-				deepest = h.feature
-				return h.fn(o, w, next)
-			},
-		})),
-		"onWrite",
-		(_o, w, land) => land(w),
-		(feature, [, w, land], [o2, w2]) => {
-			if (w2 === w) return [o2 as ProcessContext, w, land]
-			const { features: _, ...rest } = w2 as Write
-			const tagged: Write = {
-				...rest,
-				features: [...w.features ?? [], feature],
-			}
-			return [o2 as ProcessContext, tagged, land]
-		},
-	)
 	// The caller of the open call, as a place: a process's at, or a computer's process's. The host has none.
 	const caller = (): { from?: Path } | undefined => {
 		const o = callAbove(s.getCurrentFrame())
@@ -444,29 +366,6 @@ function make(options: Options, undo: (() => void)[]): Ermine {
 		caller,
 		header,
 		enter,
-		put: (o, w, land) => {
-			const was = deepest
-			deepest = undefined
-			let landed = false
-			written(o, w, (x) => {
-				landed = true
-				let told = unhold(x.part, x.id)
-				if (!told && x.part === PROCESS) {
-					if (x.id === root && heldRows.size > 0) told = true
-				}
-				// A mark only schedules the rerun, so it is made before the write lands.
-				if (told) s.mark([heldKey])
-				land(x)
-			})
-			const by = deepest
-			deepest = was
-			if (!landed && by !== undefined) {
-				let at = heldWrites.get(w.id)
-				if (at === undefined) heldWrites.set(w.id, at = new Map())
-				at.set(w.part, { feature: by, write: w })
-				s.mark([heldKey])
-			}
-		},
 		queuePulse,
 		onCreateFunction: chain<[CreatedFunction], void>(
 			hooks.onCreateFunction,
@@ -566,12 +465,10 @@ function make(options: Options, undo: (() => void)[]): Ermine {
 		places: { describe: p.describe, watchAll: p.watchAll },
 		table,
 		scheduler: s,
-		hold: (id, run, keep) => {
-			const h = statusHeld(id)
-			recorded({ id, run: h === undefined ? run : { ...run, held: h } as Run }, (r) => {
+		hold: (id, run, keep) =>
+			recorded({ id, run }, (r) => {
 				if (r.run !== undefined) keep(r.run)
-			})
-		},
+			}),
 	})
 	const calls = createCalls({
 		scheduler: s,
@@ -613,19 +510,6 @@ function make(options: Options, undo: (() => void)[]): Ermine {
 		shown,
 		torn,
 		statused,
-		held: {
-			at: heldAt,
-			status: (id) => {
-				s.track(heldKey)
-				return statusHeld(id)
-			},
-			row: (id) => {
-				s.track(heldKey)
-				const r = rowHeld(id)
-				return r === undefined ? undefined : { feature: r.feature, write: "row" }
-			},
-			drop: dropHeld,
-		},
 	}
 
 	attach(base, hostInner)
@@ -647,14 +531,8 @@ function make(options: Options, undo: (() => void)[]): Ermine {
 			processes!.stop(process)
 		} finally {
 			whys.delete(process.id)
-			dropHeld(process.id)
 			const i = started.indexOf(process)
 			if (i !== -1) started.splice(i, 1)
-		}
-		const h = heldOf(PROCESS, root)
-		if (rowAt(process.at) === process.id && h !== undefined) {
-			heldRows.set(process.id, { feature: h.feature, at: process.at })
-			s.mark([heldKey])
 		}
 	}
 
@@ -671,7 +549,7 @@ function make(options: Options, undo: (() => void)[]): Ermine {
 		o: StartOptions = {},
 		under?: Scope,
 		cut?: unknown,
-	): Started | (Refused & { held?: { process: Id; feature: string } }) => {
+	): Started | Refused => {
 		alive()
 		if (typeof fn !== "function") {
 			throw errored(
@@ -773,16 +651,7 @@ function make(options: Options, undo: (() => void)[]): Ermine {
 		} finally {
 			leaveScheduler()
 		}
-		if ("refused" in made) {
-			const under = (a: Path, b: Path) => a.every((n, i) => b[i] === n)
-			for (const process of [...heldRows.keys()]) {
-				const r = rowHeld(process)
-				if (r === undefined) continue
-				if (!(under(r.at, made.at) || under(made.at, r.at))) continue
-				return { ...made, held: { process, feature: r.feature } }
-			}
-			return made
-		}
+		if ("refused" in made) return made
 		started.push(made)
 		s.registerTeardown(made.scope, () => {
 			const i = started.indexOf(made)

@@ -101,7 +101,7 @@ export function removeAs(inner: Inner, x: Target) {
 			const [, name] = slot(inner, n.path)
 			takeOut(inner, parentOf(inner, n.path)!, name, id)
 		}
-		nodeGone(inner, id, { runs: true, calls: true, held: true })
+		nodeGone(inner, id, { runs: true, calls: true })
 		stopMade(inner, below, id)
 	})
 }

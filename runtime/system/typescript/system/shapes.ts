@@ -39,12 +39,8 @@ export type Waiting =
 	| "a stream"
 	| "PENDING"
 
-// A write a feature's onWrite held back, shown where it would have shown.
-export type Held = { readonly feature: string; readonly write: "status" | "row" }
-
 export type Status = {
 	readonly state: "done" | "pending" | "failed" | "looping"
-	readonly held?: Held
 	readonly error?: unknown
 	readonly phase?: "run" | "act"
 	readonly waiting?: readonly Waiting[]
@@ -94,17 +90,7 @@ export type ChangeView = {
 	// Made through a writer while the page was user-activated.
 	readonly userActivated?: true
 }
-export type Explained =
-	| {
-		readonly change: ChangeView
-		readonly writer: Writer
-		readonly held?: { readonly feature: string }
-	}
-	| {
-		readonly change?: undefined
-		readonly writer?: undefined
-		readonly held: { readonly feature: string }
-	}
+export type Explained = { readonly change: ChangeView; readonly writer: Writer }
 
 export class SendError extends Error {
 	constructor(readonly code: "not-a-method", readonly at?: string) {

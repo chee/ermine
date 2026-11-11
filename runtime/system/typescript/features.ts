@@ -7,15 +7,14 @@
 //     name: "log",
 //     needs: [],
 //     setup(feature) {
-//       feature.onWrite((context, write, next) => {
-//         console.log(write.part, write.id)
-//         next(context, write)
+//       feature.onRecord((record, next) => {
+//         console.log(record.id)
+//         next(record)
 //       })
 //     },
 //   }
 //
 //   onRead(x, items, next)         adds items to what reads show
-//   onWrite(context, write, next)  every table write, as the context it is for
 //   onTeardown(scope, why, next)   each teardown as its scope goes
 //   onRecord(record, next)         each run's and send's record
 //   onStatus(x, status, next)      what status(x) shows; not called for a node that is not there
@@ -44,7 +43,6 @@ import type {
 	ProcessContext,
 	Version,
 	Why,
-	Write,
 } from "./context.ts"
 import type { ChangeView, Status } from "./system/shapes.ts"
 
@@ -112,11 +110,6 @@ export type Hooks = {
 		items: readonly Version[],
 		next: (x: Reading, items: readonly Version[]) => readonly Version[],
 	) => readonly Version[]
-	onWrite: (
-		context: ProcessContext,
-		write: Write,
-		next: (context: ProcessContext, write: Write) => void,
-	) => void
 	onTeardown: (scope: Scope, why: Why, next: (scope: Scope, why: Why) => void) => void
 	onRecord: (record: Recorded, next: (record: Recorded) => void) => void
 	onStatus: (x: Asked, status: Status, next: (x: Asked, status: Status) => Status) => Status
@@ -131,7 +124,6 @@ export type Hook = keyof Hooks
 // Every hook is listed once, so a hook added to Hooks and missed here is a type error.
 const HOOK_KEYS: Record<Hook, true> = {
 	onRead: true,
-	onWrite: true,
 	onTeardown: true,
 	onRecord: true,
 	onStatus: true,
@@ -153,7 +145,6 @@ export type FeatureAPI = {
 	readonly places: Places
 	readonly processes: Processes
 	onRead: (hook: Hooks["onRead"]) => void
-	onWrite: (hook: Hooks["onWrite"]) => void
 	onTeardown: (hook: Hooks["onTeardown"]) => void
 	onRecord: (hook: Hooks["onRecord"]) => void
 	onStatus: (hook: Hooks["onStatus"]) => void

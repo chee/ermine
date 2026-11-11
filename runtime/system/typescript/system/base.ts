@@ -10,7 +10,7 @@ import type { Asked, Errored, Reading } from "../features.ts"
 import type { Handles } from "../handles.ts"
 import type { Inner, Parts, Version, Why } from "../context.ts"
 import type { Made } from "./made.ts"
-import type { ChangeView, Held, Status, WriterAs } from "./shapes.ts"
+import type { ChangeView, Status, WriterAs } from "./shapes.ts"
 
 export type Base = {
 	readonly parts: Parts
@@ -39,7 +39,6 @@ export type Base = {
 	) => { process: { id: Id; at: Path; folder: Path }; stop: (why?: Why) => void } | {
 		refused: "taken"
 		at: Path
-		held?: { process: Id; feature: string }
 	}
 	readonly newId: () => string
 	readonly errored: Errored
@@ -54,10 +53,4 @@ export type Base = {
 	readonly shown: (x: Reading, items: readonly Version[]) => readonly Version[]
 	readonly torn: (scope: Scope, why: Why, fn: (why: Why) => unknown) => void
 	readonly statused: (x: Asked, status: Status) => Status
-	readonly held: {
-		at: (part: Key, id: Id) => { feature: string } | undefined
-		status: (id: Id) => Held | undefined
-		row: (id: Id) => Held | undefined
-		drop: (id: Id) => void
-	}
 }

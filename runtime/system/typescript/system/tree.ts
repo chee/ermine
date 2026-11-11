@@ -62,17 +62,12 @@ export function slot(inner: Inner, path: Path): [Entry<unknown>, string] {
 	return [children, path[path.length - 1]]
 }
 
-// A node's entries taken out, then its run, calls and held writes let go.
-export function nodeGone(
-	inner: Inner,
-	id: Id,
-	drop: { runs?: true; calls?: true; held?: true } = {},
-) {
-	const { base, calls, runs, table } = here(inner)
+// A node's entries taken out, then its run and calls let go.
+export function nodeGone(inner: Inner, id: Id, drop: { runs?: true; calls?: true } = {}) {
+	const { calls, runs, table } = here(inner)
 	for (const [part] of table.get(id)) inner.put({ part, id, patches: [], gone: true })
 	if (drop.runs) runs.drop(id)
 	if (drop.calls) calls.drop(id)
-	if (drop.held) base.held.drop(id)
 }
 
 export const runningAt = (base: Base, path: Path, id: Id | undefined) => {

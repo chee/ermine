@@ -68,21 +68,19 @@ function ownStatus(inner: Inner, n: NodeData, id: Id, key?: string): Status {
 	const { base, calls, runs, places } = here(inner)
 	mayRead(inner, id, n.path, STATUS_TABLE, STATUS_KEY)
 	const st = statusOf(places, id)
-	const h = base.held.status(id) ?? base.held.row(id)
-	const held = h === undefined ? {} : { held: h }
 	const computer = computerAt(base.made, id)
 	if (computer === undefined) {
-		if (st === undefined) return { state: "done", ...held }
-		if (st !== PENDING) return { state: "failed", error: st, ...held }
+		if (st === undefined) return { state: "done" }
+		if (st !== PENDING) return { state: "failed", error: st }
 		const said = places.readValue(STATUS_TABLE, id, [WAITING])
 		const live = calls.waits(id).map((w) => waitOf(inner, w))
 		const waiting = Array.isArray(said) && said.length ? said.map((w) => saidOf(inner, w)) : live
-		return { state: "pending", waiting: waiting.length ? waiting : ["PENDING"], ...held }
+		return { state: "pending", waiting: waiting.length ? waiting : ["PENDING"] }
 	}
 	const wants = (k: string) => key === undefined || key === k
 	const field = <F extends Field>(f: F) => runs.read(id, f) as Run[F] | undefined
 	const runN = wants("n") || wants("waiting") ? field("n") : undefined
-	const nOf = runN === undefined ? { ...held } : { n: runN, ...held }
+	const nOf = runN === undefined ? {} : { n: runN }
 	if (st === undefined) return { state: "done", ...nOf }
 	if (st !== PENDING) {
 		if (!wants("state") && !wants("phase")) return { state: "failed", error: st, ...nOf }

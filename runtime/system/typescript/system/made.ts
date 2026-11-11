@@ -163,7 +163,7 @@ function forget(m: Computed) {
 	}
 	base.missing.delete(id)
 	for (const { folder, name } of [...base.names.of(id)]) takeOut(inner, folder, name, id)
-	nodeGone(inner, id, { runs: true, held: true })
+	nodeGone(inner, id, { runs: true })
 }
 
 export function keepAction(inner: Inner, own: Scope, id: Id) {

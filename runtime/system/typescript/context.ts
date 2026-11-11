@@ -43,10 +43,7 @@ export type Write = {
 	readonly patches: readonly Patch[]
 	readonly header?: ChangeHeader
 	readonly gone?: true
-	readonly features?: readonly string[]
 }
-
-export const FEATURES = "features"
 
 // One value a path holds and where it is from. Position 0 is read's; the rest come from onRead.
 export type Version = {
@@ -80,7 +77,6 @@ export type Parts = {
 	readonly may?: Policy
 	readonly header: () => ChangeHeader
 	readonly enter: <T>(cut: unknown, build: Location | undefined, f: () => T) => T
-	readonly put: (context: ProcessContext, write: Write, land: (write: Write) => void) => void
 	readonly queuePulse: () => void
 	readonly onCreateFunction?: (made: CreatedFunction) => void
 	readonly alive: () => void
@@ -166,11 +162,7 @@ export function createProcessContext(
 		else update(entry, w.patches, header)
 		commit([entry])
 	}
-	function headerOf(w: Write): ChangeHeader {
-		const header = w.header ?? parts.header()
-		if (w.features === undefined) return header
-		return { ...header, frame: { info: { [FEATURES]: w.features }, parent: header.frame } }
-	}
+	const headerOf = (w: Write): ChangeHeader => w.header ?? parts.header()
 
 	const ask = (op: string, ...targets: Asked[]) => {
 		if (guarded) guard.write(op, ...targets)
@@ -178,8 +170,7 @@ export function createProcessContext(
 	const aimed = (w: { id: Id; path?: Path }, part: Key) =>
 		targetOf(w.path === undefined ? { id: w.id } : { id: w.id, path: w.path }, part)
 
-	const put = (w: Write) =>
-		inside(() => parts.put(context, w, (x) => (x.gone || x.patches.length) && land(x)))
+	const put = (w: Write) => inside(() => (w.gone || w.patches.length) && land(w))
 
 	const change = (part: Key, at: At, patches: readonly Patch[], gone?: true) => {
 		const t = typeof at === "object" ? at : { id: at }

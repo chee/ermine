@@ -51,10 +51,7 @@ export function explainAs(
 	mayRead(inner, id, n.path, n.part, path)
 	places.readChange(n.part, id)
 	const change = (table.get(n.part, id) as Entry<unknown> | undefined)?.change
-	const h = base.held.at(n.part, id)
-	if (change === undefined) return h === undefined ? undefined : { held: h }
-	const by = writerOf(inner, change)
-	return h === undefined ? by : { ...by, held: h }
+	return change === undefined ? undefined : writerOf(inner, change)
 }
 
 const touched = (inner: Inner, t: { part: Key; id: Id }): Touched => {
