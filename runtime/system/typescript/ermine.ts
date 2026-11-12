@@ -17,7 +17,14 @@
 // // process pending, with what it waits on in ermine.process.waiting. Setup runs once.
 // // close() stops every process ermine started, newest first, then the host's scope.
 import type { ChangeHeader } from "@ermine/graph/entry"
-import { createPlaces, type Id, type Path, type Places } from "@ermine/places"
+import {
+	type Answerer,
+	createPlaces,
+	type Id,
+	type Make,
+	type Path,
+	type Places,
+} from "@ermine/places"
 import { children, createNames, crow } from "@ermine/places/children"
 import { crowify } from "@ermine/places/crowify"
 import { keepStackTraceLimit } from "@ermine/changeable/stacktrace"
@@ -43,15 +50,7 @@ import { isPromise } from "@ermine/reactivity/helpers"
 import { createPaths } from "@ermine/reactivity/paths"
 import { createTable, type Key, type Table } from "@ermine/graph/table"
 import { type Call, createCalls, type Wait } from "./calls.ts"
-import {
-	type Calling,
-	chain,
-	ErmineError,
-	type Errored,
-	type Feature,
-	install,
-	type Reading,
-} from "./features.ts"
+import { type Calling, ErmineError, type Errored, type Feature, install } from "./features.ts"
 import {
 	createProcessContext,
 	type ErmineTable,
@@ -60,7 +59,6 @@ import {
 	type NodeData,
 	type Parts,
 	type ProcessContext,
-	type Version,
 	whole,
 	type Why,
 } from "./context.ts"
@@ -72,8 +70,8 @@ import { callAbove } from "./system/scopes.ts"
 import { attach, innerOf } from "./system/setting.ts"
 import { type ChangeView, type Status, WAITING } from "./system/shapes.ts"
 
-export { ErmineError, FeatureError } from "./features.ts"
-export type { Calling, Feature, FeatureAPI, Hook, Hooks, Reading } from "./features.ts"
+export { ErmineError } from "./features.ts"
+export type { Calling, Feature, FeatureAPI } from "./features.ts"
 export type {
 	At,
 	From,
@@ -103,6 +101,8 @@ export type { Call, Wait } from "./calls.ts"
 
 export type Options = {
 	features?: readonly Feature[]
+	// More answers for what's at a node, after the table's: readAll shows each one's, front first.
+	answerers?: readonly (Answerer | Make)[]
 	scheduler?: Scheduler
 	may?: Policy
 	// A graph to start from, as storage hands it back: its root's id is root.
@@ -212,6 +212,7 @@ function make(options: Options, undo: (() => void)[]): Ermine {
 	let places: Places | undefined
 	// deno-lint-ignore prefer-const
 	let processes: Processes | undefined
+	// deno-lint-ignore prefer-const
 	let made:
 		| {
 			getProcessContext: (process?: Process) => ProcessContext | undefined
@@ -246,7 +247,7 @@ function make(options: Options, undo: (() => void)[]): Ermine {
 			return once
 		}
 	}
-	const features = install(options.features ?? [], {
+	install(options.features ?? [], {
 		scheduler: heard,
 		table: { get: table.get, who: table.who },
 		places: () => places,
@@ -259,9 +260,6 @@ function make(options: Options, undo: (() => void)[]): Ermine {
 		viewOf: () => made?.viewOf,
 		newId: () => ids,
 	})
-	// Hooks and slots are added in setup only: every chain below is built from them as they are now.
-	features.done()
-	const { hooks } = features
 	const newId = options.createId ?? uuidv7
 	ids = newId
 	const format = options.errorFormatter
@@ -273,7 +271,7 @@ function make(options: Options, undo: (() => void)[]): Ermine {
 		table: table as Table,
 		paths: createPaths<unknown>(),
 		scheduler: s,
-		contributors: [rows(root), children],
+		contributors: [rows(root), children, ...options.answerers ?? []],
 		now: options.now,
 	})
 	const offRelease = s.onTrackingEnd((key) => places!.release(key))
@@ -343,24 +341,6 @@ function make(options: Options, undo: (() => void)[]): Ermine {
 		queuePulse,
 		alive,
 	}
-	const tag = (feature: string, item: Version): Version =>
-		item.from.feature !== undefined ? item : { ...item, from: { ...item.from, feature } }
-	const fresh = (feature: string, before: readonly Version[], after: readonly Version[]) => {
-		const had = new Set(before)
-		return after.map((i) => had.has(i) ? i : tag(feature, i))
-	}
-	const shown = chain<[Reading, readonly Version[]], readonly Version[]>(
-		hooks.onRead,
-		"onRead",
-		(_x, items) => items,
-		(
-			feature,
-			[, items],
-			[x2, items2],
-		) => [x2 as never, fresh(feature, items, items2 as Version[])],
-		(feature, [, items], inner, out) => fresh(feature, inner ?? items, out),
-	)
-
 	const hostInner = createProcessContext(parts, {
 		scope: hostScope,
 		places: p,
@@ -439,7 +419,6 @@ function make(options: Options, undo: (() => void)[]): Ermine {
 		views: new WeakMap(),
 		changes: new WeakMap(),
 		enter,
-		shown,
 	}
 
 	attach(base, hostInner)

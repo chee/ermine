@@ -1,5 +1,5 @@
 {
-	"title": "features: needs and their order. a need not given: missing-feature; a name twice: feature-twice; needs going round: needs-loop. chain order: the list, each one's needs first; the first outermost, so its hook is called first",
+	"title": "features: needs and their order. a need not given: missing-feature; a name twice: feature-twice; needs going round: needs-loop. setup order: the list, each one's needs first",
 	"steps": [
 		{
 			"op": "ermine",
@@ -59,83 +59,25 @@
 					"name": "b",
 					"needs": [
 						"a"
-					],
-					"onRead": "log"
+					]
 				},
 				{
-					"name": "a",
-					"onRead": "log"
+					"name": "a"
 				},
 				{
-					"name": "c",
-					"onRead": "log"
+					"name": "c"
 				}
 			],
 			"expect": {}
 		},
 		{
-			"op": "host",
-			"call": [
-				"ensureNode",
-				"/x",
-				1
-			],
-			"expect": {
-				"value": {
-					"path": [
-						"x"
-					],
-					"part": "value"
-				}
-			}
-		},
-		{
-			"op": "host",
-			"call": [
-				"log",
-				"x",
-				[
-					"all",
-					[
-						"each",
-						[
-							"readAll",
-							"/x"
-						],
-						[
-							"value"
-						]
-					]
-				]
-			],
-			"expect": {
-				"value": [
-					[
-						1
-					]
-				]
-			}
-		},
-		{
 			"op": "log",
-			"name": "hooks",
+			"name": "setups",
 			"expect": {
 				"values": [
-					[
-						"a",
-						"onRead",
-						"n1"
-					],
-					[
-						"b",
-						"onRead",
-						"n1"
-					],
-					[
-						"c",
-						"onRead",
-						"n1"
-					]
+					"a",
+					"b",
+					"c"
 				]
 			}
 		}

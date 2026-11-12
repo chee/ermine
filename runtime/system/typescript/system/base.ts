@@ -5,9 +5,9 @@ import type { Runs } from "@ermine/processes/runs"
 import type { Computer, Frame, Scope } from "@ermine/reactivity"
 import type { Location } from "@ermine/changeable/stacktrace"
 import type { Calls } from "../calls.ts"
-import type { Errored, Reading } from "../features.ts"
+import type { Errored } from "../features.ts"
 import type { Handles } from "../handles.ts"
-import type { Inner, Parts, Version, Why } from "../context.ts"
+import type { Inner, Parts, Why } from "../context.ts"
 import type { Made } from "./made.ts"
 import type { ChangeView, WriterAs } from "./shapes.ts"
 
@@ -49,5 +49,4 @@ export type Base = {
 	readonly changes: WeakMap<ChangeView, ChangeHeader>
 	readonly pulse: () => void
 	readonly enter: Parts["enter"]
-	readonly shown: (x: Reading, items: readonly Version[]) => readonly Version[]
 }

@@ -65,8 +65,14 @@ typedef struct {
 typedef struct {
 	char *name;
 	const op_value *spec;
-	op_value *held;
 } tf_t;
+
+typedef struct {
+	char *name;
+	const char *read;
+	op_value *value, *from;
+	pl_contributor contributor;
+} ta_t;
 
 typedef struct {
 	void *p;
@@ -181,16 +187,6 @@ static void log_push(const char *name, op_value *v) {
 		es_map_set(&W->logs, name, list);
 	}
 	op_push(list, v != NULL ? v : op_null());
-}
-
-static void say(const tf_t *t, const char *hook, const char *a, const char *b, const char *c) {
-	op_value *row = op_list();
-	op_push(row, op_str(t->name));
-	op_push(row, op_str(hook));
-	if (a != NULL) op_push(row, op_str(a));
-	if (b != NULL) op_push(row, op_str(b));
-	if (c != NULL) op_push(row, op_str(c));
-	log_push("hooks", row);
 }
 
 static char *rooted(const char *p) {
@@ -433,13 +429,12 @@ static op_value *version_value(const es_version *v) {
 	if (v->value != NULL) op_set(m, "value", op_ref((op_value *)v->value));
 	op_value *from = op_map();
 	if (v->from.view != NULL) op_set(from, "change", es_live("view", v->from.view));
-	if (v->from.kind != NULL) op_set(from, "kind", op_str(v->from.kind));
-	if (v->from.feature != NULL) op_set(from, "feature", op_str(v->from.feature));
 	if (v->from.more != NULL && v->from.more->type == OP_MAP) {
 		for (size_t i = 0; i < v->from.more->count; i++) {
 			op_set(from, v->from.more->keys[i], op_ref(v->from.more->items[i]));
 		}
 	}
+	if (v->from.feature != NULL) op_set(from, "feature", op_str(v->from.feature));
 	op_set(m, "from", from);
 	if (v->gone) op_set(m, "gone", op_bool(1));
 	if (v->inside) op_set(m, "inside", op_bool(1));
@@ -584,19 +579,7 @@ static op_value *error_value(int code) {
 	const es_error *t = es_thrown();
 	switch (code) {
 	case ES_PENDING: op_set(m, "error", op_str("pending")); break;
-	case ES_REFUSED:
-		op_set(m, "error", op_str("refused"));
-		if (t->feature != NULL) {
-			op_set(m, "feature", op_str(t->feature));
-			op_set(m, "hook", op_str(t->hook != NULL ? t->hook : ""));
-		}
-		break;
-	case ES_FEATURE:
-		op_set(m, "error", op_str("feature"));
-		op_set(m, "feature", op_str(t->feature != NULL ? t->feature : ""));
-		op_set(m, "hook", op_str(t->hook != NULL ? t->hook : ""));
-		op_set(m, "cause", op_str(t->cause != NULL ? t->cause : ""));
-		break;
+	case ES_REFUSED: op_set(m, "error", op_str("refused")); break;
 	case ES_FAILED: {
 		const char *message = t->message != NULL ? t->message : "";
 		char *s = es_alloc(strlen(message) + 8);
@@ -1919,38 +1902,8 @@ static pr_answer deny_run(void *ctx, const pr_ask *ask, const pr_read *read) {
 	return (pr_answer){.verdict = PR_YES};
 }
 
-// --- the test features (features_fixture.ts) ----------
+// --- the test features and answerers (features_fixture.ts) ----------
 
-static int boom(const tf_t *t) { return fail("%s threw", t->name); }
-static int is_how(const tf_t *t, const char *hook, const char *how) {
-	const char *x = text(t->spec, hook);
-	return x != NULL && strcmp(x, how) == 0;
-}
-
-static int tf_read(void *ctx, const es_reading *x, const es_versions *items, es_read_next *next,
-	es_versions *out) {
-	tf_t *t = ctx;
-	say(t, "onRead", x->id, NULL, NULL);
-	if (is_how(t, "onRead", "throw")) return boom(t);
-	if (is_how(t, "onRead", "drop")) {
-		*out = (es_versions){0};
-		return 0;
-	}
-	if (is_how(t, "onRead", "add")) {
-		es_versions mine = {0};
-		mine.items = es_alloc((items->n + 1) * sizeof *mine.items);
-		memcpy(mine.items, items->items, items->n * sizeof *mine.items);
-		mine.n = mine.cap = items->n + 1;
-		es_version *extra = &mine.items[items->n];
-		extra->held = op_str(t->name);
-		extra->value = extra->held;
-		extra->from.kind = "test";
-		int code = es_next_read(next, x, &mine, out);
-		free(mine.items);
-		return code;
-	}
-	return es_next_read(next, x, items, out);
-}
 // the code the error formatter is told, as the TypeScript fixture logs error.code: a failure carrying an
 // apply code (its message's first word) logs that code, as an ApplyError's code is
 static const char *error_code(int code) {
@@ -1974,18 +1927,17 @@ static int format_error(void *ctx, int code, const char *fn) {
 }
 static int tf_setup(void *ctx, es_feature_api *f) {
 	tf_t *t = ctx;
+	log_push("setups", op_str(t->name));
 	if (flag(t->spec, "early")) {
 		pl *places;
 		TRY(es_api_places(f, &places));
 	}
-	if (flag(t->spec, "onRead")) TRY(es_on_read(f, tf_read, t));
 	return 0;
 }
 
 static void tf_free(void *p) {
 	tf_t *t = p;
 	free(t->name);
-	op_free(t->held);
 	free(t);
 }
 
@@ -2009,6 +1961,36 @@ static int feature_of(const op_value *f, const es_feature **out) {
 	}
 	*out = feature;
 	return 0;
+}
+
+static void ta_read(void *ctx, tb_key part, tb_key id, const op_key *path, size_t n, pl_versions *out) {
+	(void)part, (void)path, (void)n;
+	ta_t *t = ctx;
+	op_value *row = op_list();
+	op_push(row, op_str(t->name));
+	op_push(row, op_str(id.string != NULL ? id.string : ""));
+	log_push("answered", row);
+	if (strcmp(t->read, "throw") == 0) fail("%s threw", t->name);
+	else if (strcmp(t->read, "add") == 0) pl_versions_add(out, (pl_version){t->value, 0, t->from});
+}
+
+static void ta_free(void *p) {
+	ta_t *t = p;
+	free(t->name);
+	op_free(t->value);
+	op_free(t->from);
+	free(t);
+}
+
+static const pl_contributor *answerer_of(const op_value *a) {
+	ta_t *t = own_with(es_alloc(sizeof *t), ta_free);
+	t->name = es_dup(str_or(a, "name"));
+	t->read = str_or(a, "read");
+	t->value = op_str(t->name);
+	t->from = op_map();
+	op_set(t->from, "kind", op_str("test"));
+	t->contributor = (pl_contributor){.from = t->name, .read = ta_read, .ctx = t};
+	return &t->contributor;
 }
 
 // --- a world made ----------
@@ -2065,6 +2047,10 @@ static int make(const op_value *r, world_t *before) {
 	w->uuid = flag(r, "uuid");
 	w->process_id_throws = text(r, "createProcessId") != NULL && strcmp(text(r, "createProcessId"), "throw") == 0;
 	for (size_t i = 0; i < nfeatures; i++) TRY(feature_of(features->items[i], &list[i]));
+	const op_value *answerers = field(r, "answerers");
+	size_t nanswerers = answerers != NULL && answerers->type == OP_LIST ? answerers->count : 0;
+	const pl_contributor **answering = owned_alloc((nanswerers + 1) * sizeof *answering);
+	for (size_t i = 0; i < nanswerers; i++) answering[i] = answerer_of(answerers->items[i]);
 	if (deny != NULL && deny->type == OP_LIST) {
 		w->deny = owned_alloc((deny->count + 1) * sizeof *w->deny);
 		w->ndeny = deny->count;
@@ -2079,7 +2065,8 @@ static int make(const op_value *r, world_t *before) {
 		}
 		w->policy = pr_call(deny_run, NULL);
 	}
-	es_options o = {.features = list, .nfeatures = nfeatures, .may = w->policy, .table = w->stored, .root = "R",
+	es_options o = {.features = list, .nfeatures = nfeatures, .answerers = answering,
+		.nanswerers = nanswerers, .may = w->policy, .table = w->stored, .root = "R",
 		.info = &w->info, .ninfo = 1,
 		.user_activated = world_user_activated, .no_autopulse = 1};
 	if (!w->uuid || w->process_id_throws) o.create_process_id = harness_process_id;

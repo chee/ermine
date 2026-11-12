@@ -247,18 +247,11 @@ Deno.test("code outside any process acts as the root; a feature's newId is creat
 	e.close()
 })
 
-Deno.test("a hook added while createErmine is making is refused setup-only, not kept by some chains", () => {
+Deno.test("createId throwing while createErmine is making: the throw, and nothing left on the scheduler", () => {
 	const scheduler = counting()
-	let api: FeatureAPI | undefined
-	const late: Feature = { name: "late", setup: (f) => void (api = f) }
 	const createId = () => {
-		api!.onRead((x, items, next) => next(x, items))
-		return "x"
+		throw new Error("no ids")
 	}
-	assertThrows(
-		() => createErmine({ autopulse: false, features: [late], scheduler, createId }),
-		Error,
-		"setup-only",
-	)
+	assertThrows(() => createErmine({ autopulse: false, scheduler, createId }), Error, "no ids")
 	assertEquals(scheduler.live, 0)
 })

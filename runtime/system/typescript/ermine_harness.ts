@@ -2,7 +2,7 @@
 // ermine per run: root "R", host scope { actor: "test" }, ids "n1", "n2", ..., process ids
 // "proc:<name>". After every request the asked-for pulses run until none is asked.
 // node: { path, part } | { id, part }
-// { op: "ermine", features?, deny?, uuid?, errorFormatter? } -> {}
+// { op: "ermine", features?, answerers?, deny?, uuid?, errorFormatter? } -> {}
 //     features: names (another harness's own) or test features (below)
 //     errorFormatter: "log" logs [fn, code] to "formatted" and gives the error back; "replace"
 //     logs the same and gives a "gone" error in its place
@@ -34,9 +34,11 @@
 //     { op: "callframe", id } -> { frame }   where the handler's latest call was made from
 // A call that gave a promise logs how it settled to "promised".
 //
-// A test feature: { name, needs?, onRead?, early? }. Its hook logs [name, hook, ...] to "hooks",
-// then does what its value says: "log" calls next, "drop" does not, "throw" throws "<name> threw",
-// "add" adds an item. The ermine's ids: nodes n1, n2, ..., a process proc:<its start's name>
+// A test feature: { name, needs?, early? }; its setup logs its name to "setups", and early reads
+// places there. A test answerer:
+// { name, read }, after the table; each read logs [name, id] to "answered", then does what read says:
+// "add" answers { value: name, from: { kind: "test" } }, "none" answers nothing, "throw" throws
+// "<name> threw". The ermine's ids: nodes n1, n2, ..., a process proc:<its start's name>
 // (createProcessId "throw": it throws "createProcessId threw").
 //
 // program: steps { do: [fn, ...args], as? }; "$x" in an arg is the name x. fn is a @ermine/system
@@ -58,7 +60,7 @@
 // expr: [fn, ...args], ["all", expr, ...], ["whole", expr], "$x", or any other value as it is.
 // Answers show errors as their message, PENDING as "PENDING", functions as "function". Error answers:
 // PlacesError { error: code }, Refusal "refused", SendError "not-a-method", PENDING "pending",
-// ErmineError its code, FeatureError { error: "feature", feature, hook, cause }, else { error: text }.
+// ErmineError its code, else { error: text }.
 import { userActivation } from "./event_fixture.ts"
 import createEntry from "@ermine/graph/entry"
 import { at } from "@ermine/places"
@@ -79,7 +81,6 @@ import {
 	type Ermine,
 	ErmineError,
 	type Feature,
-	FeatureError,
 	SendError,
 	type Started,
 } from "./ermine.ts"
@@ -88,7 +89,7 @@ import type { System } from "./system/shapes.ts"
 import { isHandle } from "./handles.ts"
 import type { Run } from "@ermine/processes/runs"
 import type { Status } from "./system/shapes.ts"
-import { testFeature } from "./features_fixture.ts"
+import { testAnswerer, testFeature } from "./features_fixture.ts"
 import { type Classify, show } from "../../../meta/conformance/typescript/frames.ts"
 
 type Env = Map<string, unknown>
@@ -173,9 +174,7 @@ function make(o: Request = {}): Made {
 			? named.get(f) ?? (() => {
 				throw new Error(`no feature ${f}`)
 			})()
-			: testFeature(f as Record<string, unknown>, {
-				log,
-			})
+			: testFeature(f as Record<string, unknown>, { log })
 	)
 	const made: Made = {
 		ermine: undefined as never,
@@ -209,6 +208,9 @@ function make(o: Request = {}): Made {
 			},
 		},
 		features,
+		answerers: ((o.answerers ?? []) as Record<string, unknown>[]).map((a) =>
+			testAnswerer(a, { log })
+		),
 		may,
 	})
 	made.hostSys = hostSystem(made.ermine)
@@ -919,17 +921,9 @@ export const serveErmine = (additions: Additions = {}) => {
 			drain()
 			if (e === PENDING) return { error: "pending" }
 			if (e instanceof PlacesError) return { error: e.code }
-			if (e instanceof Refusal) {
-				const by = e as Refusal & { feature?: string; hook?: string }
-				return by.feature === undefined
-					? { error: "refused" }
-					: { error: "refused", feature: by.feature, hook: by.hook }
-			}
+			if (e instanceof Refusal) return { error: "refused" }
 			if (e instanceof SendError) return { error: e.code }
 			if (e instanceof ErmineError) return { error: e.code }
-			if (e instanceof FeatureError) {
-				return { error: "feature", feature: e.feature, hook: e.hook, cause: message(e.cause) }
-			}
 			return { error: String(e) }
 		}
 	})

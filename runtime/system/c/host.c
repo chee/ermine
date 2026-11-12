@@ -1,9 +1,8 @@
-// The host: createErmine, features and hooks, start, stop, close, process contexts, records
-// and the registry. ermine.h declares the functions.
+// The host: createErmine, features, start, stop, close, process contexts, records and the
+// registry. ermine.h declares the functions.
 //
-// The chains hand hooks borrowed arguments for the call. An onRead hook's out is a fresh array, and
-// what next gives into the out a hook passed is that hook's to free or hand up. A closed ermine gives NULL or 0 with es_thrown() ES_CLOSED from
-// every function that returns a pointer or a 1/0.
+// A closed ermine gives NULL or 0 with es_thrown() ES_CLOSED from every function that returns a
+// pointer or a 1/0.
 #include "../../../core/places/c/children.h"
 #include "ermine.h"
 
@@ -18,9 +17,6 @@ static void forget(void) {
 	free(thrown.message);
 	free(thrown.op);
 	free(thrown.reason);
-	free(thrown.feature);
-	free(thrown.hook);
-	free(thrown.cause);
 	thrown = (es_error){0};
 }
 
@@ -45,22 +41,11 @@ int es_fail(int code, const char *fmt, ...) {
 	return code;
 }
 
-int es_fail_refusal(const gd_refusal *why, const char *feature, const char *hook) {
+int es_fail_refusal(const gd_refusal *why) {
 	es_fail(ES_REFUSED, "%s refused: %s", why->op, why->reason);
 	thrown.op = es_dup(why->op);
 	thrown.reason = es_dup(why->reason);
-	if (feature != NULL) thrown.feature = es_dup(feature);
-	if (hook != NULL) thrown.hook = es_dup(hook);
 	return ES_REFUSED;
-}
-
-int es_fail_feature(const char *feature, const char *hook, const char *cause) {
-	char *said = es_dup(cause);
-	es_fail(ES_FEATURE, "%s's %s threw: %s", feature, hook, said);
-	thrown.feature = es_dup(feature);
-	thrown.hook = es_dup(hook);
-	thrown.cause = said;
-	return ES_FEATURE;
 }
 
 int es_fail_text(const char *message) { return es_fail(ES_FAILED, "%s", message); }
@@ -81,13 +66,11 @@ const char *es_code_name(int code) {
 	case ES_PENDING: return "pending";
 	case ES_STOP: return "stop";
 	case ES_NOT_A_METHOD: return "not-a-method";
-	case ES_FEATURE: return "feature";
 	case ES_FAILED: return "failed";
 	case ES_TAKEN: return "taken";
 	case ES_MISSING_FEATURE: return "missing-feature";
 	case ES_FEATURE_TWICE: return "feature-twice";
 	case ES_NEEDS_LOOP: return "needs-loop";
-	case ES_SETUP_ONLY: return "setup-only";
 	case ES_NOT_YET: return "not-yet";
 	case ES_NOTHING_OPEN: return "nothing-open";
 	case ES_NOT_A_HANDLE: return "not-a-handle";
@@ -128,10 +111,6 @@ int es_fail_ermine(int code, const char *fmt, ...) {
 		if (code_) return code_; \
 	} while (0)
 
-
-static const char *const HOOK_NAMES[ES_HOOKS] = {
-	"onRead",
-};
 
 static const char PART_VALUE[] = "value";
 
@@ -185,18 +164,6 @@ static op_patch patch_unset(const op_key *key) {
 
 
 typedef struct {
-	const char *feature;
-	union {
-		es_on_read_fn read;
-	} fn;
-	void *ctx;
-} hook_rec;
-typedef struct {
-	hook_rec *items;
-	size_t n, cap;
-} hook_list;
-
-typedef struct {
 	es_feature_api api;
 	es_ermine *e;
 	char *name;
@@ -225,7 +192,7 @@ typedef struct proc_rec {
 struct es_hosting {
 	int owns;
 	int owns_table;
-	int adding, made, queued;
+	int made, queued;
 	int no_autopulse;
 	int (*create_id)(void *ctx, char **out);
 	void *create_id_ctx;
@@ -238,7 +205,6 @@ struct es_hosting {
 	void *format_ctx;
 	// the next process's id, made before pr_start asks for it
 	char *pid;
-	hook_list hooks[ES_HOOKS];
 	fapi **apis;
 	size_t napis, capapis;
 	sc_listener *settle, *tracking, *tracking_first, *pulsed;
@@ -261,7 +227,7 @@ struct es_hosting {
 	pl_made **blocks;
 	size_t nblocks, capblocks;
 	pr_processes rows_walk;
-	const pl_contributor *contributors[2];
+	const pl_contributor **contributors;
 	es_ermine *next_closed;
 };
 typedef struct es_hosting hosting;
@@ -481,110 +447,8 @@ int es_pulse(es_context *c) {
 }
 
 
-// what a hook's code is passed up as: PENDING, STOP, a FeatureError, and what its next gave pass as
-// they are; a Refusal as it is, its feature and hook named; else a FeatureError
-static int own(const char *feature, const char *hook, int code, int passed) {
-	if (code == 0) return 0;
-	if (code == ES_PENDING || code == ES_STOP || code == ES_FEATURE) return code;
-	if (passed != 0 && code == passed) return code;
-	if (code == ES_REFUSED) {
-		if (thrown.feature == NULL) {
-			thrown.feature = es_dup(feature);
-			thrown.hook = es_dup(hook);
-		}
-		return code;
-	}
-	return es_fail_feature(feature, hook,
-		thrown.message != NULL ? thrown.message : es_code_name(code));
-}
-
-
 void es_commit_changed(es_ermine *e, const pl_changed *changed) { pl_commit(e->places, changed); }
 static void commit_changed(void *ctx, const pl_changed *changed) { es_commit_changed(ctx, changed); }
-
-struct es_read_next {
-	es_ermine *e;
-	size_t i;
-	const es_versions *given;
-	es_version *snapshot;
-	size_t nsnapshot;
-	int passed;
-};
-
-static int same_version(const es_version *a, const es_version *b) {
-	return a->value == b->value && a->from.change == b->from.change && a->from.view == b->from.view &&
-		a->from.kind == b->from.kind && a->from.feature == b->from.feature &&
-		a->from.more == b->from.more && a->gone == b->gone && a->inside == b->inside &&
-		a->held == b->held;
-}
-static int had_version(const es_version *items, size_t n, const es_version *x) {
-	for (size_t k = 0; k < n; k++) {
-		if (same_version(&items[k], x)) return 1;
-	}
-	return 0;
-}
-static void tag_fresh(const char *feature, const es_version *before, size_t nbefore, es_version *after,
-	size_t nafter) {
-	for (size_t k = 0; k < nafter; k++) {
-		if (had_version(before, nbefore, &after[k])) continue;
-		if (after[k].from.feature == NULL) after[k].from.feature = feature;
-	}
-}
-
-static int read_at(es_ermine *e, size_t i, const es_reading *x, const es_versions *items,
-	es_versions *out) {
-	hosting *h = host_of(e);
-	hook_list *l = &h->hooks[ES_ON_READ];
-	if (i == l->n) {
-		out->n = out->cap = items->n;
-		out->items = items->n ? es_alloc(items->n * sizeof *out->items) : NULL;
-		if (items->n) memcpy(out->items, items->items, items->n * sizeof *out->items);
-		return 0;
-	}
-	hook_rec *r = &l->items[i];
-	es_read_next next = {e, i, items, NULL, 0, 0};
-	*out = (es_versions){0};
-	int code = r->fn.read(r->ctx, x, items, &next, out);
-	code = own(r->feature, "onRead", code, next.passed);
-	if (code == 0) {
-		if (next.snapshot != NULL) tag_fresh(r->feature, next.snapshot, next.nsnapshot, out->items, out->n);
-		else tag_fresh(r->feature, items->items, items->n, out->items, out->n);
-	}
-	free(next.snapshot);
-	return code;
-}
-
-int es_next_read(es_read_next *next, const es_reading *x, const es_versions *items,
-	es_versions *out) {
-	hosting *h = host_of(next->e);
-	hook_rec *r = &h->hooks[ES_ON_READ].items[next->i];
-	es_versions tagged = {0};
-	if (items->n) {
-		tagged.items = es_alloc(items->n * sizeof *tagged.items);
-		memcpy(tagged.items, items->items, items->n * sizeof *tagged.items);
-	}
-	tagged.n = tagged.cap = items->n;
-	tag_fresh(r->feature, next->given->items, next->given->n, tagged.items, tagged.n);
-	int code = read_at(next->e, next->i + 1, x, &tagged, out);
-	free(tagged.items);
-	next->passed = code;
-	free(next->snapshot);
-	next->snapshot = NULL;
-	next->nsnapshot = 0;
-	if (code == 0 && out->n) {
-		next->snapshot = es_alloc(out->n * sizeof *next->snapshot);
-		memcpy(next->snapshot, out->items, out->n * sizeof *next->snapshot);
-		next->nsnapshot = out->n;
-	} else if (code == 0) {
-		next->snapshot = es_alloc(sizeof *next->snapshot);
-	}
-	return code;
-}
-
-int es_hook_read(es_ermine *e, const es_reading *x, const es_versions *items, es_versions *out) {
-	return read_at(e, 0, x, items, out);
-}
-
 
 static int given_id(int (*fn)(void *ctx, char **out), void *ctx, const char *name, char **out) {
 	*out = NULL;
@@ -619,7 +483,7 @@ int es_errored(es_ermine *e, int code, const char *fn) {
 }
 
 
-// the id of a new process: start_under made it with the hooks before pr_start asked
+// the id of a new process: start_under made it before pr_start asked
 static char *process_id(void *ctx) {
 	hosting *h = host_of(ctx);
 	char *id = h->pid;
@@ -627,24 +491,6 @@ static char *process_id(void *ctx) {
 	return id;
 }
 
-static int add_hook(es_feature_api *f, es_hook kind, hook_rec rec) {
-	fapi *a = f->private_;
-	hosting *h = host_of(a->e);
-	if (!h->adding) {
-		return es_fail_ermine(ES_SETUP_ONLY, "%s's %s: add the feature to createErmine", a->name,
-			HOOK_NAMES[kind]);
-	}
-	rec.feature = a->name;
-	hook_list *l = &h->hooks[kind];
-	ES_PUSH(l->items, l->n, l->cap, rec);
-	return 0;
-}
-
-int es_on_read(es_feature_api *f, es_on_read_fn fn, void *ctx) {
-	hook_rec r = {.ctx = ctx};
-	r.fn.read = fn;
-	return add_hook(f, ES_ON_READ, r);
-}
 int es_listened(es_feature_api *f, sc_listener *l) {
 	fapi *a = f->private_;
 	hosting *h = host_of(a->e);
@@ -654,7 +500,7 @@ int es_listened(es_feature_api *f, sc_listener *l) {
 
 static int after_setup(const char *what, int ready) {
 	if (ready) return 0;
-	return es_fail_ermine(ES_NOT_YET, "%s is made after setup: use it in a hook", what);
+	return es_fail_ermine(ES_NOT_YET, "%s is made after setup: use it later", what);
 }
 
 int es_api_places(es_feature_api *f, pl **out) {
@@ -854,7 +700,6 @@ static void release(es_ermine *e) {
 	}
 	for (size_t i = 0; i < h->nblocks; i++) pl_made_free(h->blocks[i]);
 	h->nblocks = 0;
-	for (size_t k = 0; k < ES_HOOKS; k++) h->hooks[k].n = 0;
 }
 
 static void unlisten(es_ermine *e) {
@@ -905,7 +750,7 @@ static void free_hosting(es_ermine *e) {
 		free(h->apis[i]->name);
 		free(h->apis[i]);
 	}
-	for (size_t k = 0; k < ES_HOOKS; k++) free(h->hooks[k].items);
+	free(h->contributors);
 	free(h->apis);
 	free(h->listened);
 	free(h->all);
@@ -957,7 +802,6 @@ int es_create(const es_options *given, es_ermine **out) {
 	e->may = o->may;
 	e->user_activated = o->user_activated;
 	e->user_activated_ctx = o->user_activated_ctx;
-	h->adding = 1;
 	h->no_autopulse = o->no_autopulse;
 	h->format = o->error_formatter;
 	h->format_ctx = o->error_formatter_ctx;
@@ -975,19 +819,20 @@ int es_create(const es_options *given, es_ermine **out) {
 	h->owns_table = o->table == NULL;
 	e->table = o->table != NULL ? o->table : tb_new();
 	if ((code = install(e, o)) != 0) goto fail;
-	// hooks are added in setup only, as TS: nothing after this adds
-	h->adding = 0;
 
 	if (o->root != NULL) e->root = es_dup(o->root);
 	else if ((code = es_make_id(e, &e->root)) != 0) goto fail;
 	e->places = pl_new();
 	e->paths = pt_new();
 	pr_processes_init(&h->rows_walk, tb_string(e->root));
+	size_t ncontributors = 2 + o->nanswerers;
+	h->contributors = es_alloc(ncontributors * sizeof *h->contributors);
 	h->contributors[0] = &h->rows_walk.contributor;
 	h->contributors[1] = &pl_children;
+	for (size_t i = 0; i < o->nanswerers; i++) h->contributors[2 + i] = o->answerers[i];
 	pl_connect(e->places, &(pl_setup){.root = tb_string(e->root), .table = e->table, .paths = e->paths,
-		.scheduler = e->scheduler, .contributors = h->contributors, .ncontributors = 2, .tracking = 1,
-		.now = o->now, .now_ctx = o->now_ctx});
+		.scheduler = e->scheduler, .contributors = h->contributors, .ncontributors = ncontributors,
+		.tracking = 1, .now = o->now, .now_ctx = o->now_ctx});
 	e->names = pl_index_new(e->places);
 	h->tracking = sc_on_tracking_end(e->scheduler, pl_forget, e->places);
 	h->tracking_first = sc_on_tracking_start(e->scheduler, pl_tracking, e->places);

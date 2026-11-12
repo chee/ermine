@@ -1,35 +1,32 @@
-// The ermine harness's test features.
-import type { Feature, Hook } from "./ermine.ts"
+// The ermine harness's test features and answerers.
+import type { Answerer } from "@ermine/places"
+import type { Feature } from "./ermine.ts"
 
 export function testFeature(
 	spec: Record<string, unknown>,
-	o: {
-		log: (name: string, v: unknown) => void
-	},
+	o: { log: (name: string, v: unknown) => void },
 ): Feature {
-	const { log } = o
-	const name = spec.name as string
-	const say = (hook: Hook, ...more: unknown[]) => log("hooks", [name, hook, ...more])
-	const boom = () => {
-		throw new Error(`${name} threw`)
-	}
 	return {
-		name,
+		name: spec.name as string,
 		...spec.needs !== undefined && { needs: spec.needs as string[] },
 		setup(f) {
+			o.log("setups", spec.name)
 			if (spec.early) void f.places
-			if (spec.onRead) {
-				f.onRead((x, items, next) => {
-					say("onRead", x.id)
-					const how = spec.onRead
-					if (how === "throw") boom()
-					if (how === "drop") return []
-					if (how === "add") {
-						return next(x, [...items, { value: name, from: { kind: "test" } }])
-					}
-					return next(x, items)
-				})
-			}
+		},
+	}
+}
+
+export function testAnswerer(
+	spec: Record<string, unknown>,
+	o: { log: (name: string, v: unknown) => void },
+): Answerer {
+	const name = spec.name as string
+	return {
+		from: name,
+		read: (_part, id) => {
+			o.log("answered", [name, id])
+			if (spec.read === "throw") throw new Error(`${name} threw`)
+			return spec.read === "add" ? [{ value: name, from: { kind: "test" } }] : []
 		},
 	}
 }
