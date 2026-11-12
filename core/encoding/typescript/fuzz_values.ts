@@ -257,8 +257,6 @@ export function shuffled(pick: Pick, v: Value): Value {
 export const canon = (x: number | bigint) =>
 	typeof x === "bigint"
 		? (x >= -(2n ** 53n) + 1n && x <= 2n ** 53n - 1n ? Number(x) : x)
-		: Number.isInteger(x) && !Number.isSafeInteger(x)
-		? BigInt(x)
 		: x === 0
 		? 0
 		: x
@@ -430,7 +428,8 @@ export function rewrites(pick: Pick, b: Uint8Array): [string, Uint8Array][] {
 			: BigInt(i.arg)
 		const n = i.major === 0 ? m : -1n - m
 		const x = Number(n)
-		if (BigInt(x) === n) {
+		// only below 2^53: from there a whole number written as a float is a number's own encoding
+		if (BigInt(x) === n && Number.isSafeInteger(x)) {
 			const v = new DataView(new ArrayBuffer(9))
 			const f = Object.is(Math.f16round(x), x) ? 3 : Object.is(Math.fround(x), x) ? 5 : 9
 			if (f === 3) v.setUint8(0, 0xf9), v.setFloat16(1, x)

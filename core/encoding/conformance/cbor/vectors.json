@@ -45,11 +45,20 @@
 	{ "value": 65504.5, "cbor": "fa477fe080" },
 	{ "value": 5.960464477539063e-8, "cbor": "f90001" },
 	{
-		"from": "the largest float32 is whole: a bignum, read back as a bigint",
+		"from": "the largest float32 is whole, and past 2^53: a number, so a float",
 		"value": 3.4028234663852886e+38,
-		"cbor": "c250ffffff00000000000000000000000000",
-		"back": { "/": { "bigint": "340282346638528859811704183484516925440" } }
+		"cbor": "fa7f7fffff"
 	},
+	{
+		"from": "the same value as a bigint: a bignum, read back as a bigint",
+		"value": { "/": { "bigint": "340282346638528859811704183484516925440" } },
+		"cbor": "c250ffffff00000000000000000000000000"
+	},
+	{ "from": "2^53 as a number: a float", "value": 9007199254740992, "cbor": "fa5a000000" },
+	{ "from": "-(2^53) as a number: a float", "value": -9007199254740992, "cbor": "fada000000" },
+	{ "from": "2^53 + 2 as a number", "value": 9007199254740994, "cbor": "fb4340000000000001" },
+	{ "from": "2^64 as a number", "value": 18446744073709551616, "cbor": "fa5f800000" },
+	{ "from": "1e300 as a number", "value": 1e+300, "cbor": "fb7e37e43c8800759c" },
 	{ "value": 0.1, "cbor": "fb3fb999999999999a" },
 	{ "value": -4.1, "cbor": "fbc010666666666666" },
 	{ "value": { "/": { "number": "NaN" } }, "cbor": "f97e00" },
@@ -59,8 +68,8 @@
 	{ "cbor": "f98000", "refused": "-0 as a float: -0 is 0, an integer" },
 	{ "cbor": "f93c00", "refused": "1 as a half: whole numbers are integers" },
 	{ "cbor": "fa47c35000", "refused": "100000 as a float32" },
-	{ "cbor": "fa5a000000", "refused": "2^53 as a float32" },
-	{ "cbor": "fb7e37e43c8800759c", "refused": "1e300 as a float64: a bignum" },
+	{ "cbor": "fa59800000", "refused": "2^52 as a float32: whole numbers below 2^53 are integers" },
+	{ "cbor": "fb433fffffffffffff", "refused": "2^53 - 1 as a float64" },
 	{ "cbor": "1817", "refused": "23 in a longer head" },
 	{ "cbor": "3817", "refused": "-24 in a longer head" },
 	{ "cbor": "1b00000000ffffffff", "refused": "an eight-byte head a four-byte one holds" },

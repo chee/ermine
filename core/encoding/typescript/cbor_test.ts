@@ -5,12 +5,10 @@ const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "
 const unhex = (s: string) => new Uint8Array(s.match(/../g)?.map((x) => parseInt(x, 16)) ?? [])
 const bytes = (...xs: number[]) => new Uint8Array(xs)
 
-// a number as read back: -0 is 0, a whole number past 2^53 - 1 a bigint, a safe bigint a number
+// a number as read back: -0 is 0, a safe bigint a number, every other number and bigint itself
 const canon = (x: number | bigint) =>
 	typeof x === "bigint"
 		? (x >= -(2n ** 53n) + 1n && x <= 2n ** 53n - 1n ? Number(x) : x)
-		: Number.isInteger(x) && !Number.isSafeInteger(x)
-		? BigInt(x)
 		: x === 0
 		? 0
 		: x
@@ -118,6 +116,38 @@ for (const [name, value, want] of VECTORS) {
 	})
 }
 
+// A number comes back a number and a bigint past 2^53 - 1 a bigint: a whole number a double can
+// no longer count by ones is written as a float, and only a bigint as a big integer.
+const KEPT: [string, number | bigint, string][] = [
+	["2^53", 2 ** 53, "fa5a000000"],
+	["-(2^53)", -(2 ** 53), "fada000000"],
+	["2^53 + 2", 2 ** 53 + 2, "fb4340000000000001"],
+	["1e21", 1e21, "fb444b1ae4d6e2ef50"],
+	["2^64", 2 ** 64, "fa5f800000"],
+	["-(2^64)", -(2 ** 64), "fadf800000"],
+	["1e300", 1e300, "fb7e37e43c8800759c"],
+	["the largest float32", 3.4028234663852886e38, "fa7f7fffff"],
+	["the largest double", Number.MAX_VALUE, "fb7fefffffffffffff"],
+	["2^53 as a bigint", 2n ** 53n, "1b0020000000000000"],
+	["-(2^53) as a bigint", -(2n ** 53n), "3b001fffffffffffff"],
+	["2^64 as a bigint", 2n ** 64n, "c249010000000000000000"],
+]
+
+for (const [name, x, want] of KEPT) {
+	Deno.test(`cbor: ${name} comes back the ${typeof x} it was`, () => {
+		const got = encode(x)
+		assertEquals(hex(got), want)
+		const back = decode(got)
+		assertEquals(typeof back, typeof x)
+		assertEquals(back, x)
+	})
+}
+
+Deno.test("cbor: a whole number below 2^53 written as a float is still refused", () => {
+	assertThrows(() => decode(unhex("fb433fffffffffffff")), CborError) // 2^53 - 1
+	assertThrows(() => decode(unhex("fa59800000")), CborError) // 2^52
+})
+
 Deno.test("cbor: a NaN element is the one NaN", () => {
 	const f32 = new Float32Array(1)
 	new Uint32Array(f32.buffer)[0] = 0x7fc00001
@@ -164,9 +194,8 @@ const REJECTED: [string, string][] = [
 	["1 as a half", "f93c00"],
 	["1 as a float32", "fa3f800000"],
 	["1 as a float64", "fb3ff0000000000000"],
-	["2^53 as a float32", "fa5a000000"],
-	["2^64 as a float32", "fa5f800000"],
-	["1e300 as a float64", "fb7e37e43c8800759c"],
+	["2^52 as a float32", "fa59800000"],
+	["2^53 - 1 as a float64", "fb433fffffffffffff"],
 	["a bignum a plain integer holds", "c2480100000000000000"],
 	["a bignum of nothing", "c240"],
 	["a bignum with a leading zero", "c24a00010000000000000000"],

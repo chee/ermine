@@ -49,12 +49,13 @@
 						[
 							{
 								"do": [
-									"patch",
+									"patchChildren",
 									"/missing",
 									[
 										{
-											"path": [],
-											"value": 1
+											"path": [
+												"x"
+											]
 										}
 									]
 								]

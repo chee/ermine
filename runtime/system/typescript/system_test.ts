@@ -48,7 +48,7 @@ Deno.test("@ermine/system: getNode makes nothing, ensureNode makes once, hasNode
 	e.close()
 })
 
-Deno.test("@ermine/system: patch takes patches or a function giving them; a node not there: nothing-there; attributes by their own pair", () => {
+Deno.test("@ermine/system: patch takes patches or a function giving them; a node not there is made; attributes by their own pair", () => {
 	const e = createErmine({ autopulse: false })
 	const errors: unknown[] = []
 	e.within(() =>
@@ -70,7 +70,8 @@ Deno.test("@ermine/system: patch takes patches or a function giving them; a node
 	)
 	e.start(programAt(e, "/code/p"), "/code/p")
 	assertEquals(e.within(() => read("/code/x")), { n: 1 })
-	assertEquals(errors, ["not-patches", "nothing-there"])
+	assertEquals(e.within(() => read("/code/missing")), 1)
+	assertEquals(errors, ["not-patches"])
 	let kind: unknown
 	e.getProcessContext()!.within(() => kind = readAttributes("/code/x", ["kind"]))
 	assertEquals(kind, "thing")
@@ -101,6 +102,28 @@ Deno.test("@ermine/system: patch with a function is given the value now; edit cu
 	let kind: unknown
 	e.getProcessContext()!.within(() => kind = readAttributes("/code/tags", ["kind"]))
 	assertEquals(kind, "tags")
+	e.close()
+})
+
+Deno.test("@ermine/system: a function patch at a missing path is given undefined: a start value unless one is there", () => {
+	const e = createErmine({ autopulse: false })
+	const seen: unknown[] = []
+	const start = (v: unknown) => {
+		seen.push(v)
+		return v === undefined ? [{ path: [], value: 0 }] : []
+	}
+	e.within(() =>
+		ensureNode("/code/p", () => {
+			patch("./speed", start)
+			patch("./speed", [{ path: [], value: 5 }])
+			patch("./speed", start)
+			patch("./none", () => [])
+		})
+	)
+	e.start(programAt(e, "/code/p"), "/code/p")
+	assertEquals(seen, [undefined, 5])
+	assertEquals(e.within(() => peep(() => read("/code/speed"))), 5)
+	assertEquals(e.within(() => hasNode("/code/none")), false)
 	e.close()
 })
 

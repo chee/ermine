@@ -55,7 +55,7 @@ function integer(n: bigint): string {
 
 function model(x: number | bigint): string {
 	if (typeof x === "bigint") return integer(x)
-	if (Number.isInteger(x)) return integer(BigInt(x))
+	if (Number.isSafeInteger(x)) return integer(BigInt(x))
 	if (x !== x) return "f97e00"
 	const v = new DataView(new ArrayBuffer(9))
 	if (Object.is(Math.f16round(x), x)) {
@@ -97,11 +97,7 @@ Deno.test(`cbor fuzz: ${SEEDS * 50} numbers, the integer or the shortest float, 
 			const back = decode(encode(x))
 			assert(Object.is(back, canon(x)) || (x !== x && Number.isNaN(back)), `${x}`)
 			const big = typeof back === "bigint"
-			assertEquals(
-				big,
-				Number.isInteger(Number(x)) && !Number.isSafeInteger(Number(canon(x))),
-				`${x}`,
-			)
+			assertEquals(big, typeof x === "bigint" && !Number.isSafeInteger(Number(x)), `${x}`)
 		}
 	}
 })

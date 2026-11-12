@@ -1,0 +1,211 @@
+{
+	"title": "a patch at a path with nothing there makes the node, and any folders on the way; patchAttributes too, and patchChildren makes a missing folder when it places a name. no patches: nothing made. it asks edit on the new node, then place on its folder: either refused, nothing is made",
+	"steps": [
+		{
+			"op": "ermine",
+			"deny": [
+				{
+					"op": "edit",
+					"path": "shut",
+					"from": "code/p"
+				},
+				{
+					"op": "place",
+					"path": "locked",
+					"from": "code/p"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/locked",
+				0
+			]
+		},
+		{
+			"op": "code",
+			"at": "/code/p",
+			"program": [
+				{
+					"do": [
+						"patch",
+						"/a/b/c",
+						[
+							{
+								"path": [],
+								"value": 1
+							}
+						]
+					]
+				},
+				{
+					"do": [
+						"patchAttributes",
+						"/d",
+						[
+							{
+								"path": [
+									"k"
+								],
+								"value": "v"
+							}
+						]
+					]
+				},
+				{
+					"do": [
+						"patch",
+						"/e",
+						[]
+					]
+				},
+				{
+					"do": [
+						"patchChildren",
+						"/f",
+						[
+							{
+								"path": [
+									"x"
+								],
+								"value": "/a/b/c"
+							}
+						]
+					]
+				},
+				{
+					"do": [
+						"caught",
+						"shut",
+						[
+							{
+								"do": [
+									"patch",
+									"/shut",
+									[
+										{
+											"path": [],
+											"value": 1
+										}
+									]
+								]
+							}
+						]
+					]
+				},
+				{
+					"do": [
+						"caught",
+						"locked",
+						[
+							{
+								"do": [
+									"patch",
+									"/locked/x",
+									[
+										{
+											"path": [],
+											"value": 1
+										}
+									]
+								]
+							}
+						]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": "/code/p",
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/a/b/c"
+			],
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"readAttributes",
+				"/d"
+			],
+			"expect": {
+				"value": {
+					"k": "v"
+				}
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"hasNode",
+				"/e"
+			],
+			"expect": {
+				"value": false
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/f/x"
+			],
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"hasNode",
+				"/shut"
+			],
+			"expect": {
+				"value": false
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"hasNode",
+				"/locked/x"
+			],
+			"expect": {
+				"value": false
+			}
+		},
+		{
+			"op": "log",
+			"name": "shut",
+			"expect": {
+				"values": [
+					"refused"
+				]
+			}
+		},
+		{
+			"op": "log",
+			"name": "locked",
+			"expect": {
+				"values": [
+					"refused"
+				]
+			}
+		}
+	]
+}

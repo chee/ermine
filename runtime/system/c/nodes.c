@@ -1486,14 +1486,29 @@ static int patch_in(void *p) {
 	patching *s = p;
 	es_node_data n;
 	TRY(node_part(s->c, s->x, s->part, &n));
-	const char *id;
-	int code = need_id(s->c, &n, &id);
-	if (!code) code = ask(s->c, "edit", gd_target_of(es_thing_of(id, &n), n.part, NULL));
+	const char *id = NULL;
+	char *made = NULL;
+	int code = 0;
+	if (!es_id_of(s->c, &n, &id) && n.has_path && !check(s->c)) {
+		// nothing there: made, folders on the way too, if there are patches. edit asked first
+		if (s->n) code = es_make_id(s->c->ermine, &made);
+		id = made;
+		if (s->n && !code) code = ask(s->c, "edit", gd_target_of(es_thing_of(id, &n), n.part, NULL));
+		if (s->n && !code) {
+			char *built = NULL;
+			code = es_build(s->c, CP(n.path), n.npath, NULL, made, &built);
+			free(built);
+		}
+	} else {
+		code = need_id(s->c, &n, &id);
+		if (!code) code = ask(s->c, "edit", gd_target_of(es_thing_of(id, &n), n.part, NULL));
+	}
 	if (!code && s->n) {
 		es_write w = {.part = n.part, .id = id, .has_path = n.has_path, .path = CP(n.path),
 			.npath = n.npath, .patches = s->patches, .npatches = s->n};
 		code = es_context_put(s->c, &w);
 	}
+	free(made);
 	es_node_data_free(&n);
 	return code;
 }
@@ -1691,8 +1706,16 @@ static int children_in(void *p) {
 	es_ermine *e = s->c->ermine;
 	es_node_data n;
 	TRY(es_node_of(s->c, s->x, &n));
-	const char *folder;
-	int code = need_id(s->c, &n, &folder);
+	const char *folder = NULL;
+	char *made = NULL;
+	int code = 0;
+	int placing_any = 0;
+	for (size_t i = 0; i < s->n; i++) placing_any |= s->patches[i].has_value && s->patches[i].value != NULL;
+	if (!es_id_of(s->c, &n, &folder) && n.has_path && placing_any && !check(s->c)) {
+		// a missing folder is made if a name is placed
+		code = es_build(s->c, CP(n.path), n.npath, NULL, NULL, &made);
+		folder = made;
+	} else code = need_id(s->c, &n, &folder);
 	for (size_t i = 0; i < s->n && !code; i++) {
 		const op_patch *p = &s->patches[i];
 		if (p->place.length != 1 || p->place.path[0].type != OP_STR_KEY || p->has_move ||
@@ -1756,6 +1779,7 @@ static int children_in(void *p) {
 		}
 		op_free(field);
 	}
+	free(made);
 	es_node_data_free(&n);
 	return code;
 }

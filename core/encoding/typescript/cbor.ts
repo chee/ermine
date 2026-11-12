@@ -1,17 +1,20 @@
 // Deterministic CBOR (RFC 8949 4.2.1) for values, with typed arrays as RFC 8746. This header is the
 // rule; core/encoding/conformance/cbor/vectors.json holds the bytes.
-// - whole numbers: integers in the shortest head; past 64 bits a bignum (tag 2 or 3, big-endian,
-//   no leading zero). -0 is 0. A number or bigint of the same value gives the same bytes.
-// - other numbers: the shortest float that holds them exactly; one NaN f97e00; infinities f97c00, f9fc00
-// - read back: a number up to 2^53 - 1, a bigint past that
+// - whole numbers up to 2^53 - 1 either way, and every bigint: integers in the shortest head; past
+//   64 bits a bignum (tag 2 or 3, big-endian, no leading zero). -0 is 0. Up to 2^53 - 1 a number
+//   and a bigint of the same value give the same bytes.
+// - other numbers, a whole number from 2^53 among them (a double no longer counts by ones there):
+//   the shortest float that holds them exactly; one NaN f97e00; infinities f97c00, f9fc00
+// - read back: an integer up to 2^53 - 1 a number, past that a bigint; a float always a number. So
+//   a number comes back a number, and a bigint past 2^53 - 1 a bigint.
 // - map keys are strings, sorted bytewise by their encodings
 // - typed arrays: a tag over little-endian bytes (uint16 69 ... float64 86); NaNs are the quiet NaN,
 //   -0 is kept, and there is no uint8 kind
 // - stand-ins: tag 0x12345678 over the kind. Live values and symbols have no encoding, unless
 //   encode(x, { live: true }) writes each as a stand-in naming it.
 // - at most DEPTH nested containers
-// Decoding accepts exactly what encoding gives: no float holding a whole number, no overlong
-// head, no bignum that a plain integer holds.
+// Decoding accepts exactly what encoding gives: no float holding a whole number below 2^53, no
+// overlong head, no bignum that a plain integer holds.
 
 /** A value as this codec holds it. */
 export type Value =
@@ -144,7 +147,7 @@ function half(x: number): number | undefined {
 	return (sig & ((1 << shift) - 1)) === 0 ? sign | (sig >>> shift) : undefined
 }
 
-const TWO64 = 2 ** 64, EXACT = 2n ** 53n
+const SAFE = 2n ** 53n - 1n
 
 /** A bigint's magnitude as bytes, big-endian, no leading zero. */
 function magnitude(m: bigint): Uint8Array {
@@ -155,7 +158,7 @@ function magnitude(m: bigint): Uint8Array {
 	return b
 }
 
-/** A whole number past what a double's head math holds exactly, as a bigint. */
+/** A bigint past 2^53 - 1 either way, as an integer. */
 function integer(out: Out, x: bigint) {
 	const negative = x < 0n, m = negative ? -1n - x : x
 	if (m < 0x10000000000000000n) {
@@ -172,11 +175,7 @@ function integer(out: Out, x: bigint) {
 }
 
 function number(out: Out, x: number) {
-	if (Number.isInteger(x)) {
-		if (x >= 0 && x < TWO64) return out.head(0, x === 0 ? 0 : x)
-		if (x < 0 && x >= -(2 ** 53)) return out.head(1, -1 - x)
-		return integer(out, BigInt(x))
-	}
+	if (Number.isSafeInteger(x)) return x >= 0 ? out.head(0, x === 0 ? 0 : x) : out.head(1, -1 - x)
 	out.room(9)
 	const n = out.n
 	if (x !== x) {
@@ -306,7 +305,7 @@ function value(out: Out, x: unknown, open: Set<object>, depth: number, live: boo
 	if (typeof x === "number") return number(out, x)
 	if (typeof x === "string") return text(out, x)
 	if (typeof x === "bigint") {
-		return x >= -EXACT && x <= EXACT ? number(out, Number(x)) : integer(out, x)
+		return x >= -SAFE && x <= SAFE ? number(out, Number(x)) : integer(out, x)
 	}
 	if (x === null) return out.byte(0xf6)
 	if (x === false) return out.byte(0xf4)
@@ -392,7 +391,6 @@ export function encode(x: Value, options?: { live?: boolean }): Uint8Array {
 
 // decoding -------------------------------------------------------------------
 
-const SAFE = 2n ** 53n - 1n
 const wrong = (why: string) =>
 	new CborError("not-an-encoding", `not an encoding of a value: ${why}`)
 
@@ -618,7 +616,7 @@ function read(input: In, depth: number): Value {
 			} else if (x !== x || half(x) !== undefined || (ib === 0xfb && Math.fround(x) === x)) {
 				throw wrong("a number not in its shortest float")
 			}
-			if (Number.isInteger(x)) throw wrong("a whole number written as a float")
+			if (Number.isSafeInteger(x)) throw wrong("a whole number below 2^53 written as a float")
 			return x
 		}
 	}
