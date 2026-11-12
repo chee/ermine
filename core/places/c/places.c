@@ -491,14 +491,14 @@ void pl_versions_add(pl_versions *out, pl_version item) {
 }
 
 // The first item an answerer in front of the table holds: 1 and *out its value (NULL when gone),
-// or 0 when none of them holds anything.
+// or 0 when none of them holds anything. pl_read can't fail, so a front read that fails holds
+// nothing here; pl_read_all reports it.
 static int front(pl *l, tb_key part, tb_key id, const op_key *path, size_t n, const op_value **out) {
 	for (size_t i = 0; i < l->stored_at; i++) {
 		const pl_contributor *c = l->asked[i];
 		if (c->read == NULL) continue;
 		pl_versions held = {0};
-		c->read(c->ctx, part, id, path, n, &held);
-		if (held.n == 0) {
+		if (c->read(c->ctx, part, id, path, n, &held) || held.n == 0) {
 			free(held.items);
 			continue;
 		}
@@ -531,27 +531,34 @@ static void shown_add(pl_showns *out, pl_shown item) {
 	out->items[out->n++] = item;
 }
 
-static void ask(const pl_contributor *c, tb_key part, tb_key id, const op_key *path, size_t n,
+static int ask(const pl_contributor *c, tb_key part, tb_key id, const op_key *path, size_t n,
 	pl_showns *out) {
-	if (c->read == NULL) return;
+	if (c->read == NULL) return 0;
 	pl_versions held = {0};
-	c->read(c->ctx, part, id, path, n, &held);
+	int code = c->read(c->ctx, part, id, path, n, &held);
+	if (code) {
+		free(held.items);
+		return code;
+	}
 	for (size_t i = 0; i < held.n; i++) {
 		shown_add(out, (pl_shown){held.items[i].gone ? NULL : held.items[i].value, held.items[i].gone,
 			held.items[i].from, NULL, c->from});
 	}
 	free(held.items);
+	return 0;
 }
 
-pl_showns pl_read_all(pl *l, tb_key part, tb_key id, const op_key *path, size_t n) {
+int pl_read_all(pl *l, tb_key part, tb_key id, const op_key *path, size_t n, pl_showns *out) {
 	if (!l->s->peeping) tell(l, pt_spot_of(l->s->paths, pair_key(l, part), paths_key(id), path, n, 0));
-	pl_showns out = {0};
-	for (size_t i = 0; i < l->stored_at; i++) ask(l->asked[i], part, id, path, n, &out);
+	*out = (pl_showns){0};
+	int code = 0;
+	for (size_t i = 0; i < l->stored_at && !code; i++) code = ask(l->asked[i], part, id, path, n, out);
+	if (code) return code;
 	const nd_entry *node = tb_get(l->s->table, part, id);
 	const op_value *v = node != NULL ? pl_at(node->value, path, n, &l->s->scratch) : NULL;
-	if (v != NULL) shown_add(&out, (pl_shown){v, 0, NULL, &node->change, l->stored_by});
-	for (size_t i = l->stored_at + 1; i < l->nasked; i++) ask(l->asked[i], part, id, path, n, &out);
-	return out;
+	if (v != NULL) shown_add(out, (pl_shown){v, 0, NULL, &node->change, l->stored_by});
+	for (size_t i = l->stored_at + 1; i < l->nasked && !code; i++) code = ask(l->asked[i], part, id, path, n, out);
+	return code;
 }
 
 int pl_read_range(pl *l, tb_key part, tb_key id, const op_key *path, size_t n, int64_t a, int64_t b,

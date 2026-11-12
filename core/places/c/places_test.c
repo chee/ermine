@@ -103,19 +103,26 @@ typedef struct {
 	const op_value *at_key;
 	int asked;
 } holder;
-static void hold_read(void *ctx, tb_key part, tb_key id, const op_key *path, size_t n,
+static int fail_read(void *ctx, tb_key part, tb_key id, const op_key *path, size_t n,
+	pl_versions *out) {
+	(void)part, (void)id, (void)path, (void)n, (void)out;
+	++*(int *)ctx;
+	return 7;
+}
+static int hold_read(void *ctx, tb_key part, tb_key id, const op_key *path, size_t n,
 	pl_versions *out) {
 	holder *h = ctx;
 	h->asked++;
-	if (strcmp(part.string, h->part) != 0 || id.string == NULL || strcmp(id.string, h->id) != 0) return;
+	if (strcmp(part.string, h->part) != 0 || id.string == NULL || strcmp(id.string, h->id) != 0) return 0;
 	if (n == 1 && h->key != NULL && path[0].type == OP_STR_KEY && strcmp(path[0].s, h->key) == 0) {
 		pl_versions_add(out, (pl_version){h->at_key, 0, NULL});
-		return;
+		return 0;
 	}
-	if (n != 0) return;
+	if (n != 0) return 0;
 	for (size_t i = 0; i < h->n; i++) {
 		pl_versions_add(out, (pl_version){h->items[i], h->gone[i], h->from});
 	}
+	return 0;
 }
 
 static const void *marked[8];
@@ -179,11 +186,12 @@ static void answerers(void) {
 
 	// none reads: pl_read_all is the table's one item, with its entry's change, by children
 	answering(walk, 1);
-	pl_showns all = pl_read_all(p, tb_string("value"), tb_string("n"), NULL, 0);
+	pl_showns all;
+	pl_read_all(p, tb_string("value"), tb_string("n"), NULL, 0, &all);
 	CHECK(all.n == 0);
 	pl_showns_free(&all);
 	put("n", op_str("now"));
-	all = pl_read_all(p, tb_string("value"), tb_string("n"), NULL, 0);
+	pl_read_all(p, tb_string("value"), tb_string("n"), NULL, 0, &all);
 	CHECK(all.n == 1 && is_str(all.items[0].value, "now") && !all.items[0].gone);
 	CHECK(strcmp(all.items[0].by, "children") == 0 && all.items[0].from == NULL);
 	CHECK(all.items[0].change == pl_change(p, tb_string("value"), tb_string("n")));
@@ -200,12 +208,12 @@ static void answerers(void) {
 	op_value *cut = NULL;
 	CHECK(pl_read_range(p, tb_string("value"), tb_string("n"), NULL, 0, 0, 0, &cut) == OP_OK);
 	CHECK(cut == NULL && history.asked == 0);
-	all = pl_read_all(p, tb_string("value"), tb_string("n"), NULL, 0);
+	pl_read_all(p, tb_string("value"), tb_string("n"), NULL, 0, &all);
 	CHECK(all.n == 2 && is_str(all.items[0].value, "older") && history.asked == 1);
 	pl_showns_free(&all);
 	put("n", op_str("now"));
 	CHECK(is_str(value_of("n"), "now") && history.asked == 1);
-	all = pl_read_all(p, tb_string("value"), tb_string("n"), NULL, 0);
+	pl_read_all(p, tb_string("value"), tb_string("n"), NULL, 0, &all);
 	CHECK(all.n == 3 && is_str(all.items[0].value, "now") && is_str(all.items[2].value, "oldest"));
 	CHECK(strcmp(all.items[0].by, "children") == 0 && strcmp(all.items[1].by, "history") == 0);
 	CHECK(all.items[1].from == heads && all.items[1].change == NULL && all.items[0].change != NULL);
@@ -230,7 +238,7 @@ static void answerers(void) {
 	put("m", op_str("kept"));
 	CHECK(is_str(value_of("n"), "draft") && second.asked == 0);
 	CHECK(is_str(value_of("m"), "kept") && second.asked == 1);
-	all = pl_read_all(p, tb_string("value"), tb_string("n"), NULL, 0);
+	pl_read_all(p, tb_string("value"), tb_string("n"), NULL, 0, &all);
 	CHECK(all.n == 3 && is_str(all.items[0].value, "draft") && is_str(all.items[2].value, "saved"));
 	CHECK(strcmp(all.items[0].by, "overlay") == 0 && strcmp(all.items[2].by, "children") == 0);
 	pl_showns_free(&all);
@@ -242,7 +250,7 @@ static void answerers(void) {
 	op_free(cut);
 	overlay.gone[0] = 1;
 	CHECK(value_of("n") == NULL);
-	all = pl_read_all(p, tb_string("value"), tb_string("n"), NULL, 0);
+	pl_read_all(p, tb_string("value"), tb_string("n"), NULL, 0, &all);
 	CHECK(all.n == 3 && all.items[0].gone && all.items[0].value == NULL);
 	pl_showns_free(&all);
 	overlay.gone[0] = 0;
@@ -269,11 +277,23 @@ static void answerers(void) {
 	pl_set_free(&titled);
 	teardown(as, apaths);
 
+	// a read that fails: pl_read_all stops there and returns it, asking none after it
+	int failing = 0;
+	holder later = {.part = "value", .id = "n", .items = {older}, .n = 1};
+	const pl_contributor broken = {.from = "broken", .read = fail_read, .ctx = &failing};
+	const pl_contributor last = {.from = "later", .read = hold_read, .ctx = &later};
+	const pl_contributor *const failing_list[] = {&pl_children, &broken, &last};
+	answering(failing_list, 3);
+	CHECK(pl_read_all(p, tb_string("value"), tb_string("n"), NULL, 0, &all) == 7);
+	CHECK(failing == 1 && later.asked == 0);
+	pl_showns_free(&all);
+	teardown(as, apaths);
+
 	// none marked stored: the table is last, and its item is by "table"
 	const pl_contributor *const unmarked[] = {&over};
 	answering(unmarked, 1);
 	put("n", op_str("saved"));
-	all = pl_read_all(p, tb_string("value"), tb_string("n"), NULL, 0);
+	pl_read_all(p, tb_string("value"), tb_string("n"), NULL, 0, &all);
 	CHECK(all.n == 2 && is_str(all.items[0].value, "draft") && strcmp(all.items[1].by, "table") == 0);
 	pl_showns_free(&all);
 	teardown(as, apaths);

@@ -1193,9 +1193,10 @@ static int versions_part(es_context *c, es_target x, const char *part, const op_
 	}
 	if (code) return es_node_data_free(&n), code;
 	es_clear_thrown();
-	pl_showns all = pl_read_all(c->places, tb_string(n.part), tb_string(id), key, nkey);
+	pl_showns all;
+	int failed = pl_read_all(c->places, tb_string(n.part), tb_string(id), key, nkey, &all);
 	es_node_data_free(&n);
-	code = es_thrown()->code;
+	code = !failed ? 0 : es_thrown()->code ? es_thrown()->code : ES_FAILED;
 	if (!code) code = check(c);
 	if (code) return pl_showns_free(&all), code;
 	out->items = all.n ? es_alloc(all.n * sizeof *out->items) : NULL;

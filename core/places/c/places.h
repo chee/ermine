@@ -78,8 +78,8 @@ typedef struct {
 	int (*level)(void *ctx, const pl_here *here, const char *name, pl *reads);
 	void *ctx;
 	// What it holds for (part, id) at path, added to out front first; nothing added: not its.
-	// NULL: it answers no reads.
-	void (*read)(void *ctx, tb_key part, tb_key id, const op_key *path, size_t n, pl_versions *out);
+	// Nonzero: the read failed, and pl_read_all stops there. NULL: it answers no reads.
+	int (*read)(void *ctx, tb_key part, tb_key id, const op_key *path, size_t n, pl_versions *out);
 	// The table's own values are read where this one is among the contributors.
 	int stored;
 } pl_contributor;
@@ -173,8 +173,9 @@ typedef struct {
 	size_t n, cap;
 } pl_showns;
 void pl_showns_free(pl_showns *list);
-// Tracked as pl_read is. Borrowed as each answerer's items are, until it is next asked.
-pl_showns pl_read_all(pl *l, tb_key part, tb_key id, const op_key *path, size_t n);
+// Tracked as pl_read is. Borrowed as each answerer's items are, until it is next asked. Returns
+// the first answerer's failure (nonzero), asking none after it; out is to free either way.
+int pl_read_all(pl *l, tb_key part, tb_key id, const op_key *path, size_t n, pl_showns *out);
 // What an answerer holds for (part, id) has moved: marks its readers as pl_add does (patches
 // NULL) or as pl_commit does for the patches, and tells no watch.
 void pl_moved(pl *p, tb_key part, tb_key id, const op_patch *patches, size_t n);

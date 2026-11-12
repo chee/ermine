@@ -129,7 +129,7 @@ One kept write. Bytes: a cbor array.
   `readAll` shows conflicts only: `history.versions(node, part, path)` is the cells at the path, the
   shown first, each from the step that made it (a key its parent's put made, with no cell of its
   own: that put's); every device, keeper or forgetting, returns the same. `typescript/reading.ts` is
-  the feature for @ermine/system's `onRead`, adding all but the first (read's own)
+  an answerer for @ermine/system (createErmine's `answerers`), giving all but the first (read's own)
 
   trash (chee, 11-02: removals hide; only the host empties; readAll never shows it): a container a
   put replaced, a removal or a splice took away, or that landed after a pred named its cell, is held

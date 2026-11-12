@@ -1963,15 +1963,16 @@ static int feature_of(const op_value *f, const es_feature **out) {
 	return 0;
 }
 
-static void ta_read(void *ctx, tb_key part, tb_key id, const op_key *path, size_t n, pl_versions *out) {
+static int ta_read(void *ctx, tb_key part, tb_key id, const op_key *path, size_t n, pl_versions *out) {
 	(void)part, (void)path, (void)n;
 	ta_t *t = ctx;
 	op_value *row = op_list();
 	op_push(row, op_str(t->name));
 	op_push(row, op_str(id.string != NULL ? id.string : ""));
 	log_push("answered", row);
-	if (strcmp(t->read, "throw") == 0) fail("%s threw", t->name);
-	else if (strcmp(t->read, "add") == 0) pl_versions_add(out, (pl_version){t->value, 0, t->from});
+	if (t->read != NULL && strcmp(t->read, "throw") == 0) return fail("%s threw", t->name), 1;
+	if (t->read != NULL && strcmp(t->read, "add") == 0) pl_versions_add(out, (pl_version){t->value, 0, t->from});
+	return 0;
 }
 
 static void ta_free(void *p) {

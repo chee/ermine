@@ -1,5 +1,5 @@
 {
-	"title": "answerers, given to createErmine, answer for what is at a node after the table: readAll shows the table's value first, then each answerer's items in the list's order, each naming it in from.feature; read shows the table's. one that answers nothing adds nothing; one that throws, the read throws that. a feature's setup reaching places, made after setup: not-yet",
+	"title": "answerers, given to createErmine, answer for what is at a node after the table: readAll shows the table's value first, then each answerer's items in the list's order, each naming it in from.feature; read shows the table's. one that answers nothing adds nothing; one that throws, the read throws that, and none after it is asked. a feature's setup reaching places, made after setup: not-yet",
 	"steps": [
 		{
 			"op": "ermine",
@@ -148,6 +148,10 @@
 				{
 					"name": "t",
 					"read": "throw"
+				},
+				{
+					"name": "s",
+					"read": "add"
 				}
 			],
 			"expect": {}
@@ -179,6 +183,18 @@
 			],
 			"expect": {
 				"value": 1
+			}
+		},
+		{
+			"op": "log",
+			"name": "answered",
+			"expect": {
+				"values": [
+					[
+						"t",
+						"n1"
+					]
+				]
 			}
 		},
 		{
