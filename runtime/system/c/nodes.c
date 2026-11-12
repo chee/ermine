@@ -1205,13 +1205,13 @@ static int versions_part(es_context *c, es_target x, const char *part, const op_
 		const pl_shown *s = &all.items[i];
 		es_version *v = &out->items[i];
 		v->gone = s->gone;
+		// the list lets go of its references: each version takes its own
+		v->held = op_ref((op_value *)s->value);
+		v->value = v->held;
 		if (s->change != NULL) {
-			v->value = s->value;
 			v->from.change = pl_change_value(e->places, s->change);
 			if (v->from.change != NULL) v->from.view = es_change_view_of(e, v->from.change);
 		} else {
-			v->held = op_ref((op_value *)s->value);
-			v->value = v->held;
 			v->from.feature = s->by;
 			v->from.more = op_ref((op_value *)s->from);
 		}

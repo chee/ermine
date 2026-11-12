@@ -14,8 +14,8 @@
 // marked: one before it is in front of the table, one after it behind.
 //   pl_read_all   every answerer's items in that order, each with who answered (by)
 //   pl_read       the first item an answerer in front holds, else the table's value; a gone item
-//                 is nothing. One behind the table is never asked: what it holds shows in
-//                 pl_read_all only.
+//                 is nothing. The one marked stored and those behind are never asked: what they
+//                 hold shows in pl_read_all only, the stored one's right after the table's.
 // An answerer says what it holds has moved with pl_moved (places.ts's changed), which marks
 // readers and tells no watch. pl_keys, pl_change and pl_read_here are the table's alone.
 #ifndef PLACES_H
@@ -54,8 +54,9 @@ typedef struct {
 } pl_namelist;
 void pl_namelist_free(pl_namelist *list);
 
-// One thing an answerer holds. value is borrowed until the answerer is next asked, and NULL when
-// gone. from is the answerer's own account of where it is from (NULL: none), borrowed the same.
+// One thing an answerer holds. from is the answerer's own account of where it is from (NULL:
+// none). The answerer hands over one reference of value and of from (op_ref one it holds, or a
+// new one); the list owns them.
 typedef struct {
 	const op_value *value;
 	int gone;
@@ -66,6 +67,7 @@ typedef struct {
 	size_t n, cap;
 } pl_versions;
 void pl_versions_add(pl_versions *out, pl_version item);
+void pl_versions_free(pl_versions *list);
 
 // from must outlive the places. A contributor reads through the places it is handed.
 typedef struct {
@@ -152,7 +154,8 @@ void pl_stop(pl_watch *w);
 // A typed array element is made in scratch and returned (good until the next call; 64-bit
 // elements come as doubles). NULL if nothing is there.
 const op_value *pl_at(const op_value *v, const op_key *path, size_t n, op_value *scratch);
-// Borrowed until the node changes (a typed array element: until the next pl_read).
+// Borrowed until the node changes. A typed array element is good until the next pl_read; a front
+// answerer's value until the same spot is read again, or the places is freed.
 const op_value *pl_read(pl *l, tb_key part, tb_key id, const op_key *path, size_t n);
 // What the delete patch { path, range: [a, b] } would take out: a string, list or typed array of
 // its own (a list shares its items), in *out for the caller to op_free. Tracked as pl_read is. It
@@ -160,7 +163,8 @@ const op_value *pl_read(pl *l, tb_key part, tb_key id, const op_key *path, size_
 int pl_read_range(pl *l, tb_key part, tb_key id, const op_key *path, size_t n, int64_t a, int64_t b,
 	op_value **out);
 // A version and who gave it: by is the answerer's from ("table" for the table's with none marked
-// stored). The table's item has its entry's change and no from; an answerer's has no change.
+// stored). The table's item has its entry's change and no from; an answerer's has no change. Each
+// item holds a reference of its value and from, let go by pl_showns_free.
 typedef struct {
 	const op_value *value;
 	int gone;
@@ -173,8 +177,7 @@ typedef struct {
 	size_t n, cap;
 } pl_showns;
 void pl_showns_free(pl_showns *list);
-// Tracked as pl_read is. Borrowed as each answerer's items are, until it is next asked. Returns
-// the first answerer's failure (nonzero), asking none after it; out is to free either way.
+// Tracked as pl_read is. A gone item keeps its value. Returns the first answerer's failure (nonzero), asking none after it; out is to free either way.
 int pl_read_all(pl *l, tb_key part, tb_key id, const op_key *path, size_t n, pl_showns *out);
 // What an answerer holds for (part, id) has moved: marks its readers as pl_add does (patches
 // NULL) or as pl_commit does for the patches, and tells no watch.
