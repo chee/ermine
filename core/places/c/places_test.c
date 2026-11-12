@@ -103,11 +103,13 @@ typedef struct {
 	const op_value *at_key;
 	int asked;
 } holder;
+// lends one item, then fails: what it added before failing must not show
+static op_value half = {.type = OP_NUM, .num = 0.5, .refs = 1};
 static int fail_read(void *ctx, tb_key part, tb_key id, const op_key *path, size_t n,
 	pl_versions *out) {
 	(void)part, (void)id, (void)path, (void)n;
 	++*(int *)ctx;
-	pl_versions_add(out, (pl_version){op_str("half"), 0, NULL});
+	pl_versions_add(out, (pl_version){.value = &half});
 	return 7;
 }
 static int hold_read(void *ctx, tb_key part, tb_key id, const op_key *path, size_t n,
@@ -116,40 +118,40 @@ static int hold_read(void *ctx, tb_key part, tb_key id, const op_key *path, size
 	h->asked++;
 	if (strcmp(part.string, h->part) != 0 || id.string == NULL || strcmp(id.string, h->id) != 0) return 0;
 	if (n == 1 && h->key != NULL && path[0].type == OP_STR_KEY && strcmp(path[0].s, h->key) == 0) {
-		pl_versions_add(out, (pl_version){op_ref((op_value *)h->at_key), 0, NULL});
+		pl_versions_add(out, (pl_version){h->at_key, 0, NULL});
 		return 0;
 	}
 	if (n != 0) return 0;
 	for (size_t i = 0; i < h->n; i++) {
-		pl_versions_add(out, (pl_version){op_ref((op_value *)h->items[i]), h->gone[i],
-			op_ref((op_value *)h->from)});
+		pl_versions_add(out, (pl_version){h->items[i], h->gone[i], h->from});
 	}
 	return 0;
 }
 
-// Hands over a new number each time it is asked: 1, 2, ...
+// Makes a new number each time it is asked, 1, 2, ..., and holds every one till it is let go.
+typedef struct {
+	op_value *made[4];
+	size_t n;
+} counter_t;
 static int count_read(void *ctx, tb_key part, tb_key id, const op_key *path, size_t n,
 	pl_versions *out) {
 	(void)part, (void)id, (void)path, (void)n;
-	pl_versions_add(out, (pl_version){op_num(++*(int *)ctx), 0, NULL});
+	counter_t *c = ctx;
+	if (c->n == 4) return 0;
+	c->made[c->n] = op_num((double)c->n + 1);
+	pl_versions_add(out, (pl_version){c->made[c->n++], 0, NULL});
 	return 0;
 }
-// Answers children/R at "a" with a new id, X.
-static int kid_read(void *ctx, tb_key part, tb_key id, const op_key *path, size_t n,
-	pl_versions *out) {
-	(void)ctx;
-	if (strcmp(part.string, "children") || id.string == NULL || strcmp(id.string, "R") || n != 1) return 0;
-	if (path[0].type != OP_STR_KEY || strcmp(path[0].s, "a")) return 0;
-	pl_versions_add(out, (pl_version){op_str("X"), 0, NULL});
-	return 0;
-}
-// Reads B[0] through the places and hands over a copy of it.
+// Reads B[0] through the places and lends it, copied into the number it holds.
 static int peek_read(void *ctx, tb_key part, tb_key id, const op_key *path, size_t n,
 	pl_versions *out) {
-	(void)ctx, (void)part, (void)id, (void)path, (void)n;
+	(void)part, (void)id, (void)path, (void)n;
+	op_value *copy = ctx;
 	op_key zero = {.type = OP_NUM_KEY, .n = 0};
 	const op_value *v = pl_read(p, tb_string("value"), tb_string("B"), &zero, 1);
-	if (v != NULL) pl_versions_add(out, (pl_version){op_num(v->num), 0, NULL});
+	if (v == NULL) return 0;
+	copy->num = v->num;
+	pl_versions_add(out, (pl_version){copy, 0, NULL});
 	return 0;
 }
 
@@ -254,7 +256,7 @@ static void answerers(void) {
 	pl_members_free(&names);
 	teardown(as, apaths);
 
-	// one in front of the table is read first; nothing from it looks through; gone hides the table
+	// one in front of the table shows first in pl_read_all; pl_read never asks it
 	holder overlay = {.part = "value", .id = "n", .items = {draft}, .n = 1, .key = "title",
 		.at_key = title};
 	holder second = {.part = "value", .id = "n", .items = {older}, .n = 1};
@@ -263,23 +265,24 @@ static void answerers(void) {
 	const pl_contributor *const before[] = {&over, &under, &pl_children};
 	answering(before, 3);
 	put("n", op_str("saved"));
-	put("m", op_str("kept"));
-	CHECK(is_str(value_of("n"), "draft") && second.asked == 0);
-	CHECK(is_str(value_of("m"), "kept") && second.asked == 1);
+	CHECK(is_str(value_of("n"), "saved") && overlay.asked == 0 && second.asked == 0);
+	op_key at_title = {.type = OP_STR_KEY, .s = "title"};
+	CHECK(pl_read(p, tb_string("value"), tb_string("n"), &at_title, 1) == NULL);
+	CHECK(pl_read_range(p, tb_string("value"), tb_string("n"), NULL, 0, 1, 3, &cut) == OP_OK);
+	CHECK(is_str(cut, "av"));
+	op_free(cut);
+	CHECK(overlay.asked == 0);
 	pl_read_all(p, tb_string("value"), tb_string("n"), NULL, 0, &all);
 	CHECK(all.n == 3 && is_str(all.items[0].value, "draft") && is_str(all.items[2].value, "saved"));
 	CHECK(strcmp(all.items[0].by, "overlay") == 0 && strcmp(all.items[2].by, "children") == 0);
 	pl_showns_free(&all);
-	// it is asked with the path, and a range is cut from the front value (code points)
-	op_key at_title = {.type = OP_STR_KEY, .s = "title"};
-	CHECK(pl_read(p, tb_string("value"), tb_string("n"), &at_title, 1) == title);
-	CHECK(pl_read_range(p, tb_string("value"), tb_string("n"), &at_title, 1, 1, 3, &cut) == OP_OK);
-	CHECK(is_str(cut, "\xc3\xa9l"));
-	op_free(cut);
-	overlay.gone[0] = 1;
-	CHECK(value_of("n") == NULL);
-	pl_read_all(p, tb_string("value"), tb_string("n"), NULL, 0, &all);
+	// it is asked with the path
+	pl_read_all(p, tb_string("value"), tb_string("n"), &at_title, 1, &all);
+	CHECK(all.n == 1 && all.items[0].value == title);
+	pl_showns_free(&all);
 	// a gone item keeps its value in pl_read_all
+	overlay.gone[0] = 1;
+	pl_read_all(p, tb_string("value"), tb_string("n"), NULL, 0, &all);
 	CHECK(all.n == 3 && all.items[0].gone && all.items[0].value == draft);
 	pl_showns_free(&all);
 	overlay.gone[0] = 0;
@@ -314,7 +317,7 @@ static void answerers(void) {
 	const pl_contributor *const failing_list[] = {&pl_children, &broken, &last};
 	answering(failing_list, 3);
 	CHECK(pl_read_all(p, tb_string("value"), tb_string("n"), NULL, 0, &all) == 7);
-	CHECK(failing == 1 && later.asked == 0);
+	CHECK(failing == 1 && later.asked == 0 && all.n == 0 && half.refs == 1);
 	pl_showns_free(&all);
 	teardown(as, apaths);
 
@@ -327,34 +330,9 @@ static void answerers(void) {
 	pl_showns_free(&all);
 	teardown(as, apaths);
 
-	// a front answerer's own new value is good until the same spot is read again
-	int counted = 0;
+	// the same contributor twice: each answer is its own
+	counter_t counted = {0};
 	const pl_contributor counter = {.from = "counter", .read = count_read, .ctx = &counted};
-	const pl_contributor *const counting[] = {&counter, &pl_children};
-	answering(counting, 2);
-	const op_value *one = value_of("n");
-	CHECK(value_of("m")->num == 2);
-	CHECK(one != NULL && one->type == OP_NUM && one->num == 1);
-	CHECK(value_of("n")->num == 3 && value_of("m")->num == 4);
-	teardown(as, apaths);
-
-	// a walk through a child id a front answerer made: the id lives on as the next step reads
-	const pl_contributor kidder = {.from = "kidder", .read = kid_read};
-	const pl_contributor *const kidding[] = {&kidder, &pl_children};
-	answering(kidding, 2);
-	op_value *xmap = op_map();
-	op_set(xmap, "b", op_str("Y"));
-	nd_entry *xs = nd_make_entry(xmap, NULL);
-	op_free(xmap);
-	pl_own(p, xs);
-	pl_add(p, tb_string("children"), tb_string("X"), xs);
-	tb_key found;
-	CHECK(pl_get(p, (const char *const[]){"a", "b"}, 2, &found) == 1);
-	CHECK(found.string != NULL && strcmp(found.string, "Y") == 0);
-	teardown(as, apaths);
-
-	// the same contributor twice: each answer is its own, the first not lost to the second
-	counted = 0;
 	const pl_contributor *const twice[] = {&pl_children, &counter, &counter};
 	answering(twice, 3);
 	put("n", op_str("now"));
@@ -363,9 +341,11 @@ static void answerers(void) {
 	CHECK(all.items[1].value->num == 1 && all.items[2].value->num == 2);
 	pl_showns_free(&all);
 	teardown(as, apaths);
+	for (size_t i = 0; i < counted.n; i++) op_free(counted.made[i]);
 
 	// the table's item is a byte, and one behind reads another byte through pl_read: it stays
-	const pl_contributor peek = {.from = "peek", .read = peek_read};
+	op_value *copy = op_num(0);
+	const pl_contributor peek = {.from = "peek", .read = peek_read, .ctx = copy};
 	const pl_contributor *const peeking[] = {&pl_children, &peek};
 	answering(peeking, 2);
 	put("A", op_bytes((const unsigned char[]){1, 2}, 2));
@@ -375,6 +355,7 @@ static void answerers(void) {
 	CHECK(all.n == 2 && all.items[0].value->num == 1 && all.items[1].value->num == 9);
 	pl_showns_free(&all);
 	teardown(as, apaths);
+	op_free(copy);
 
 	// one marked stored that reads: asked right after the table's item, never by pl_read
 	holder stored = {.part = "value", .id = "n", .items = {older}, .n = 1};

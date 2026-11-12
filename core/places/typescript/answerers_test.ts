@@ -109,43 +109,31 @@ Deno.test("answerers: a read never asks one behind the table: what it holds for 
 	assertEquals(old.asked, ["value/gone"])
 })
 
-Deno.test("answerers: a read stops at the first item in front: a later one in front is not asked", () => {
-	const a = holder("a", { "value/n": [{ value: "a's" }] })
-	const b = holder("b", { "value/n": [{ value: "b's" }], "value/m": [{ value: "b's m" }] })
-	const { places } = world([a.answerer, b.answerer, children])
-	assertEquals(places.readValue("value", "n"), "a's")
-	assertEquals(b.asked, [])
-	assertEquals(places.readValue("value", "m"), "b's m")
-	assertEquals([a.asked, b.asked], [["value/n", "value/m"], ["value/m"]])
-})
-
-Deno.test("answerers: one in front of the table is read first; [] looks through it, gone hides the table", () => {
+Deno.test("answerers: a read never asks one in front; readAll shows its items first, gone ones with their value", () => {
 	const over = holder("overlay", { "value/n": [{ value: "draft" }] })
 	const { places, put } = world([over.answerer, children])
 	put("value", "n", "saved")
-	put("value", "m", "kept")
 	put("value", "g", "hidden")
-	over.held["value/g"] = [{ value: undefined, gone: true }]
-	assertEquals(places.readValue("value", "n"), "draft")
-	assertEquals(places.readValue("value", "m"), "kept")
-	assertEquals(places.readValue("value", "g"), undefined)
+	over.held["value/g"] = [{ value: "was", gone: true }]
+	assertEquals(places.readValue("value", "n"), "saved")
+	assertEquals(places.readValue("value", "g"), "hidden")
+	assertEquals(over.asked, [])
 	assertEquals(
 		places.readAll("value", "n").map((v) => [v.value, v.by]),
 		[["draft", "overlay"], ["saved", "children"]],
 	)
 	assertEquals(
 		places.readAll("value", "g").map((v) => [v.gone, v.value, v.by]),
-		[[true, undefined, "overlay"], [undefined, "hidden", "children"]],
+		[[true, "was", "overlay"], [undefined, "hidden", "children"]],
 	)
 })
 
-Deno.test("answerers: an answerer is asked with the path, and a range is cut from the front value", () => {
+Deno.test("answerers: an answerer is asked with the path", () => {
 	const over = holder("overlay", { "value/n/title": [{ value: "héllo" }] })
 	const { places, put } = world([over.answerer, children])
 	put("value", "n", { title: "saved", body: "text" })
-	assertEquals(places.readValue("value", "n", ["title"]), "héllo")
-	assertEquals(places.readValue("value", "n", ["title"], [1, 3]), "él")
-	assertEquals(places.readValue("value", "n", ["body"], [0, 2]), "te")
+	assertEquals(places.readAll("value", "n", ["title"]).map((v) => v.value), ["héllo", "saved"])
+	assertEquals(over.asked, ["value/n/title"])
 })
 
 Deno.test("answerers: an item's own from is kept, and who answered is beside it", () => {
@@ -199,15 +187,14 @@ Deno.test("answerers: changed reruns a reader of what an answerer holds, and tel
 	const { s, places, watch } = world([old.answerer, children])
 	const facts: Fact[] = []
 	places.watchAll((f) => void facts.push(f))
-	const one = watch(() => places.readValue("value", "n"))
 	const all = watch(() => places.readAll("value", "n").length)
-	const other = watch(() => places.readValue("value", "m"))
+	const other = watch(() => places.readAll("value", "m").length)
 	s.pulse()
-	assertEquals([one.runs, one.value, all.value, other.runs], [1, 1, 1, 1])
+	assertEquals([all.value, other.runs], [1, 1])
 	old.held["value/n"] = [{ value: 2 }, { value: 1 }]
 	places.changed("value", "n")
 	s.pulse()
-	assertEquals([one.runs, one.value, all.runs, all.value, other.runs], [2, 2, 2, 2, 1])
+	assertEquals([all.runs, all.value, other.runs], [2, 2, 1])
 	assertEquals(facts, [])
 })
 
@@ -219,8 +206,8 @@ Deno.test("answerers: a Make is handed changed, and changed with patches reruns 
 		return { from: "served", read: (_part, _id, path) => [{ value: held[String(path[0])] }] }
 	}
 	const { s, places, watch } = world([make, children])
-	const title = watch(() => places.readValue("value", "n", ["title"]))
-	const body = watch(() => places.readValue("value", "n", ["body"]))
+	const title = watch(() => places.readAll("value", "n", ["title"])[0]?.value)
+	const body = watch(() => places.readAll("value", "n", ["body"])[0]?.value)
 	s.pulse()
 	held.body = "c"
 	changed!("value", "n", [{ path: ["body"], value: "c" }])

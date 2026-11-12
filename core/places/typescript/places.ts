@@ -14,17 +14,11 @@
 // the table, one after it behind.
 //
 //   readAll(part, id, path)    every answerer's items in that order, each with who answered (by)
-//   readValue(part, id, path)  the first item an answerer in front holds, else the table's value;
-//                              a gone item is nothing. One behind the table is never asked: what
-//                              it holds shows in readAll only, so a node the table has nothing for
-//                              reads as nothing whatever an answerer behind it holds.
+//   readValue(part, id, path)  the table's value; no answerer is asked
 //
-// An answerer says what it holds has moved with changed(part, id) or changed(part, id, patches),
-// handed to a Make and also on places. It marks readers and tells no watcher: only the table's
-// changes reach watchAll. readKeys and readChange are the table's alone, and so are the keys and
-// here that contributors read through Reads; their read is readValue, so it does see an answerer
-// in front. Nothing in front holds children yet, and the walk and the listing must be made to
-// agree before anything does.
+// What an answerer gives for a node stays the same until that node changes or the answerer says
+// it moved, with changed(part, id) or changed(part, id, patches), handed to a Make and also on
+// places. changed marks readers and tells no watcher: only the table's changes reach watchAll.
 import type { ChangeHeader, Entry } from "@ermine/graph/entry"
 import { ApplyError, type Key as Step, type Patch, type Span } from "@ermine/changeable/apply"
 import { walk } from "@ermine/changeable/walk-string"
@@ -326,12 +320,6 @@ export function createPlaces(setup: Setup): Places {
 
 	function readValue(part: Key, id: Id, path: readonly Step[] = [], range?: Span): unknown {
 		if (!peeping) tell(paths.spot(first(part), id, path))
-		for (const a of before) {
-			const items = a.read!(part, id, path)
-			if (items.length === 0) continue
-			const v = items[0].gone ? undefined : items[0].value
-			return range === undefined ? v : sliceAt(v, [], range)
-		}
 		const v = table.get(part, id)?.value
 		return range === undefined ? at(v, path) : sliceAt(v, path, range)
 	}

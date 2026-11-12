@@ -98,25 +98,10 @@ struct pl {
 	tb_key root;
 	const pl_contributor *const *asked;
 	size_t nasked;
-	// where the table's own values sit among the contributors that read, and how many read before it
+	// where the table's own values sit among the contributors that read
 	size_t stored_at;
-	size_t fronts;
 	const char *stored_by;
-	// the front answer pl_read last returned for each spot, let go when that spot is read again
-	struct answered *answered;
-	size_t nanswered, capanswered;
-	// while answerers are asked, front answers let go wait here: the read's arguments may be in them
-	int asking;
-	op_value **dropped;
-	size_t ndropped, capdropped;
 	shared *s;
-};
-
-struct answered {
-	tb_key part, id;
-	op_key *path;
-	size_t n;
-	op_value *value;
 };
 
 static pt_key paths_key(tb_key k) { return (pt_key){.string = k.string, .symbol = k.symbol}; }
@@ -165,8 +150,6 @@ void pl_connect(pl *l, const pl_setup *setup) {
 		l->stored_by = l->asked[i]->from;
 		break;
 	}
-	l->fronts = 0;
-	for (size_t i = 0; i < l->stored_at; i++) l->fronts += l->asked[i]->read != NULL;
 }
 
 tb_key pl_root(const pl *l) { return l->root; }
@@ -192,7 +175,6 @@ static void unhold(pl *l, hold *h) {
 }
 
 static void free_dead(pl *l);
-static void spot_free(struct answered *a);
 
 void pl_free(pl *l) {
 	if (l == NULL) return;
@@ -200,12 +182,6 @@ void pl_free(pl *l) {
 		next = w->next;
 		if (w->l == l) pl_stop(w);
 	}
-	for (size_t i = 0; i < l->nanswered; i++) {
-		op_free(l->answered[i].value);
-		spot_free(&l->answered[i]);
-	}
-	free(l->answered);
-	free(l->dropped);
 	shared *s = l->s;
 	if (--s->refs > 0) {
 		free(l);
@@ -502,6 +478,44 @@ const op_value *pl_at(const op_value *v, const op_key *path, size_t n, op_value 
 	return v;
 }
 
+const op_value *pl_read(pl *l, tb_key part, tb_key id, const op_key *path, size_t n) {
+	if (!l->s->peeping) tell(l, pt_spot_of(l->s->paths, pair_key(l, part), paths_key(id), path, n, 0));
+	const nd_entry *node = tb_get(l->s->table, part, id);
+	return node != NULL ? pl_at(node->value, path, n, &l->s->scratch) : NULL;
+}
+
+int pl_read_range(pl *l, tb_key part, tb_key id, const op_key *path, size_t n, int64_t a, int64_t b,
+	op_value **out) {
+	*out = NULL;
+	if (!l->s->peeping) tell(l, pt_spot_of(l->s->paths, pair_key(l, part), paths_key(id), path, n, 0));
+	if (a < 0 || b < 0) return OP_NOT_A_PATCH;
+	// The path walks as pl_at does: nothing there is nothing, no error.
+	const nd_entry *node = tb_get(l->s->table, part, id);
+	const op_value *v = node != NULL ? pl_at(node->value, path, n, &l->s->scratch) : NULL;
+	if (v == NULL) return OP_OK;
+	if (a > b) return OP_RANGE;
+	if (v->type == OP_STR) {
+		size_t x, y;
+		if (!op_string_span(v, a, b, &x, &y)) return OP_RANGE;
+		char *s = malloc(y - x + 1);
+		if (s == NULL) abort();
+		memcpy(s, v->str + x, y - x);
+		s[y - x] = 0;
+		*out = op_str_counted(s, y - x, (size_t)(b - a));
+	} else if (v->type == OP_LIST) {
+		if ((uint64_t)b > v->count) return OP_RANGE;
+		op_value *r = op_list();
+		for (int64_t i = a; i < b; i++) op_push(r, op_ref(v->items[i]));
+		*out = r;
+	} else if (v->type == OP_BYTES || v->type == OP_TYPED) {
+		if ((uint64_t)b > op_length(v)) return OP_RANGE;
+		size_t z = v->type == OP_BYTES ? 1 : op_size(v->kind);
+		*out = v->type == OP_BYTES ? op_bytes(v->data + (size_t)a, (size_t)(b - a))
+					   : op_typed(v->kind, v->data + (size_t)a * z, (size_t)(b - a));
+	} else return OP_WRONG_KIND;
+	return OP_OK;
+}
+
 void pl_versions_add(pl_versions *out, pl_version item) {
 	if (out->n == out->cap) {
 		out->cap = out->cap ? out->cap * 2 : 4;
@@ -509,128 +523,6 @@ void pl_versions_add(pl_versions *out, pl_version item) {
 		if (out->items == NULL) abort();
 	}
 	out->items[out->n++] = item;
-}
-
-void pl_versions_free(pl_versions *list) {
-	for (size_t i = 0; i < list->n; i++) {
-		op_free((op_value *)list->items[i].value);
-		op_free((op_value *)list->items[i].from);
-	}
-	free(list->items);
-	*list = (pl_versions){0};
-}
-
-// The first item an answerer in front of the table holds: 1 and *out a reference of its value
-// (NULL when gone), or 0 when none of them holds anything. pl_read can't fail, so a front read
-// that fails holds nothing here; pl_read_all reports it.
-static int front(pl *l, tb_key part, tb_key id, const op_key *path, size_t n, op_value **out) {
-	for (size_t i = 0; i < l->stored_at; i++) {
-		const pl_contributor *c = l->asked[i];
-		if (c->read == NULL) continue;
-		pl_versions held = {0};
-		if (c->read(c->ctx, part, id, path, n, &held) || held.n == 0) {
-			pl_versions_free(&held);
-			continue;
-		}
-		*out = held.items[0].gone ? NULL : op_ref((op_value *)held.items[0].value);
-		pl_versions_free(&held);
-		return 1;
-	}
-	return 0;
-}
-
-static tb_key key_copy(tb_key k) { return k.symbol || k.string == NULL ? k : tb_string(xdup(k.string)); }
-static int key_same(tb_key a, tb_key b) {
-	if (a.symbol || b.symbol || a.string == NULL || b.string == NULL) {
-		return a.symbol == b.symbol && a.string == b.string;
-	}
-	return strcmp(a.string, b.string) == 0;
-}
-static int step_same(const op_key *a, const op_key *b) {
-	if (a->type != b->type) return 0;
-	if (a->type == OP_NUM_KEY) return a->n == b->n;
-	if (a->type == OP_STR_KEY) return strcmp(a->s, b->s) == 0;
-	return a->a == b->a && a->b == b->b;
-}
-static struct answered *spot_find(pl *l, tb_key part, tb_key id, const op_key *path, size_t n) {
-	for (size_t i = 0; i < l->nanswered; i++) {
-		struct answered *a = &l->answered[i];
-		if (a->n != n || !key_same(a->part, part) || !key_same(a->id, id)) continue;
-		size_t k = 0;
-		while (k < n && step_same(&a->path[k], &path[k])) k++;
-		if (k == n) return a;
-	}
-	return NULL;
-}
-static void spot_free(struct answered *a) {
-	if (!a->part.symbol) free((char *)a->part.string);
-	if (!a->id.symbol) free((char *)a->id.string);
-	for (size_t k = 0; k < a->n; k++) {
-		if (a->path[k].type == OP_STR_KEY) free((char *)a->path[k].s);
-	}
-	free(a->path);
-}
-static void spot_add(pl *l, tb_key part, tb_key id, const op_key *path, size_t n, op_value *v) {
-	if (l->nanswered == l->capanswered) {
-		l->capanswered = l->capanswered ? l->capanswered * 2 : 4;
-		l->answered = realloc(l->answered, l->capanswered * sizeof *l->answered);
-		if (l->answered == NULL) abort();
-	}
-	struct answered *a = &l->answered[l->nanswered++];
-	*a = (struct answered){key_copy(part), key_copy(id), xalloc(n * sizeof *a->path), n, v};
-	for (size_t k = 0; k < n; k++) {
-		a->path[k] = path[k];
-		if (path[k].type == OP_STR_KEY) a->path[k].s = xdup(path[k].s);
-	}
-}
-
-static void let_go(pl *l, op_value *v) {
-	if (v == NULL) return;
-	if (!l->asking) {
-		op_free(v);
-		return;
-	}
-	if (l->ndropped == l->capdropped) {
-		l->capdropped = l->capdropped ? l->capdropped * 2 : 4;
-		l->dropped = realloc(l->dropped, l->capdropped * sizeof *l->dropped);
-		if (l->dropped == NULL) abort();
-	}
-	l->dropped[l->ndropped++] = v;
-}
-// A read that asks answerers: what is let go meanwhile waits till the outermost one is done.
-static void enter(pl *l) { l->asking++; }
-static void leave(pl *l) {
-	if (--l->asking) return;
-	while (l->ndropped) op_free(l->dropped[--l->ndropped]);
-}
-
-const op_value *pl_read(pl *l, tb_key part, tb_key id, const op_key *path, size_t n) {
-	if (!l->s->peeping) tell(l, pt_spot_of(l->s->paths, pair_key(l, part), paths_key(id), path, n, 0));
-	if (!l->fronts) {
-		const nd_entry *node = tb_get(l->s->table, part, id);
-		return node != NULL ? pl_at(node->value, path, n, &l->s->scratch) : NULL;
-	}
-	enter(l);
-	op_value *held = NULL;
-	const op_value *v;
-	int found = front(l, part, id, path, n, &held);
-	// the spot's last front answer is let go only once this read is done with its arguments
-	struct answered *was = spot_find(l, part, id, path, n);
-	op_value *old = was != NULL ? was->value : NULL;
-	if (found && was != NULL) was->value = held;
-	else if (found) spot_add(l, part, id, path, n, held);
-	else if (was != NULL) {
-		spot_free(was);
-		*was = l->answered[--l->nanswered];
-	}
-	if (found) v = held;
-	else {
-		const nd_entry *node = tb_get(l->s->table, part, id);
-		v = node != NULL ? pl_at(node->value, path, n, &l->s->scratch) : NULL;
-	}
-	let_go(l, old);
-	leave(l);
-	return v;
 }
 
 void pl_showns_free(pl_showns *list) {
@@ -656,26 +548,21 @@ static int ask(const pl_contributor *c, tb_key part, tb_key id, const op_key *pa
 	if (c->read == NULL) return 0;
 	pl_versions held = {0};
 	int code = c->read(c->ctx, part, id, path, n, &held);
-	if (code) {
-		pl_versions_free(&held);
-		return code;
-	}
-	// the items' references pass to out
-	for (size_t i = 0; i < held.n; i++) {
+	for (size_t i = 0; i < held.n && !code; i++) {
 		pl_version *v = &held.items[i];
-		shown_add(out, (pl_shown){v->value, v->gone, v->from, NULL, c->from});
+		shown_add(out, (pl_shown){op_ref((op_value *)v->value), v->gone, op_ref((op_value *)v->from),
+			NULL, c->from});
 	}
 	free(held.items);
-	return 0;
+	return code;
 }
 
 int pl_read_all(pl *l, tb_key part, tb_key id, const op_key *path, size_t n, pl_showns *out) {
 	if (!l->s->peeping) tell(l, pt_spot_of(l->s->paths, pair_key(l, part), paths_key(id), path, n, 0));
 	*out = (pl_showns){0};
 	int code = 0;
-	enter(l);
 	for (size_t i = 0; i < l->stored_at && !code; i++) code = ask(l->asked[i], part, id, path, n, out);
-	if (code) return leave(l), code;
+	if (code) return code;
 	const nd_entry *node = tb_get(l->s->table, part, id);
 	const op_value *v = node != NULL ? pl_at(node->value, path, n, &l->s->scratch) : NULL;
 	// a typed array element sits in scratch, which a later pl_read writes over: copy it
@@ -683,53 +570,6 @@ int pl_read_all(pl *l, tb_key part, tb_key id, const op_key *path, size_t n, pl_
 	if (mine != NULL) shown_add(out, (pl_shown){mine, 0, NULL, &node->change, l->stored_by});
 	// the one marked stored answers right after the table's
 	for (size_t i = l->stored_at; i < l->nasked && !code; i++) code = ask(l->asked[i], part, id, path, n, out);
-	leave(l);
-	return code;
-}
-
-// What the delete patch { range: [a, b] } would take out of v.
-static int cut(const op_value *v, int64_t a, int64_t b, op_value **out) {
-	if (v == NULL) return OP_OK;
-	if (a > b) return OP_RANGE;
-	if (v->type == OP_STR) {
-		size_t x, y;
-		if (!op_string_span(v, a, b, &x, &y)) return OP_RANGE;
-		char *s = malloc(y - x + 1);
-		if (s == NULL) abort();
-		memcpy(s, v->str + x, y - x);
-		s[y - x] = 0;
-		*out = op_str_counted(s, y - x, (size_t)(b - a));
-	} else if (v->type == OP_LIST) {
-		if ((uint64_t)b > v->count) return OP_RANGE;
-		op_value *r = op_list();
-		for (int64_t i = a; i < b; i++) op_push(r, op_ref(v->items[i]));
-		*out = r;
-	} else if (v->type == OP_BYTES || v->type == OP_TYPED) {
-		if ((uint64_t)b > op_length(v)) return OP_RANGE;
-		size_t z = v->type == OP_BYTES ? 1 : op_size(v->kind);
-		*out = v->type == OP_BYTES ? op_bytes(v->data + (size_t)a, (size_t)(b - a))
-					   : op_typed(v->kind, v->data + (size_t)a * z, (size_t)(b - a));
-	} else return OP_WRONG_KIND;
-	return OP_OK;
-}
-
-int pl_read_range(pl *l, tb_key part, tb_key id, const op_key *path, size_t n, int64_t a, int64_t b,
-	op_value **out) {
-	*out = NULL;
-	if (!l->s->peeping) tell(l, pt_spot_of(l->s->paths, pair_key(l, part), paths_key(id), path, n, 0));
-	if (a < 0 || b < 0) return OP_NOT_A_PATCH;
-	// The path walks as pl_at does: nothing there is nothing, no error.
-	op_value *held = NULL;
-	const op_value *v;
-	enter(l);
-	if (l->fronts && front(l, part, id, path, n, &held)) v = held;
-	else {
-		const nd_entry *node = tb_get(l->s->table, part, id);
-		v = node != NULL ? pl_at(node->value, path, n, &l->s->scratch) : NULL;
-	}
-	int code = cut(v, a, b, out);
-	op_free(held);
-	leave(l);
 	return code;
 }
 

@@ -1971,9 +1971,7 @@ static int ta_read(void *ctx, tb_key part, tb_key id, const op_key *path, size_t
 	op_push(row, op_str(id.string != NULL ? id.string : ""));
 	log_push("answered", row);
 	if (t->read != NULL && strcmp(t->read, "throw") == 0) return fail("%s threw", t->name), 1;
-	if (t->read != NULL && strcmp(t->read, "add") == 0) {
-		pl_versions_add(out, (pl_version){op_ref(t->value), 0, op_ref(t->from)});
-	}
+	if (t->read != NULL && strcmp(t->read, "add") == 0) pl_versions_add(out, (pl_version){t->value, 0, t->from});
 	return 0;
 }
 

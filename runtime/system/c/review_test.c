@@ -206,7 +206,7 @@ static void teardown_thrown(int closing) {
 
 // an answerer that says what it holds changed: an effect reading readAll reruns, and sees it
 typedef struct {
-	double now;
+	op_value *now;
 	char *id;
 } holding_t;
 static int holds_a_number(void *ctx, tb_key part, tb_key id, const op_key *path, size_t n,
@@ -214,7 +214,7 @@ static int holds_a_number(void *ctx, tb_key part, tb_key id, const op_key *path,
 	(void)part, (void)path, (void)n;
 	holding_t *h = ctx;
 	if (h->id == NULL) h->id = strdup(id.string);
-	pl_versions_add(out, (pl_version){op_num(h->now), 0, NULL});
+	pl_versions_add(out, (pl_version){h->now, 0, NULL});
 	return 0;
 }
 static int reads;
@@ -237,7 +237,7 @@ static es_out makes_a_reader(es_context *c, void *ctx) {
 	return es_out_of(NULL);
 }
 static void answerer_changed(void) {
-	holding_t held = {1, NULL};
+	holding_t held = {op_num(1), NULL};
 	const pl_contributor answerer = {.from = "holder", .read = holds_a_number, .ctx = &held};
 	const pl_contributor *list[1] = {&answerer};
 	es_ermine *e = NULL;
@@ -251,8 +251,10 @@ static void answerer_changed(void) {
 	CHECK(es_start(e, makes_a_reader, NULL, es_text("/code/p"), NULL, &started, &no) == 0);
 	CHECK(es_pulse(e->host_context) == 0);
 	CHECK(reads == 1 && last == 1 && held.id != NULL);
-	held.now = 2;
+	op_value *was = held.now;
+	held.now = op_num(2);
 	CHECK(es_changed(e, "value", held.id) == 0);
+	op_free(was);
 	CHECK(reads == 2 && last == 2);
 	es_stop(started, NULL);
 	es_started_free(started);
@@ -260,6 +262,7 @@ static void answerer_changed(void) {
 	free(held.id);
 	CHECK(es_close(e) == 0);
 	es_free(e);
+	op_free(held.now);
 }
 
 int main(int argc, char **argv) {
