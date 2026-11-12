@@ -17,7 +17,7 @@
 //   readValue(part, id, path)  the first item an answerer in front holds, else the table's value;
 //                              a gone item is nothing. One behind the table is never asked: what
 //                              it holds shows in readAll only, so a node the table has nothing for
-//                              reads as nothing whatever a history behind it remembers.
+//                              reads as nothing whatever an answerer behind it holds.
 //
 // An answerer says what it holds has moved with changed(part, id) or changed(part, id, patches),
 // handed to a Make and also on places. It marks readers and tells no watcher: only the table's
@@ -347,8 +347,11 @@ export function createPlaces(setup: Setup): Places {
 	function readAll(part: Key, id: Id, path: readonly Step[] = []): Answered[] {
 		if (!peeping) tell(paths.spot(first(part), id, path))
 		const out: Answered[] = []
+		// Each item is built from its fields, so no answerer's can pass for the table's.
 		const ask = (a: Answerer) => {
-			for (const item of a.read!(part, id, path)) out.push({ ...item, by: a.from })
+			for (const { value, gone, from } of a.read!(part, id, path)) {
+				out.push({ value, ...gone && { gone }, ...from !== undefined && { from }, by: a.from })
+			}
 		}
 		before.forEach(ask)
 		const mine = stored(part, id, path)
@@ -392,7 +395,8 @@ export function createPlaces(setup: Setup): Places {
 	const storedAt = marked === -1 ? asked.length : marked
 	const storedBy = marked === -1 ? "table" : asked[marked].from
 	const before = asked.filter((a, i) => a.read !== undefined && i < storedAt)
-	const after = asked.filter((a, i) => a.read !== undefined && i > storedAt)
+	// The marked answerer's own read comes right after the table's value.
+	const after = asked.filter((a, i) => a.read !== undefined && i >= storedAt)
 
 	let said = 0
 

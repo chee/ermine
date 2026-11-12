@@ -241,3 +241,32 @@ Deno.test("answerers: a table change still reruns readers when answerers read to
 	assertEquals([a.runs, a.value], [1, 1])
 	assertEquals([b.runs, b.value], [2, [2]])
 })
+
+Deno.test("answerers: an item an answerer passes on with stored set is still the answerer's", () => {
+	const passer: Answerer = {
+		from: "passer",
+		read: () => [{ value: "passed on", stored: true, from: { change: 1 } } as Version],
+	}
+	const { places, put } = world([children, passer])
+	put("value", "n", "table's")
+	assertEquals(
+		places.readAll("value", "n").map((v) => [v.value, v.by, v.stored]),
+		[["table's", "children", true], ["passed on", "passer", undefined]],
+	)
+})
+
+Deno.test("answerers: the one marked stored is asked too, right after the table's value", () => {
+	const marked: Answerer = { from: "marked", stored: true, read: () => [{ value: "marked's" }] }
+	const after = holder("after", { "value/n": [{ value: "after's" }] })
+	const { places, put } = world([marked, after.answerer])
+	put("value", "n", "table's")
+	assertEquals(
+		places.readAll("value", "n").map((v) => [v.value, v.by, v.stored]),
+		[["table's", "marked", true], ["marked's", "marked", undefined], [
+			"after's",
+			"after",
+			undefined,
+		]],
+	)
+	assertEquals(places.readValue("value", "n"), "table's")
+})
