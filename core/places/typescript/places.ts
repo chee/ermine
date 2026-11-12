@@ -6,6 +6,19 @@
 //   places.commit(changed)
 //
 // A name is any string except "", ".", ".." and "/".
+//
+// Answerers. Each contributor is an answerer: it may answer names (step, names), and it may answer
+// reads (read) with what it holds for a part of a node, front first, [] when it holds nothing.
+// The list's order is the order they are asked in. The table's own values sit where the answerer
+// marked `stored` is (children), or last with none marked: an answerer before it is in front of
+// the table, one after it behind.
+//
+//   readAll(part, id, path)    every answerer's items in that order, each with who answered (by)
+//   readValue(part, id, path)  the table's value; no answerer is asked
+//
+// What an answerer gives for a node stays the same until that node changes or the answerer says
+// it moved, with changed(part, id) or changed(part, id, patches), handed to a Make and also on
+// places. changed marks readers and tells no watcher: only the table's changes reach watchAll.
 import type { ChangeHeader, Entry } from "@ermine/graph/entry"
 import { ApplyError, type Key as Step, type Patch, type Span } from "@ermine/changeable/apply"
 import { walk } from "@ermine/changeable/walk-string"
@@ -29,7 +42,7 @@ export type Setup = {
 	scheduler:
 		& Pick<Scheduler, "track" | "mark" | "getRun">
 		& Partial<Pick<Scheduler, "getCurrentFrame">>
-	contributors: readonly Contributor[]
+	contributors: readonly (Answerer | Make)[]
 	now?: () => number
 }
 
@@ -50,12 +63,32 @@ export type Reads = {
 	track(key: unknown): void
 }
 
-export type Contributor = {
-	readonly from: string
-	step(here: Place, name: string, reads: Reads): Id | undefined | typeof none
-	names(here: Place, reads: Reads): string[] | typeof none
-	level?(here: Place, name: string, reads: Reads): boolean
+// One thing an answerer holds. `from` is the answerer's own account of where it is from.
+export type Version = {
+	readonly value: unknown
+	readonly gone?: true
+	readonly from?: Readonly<Record<string, unknown>>
 }
+
+// A version and the answerer that gave it (its `from` name). The table's own is marked stored, and
+// is from: { change }; no answerer's is marked, whatever its name.
+export type Answered = Version & { readonly by: string; readonly stored?: true }
+
+export type Changed = (part: Key, id: Id, patches?: readonly Patch[]) => void
+
+export type Answerer = {
+	readonly from: string
+	step?(here: Place, name: string, reads: Reads): Id | undefined | typeof none
+	names?(here: Place, reads: Reads): string[] | typeof none
+	level?(here: Place, name: string, reads: Reads): boolean
+	read?(part: Key, id: Id, path: readonly Step[]): readonly Version[]
+	readonly stored?: true
+}
+
+// An answerer that answers names: what the walk has always asked.
+export type Contributor = Answerer & Required<Pick<Answerer, "step" | "names">>
+
+export type Make = (setup: { changed: Changed }) => Answerer
 
 export type Answer = { readonly id: Id; readonly from: string }
 
@@ -277,10 +310,42 @@ export function createPlaces(setup: Setup): Places {
 		tellAll(facts)
 	}
 
+	function changed(part: Key, id: Id, patches?: readonly Patch[]) {
+		say(
+			patches === undefined
+				? paths.event(first(part), id)
+				: paths.mark(first(part), id, patches),
+		)
+	}
+
 	function readValue(part: Key, id: Id, path: readonly Step[] = [], range?: Span): unknown {
 		if (!peeping) tell(paths.spot(first(part), id, path))
 		const v = table.get(part, id)?.value
 		return range === undefined ? at(v, path) : sliceAt(v, path, range)
+	}
+
+	function stored(part: Key, id: Id, path: readonly Step[]): Version | undefined {
+		const entry = table.get(part, id)
+		const value = at(entry?.value, path)
+		if (value === undefined) return undefined
+		const change = entry!.change as ChangeHeader | undefined
+		return change === undefined ? { value } : { value, from: { change } }
+	}
+
+	function readAll(part: Key, id: Id, path: readonly Step[] = []): Answered[] {
+		if (!peeping) tell(paths.spot(first(part), id, path))
+		const out: Answered[] = []
+		// Each item is built from its fields, so no answerer's can pass for the table's.
+		const ask = (a: Answerer) => {
+			for (const { value, gone, from } of a.read!(part, id, path)) {
+				out.push({ value, ...gone && { gone }, ...from !== undefined && { from }, by: a.from })
+			}
+		}
+		before.forEach(ask)
+		const mine = stored(part, id, path)
+		if (mine !== undefined) out.push({ ...mine, by: storedBy, stored: true })
+		after.forEach(ask)
+		return out
 	}
 
 	function readChange(part: Key, id: Id): ChangeHeader | undefined {
@@ -310,7 +375,16 @@ export function createPlaces(setup: Setup): Places {
 	}
 
 	const root = setup.root
-	const asked = setup.contributors
+	const asked: readonly Answerer[] = setup.contributors.map((c) =>
+		typeof c === "function" ? c({ changed }) : c
+	)
+	// Where the table's own values sit among the answerers that read.
+	const marked = asked.findIndex((a) => a.stored)
+	const storedAt = marked === -1 ? asked.length : marked
+	const storedBy = marked === -1 ? "table" : asked[marked].from
+	const before = asked.filter((a, i) => a.read !== undefined && i < storedAt)
+	// The marked answerer's own read comes right after the table's value.
+	const after = asked.filter((a, i) => a.read !== undefined && i >= storedAt)
 
 	let said = 0
 
@@ -320,7 +394,7 @@ export function createPlaces(setup: Setup): Places {
 		for (let i = 0; i < asked.length; i++) {
 			const b = bit(i)
 			if (gone & b) continue
-			const id = asked[i].step(here, name, reads)
+			const id = asked[i].step?.(here, name, reads)
 			if (id === none) under |= b
 			else if (id !== undefined) {
 				said = under
@@ -361,7 +435,7 @@ export function createPlaces(setup: Setup): Places {
 		for (let i = 0; i < asked.length; i++) {
 			const b = bit(i)
 			if (gone & b) continue
-			const id = asked[i].step(here, name, reads)
+			const id = asked[i].step?.(here, name, reads)
 			if (id === none) under |= b
 			else if (id !== undefined) out.push({ id, from: asked[i].from })
 		}
@@ -388,7 +462,7 @@ export function createPlaces(setup: Setup): Places {
 			const b = bit(i)
 			if (gone & b) continue
 			const c = asked[i]
-			const got = c.names(here, reads)
+			const got = c.names?.(here, reads) ?? []
 			if (got === none) {
 				under |= b
 				continue
@@ -412,7 +486,9 @@ export function createPlaces(setup: Setup): Places {
 		commit,
 		eachEntryChange,
 		watchAll,
+		changed,
 		readValue,
+		readAll,
 		readKeys,
 		readChange,
 		walk,
@@ -438,10 +514,12 @@ export type Places = {
 	commit: (changed: readonly Entry<unknown>[]) => void
 	eachEntryChange: (changed: readonly Entry<unknown>[]) => Generator<Fact>
 	watchAll: (fn: (fact: Fact) => void) => () => void
+	changed: Changed
 
-	readonly contributors: readonly Contributor[]
+	readonly contributors: readonly Answerer[]
 
 	readValue: (part: Key, id: Id, path?: readonly Step[], range?: Span) => unknown
+	readAll: (part: Key, id: Id, path?: readonly Step[]) => Answered[]
 	readKeys: (part: Key, id: Id, path?: readonly Step[], ids?: boolean) => string[]
 	readChange: (part: Key, id: Id) => ChangeHeader | undefined
 	walk: (path: Path, from?: Id | Place) => Generator<Member, Place | undefined>

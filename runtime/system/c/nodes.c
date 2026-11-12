@@ -373,7 +373,7 @@ sc_scope *es_owner(es_context *c) {
 static int answered(gd_answer a, const gd_refusal *why) {
 	switch (a) {
 	case GD_OK: return 0;
-	case GD_REFUSED: return es_fail_refusal(why, NULL, NULL);
+	case GD_REFUSED: return es_fail_refusal(why);
 	case GD_PENDING: return es_fail(ES_PENDING, "%s", "");
 	default: return es_fail(ES_STOP, "%s", "");
 	}
@@ -1176,6 +1176,8 @@ void es_versions_free(es_versions *v) {
 	*v = (es_versions){0};
 }
 
+// Every answer for what is at x, front first: the table's, then each answerer's after it. The
+// read's own asks, tracking and waiting come first. An answerer that failed (es_fail) fails it.
 static int versions_part(es_context *c, es_target x, const char *part, const op_key *key,
 	size_t nkey, es_versions *out) {
 	es_ermine *e = c->ermine;
@@ -1190,30 +1192,31 @@ static int versions_part(es_context *c, es_target x, const char *part, const op_
 		return check(c);
 	}
 	if (code) return es_node_data_free(&n), code;
-	es_versions items = {0};
-	es_version first = {0};
-	if (shown != NULL) {
-		first.value = shown;
-		const nd_entry *entry = tb_get(e->table, tb_string(n.part), tb_string(id));
-		if (entry != NULL) {
-			first.from.change = pl_change_value(e->places, &entry->change);
-			if (first.from.change != NULL) first.from.view = es_change_view_of(e, first.from.change);
-		}
-		items.items = es_alloc(sizeof *items.items);
-		items.items[0] = first;
-		items.n = items.cap = 1;
-	}
-	es_reading rd = {.node = &n, .part = n.part, .id = id, .path = key, .npath = nkey, .context = c};
-	es_versions shown_out = {0};
-	code = es_hook_read(e, &rd, &items, &shown_out);
-	if (items.items != shown_out.items) free(items.items);
+	es_clear_thrown();
+	pl_showns all;
+	int failed = pl_read_all(c->places, tb_string(n.part), tb_string(id), key, nkey, &all);
 	es_node_data_free(&n);
-	if (code) return es_versions_free(&shown_out), code;
-	for (size_t i = 0; i < shown_out.n; i++) {
-		es_from *f = &shown_out.items[i].from;
-		if (f->change != NULL && f->view == NULL) f->view = es_change_view_of(e, f->change);
+	code = !failed ? 0 : es_thrown()->code ? es_thrown()->code : ES_FAILED;
+	if (!code) code = check(c);
+	if (code) return pl_showns_free(&all), code;
+	out->items = all.n ? es_alloc(all.n * sizeof *out->items) : NULL;
+	out->n = out->cap = all.n;
+	for (size_t i = 0; i < all.n; i++) {
+		const pl_shown *s = &all.items[i];
+		es_version *v = &out->items[i];
+		v->gone = s->gone;
+		// the list lets go of its references: each version takes its own
+		v->held = op_ref((op_value *)s->value);
+		v->value = v->held;
+		if (s->change != NULL) {
+			v->from.change = pl_change_value(e->places, s->change);
+			if (v->from.change != NULL) v->from.view = es_change_view_of(e, v->from.change);
+		} else {
+			v->from.feature = s->by;
+			v->from.more = op_ref((op_value *)s->from);
+		}
 	}
-	*out = shown_out;
+	pl_showns_free(&all);
 	return 0;
 }
 

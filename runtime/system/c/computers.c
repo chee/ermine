@@ -865,7 +865,7 @@ static int ask_status(es_context *t, const char *id, const es_node_data *n) {
 	gd_refusal why = {0};
 	gd_answer a = gd_read(t->guard, &target, 1, &why);
 	int code = 0;
-	if (a == GD_REFUSED) code = es_fail_refusal(&why, NULL, NULL);
+	if (a == GD_REFUSED) code = es_fail_refusal(&why);
 	else if (a == GD_PENDING) code = es_fail(ES_PENDING, "PENDING");
 	else if (a == GD_FAILED) code = ES_STOP;
 	op_free(field);

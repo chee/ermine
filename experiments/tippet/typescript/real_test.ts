@@ -1,7 +1,7 @@
 // readAll through a real createErmine: two ermines, each with a tippet log and a history over the
-// ermine's own table and places, and the reading feature. The history is made after createErmine,
-// since the places are (a feature's setup that asked for them would throw not-yet), so the feature
-// is given a thunk that reaches the history once it is there.
+// ermine's own table and places, and the reading answerer. The history is made after createErmine,
+// since it needs the ermine's places, so the answerer is given a thunk that reaches it once it is
+// there.
 import { assertEquals } from "@std/assert"
 import { createErmine, ensureNode, patch, read, readAll } from "@ermine/system"
 import { createLog } from "./log.ts"
@@ -12,7 +12,7 @@ async function one(seed: number) {
 	const log = createLog({ writes: true, seed: new Uint8Array(32).fill(seed) })
 	const e = createErmine({
 		root: "world",
-		features: [reading({ versions: (...a) => history.versions(...a) })],
+		answerers: [reading({ versions: (...a) => history.versions(...a) })],
 	})
 	const history: History = createHistory({
 		log,

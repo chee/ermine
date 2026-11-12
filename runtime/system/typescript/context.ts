@@ -45,7 +45,8 @@ export type Write = {
 	readonly gone?: true
 }
 
-// One value a path holds and where it is from. Position 0 is read's; the rest come from onRead.
+// One value a path holds and where it is from: the table's first, then each answerer's (from.feature
+// names it).
 export type Version = {
 	readonly value: unknown
 	readonly from: From

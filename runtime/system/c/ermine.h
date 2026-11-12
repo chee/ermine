@@ -61,13 +61,11 @@ typedef enum {
 	ES_PENDING,
 	ES_STOP,
 	ES_NOT_A_METHOD,
-	ES_FEATURE,
 	ES_FAILED,
 	ES_TAKEN,
 	ES_MISSING_FEATURE,
 	ES_FEATURE_TWICE,
 	ES_NEEDS_LOOP,
-	ES_SETUP_ONLY,
 	ES_NOT_YET,
 	ES_NOTHING_OPEN,
 	ES_NOT_A_HANDLE,
@@ -84,14 +82,11 @@ typedef enum {
 	ES_OUTSIDE,
 } es_code;
 
-// The error behind the last code returned (one slot, single threaded). feature, hook and cause are
-// set when a hook threw.
+// The error behind the last code returned (one slot, single threaded). op and reason: a refusal's.
 typedef struct {
 	int code;
 	char *message;
 	char *op, *reason;
-	char *feature, *hook;
-	char *cause;
 } es_error;
 
 // --- small things every file uses ----------
@@ -415,12 +410,11 @@ typedef struct es_change_view {
 	int user_activated;
 } es_change_view;
 
-// Where a value is from: the change (as a hook gets it) and its view (as a program gets it).
-// For a feature's item it also has the kind, the feature's name and other fields (a map or NULL).
+// Where a value is from: the table's change and its view (as a program gets it). An answerer's
+// item has its name in feature and its own from in more (a map or NULL), and no change.
 typedef struct {
 	const op_value *change;
 	const es_change_view *view;
-	const char *kind;
 	const char *feature;
 	op_value *more;
 } es_from;
@@ -622,41 +616,15 @@ typedef struct {
 	double started;
 } es_calling_view;
 
-// --- features and their hooks (features.ts) ----------
+// --- features (features.ts) ----------
 
-typedef enum {
-	ES_ON_READ, ES_HOOKS
-} es_hook;
-
-typedef struct {
-	const es_node_data *node;
-	const char *part;
-	const char *id;
-	const op_key *path;
-	size_t npath;
-	es_context *context;
-} es_reading;
-
-// the continuation of a hook: what is after it in its chain, the base last. not calling it: what the
-// hook guards does not happen. each is called with the hook's own arguments, as given or changed
-typedef struct es_read_next es_read_next;
-int es_next_read(es_read_next *next, const es_reading *x, const es_versions *items, es_versions *out);
-
-// Hooks are middleware. Each returns 0 or a code (it threw). A code is rethrown as a FeatureError
-// naming the feature and hook, except ES_PENDING, ES_STOP, a FeatureError, and a code next gave,
-// which pass as they are. A Refusal gets its feature and hook named. ctx is the one given at
-// registration.
-typedef int (*es_on_read_fn)(void *ctx, const es_reading *x, const es_versions *items,
-	es_read_next *next, es_versions *out);
-// What a feature acts with, in its setup and its hooks. Hooks can only be added in setup
-// (ES_SETUP_ONLY). Places, processes, contexts and handles exist after setup (ES_NOT_YET before).
-// Scheduler listeners it adds are removed at close.
+// What a feature acts with in its setup. Places, processes, contexts and handles exist after setup
+// (ES_NOT_YET before). Scheduler listeners it adds are removed at close.
 typedef struct es_feature_api {
 	sc_scheduler *scheduler;
 	const tb_table *table;
 	void *private_;
 } es_feature_api;
-int es_on_read(es_feature_api *f, es_on_read_fn fn, void *ctx);
 int es_api_places(es_feature_api *f, pl **out);
 int es_api_processes(es_feature_api *f, pr **out);
 int es_api_get_process_context(es_feature_api *f, pr_process *process, es_context **out);
@@ -685,6 +653,10 @@ typedef struct {
 typedef struct {
 	const es_feature *const *features;
 	size_t nfeatures;
+	// more answers for what is at a node, after the table's (places contributors with read): readAll
+	// shows each one's, front first. One fails the read by es_fail as it answers
+	const pl_contributor *const *answerers;
+	size_t nanswerers;
 	sc_scheduler *scheduler;
 	int64_t (*now)(void *ctx);
 	void *now_ctx;
@@ -1049,8 +1021,7 @@ void es_calls_stop(es_ermine *e);
 
 int es_fail_ermine(int code, const char *format, ...) __attribute__((format(printf, 2, 3)));
 int es_fail(int code, const char *format, ...) __attribute__((format(printf, 2, 3)));
-int es_fail_refusal(const gd_refusal *why, const char *feature, const char *hook);
-int es_fail_feature(const char *feature, const char *hook, const char *cause);
+int es_fail_refusal(const gd_refusal *why);
 int es_fail_text(const char *message);
 const es_error *es_thrown(void);
 void es_clear_thrown(void);
@@ -1125,10 +1096,8 @@ es_wait *es_records_waits(es_ermine *e, size_t *n);
 // and the caller's context; for a service acting for its caller. 1, 0: none
 int es_calling(es_ermine *e, es_calling_view *out);
 
-// what the other three call. the hook around reads' items: its chain, the base's own last
-// the entries changed, said written
+// what the other three call. the entries changed, said written
 void es_commit_changed(es_ermine *e, const pl_changed *changed);
-int es_hook_read(es_ermine *e, const es_reading *x, const es_versions *items, es_versions *out);
 // a write's header now: the open scope's, its frame the one open; from outside the graph, the
 // call's location (es_enter) in a frame more on top. *made: its block, for pl_hold on the entry written
 int es_header(es_ermine *e, ch_header *out, pl_made **made);
@@ -1140,6 +1109,8 @@ int es_outside(es_ermine *e, op_value **locations);
 int es_alive(es_ermine *e);
 // asks for a pulse: it runs at once (C has no microtask); with no_autopulse, nothing happens
 int es_queue_pulse(es_ermine *e);
+// an answerer says what it holds for (part, id) changed: its readers rerun, as after a write
+int es_changed(es_ermine *e, const char *part, const char *id);
 // a new node's id and a new process's, from create_id and create_process_id
 int es_make_id(es_ermine *e, char **out);
 int es_make_process_id(es_ermine *e, char **out);

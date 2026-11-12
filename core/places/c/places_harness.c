@@ -71,7 +71,8 @@ static void rows_names(void *ctx, const pl_here *here, pl *l, pl_namelist *out) 
 static int rows_level(void *ctx, const pl_here *here, const char *name, pl *l) {
 	return here->has_path && filled(rows_at(ctx, here, name, l));
 }
-static const pl_contributor rows = {"rows", rows_step, rows_names, rows_level, "rows"};
+static const pl_contributor rows = {.from = "rows", .step = rows_step, .names = rows_names,
+	.level = rows_level, .ctx = "rows"};
 #define MAX_TRIES 8
 static pl_contributor tries[MAX_TRIES];
 static const pl_contributor *tries_walk[MAX_TRIES + 1];
@@ -376,7 +377,8 @@ op_value *ph_answer(const op_value *r) {
 		else {
 			for (size_t i = 0; i < of->count && n < MAX_TRIES; i++) {
 				const char *from = world_copy(of->items[i]->str);
-				tries[n] = (pl_contributor){from, rows_step, rows_names, rows_level, (void *)from};
+				tries[n] = (pl_contributor){.from = from, .step = rows_step, .names = rows_names,
+					.level = rows_level, .ctx = (void *)from};
 				tries_walk[n] = &tries[n];
 				n++;
 			}

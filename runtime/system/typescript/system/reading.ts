@@ -1,10 +1,10 @@
-import type { ChangeHeader, Entry } from "@ermine/graph/entry"
+import type { ChangeHeader } from "@ermine/graph/entry"
 import type { Id, Path } from "@ermine/places"
 import { get, gets, list as listAt } from "@ermine/places/lib"
 import { REFUSED } from "@ermine/processes/guard"
 import { isPending } from "@ermine/processes/status"
 import { PENDING } from "@ermine/reactivity"
-import type { Inner, Node, Step, Target, Version } from "../context.ts"
+import type { From, Inner, Node, Step, Target, Version } from "../context.ts"
 import { go } from "../acting.ts"
 import { marked } from "../site.ts"
 import { attributesOf, byId, handle, idOf, keyOf, nodeOf, viewOf } from "./addressing.ts"
@@ -75,23 +75,29 @@ export function readAs(inner: Inner, x: Target, key: ReadKey = []): unknown {
 	return places.readValue(n.part, id, path, range)
 }
 
+// Every answer for what's at x, front first: the table's, then each answerer's after it. read's own
+// asks, tracking and waiting come first, so nothing there is pending here too.
 function versions(inner: Inner, x: Target, path: readonly Step[] = []): Version[] {
-	const { base, table, context } = here(inner)
+	const { base, places } = here(inner)
 	const n = nodeOf(inner, x)
-	const shown = readAs(inner, x, path)
+	readAs(inner, x, path)
 	const id = idOf(inner, n)
 	if (id === undefined) return []
-	const items: Version[] = []
-	if (shown !== undefined) {
-		const change = (table.get(n.part, id) as Entry<unknown> | undefined)?.change
-		items.push({ value: shown, from: change === undefined ? {} : { change } })
-	}
-	return base.shown({ node: n, part: n.part, id, path, context }, items).map((v) =>
-		v.from.change === undefined || base.changes.has(v.from.change as never) ? v : {
-			...v,
-			from: { ...v.from, change: viewOf(base, v.from.change as ChangeHeader) as never },
+	return places.readAll(n.part, id, path).map((v) => {
+		// Only the table's item carries a change; an answerer's from is its own and is not one.
+		if (!v.stored) {
+			return {
+				value: v.value,
+				from: { ...v.from, feature: v.by },
+				...v.gone && { gone: true as const },
+			}
 		}
-	)
+		const change = v.from?.change as ChangeHeader | undefined
+		const from: From = change === undefined || base.changes.has(change as never)
+			? { ...v.from }
+			: { ...v.from, change: viewOf(base, change) as never }
+		return { value: v.value, from, ...v.gone && { gone: true as const } }
+	})
 }
 
 export function readEntriesAs(inner: Inner, x: Target): Item[] {

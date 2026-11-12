@@ -678,7 +678,7 @@ static int ask_read(es_context *t, const char *id, const es_node_data *n, const 
 	gd_refusal why;
 	gd_answer answer = gd_read(t->guard, &target, 1, &why);
 	int code = 0;
-	if (answer == GD_REFUSED) code = es_fail_refusal(&why, NULL, NULL);
+	if (answer == GD_REFUSED) code = es_fail_refusal(&why);
 	else if (answer == GD_PENDING) code = ES_PENDING;
 	else if (answer == GD_FAILED) code = ES_STOP;
 	op_free(field);

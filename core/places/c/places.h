@@ -7,6 +7,16 @@
 //   pl_commit(p, &changed);  // after a change in place
 //
 // Returned values and names are borrowed from the table. Out of memory aborts.
+//
+// Answerers, as in places.ts. A contributor may answer reads (read) with what it holds for a part
+// of a node, front first, nothing when it holds nothing. They are asked in the list's order. The
+// table's own values sit where the contributor marked stored is (pl_children), or last with none
+// marked: one before it is in front of the table, one after it behind.
+//   pl_read_all   every answerer's items in that order, each with who answered (by); the
+//                 stored one's right after the table's
+//   pl_read       the table's value. Answerers show in pl_read_all only.
+// An answerer says what it holds has moved with pl_moved (places.ts's changed), which marks
+// readers and tells no watch. pl_keys, pl_change and pl_read_here are the table's alone.
 #ifndef PLACES_H
 #define PLACES_H
 
@@ -43,15 +53,35 @@ typedef struct {
 } pl_namelist;
 void pl_namelist_free(pl_namelist *list);
 
+// One thing an answerer holds. from is the answerer's own account of where it is from (NULL:
+// none). Both are borrowed: heap op_values, good until that node changes or the answerer calls
+// pl_moved for it; an answerer frees nothing during a read. pl_read_all takes a reference.
+typedef struct {
+	const op_value *value;
+	int gone;
+	const op_value *from;
+} pl_version;
+typedef struct {
+	pl_version *items;
+	size_t n, cap;
+} pl_versions;
+void pl_versions_add(pl_versions *out, pl_version item);
+
 // from must outlive the places. A contributor reads through the places it is handed.
 typedef struct {
 	const char *from;
 	// 1 and *out, 0 if nothing is there (maybe deeper), PL_NONE if nothing is under it either.
+	// NULL: it answers no names.
 	int (*step)(void *ctx, const pl_here *here, const char *name, pl *reads, tb_key *out);
 	void (*names)(void *ctx, const pl_here *here, pl *reads, pl_namelist *out);
 	// Whether here + name is a level: no id, but names under it. NULL means never.
 	int (*level)(void *ctx, const pl_here *here, const char *name, pl *reads);
 	void *ctx;
+	// What it holds for (part, id) at path, added to out front first; nothing added: not its.
+	// Nonzero: the read failed, and pl_read_all stops there. NULL: it answers no reads.
+	int (*read)(void *ctx, tb_key part, tb_key id, const op_key *path, size_t n, pl_versions *out);
+	// The table's own values are read where this one is among the contributors.
+	int stored;
 } pl_contributor;
 #define PL_NONE 2
 
@@ -122,13 +152,33 @@ void pl_stop(pl_watch *w);
 // A typed array element is made in scratch and returned (good until the next call; 64-bit
 // elements come as doubles). NULL if nothing is there.
 const op_value *pl_at(const op_value *v, const op_key *path, size_t n, op_value *scratch);
-// Borrowed until the node changes (a typed array element: until the next pl_read).
+// Borrowed until the node changes. A typed array element is good until the next pl_read.
 const op_value *pl_read(pl *l, tb_key part, tb_key id, const op_key *path, size_t n);
 // What the delete patch { path, range: [a, b] } would take out: a string, list or typed array of
 // its own (a list shares its items), in *out for the caller to op_free. Tracked as pl_read is. It
 // fails as that patch does: an OP_ code, *out NULL.
 int pl_read_range(pl *l, tb_key part, tb_key id, const op_key *path, size_t n, int64_t a, int64_t b,
 	op_value **out);
+// A version and who gave it: by is the answerer's from ("table" for the table's with none marked
+// stored). The table's item has its entry's change and no from; an answerer's has no change. Each
+// item holds a reference of its value and from, let go by pl_showns_free.
+typedef struct {
+	const op_value *value;
+	int gone;
+	const op_value *from;
+	const ch_header *change;
+	const char *by;
+} pl_shown;
+typedef struct {
+	pl_shown *items;
+	size_t n, cap;
+} pl_showns;
+void pl_showns_free(pl_showns *list);
+// Tracked as pl_read is. A gone item keeps its value. Returns the first answerer's failure (nonzero), asking none after it; out is to free either way.
+int pl_read_all(pl *l, tb_key part, tb_key id, const op_key *path, size_t n, pl_showns *out);
+// What an answerer holds for (part, id) has moved: marks its readers as pl_add does (patches
+// NULL) or as pl_commit does for the patches, and tells no watch.
+void pl_moved(pl *p, tb_key part, tb_key id, const op_patch *patches, size_t n);
 const op_value *pl_read_here(pl *l, tb_key part, tb_key id, const op_key *path, size_t n);
 const op_value *pl_a_map(void);
 const ch_header *pl_change(pl *l, tb_key part, tb_key id);

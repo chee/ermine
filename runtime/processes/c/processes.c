@@ -78,7 +78,8 @@ static int level(void *ctx, const pl_here *here, const char *name, pl *l) {
 void pr_trie_init(pr_processes *p, const char *part, tb_key root, const char *from) {
 	p->root = root;
 	p->part = part;
-	p->contributor = (pl_contributor){from, step, names, level, p};
+	p->contributor = (pl_contributor){.from = from, .step = step, .names = names, .level = level,
+		.ctx = p};
 }
 
 void pr_processes_init(pr_processes *p, tb_key root) { pr_trie_init(p, PR_PART, root, "process"); }

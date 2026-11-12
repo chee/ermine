@@ -1,0 +1,214 @@
+{
+	"title": "answerers, given to createErmine, answer for what is at a node after the table: readAll shows the table's value first, then each answerer's items in the list's order, each naming it in from.feature; read shows the table's. one that answers nothing adds nothing; one that throws, the read throws that, and none after it is asked. a feature's setup reaching places, made after setup: not-yet",
+	"steps": [
+		{
+			"op": "ermine",
+			"answerers": [
+				{
+					"name": "r",
+					"read": "add"
+				},
+				{
+					"name": "q",
+					"read": "none"
+				},
+				{
+					"name": "s",
+					"read": "add"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/x",
+				1
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"log",
+				"x",
+				[
+					"all",
+					[
+						"each",
+						[
+							"readAll",
+							"/x"
+						],
+						[
+							"value"
+						]
+					],
+					[
+						"each",
+						[
+							"readAll",
+							"/x"
+						],
+						[
+							"from",
+							"feature"
+						]
+					],
+					[
+						"each",
+						[
+							"readAll",
+							"/x"
+						],
+						[
+							"from",
+							"kind"
+						]
+					]
+				]
+			],
+			"expect": {
+				"value": [
+					[
+						1,
+						"r",
+						"s"
+					],
+					[
+						null,
+						"r",
+						"s"
+					],
+					[
+						null,
+						"test",
+						"test"
+					]
+				]
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/x"
+			],
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "log",
+			"name": "answered",
+			"expect": {
+				"values": [
+					[
+						"r",
+						"n1"
+					],
+					[
+						"q",
+						"n1"
+					],
+					[
+						"s",
+						"n1"
+					],
+					[
+						"r",
+						"n1"
+					],
+					[
+						"q",
+						"n1"
+					],
+					[
+						"s",
+						"n1"
+					],
+					[
+						"r",
+						"n1"
+					],
+					[
+						"q",
+						"n1"
+					],
+					[
+						"s",
+						"n1"
+					]
+				]
+			}
+		},
+		{
+			"op": "ermine",
+			"answerers": [
+				{
+					"name": "t",
+					"read": "throw"
+				},
+				{
+					"name": "s",
+					"read": "add"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"call": [
+				"ensureNode",
+				"/x",
+				1
+			]
+		},
+		{
+			"op": "host",
+			"call": [
+				"readAll",
+				"/x"
+			],
+			"fails": true,
+			"expect": {
+				"error": "Error: t threw"
+			}
+		},
+		{
+			"op": "host",
+			"call": [
+				"read",
+				"/x"
+			],
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "log",
+			"name": "answered",
+			"expect": {
+				"values": [
+					[
+						"t",
+						"n1"
+					]
+				]
+			}
+		},
+		{
+			"op": "ermine",
+			"features": [
+				{
+					"name": "e",
+					"early": true
+				}
+			],
+			"fails": true,
+			"expect": {
+				"error": "not-yet"
+			}
+		}
+	]
+}
