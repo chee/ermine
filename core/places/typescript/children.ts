@@ -8,8 +8,10 @@ import type { Id, Key } from "@ermine/graph/table"
 import { updateEntry } from "./crowify.ts"
 import { asId, type Contributor, level, type Places, PlacesError } from "./places.ts"
 
+// Marked stored: the table's own values are read where children is among the answerers.
 export const children: Contributor = {
 	from: "children",
+	stored: true,
 	step: ({ id }, name, r) => id === level ? undefined : asId(r.read("children", id, [name])),
 	names: ({ id }, r) => id === level ? [] : r.keys("children", id),
 }
