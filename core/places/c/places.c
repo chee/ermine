@@ -98,6 +98,10 @@ struct pl {
 	tb_key root;
 	const pl_contributor *const *asked;
 	size_t nasked;
+	// where the table's own values sit among the contributors that read, and how many read before it
+	size_t stored_at;
+	size_t fronts;
+	const char *stored_by;
 	shared *s;
 };
 
@@ -139,6 +143,16 @@ void pl_connect(pl *l, const pl_setup *setup) {
 	l->s->now_ctx = setup->now_ctx;
 	l->asked = setup->contributors;
 	l->nasked = setup->ncontributors;
+	l->stored_at = l->nasked;
+	l->stored_by = "table";
+	for (size_t i = 0; i < l->nasked; i++) {
+		if (!l->asked[i]->stored) continue;
+		l->stored_at = i;
+		l->stored_by = l->asked[i]->from;
+		break;
+	}
+	l->fronts = 0;
+	for (size_t i = 0; i < l->stored_at; i++) l->fronts += l->asked[i]->read != NULL;
 }
 
 tb_key pl_root(const pl *l) { return l->root; }
@@ -467,10 +481,77 @@ const op_value *pl_at(const op_value *v, const op_key *path, size_t n, op_value 
 	return v;
 }
 
+void pl_versions_add(pl_versions *out, pl_version item) {
+	if (out->n == out->cap) {
+		out->cap = out->cap ? out->cap * 2 : 4;
+		out->items = realloc(out->items, out->cap * sizeof *out->items);
+		if (out->items == NULL) abort();
+	}
+	out->items[out->n++] = item;
+}
+
+// The first item an answerer in front of the table holds: 1 and *out its value (NULL when gone),
+// or 0 when none of them holds anything.
+static int front(pl *l, tb_key part, tb_key id, const op_key *path, size_t n, const op_value **out) {
+	for (size_t i = 0; i < l->stored_at; i++) {
+		const pl_contributor *c = l->asked[i];
+		if (c->read == NULL) continue;
+		pl_versions held = {0};
+		c->read(c->ctx, part, id, path, n, &held);
+		if (held.n == 0) {
+			free(held.items);
+			continue;
+		}
+		*out = held.items[0].gone ? NULL : held.items[0].value;
+		free(held.items);
+		return 1;
+	}
+	return 0;
+}
+
 const op_value *pl_read(pl *l, tb_key part, tb_key id, const op_key *path, size_t n) {
 	if (!l->s->peeping) tell(l, pt_spot_of(l->s->paths, pair_key(l, part), paths_key(id), path, n, 0));
+	const op_value *held;
+	if (l->fronts && front(l, part, id, path, n, &held)) return held;
 	const nd_entry *node = tb_get(l->s->table, part, id);
 	return node != NULL ? pl_at(node->value, path, n, &l->s->scratch) : NULL;
+}
+
+void pl_showns_free(pl_showns *list) {
+	free(list->items);
+	*list = (pl_showns){0};
+}
+
+static void shown_add(pl_showns *out, pl_shown item) {
+	if (out->n == out->cap) {
+		out->cap = out->cap ? out->cap * 2 : 4;
+		out->items = realloc(out->items, out->cap * sizeof *out->items);
+		if (out->items == NULL) abort();
+	}
+	out->items[out->n++] = item;
+}
+
+static void ask(const pl_contributor *c, tb_key part, tb_key id, const op_key *path, size_t n,
+	pl_showns *out) {
+	if (c->read == NULL) return;
+	pl_versions held = {0};
+	c->read(c->ctx, part, id, path, n, &held);
+	for (size_t i = 0; i < held.n; i++) {
+		shown_add(out, (pl_shown){held.items[i].gone ? NULL : held.items[i].value, held.items[i].gone,
+			held.items[i].from, NULL, c->from});
+	}
+	free(held.items);
+}
+
+pl_showns pl_read_all(pl *l, tb_key part, tb_key id, const op_key *path, size_t n) {
+	if (!l->s->peeping) tell(l, pt_spot_of(l->s->paths, pair_key(l, part), paths_key(id), path, n, 0));
+	pl_showns out = {0};
+	for (size_t i = 0; i < l->stored_at; i++) ask(l->asked[i], part, id, path, n, &out);
+	const nd_entry *node = tb_get(l->s->table, part, id);
+	const op_value *v = node != NULL ? pl_at(node->value, path, n, &l->s->scratch) : NULL;
+	if (v != NULL) shown_add(&out, (pl_shown){v, 0, NULL, &node->change, l->stored_by});
+	for (size_t i = l->stored_at + 1; i < l->nasked; i++) ask(l->asked[i], part, id, path, n, &out);
+	return out;
 }
 
 int pl_read_range(pl *l, tb_key part, tb_key id, const op_key *path, size_t n, int64_t a, int64_t b,
@@ -479,8 +560,11 @@ int pl_read_range(pl *l, tb_key part, tb_key id, const op_key *path, size_t n, i
 	if (!l->s->peeping) tell(l, pt_spot_of(l->s->paths, pair_key(l, part), paths_key(id), path, n, 0));
 	if (a < 0 || b < 0) return OP_NOT_A_PATCH;
 	// The path walks as pl_at does: nothing there is nothing, no error.
-	const nd_entry *node = tb_get(l->s->table, part, id);
-	const op_value *v = node != NULL ? pl_at(node->value, path, n, &l->s->scratch) : NULL;
+	const op_value *v;
+	if (!l->fronts || !front(l, part, id, path, n, &v)) {
+		const nd_entry *node = tb_get(l->s->table, part, id);
+		v = node != NULL ? pl_at(node->value, path, n, &l->s->scratch) : NULL;
+	}
 	if (v == NULL) return OP_OK;
 	if (a > b) return OP_RANGE;
 	if (v->type == OP_STR) {
@@ -578,6 +662,17 @@ int pl_del(pl *l, tb_key part, tb_key id) {
 	int code = tb_del(l->s->table, part, id);
 	if (code == 0) landed(l, part, id);
 	return code;
+}
+
+void pl_moved(pl *l, tb_key part, tb_key id, const op_patch *patches, size_t length) {
+	size_t n;
+	pt_spot *const *spots = patches == NULL
+		? pt_event(l->s->paths, pair_key(l, part), paths_key(id), &n)
+		: pt_mark(l->s->paths, pair_key(l, part), paths_key(id), patches, length, &n);
+	spots_vec out = {0};
+	add_spots(&out, spots, n);
+	say(l, &out);
+	free(out.v);
 }
 
 static void landed(pl *l, tb_key part, tb_key id) {
@@ -760,7 +855,7 @@ static int go(pl *l, const pl_here *here, const char *name, tb_key *out, const c
 	for (size_t i = 0; i < l->nasked; i++) {
 		if (gone & bit(i)) continue;
 		const pl_contributor *c = l->asked[i];
-		int got = c->step(c->ctx, here, name, l, out);
+		int got = c->step != NULL ? c->step(c->ctx, here, name, l, out) : 0;
 		if (got == PL_NONE) said |= bit(i);
 		else if (got) {
 			*by = c->from;
@@ -875,7 +970,7 @@ pl_answers pl_answers_at(pl *l, const pl_here *here, const char *name) {
 		if (gone & bit(i)) continue;
 		const pl_contributor *c = l->asked[i];
 		tb_key id;
-		int got = c->step(c->ctx, here, name, l, &id);
+		int got = c->step != NULL ? c->step(c->ctx, here, name, l, &id) : 0;
 		if (got == PL_NONE) out.gone |= bit(i);
 		else if (got) out.items[out.n++] = (pl_answer){id, c->from};
 	}
@@ -953,7 +1048,7 @@ pl_nameds pl_names(pl *l, const pl_here *here) {
 		if (gone & bit(i)) continue;
 		const pl_contributor *c = l->asked[i];
 		pl_namelist names = {0};
-		c->names(c->ctx, here, l, &names);
+		if (c->names != NULL) c->names(c->ctx, here, l, &names);
 		if (names.none) out.gone |= bit(i);
 		for (size_t j = 0; j < names.n; j++) {
 			if (tb_get(seen, tb_symbol(&seen_tag), tb_string(names.items[j])) != NULL) continue;

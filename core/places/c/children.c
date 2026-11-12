@@ -49,7 +49,8 @@ static void names(void *ctx, const pl_here *here, pl *l, pl_namelist *out) {
 	pl_keys(l, tb_string("children"), here->id, NULL, 0, 0, out);
 }
 
-const pl_contributor pl_children = {"children", step, names, NULL, NULL};
+// Marked stored: the table's own values are read where children is among the contributors.
+const pl_contributor pl_children = {.from = "children", .step = step, .names = names, .stored = 1};
 
 static tb_key key_own(tb_key k) { return k.symbol ? k : tb_string(xdup(k.string)); }
 static void key_disown(tb_key k) {
