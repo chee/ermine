@@ -1109,6 +1109,8 @@ int es_outside(es_ermine *e, op_value **locations);
 int es_alive(es_ermine *e);
 // asks for a pulse: it runs at once (C has no microtask); with no_autopulse, nothing happens
 int es_queue_pulse(es_ermine *e);
+// an answerer says what it holds for (part, id) changed: its readers rerun, as after a write
+int es_changed(es_ermine *e, const char *part, const char *id);
 // a new node's id and a new process's, from create_id and create_process_id
 int es_make_id(es_ermine *e, char **out);
 int es_make_process_id(es_ermine *e, char **out);

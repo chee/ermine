@@ -423,6 +423,12 @@ int es_queue_pulse(es_ermine *e) {
 	return 0;
 }
 
+int es_changed(es_ermine *e, const char *part, const char *id) {
+	TRY(es_alive(e));
+	pl_moved(e->places, tb_string(part), tb_string(id), NULL, 0);
+	return es_queue_pulse(e);
+}
+
 // a listener has no code to give
 static void settled(void *data) { (void)es_queue_pulse(data); }
 static void pulse_ended(void *data) {

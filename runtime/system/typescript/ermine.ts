@@ -19,6 +19,7 @@
 import type { ChangeHeader } from "@ermine/graph/entry"
 import {
 	type Answerer,
+	type Changed,
 	createPlaces,
 	type Id,
 	type Make,
@@ -271,7 +272,22 @@ function make(options: Options, undo: (() => void)[]): Ermine {
 		table: table as Table,
 		paths: createPaths<unknown>(),
 		scheduler: s,
-		contributors: [rows(root), children, ...options.answerers ?? []],
+		// An answerer's changed also wakes the ermine, as an outside write does.
+		contributors: [
+			rows(root),
+			children,
+			...(options.answerers ?? []).map((a) =>
+				typeof a === "function"
+					? (setup: { changed: Changed }) =>
+						a({
+							changed: (...args) => {
+								setup.changed(...args)
+								queuePulse()
+							},
+						})
+					: a
+			),
+		],
 		now: options.now,
 	})
 	const offRelease = s.onTrackingEnd((key) => places!.release(key))

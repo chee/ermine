@@ -2,6 +2,7 @@
 // context, and the ids.
 import {
 	createAction,
+	createMemo,
 	ensureNode,
 	executeAction,
 	patch,
@@ -254,4 +255,32 @@ Deno.test("createId throwing while createErmine is making: the throw, and nothin
 	}
 	assertThrows(() => createErmine({ autopulse: false, scheduler, createId }), Error, "no ids")
 	assertEquals(scheduler.live, 0)
+})
+
+Deno.test("an answerer's changed wakes the ermine: a memo reading readAll reruns with no pulse asked for", async () => {
+	let more = false
+	let tell = (): void => {}
+	const e = createErmine({
+		answerers: [({ changed }) => ({
+			from: "more",
+			read: (part, id) => {
+				tell = () => changed(part, id)
+				return more ? [{ value: "more" }] : []
+			},
+		})],
+	})
+	try {
+		e.start(() => {
+			ensureNode("a", 1)
+			createMemo("count", () => readAll("a").length)
+		}, "/p")
+		await new Promise((r) => setTimeout(r, 0))
+		assertEquals(e.within(() => read("/p/count")), 1)
+		more = true
+		tell()
+		await new Promise((r) => setTimeout(r, 0))
+		assertEquals(e.within(() => read("/p/count")), 2)
+	} finally {
+		e.close()
+	}
 })

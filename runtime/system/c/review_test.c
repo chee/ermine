@@ -204,6 +204,64 @@ static void teardown_thrown(int closing) {
 	es_free(e);
 }
 
+// an answerer that says what it holds changed: an effect reading readAll reruns, and sees it
+typedef struct {
+	double now;
+	char *id;
+} holding_t;
+static int holds_a_number(void *ctx, tb_key part, tb_key id, const op_key *path, size_t n,
+	pl_versions *out) {
+	(void)part, (void)path, (void)n;
+	holding_t *h = ctx;
+	if (h->id == NULL) h->id = strdup(id.string);
+	pl_versions_add(out, (pl_version){op_num(h->now), 0, NULL});
+	return 0;
+}
+static int reads;
+static double last;
+static es_out reads_all(es_context *c, void *ctx, const op_value *previous) {
+	(void)ctx, (void)previous;
+	es_versions all;
+	int code = es_read_all(c, es_on_path(es_text("/k")), NULL, 0, &all);
+	if (code) return es_out_code(code);
+	reads++;
+	if (all.n == 2 && all.items[1].value != NULL) last = all.items[1].value->num;
+	es_versions_free(&all);
+	return es_out_of(NULL);
+}
+static es_out makes_a_reader(es_context *c, void *ctx) {
+	(void)ctx;
+	es_handle *h;
+	int code = es_create_effect(c, es_text("e"), reads_all, does_nothing, NULL, NULL, &h);
+	CHECK(code == 0 || code == ES_PENDING);
+	return es_out_of(NULL);
+}
+static void answerer_changed(void) {
+	holding_t held = {1, NULL};
+	const pl_contributor answerer = {.from = "holder", .read = holds_a_number, .ctx = &held};
+	const pl_contributor *list[1] = {&answerer};
+	es_ermine *e = NULL;
+	CHECK(es_create(&(es_options){.answerers = list, .nanswerers = 1}, &e) == 0);
+	es_handle *k;
+	op_value *zero = op_num(0);
+	CHECK(es_ensure_node(e->host_context, es_text("/k"), zero, &k) == 0);
+	es_started *started = NULL;
+	es_refused no = {0};
+	reads = 0;
+	CHECK(es_start(e, makes_a_reader, NULL, es_text("/code/p"), NULL, &started, &no) == 0);
+	CHECK(es_pulse(e->host_context) == 0);
+	CHECK(reads == 1 && last == 1 && held.id != NULL);
+	held.now = 2;
+	CHECK(es_changed(e, "value", held.id) == 0);
+	CHECK(reads == 2 && last == 2);
+	es_stop(started, NULL);
+	es_started_free(started);
+	op_free(zero);
+	free(held.id);
+	CHECK(es_close(e) == 0);
+	es_free(e);
+}
+
 int main(int argc, char **argv) {
 	const char *only = argc > 1 ? argv[1] : NULL;
 #define RUN(name, call) \
@@ -214,6 +272,7 @@ int main(int argc, char **argv) {
 	RUN("foreign-seen", seen_by_a_foreign_context());
 	RUN("stop-thrown", teardown_thrown(0));
 	RUN("close-thrown", teardown_thrown(1));
+	RUN("answerer-changed", answerer_changed());
 	if (!failed) puts("review: ok");
 	return failed;
 }
