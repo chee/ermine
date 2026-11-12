@@ -21,8 +21,10 @@
 //
 // An answerer says what it holds has moved with changed(part, id) or changed(part, id, patches),
 // handed to a Make and also on places. It marks readers and tells no watcher: only the table's
-// changes reach watchAll. readKeys, readChange and what contributors read through Reads are the
-// table's alone.
+// changes reach watchAll. readKeys and readChange are the table's alone, and so are the keys and
+// here that contributors read through Reads; their read is readValue, so it does see an answerer
+// in front. Nothing in front holds children yet, and the walk and the listing must be made to
+// agree before anything does.
 import type { ChangeHeader, Entry } from "@ermine/graph/entry"
 import { ApplyError, type Key as Step, type Patch, type Span } from "@ermine/changeable/apply"
 import { walk } from "@ermine/changeable/walk-string"
