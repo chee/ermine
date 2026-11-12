@@ -74,11 +74,13 @@ Deno.test("answerers: with none that reads, readAll is the table's one item, wit
 		value: { a: 1 },
 		from: { change },
 		by: "children",
+		stored: true,
 	}])
 	assertEquals(places.readAll("value", "n", ["a"]), [{
 		value: 1,
 		from: { change },
 		by: "children",
+		stored: true,
 	}])
 	assertEquals(places.readAll("value", "n", ["b"]), [])
 	assertEquals(places.readValue("value", "n", ["a"]), 1)
@@ -157,6 +159,19 @@ Deno.test("answerers: an item's own from is kept, and who answered is beside it"
 		from: { heads: [["b", 1]] },
 		by: "history",
 	}])
+})
+
+Deno.test("answerers: only the table's item is marked stored, though an answerer has children's name", () => {
+	const twin: Answerer = {
+		from: "children",
+		read: () => [{ value: "twin's", from: { change: 1 } }],
+	}
+	const { places, put } = world([children, twin])
+	put("value", "n", "table's")
+	assertEquals(
+		places.readAll("value", "n").map((v) => [v.value, v.by, v.stored]),
+		[["table's", "children", true], ["twin's", "children", undefined]],
+	)
 })
 
 Deno.test("answerers: with none marked stored, the table is last", () => {

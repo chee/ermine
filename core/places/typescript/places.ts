@@ -74,8 +74,9 @@ export type Version = {
 	readonly from?: Readonly<Record<string, unknown>>
 }
 
-// A version and the answerer that gave it (its `from` name). The table's is from: { change }.
-export type Answered = Version & { readonly by: string }
+// A version and the answerer that gave it (its `from` name). The table's own is marked stored, and
+// is from: { change }; no answerer's is marked, whatever its name.
+export type Answered = Version & { readonly by: string; readonly stored?: true }
 
 export type Changed = (part: Key, id: Id, patches?: readonly Patch[]) => void
 
@@ -349,7 +350,7 @@ export function createPlaces(setup: Setup): Places {
 		}
 		before.forEach(ask)
 		const mine = stored(part, id, path)
-		if (mine !== undefined) out.push({ ...mine, by: storedBy })
+		if (mine !== undefined) out.push({ ...mine, by: storedBy, stored: true })
 		after.forEach(ask)
 		return out
 	}
